@@ -13,11 +13,11 @@ def heartbeat():
         'service': 'ccc-ehr-pipeline'
     }), 200
 
-@app.route('/get_files', methods=['GET'])
+@app.route('/get_file_list', methods=['GET'])
 def get_files():
-    # Get parameters from query string with defaults
-    bucket = request.args.get('bucket', 'synthea_datasets')
-    folder = request.args.get('folder', 'synthea_100_raw')   # Default folder if not provided
+    # Get parameters from query string
+    bucket = request.args.get('bucket')
+    folder = request.args.get('folder')
     
     file_list = utils.list_gcs_files(bucket, folder)
 
