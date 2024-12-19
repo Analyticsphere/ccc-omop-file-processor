@@ -1,0 +1,33 @@
+steps:
+
+# Build the container image
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '-t', 'gcr.io/$PROJECT_ID/ccc-omop-file-processor:$COMMIT_SHA',
+    '-f', 'Dockerfile',
+    '.'
+  ]
+  timeout: 1200s
+
+# Push the container image to Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/$PROJECT_ID/ccc-omop-file-processor:$COMMIT_SHA']
+
+# Deploy container image to Cloud Run
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: [
+    'run', 'deploy', 'ccc-omop-file-processor',
+    '--image=gcr.io/$PROJECT_ID/ccc-omop-file-processor:$COMMIT_SHA',
+    '--cpu=4', '--memory=8Gi',
+    '--region=us-central1',
+    '--service-account=$SERVICE_ACCOUNT_EMAIL', # Directly use the substitution variable
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID'
+  ]
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+images:
+  - 'gcr.io/$PROJECT_ID/ccc-omop-file-processor:$COMMIT_SHA'

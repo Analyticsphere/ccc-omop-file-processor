@@ -1,0 +1,7 @@
+site: UoC
+  display_name: University of Chicago
+  project_id: nih-nci-dceg-connect-prod-6d04
+  gcs_path: gs://ehr_uchicago
+  bq_omop_table: ehr_uchicago
+  file_delivery_format: .csv
+  
