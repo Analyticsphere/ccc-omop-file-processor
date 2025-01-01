@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from datetime import datetime
 import core.utils as utils
 import core.constants as constants
+import core.file_conversion as file_conversion
 import os
 
 app = Flask(__name__)
@@ -55,15 +56,17 @@ def convert_to_parquet():
     file_path: str = request.args.get('file_path')
 
     try:
-        if file_path.endswith('.csv'):
+        if file_path.endswith(constants.CSV):
             utils.logger.info(f"Converting CSV file {file_path} to Parquet format")
-            utils.csv_to_parquet(file_path)
+            file_conversion.csv_to_parquet(file_path)
+        elif file_path.endswith(constants.PARQUET):
+            utils.logger.info(f"Received parquet file from site: {file_path}")
         else:
-            utils.logger.info(f"FOR NOW not converting {file_path} to Parquet")
+            utils.logger.info(f"Invalid source file format: {file_path}")
     
         return "Converted file to Parquet", 200
     except:
-        return "Unable to convert Parquet files", 500
+        return "Unable to convert files to Parquet", 500
 
 
 if __name__ == '__main__':
