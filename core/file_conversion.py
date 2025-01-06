@@ -27,6 +27,7 @@ class StreamingCSVWriter:
         # If buffer gets too large, upload it
         if self.buffer.tell() > 1024 * 1024:  # 1MB threshold
             self._upload_buffer()
+            
 
     def _upload_buffer(self):
         """Upload current buffer contents to GCS using resumable upload"""
