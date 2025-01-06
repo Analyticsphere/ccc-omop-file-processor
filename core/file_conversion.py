@@ -72,9 +72,8 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             parquet_artifacts = gcs_file_path.replace(file_name, constants.ArtifactPaths.CONVERTED_FILES.value)
 
             # Replace CSV file extension with Parquet extension
-            parquet_file_name = file_name.replace(constants.CSV,constants.PARQUET)
             # Remove FIXED_FILE_TAG_STRING string, if reprocessing file after it's been converted to UTF8
-            parquet_file_name = file_name.replace(constants.FIXED_FILE_TAG_STRING,'')
+            parquet_file_name = file_name.replace(constants.CSV,constants.PARQUET).replace(constants.FIXED_FILE_TAG_STRING,'')
 
             parquet_path = f"{parquet_artifacts}{parquet_file_name}"
 
