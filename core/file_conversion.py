@@ -164,8 +164,12 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
 
             # Stream from source and process
             with source_blob.open("rb") as source_file:
+                # Map Windows encodings to their Python codec names
+                codec_name = detected_encoding.replace('Windows-', 'cp')
+                utils.logger.info(f"Using codec: {codec_name}")
+                
                 # Create a text wrapper that handles the encoding
-                text_stream = codecs.getreader(detected_encoding)(source_file)
+                text_stream = codecs.getreader(codec_name)(source_file)
                 csv_reader = csv.reader(text_stream)
                 
                 # Process CSV row by row, streaming directly to GCS
@@ -178,6 +182,9 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
             utils.logger.info(f"Total bytes processed: {streaming_writer.total_bytes_uploaded}\n")
 
+            # After creating new file with UTF8 encoding, try converting it to Parquet
+            csv_to_parquet(new_file_path)
+
         except UnicodeDecodeError as e:
             utils.logger.error(f"Failed to decode content with detected encoding {detected_encoding}: {str(e)}")
             sys.exit(1)
@@ -189,5 +196,3 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         utils.logger.error(f"Unable to convert CSV to UTF8: {e}")
         sys.exit(1)
     
-    # After creating new file with UTF8 encoding, try converting it to Parquet
-    csv_to_parquet(new_file_path)
