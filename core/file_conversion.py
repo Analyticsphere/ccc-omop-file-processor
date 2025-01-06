@@ -86,6 +86,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             """
             conn.execute(convert_statement)
             utils.logger.info("File successfully converted\n")
+
     except duckdb.InvalidInputException as e:
         error_type = utils.parse_duckdb_csv_error(e)
         if error_type == "INVALID_UNICODE":
@@ -168,7 +169,9 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
                 utils.logger.info(f"Using codec: {codec_name}")
                 
                 # Create a text wrapper that handles the encoding
-                text_stream = codecs.getreader(codec_name)(source_file)
+                # If there's an issue with converting any of the non-UTF8 characters, replace them with a question mark symbol
+                text_stream = codecs.getreader(codec_name)(source_file, errors='replace')
+
                 csv_reader = csv.reader(text_stream)
                 
                 # Process CSV row by row, streaming directly to GCS
