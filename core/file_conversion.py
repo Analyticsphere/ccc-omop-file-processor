@@ -37,17 +37,6 @@ class StreamingCSVWriter:
             end_byte = self.total_bytes_uploaded + len(content)
             
             # Upload the chunk using the resumable session
-            # self.target_blob.upload_from_string(
-            #     content,
-            #     content_type='text/csv',
-            #     timeout=None,
-            #     retry=None,
-            #     if_generation_match=None,
-            #     num_retries=3,
-            #     size=len(content),
-            #     resumable=True,
-            #     chunk_size=1024*1024  # 1MB chunks for upload
-            # )
             self.target_blob.upload_from_string(
                 content,
                 content_type='text/csv',
@@ -102,7 +91,6 @@ def csv_to_parquet(gcs_file_path: str) -> None:
         elif error_type == "UNTERMINATED_QUOTE":
             utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
             
-
         elif error_type == "CSV_FORMAT_ERROR":
             utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
             sys.exit(1)
@@ -116,7 +104,6 @@ def csv_to_parquet(gcs_file_path: str) -> None:
         utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
     
     utils.logger.info("File successfully converted\n")
-
 
 def convert_csv_file_encoding(gcs_file_path: str) -> None:
     """
