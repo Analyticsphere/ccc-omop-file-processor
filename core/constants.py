@@ -9,6 +9,8 @@ SERVICE_NAME = "omop-file-processor"
 CSV = ".csv"
 PARQUET = ".parquet"
 
+FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
+
 class ArtifactPaths(str, Enum):
     ARTIFACTS = "artifacts/"
     CONVERTED_FILES = f"{ARTIFACTS}converted_files/"

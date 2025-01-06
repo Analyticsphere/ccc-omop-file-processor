@@ -7,6 +7,7 @@ import os
 import shutil
 from fsspec import filesystem
 import core.constants as constants
+from typing import Optional
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -98,8 +99,25 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str,
     # Destory DuckDB object to free memory, and remove temporary files
     try:
         conn.close()
-        os.remove(local_db_file)
-        shutil.rmtree(tmp_dir)
+
+
+        #os.remove(local_db_file)
+        #shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
+
+def parse_duckdb_csv_error(error: duckdb.InvalidInputException) -> Optional[str]:
+    """
+    Parse DuckDB CSV error messages to identify specific error types.
+    Returns error type as string or None if unrecognized.
+    """
+    error_msg = str(error).lower()
+    
+    if "invalid unicode" in error_msg or "byte sequence mismatch" in error_msg:
+        return "INVALID_UNICODE"
+    elif "unterminated quote" in error_msg:
+        return "UNTERMINATED_QUOTE"
+    elif "csv error on line" in error_msg:  # Generic CSV error fallback
+        return "CSV_FORMAT_ERROR"
+    return None
