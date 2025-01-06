@@ -194,7 +194,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             utils.logger.info(f"Total bytes processed: {streaming_writer.total_bytes_uploaded}\n")
 
             # After creating new file with UTF8 encoding, try converting it to Parquet
-            csv_to_parquet(new_file_path)
+            csv_to_parquet(f"{bucket_name}/{new_file_path}")
 
         except UnicodeDecodeError as e:
             utils.logger.error(f"Failed to decode content with detected encoding {detected_encoding}: {str(e)}")
