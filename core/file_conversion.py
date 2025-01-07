@@ -183,7 +183,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             # Ensure all remaining data is uploaded
             streaming_writer.close()
 
-            utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
+            utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{new_file_path}")
             utils.logger.info(f"Total bytes processed: {streaming_writer.total_bytes_uploaded}\n")
 
             # After creating new file with UTF8 encoding, try converting it to Parquet
