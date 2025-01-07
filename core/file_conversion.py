@@ -66,13 +66,16 @@ def csv_to_parquet(gcs_file_path: str) -> None:
 
             # Get file name from GCS path
             file_name = gcs_file_path.split('/')[-1].lower()
+            utils.logger.warning(f"file name is {file_name}")
 
             # Get the directory structure without the file name
             directory_path = '/'.join(gcs_file_path.split('/')[:-1])
+            utils.logger.warning(f"directory_path is {directory_path}")
 
             # Construct the parquet artifacts path by appending the CONVERTED_FILES path
             # to the existing directory structure
             parquet_artifacts_path = f"{directory_path}/{constants.ArtifactPaths.CONVERTED_FILES.value}"
+            utils.logger.warning(f"parquet_artifacts_path is {parquet_artifacts_path}")
 
             # Ensure we have a trailing slash for the artifacts path
             if not parquet_artifacts_path.endswith('/'):
@@ -81,8 +84,13 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             # Replace CSV file extension with Parquet extension
             # Remove FIXED_FILE_TAG_STRING string, if reprocessing file after it's been converted to UTF8
             parquet_file_name = file_name.replace(constants.CSV,constants.PARQUET).replace(constants.FIXED_FILE_TAG_STRING,'')
+            utils.logger.warning(f"parquet_artifacts_path is {parquet_artifacts_path}")
 
             parquet_path = f"{parquet_artifacts_path}{parquet_file_name}"
+            utils.logger.warning(f"parquet_artifacts_path is {parquet_artifacts_path}")
+
+            parquet_path_CORRECT = f"{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
+            utils.logger.warning(f"parquet_path_CORRECT is {parquet_path_CORRECT}")
 
             convert_statement = f"""
                 COPY  (
