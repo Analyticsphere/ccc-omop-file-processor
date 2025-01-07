@@ -13,6 +13,7 @@ FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
 
 class ArtifactPaths(str, Enum):
     ARTIFACTS = "artifacts/"
+    FIXED_FILES = f"{ARTIFACTS}fixed_files/"
     CONVERTED_FILES = f"{ARTIFACTS}converted_files/"
     REPORT = f"{ARTIFACTS}delivery_report/"
     DQD = f"{ARTIFACTS}dqd/"

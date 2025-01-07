@@ -137,7 +137,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
 
         # Create output filename
         file_name_parts = file_path.rsplit('.', 1)
-        new_file_path = f"{file_name_parts[0]}/{constants.ArtifactPaths.ARTIFACTS.value}/{constants.FIXED_FILE_TAG_STRING}.{file_name_parts[1]}"
+        new_file_path = f"{file_name_parts[0]}/{constants.ArtifactPaths.FIXED_FILES.value}/{constants.FIXED_FILE_TAG_STRING}.{file_name_parts[1]}"
         target_blob = bucket.blob(new_file_path)
 
         utils.logger.info(f"Converting file gs://{gcs_file_path} to UTF-8 encoding...")
