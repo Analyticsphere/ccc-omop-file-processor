@@ -150,15 +150,8 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         date_part = path_parts[1]
         file_name_part = file_name_parts[0].split('/')[1]
         file_ext = file_name_parts[1]
-        
-        utils.logger.warning(f"file_name_parts is {file_name_parts}")
-        utils.logger.warning(f"date_part is {date_part}")
-        utils.logger.warning(f"file_name_part is {file_name_part}")
-        utils.logger.warning(f"file_ext is {file_ext}")
-
 
         new_file_path = f"{date_part}/{constants.ArtifactPaths.FIXED_FILES.value}{file_name_part}{constants.FIXED_FILE_TAG_STRING}.{file_ext}"
-        utils.logger.warning(f"new file path is {new_file_path}")
         target_blob = bucket.blob(new_file_path)
 
         utils.logger.info(f"Converting file gs://{gcs_file_path} to UTF-8 encoding...")
