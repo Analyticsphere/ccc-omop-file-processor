@@ -89,7 +89,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             parquet_path = f"{parquet_artifacts_path}{parquet_file_name}"
             utils.logger.warning(f"parquet_path is {parquet_path}")
 
-            parquet_path_CORRECT_MAYBE = f"{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
+            parquet_path_CORRECT_MAYBE = f"{directory_path}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
             utils.logger.warning(f"parquet_path_CORRECT_MAYBE is {parquet_path_CORRECT_MAYBE}")
 
             convert_statement = f"""
