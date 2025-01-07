@@ -42,7 +42,7 @@ def create_artifact_buckets():
     directories = []
 
     # Create fully qualified paths for each artifact directory
-    for path in constants.ArtifactPaths.ARTIFACTS:
+    for path in constants.ArtifactPaths:
         full_path = f"{parent_bucket}/{path.value}"
         utils.logger.warning(f"full path is {full_path}")
         directories.append(full_path)
