@@ -84,13 +84,13 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             # Replace CSV file extension with Parquet extension
             # Remove FIXED_FILE_TAG_STRING string, if reprocessing file after it's been converted to UTF8
             parquet_file_name = file_name.replace(constants.CSV,constants.PARQUET).replace(constants.FIXED_FILE_TAG_STRING,'')
-            utils.logger.warning(f"parquet_artifacts_path is {parquet_artifacts_path}")
+            utils.logger.warning(f"parquet_file_name is {parquet_file_name}")
 
             parquet_path = f"{parquet_artifacts_path}{parquet_file_name}"
-            utils.logger.warning(f"parquet_artifacts_path is {parquet_artifacts_path}")
+            utils.logger.warning(f"parquet_path is {parquet_path}")
 
-            parquet_path_CORRECT = f"{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
-            utils.logger.warning(f"parquet_path_CORRECT is {parquet_path_CORRECT}")
+            parquet_path_CORRECT_MAYBE = f"{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
+            utils.logger.warning(f"parquet_path_CORRECT_MAYBE is {parquet_path_CORRECT_MAYBE}")
 
             convert_statement = f"""
                 COPY  (
@@ -156,7 +156,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         # Create output filename
         file_name_parts = file_path.rsplit('.', 1)
         date_part = path_parts[1]
-        file_name_part = path_parts[2]
+        file_name_part = file_name_parts[0]
         file_ext = file_name_parts[1]
         
         new_file_path = f"{date_part}/{constants.ArtifactPaths.FIXED_FILES.value}{file_name_part}{constants.FIXED_FILE_TAG_STRING}.{file_ext}"
