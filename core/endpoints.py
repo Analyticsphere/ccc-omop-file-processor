@@ -44,11 +44,8 @@ def create_artifact_buckets():
     # Create fully qualified paths for each artifact directory
     for path in constants.ArtifactPaths:
         full_path = f"{parent_bucket}/{path.value}"
-        utils.logger.warning(f"full path is {full_path}")
         directories.append(full_path)
     
-    utils.logger.warning(f"DIRECTORIES IS {directories}")
-
     # Create the actual GCS directories
     for directory in directories:
         utils.create_gcs_directory(directory)

@@ -111,6 +111,7 @@ def parse_duckdb_csv_error(error: duckdb.InvalidInputException) -> Optional[str]
     """
     Parse DuckDB CSV error messages to identify specific error types.
     Returns error type as string or None if unrecognized.
+    DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific errors
     """
     error_msg = str(error).lower()
     
