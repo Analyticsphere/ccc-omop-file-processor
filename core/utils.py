@@ -69,6 +69,38 @@ def create_gcs_directory(directory_path: str) -> None:
     except Exception as e:
         logger.error(f"Unable to create GCS bucket: {e}")
         sys.exit(1)
+def download_gcs_file(gcs_file_path: str, destination_path: str) -> None:
+    """
+    Downloads a file from a GCS bucket to a local destination using the Python client library.
+
+    Args:
+        gcs_file_path (str): Full path to the file in the GCS bucket (e.g., 'gs://bucket_name/path/to/file').
+        destination_path (str): Local path where the file will be saved.
+
+    Raises:
+        Exception: If there is an error during the download.
+    """
+    try:
+        if not gcs_file_path.startswith("gs://"):
+            raise ValueError(f"Invalid GCS path: {gcs_file_path}")
+        
+        # Parse bucket name and blob path
+        path_parts = gcs_file_path[5:].split('/', 1)
+        if len(path_parts) != 2:
+            raise ValueError(f"Invalid GCS path format: {gcs_file_path}")
+        bucket_name, blob_name = path_parts
+
+        # Initialize the GCS client
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+
+        # Download the blob to the specified local destination
+        blob.download_to_filename(destination_path)
+        logger.info(f"File downloaded to {destination_path}")
+    except Exception as e:
+        logger.error(f"Failed to download GCS file: {e}")
+        raise
 
 def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
     # Creates a DuckDB instance with a local database
