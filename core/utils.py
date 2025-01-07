@@ -1,3 +1,4 @@
+import json
 from google.cloud import storage
 import logging
 import sys
@@ -50,6 +51,27 @@ def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
     
     except Exception as e:
         raise Exception(f"Error listing files in GCS: {str(e)}")
+
+def validate_cdm_table_name(file_name: str, cdm_spec_path: str = 'omop_cdm_53_validation.json') -> bool:
+    """
+    Validates whether the filename (without extension) matches one of the
+    OMOP CDM tables defined in the JSON specification file.
+    """
+    try:
+        with open(cdm_spec_path, 'r') as f:
+            cdm_spec = json.load(f)
+
+        # Extract the valid table names from the JSON spec
+        valid_table_names = cdm_spec.keys()
+
+        # Get the base name of the file (without extension), e.g., "person" from "person.csv"
+        table_name, _ = os.path.splitext(file_name)
+
+        # Check if the filename matches any of the table keys in the JSON
+        return table_name in valid_table_names
+
+    except Exception as e:
+        raise Exception(f"Error validating cdm file: {str(e)}")
     
 def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.
