@@ -64,15 +64,25 @@ def csv_to_parquet(gcs_file_path: str) -> None:
         with conn:
             utils.logger.info(f"Converting file gs://{gcs_file_path} to parquet...")
 
+            # Get file name from GCS path
             file_name = gcs_file_path.split('/')[-1].lower()
 
-            parquet_artifacts = gcs_file_path.replace(file_name, constants.ArtifactPaths.CONVERTED_FILES.value)
+            # Get the directory structure without the file name
+            directory_path = '/'.join(gcs_file_path.split('/')[:-1])
+
+            # Construct the parquet artifacts path by appending the CONVERTED_FILES path
+            # to the existing directory structure
+            parquet_artifacts_path = f"{directory_path}/{constants.ArtifactPaths.CONVERTED_FILES.value}"
+
+            # Ensure we have a trailing slash for the artifacts path
+            if not parquet_artifacts_path.endswith('/'):
+                parquet_artifacts_path += '/'
 
             # Replace CSV file extension with Parquet extension
             # Remove FIXED_FILE_TAG_STRING string, if reprocessing file after it's been converted to UTF8
             parquet_file_name = file_name.replace(constants.CSV,constants.PARQUET).replace(constants.FIXED_FILE_TAG_STRING,'')
 
-            parquet_path = f"{parquet_artifacts}{parquet_file_name}"
+            parquet_path = f"{parquet_artifacts_path}{parquet_file_name}"
 
             convert_statement = f"""
                 COPY  (
@@ -183,7 +193,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             # Ensure all remaining data is uploaded
             streaming_writer.close()
 
-            utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{new_file_path}")
+            utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
             utils.logger.info(f"Total bytes processed: {streaming_writer.total_bytes_uploaded}\n")
 
             # After creating new file with UTF8 encoding, try converting it to Parquet
