@@ -34,28 +34,18 @@ def get_files():
         'service': constants.SERVICE_NAME
     }), 200
     
-@app.route('/validate_cdm_file', methods=['GET'])
-def validate_file(file_config: dict) -> list[dict]:
+@app.route('/validate_file', methods=['GET'])
+def validate_file() -> list[dict]:
     """
     Validates a file's name and schema against the OMOP standard.
-
-    Args:
-        file_config (dict): Configuration for the file, including GCS path, OMOP version, etc.
-
-    Returns:
-        list[dict]: Validation results, including file path, file name validation, and schema validation status.
     """
-    # Construct GCS path
-    gcs_file_path = (
-        f"gs://{file_config[constants.FileConfig.GCS_PATH.value]}/"
-        f"{file_config[constants.FileConfig.DELIVERY_DATE.value]}/"
-        f"{file_config[constants.FileConfig.FILE_NAME.value]}"
-    )
-    omop_version = file_config[constants.FileConfig.OMOP_VERSION.value]
+        # Get parameters from query string
+    file_path = request.args.get('file_path')
+    omop_version = request.args.get('omop_version')
     
-    utils.logger.info(f"Validating schema of {gcs_file_path} against OMOP v{omop_version}")
-    result = file_validation.validate_file(gcs_file_path, omop_version)
-    utils.logger.info(f"Validation successful for {gcs_file_path}")
+    utils.logger.info(f"Validating schema of {file_path} against OMOP v{omop_version}")
+    result = file_validation.validate_file(file_path, omop_version)
+    utils.logger.info(f"Validation successful for {file_path}")
 
     return jsonify({
         'status': 'success',
