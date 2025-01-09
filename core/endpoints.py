@@ -3,6 +3,7 @@ from datetime import datetime
 import core.utils as utils
 import core.constants as constants
 import core.file_conversion as file_conversion
+import core.file_validation as file_validation
 import os
 
 app = Flask(__name__)
@@ -32,7 +33,39 @@ def get_files():
         'file_list': file_list,
         'service': constants.SERVICE_NAME
     }), 200
+    
+@app.route('/validate_cdm_file', methods=['GET'])
+def validate_file(file_config: dict) -> list[dict]:
+    """
+    Validates a file's name and schema against the OMOP standard.
 
+    Args:
+        file_config (dict): Configuration for the file, including GCS path, OMOP version, etc.
+
+    Returns:
+        list[dict]: Validation results, including file path, file name validation, and schema validation status.
+    """
+    # Construct GCS path
+    gcs_file_path = (
+        f"gs://{file_config[constants.FileConfig.GCS_PATH.value]}/"
+        f"{file_config[constants.FileConfig.DELIVERY_DATE.value]}/"
+        f"{file_config[constants.FileConfig.FILE_NAME.value]}"
+    )
+    omop_version = file_config[constants.FileConfig.OMOP_VERSION.value]
+    
+    utils.logger.info(f"Validating schema of {gcs_file_path} against OMOP v{omop_version}")
+    result = file_validation.validate_file(gcs_file_path, omop_version)
+    utils.logger.info(f"Validation successful for {gcs_file_path}")
+
+    return jsonify({
+        'status': 'success',
+        'result': result,
+        'service': constants.SERVICE_NAME
+    }), 200
+    
+    # TODO Write to BQ meta_data, but this will just show in Airflow logs.
+
+    
 @app.route('/create_artifact_buckets', methods=['GET'])
 def create_artifact_buckets():
     parent_bucket = request.args.get('parent_bucket')
