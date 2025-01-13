@@ -3,11 +3,10 @@ import logging
 import sys
 import uuid
 import duckdb
-import os
-import shutil
 from fsspec import filesystem
 import core.constants as constants
 from typing import Optional
+
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
