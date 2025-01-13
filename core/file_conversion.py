@@ -245,7 +245,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         - Converts data types of columns within Parquet file to OMOP CDM standard
         - Creates a new Parquet file with the invalid rows from original data file
         - Converts all column names to lower case
-        - Ensures consisnt field order within Parquet
+        - Ensures consistant field order within Parquet
 
     This SQL has many functions, but it is far more efficient to do this all in one step,
     as compared to read and writing the Parquet each time, for each piece of functionality
@@ -291,43 +291,61 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         else:
             cast_statements.append(field_name)
 
-    sql = f"""
+    # Build SQL parts separately
+    source_with_defaults = f"""
         WITH source_with_defaults AS (
             SELECT 
-                {',\n        '.join(column_definitions)}
+                {',\n                '.join(column_definitions)}
             FROM {table_name}
-        ),
-        conversion_check AS (
+        )"""
+
+    conversion_check = f"""
+        , conversion_check AS (
             SELECT *,
-                {',\n        '.join(validation_checks)}
+                {',\n                '.join(validation_checks)}
             FROM source_with_defaults
-        ),
-        valid_rows AS (
+        )"""
+
+    valid_rows = f"""
+        , valid_rows AS (
             SELECT *
             FROM conversion_check
-            WHERE {' AND\n        '.join(required_conditions)}
-        ),
-        invalid_rows AS (
+            WHERE {' AND\n                '.join(required_conditions)}
+        )"""
+
+    invalid_rows = f"""
+        , invalid_rows AS (
             SELECT *
             FROM conversion_check
             WHERE NOT (
-                {' AND\n        '.join(required_conditions)}
+                {' AND\n                '.join(required_conditions)}
             )
-        )
+        )"""
 
+    copy_valid = f"""
         -- Save valid rows with proper types, overwriting original Parquet file
         COPY (
             SELECT 
-                {',\n        '.join(cast_statements)}
+                {',\n                '.join(cast_statements)}
             FROM valid_rows
-        ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING};
+        ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING};"""
 
+    copy_invalid = f"""
         -- Save invalid rows as-is for investigation, creating a new Parquet file
         COPY (
             SELECT * FROM invalid_rows
-        ) TO 'gs://{constants.ArtifactPaths.INVALID_ROWS.value}invalid_{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING};
-    """
-    
+        ) TO 'gs://{constants.ArtifactPaths.INVALID_ROWS.value}invalid_{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING};"""
+
+    # Combine all parts
+    sql = (
+        source_with_defaults +
+        conversion_check +
+        valid_rows +
+        invalid_rows +
+        copy_valid +
+        copy_invalid
+    )
+
     return sql
 
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:

@@ -79,7 +79,7 @@ def convert_to_parquet():
 @app.route('/fix_parquet', methods=['GET'])
 def convert_to_parquet():
     file_path: str = request.args.get('file_path')
-    omop_version = request.args.get('omop_version')
+    omop_version: str = request.args.get('omop_version')
 
     try:
         utils.logger.info(f"Attempt to fix Parquet file {file_path}")
