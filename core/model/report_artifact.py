@@ -10,7 +10,7 @@ class ReportArtifact:
     def __init__(self, delivery_date: str, gcs_path: str, concept_id: Optional[int], name: str, value_as_string: Optional[str], value_as_concept_id: Optional[int], value_as_number: Optional[float]):
         self.delivery_date = delivery_date
         self.gcs_path = gcs_path
-        self.report_artifact_path = f"{gcs_path}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP}"
+        self.report_artifact_path = f"{gcs_path}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
         self.concept_id = concept_id if concept_id is not None else 0
         self.name = name
         self.value_as_string = value_as_string
@@ -37,8 +37,8 @@ class ReportArtifact:
                         CAST('{self.value_as_string}' AS STRING) AS value_as_string,
                         SAFE_CAST('{self.value_as_concept_id}' AS INT) AS value_as_concept_id,
                         SAFE_CAST('{self.value_as_number}' AS FLOAT) AS value_as_number,
-                        '{date.today().strftime("%Y-%m-%d")}' AS metadata_date,
-                        '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' AS metadata_datetime
+                        SAFE_CAST('{date.today().strftime("%Y-%m-%d")}' AS DATE) AS metadata_date,
+                        SAFE_CAST('{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' AS DATETIME) AS metadata_datetime
                 ) TO {file_path} {constants.DUCKDB_FORMAT_STRING}
                 """
                 utils.logger.warning(f"record statement is {record_statement}")
