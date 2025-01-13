@@ -295,14 +295,14 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     source_with_defaults = f"""
         WITH source_with_defaults AS (
             SELECT 
-                {',\n                '.join(column_definitions)}
+                {', '.join(column_definitions)}
             FROM {table_name}
         )"""
 
     conversion_check = f"""
         , conversion_check AS (
             SELECT *,
-                {',\n                '.join(validation_checks)}
+                {', '.join(validation_checks)}
             FROM source_with_defaults
         )"""
 
@@ -310,7 +310,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         , valid_rows AS (
             SELECT *
             FROM conversion_check
-            WHERE {' AND\n                '.join(required_conditions)}
+            WHERE {' AND '.join(required_conditions)}
         )"""
 
     invalid_rows = f"""
@@ -318,7 +318,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
             SELECT *
             FROM conversion_check
             WHERE NOT (
-                {' AND\n                '.join(required_conditions)}
+                {' AND '.join(required_conditions)}
             )
         )"""
 
@@ -326,7 +326,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         -- Save valid rows with proper types, overwriting original Parquet file
         COPY (
             SELECT 
-                {',\n                '.join(cast_statements)}
+                {', '.join(cast_statements)}
             FROM valid_rows
         ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING};"""
 
