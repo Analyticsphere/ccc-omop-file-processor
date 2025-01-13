@@ -250,6 +250,9 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     This SQL has many functions, but it is far more efficient to do this all in one step,
     as compared to read and writing the Parquet each time, for each piece of functionality
     """
+
+    utils.logger.warning(f"in get_fix_columns_sql_statement() function")
+
     # Extract table name from file path
     table_name = get_table_name_from_path(gcs_file_path)
     
@@ -350,4 +353,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
     utils.logger.warning(f"RUNNING fix_columns ; gcs_file_path IS {gcs_file_path} AND cdm_version IS {cdm_version}")
+
+    utils.logger.warning("going to get SQL"
     utils.logger.warning(f"The SQL to fix the Parquet is {get_fix_columns_sql_statement(gcs_file_path, cdm_version)}")
