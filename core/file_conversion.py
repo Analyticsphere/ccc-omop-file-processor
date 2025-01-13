@@ -354,5 +354,5 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
     utils.logger.warning(f"RUNNING fix_columns ; gcs_file_path IS {gcs_file_path} AND cdm_version IS {cdm_version}")
 
-    utils.logger.warning("going to get SQL"
+    utils.logger.warning("going to get SQL")
     utils.logger.warning(f"The SQL to fix the Parquet is {get_fix_columns_sql_statement(gcs_file_path, cdm_version)}")
