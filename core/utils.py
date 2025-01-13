@@ -72,47 +72,39 @@ def gcs_path_exists(path: str) -> bool:
         logger.error(f"Error checking path existence for {path}: {str(e)}")
         return False
 
-def delete_gcs_file(file_path: str) -> None:
-    """
-    Delete a single file from GCS.
-    """
-    try:
-        # Remove 'gs://' prefix if present
-        if file_path.startswith('gs://'):
-            file_path = file_path[5:]
-        
-        # Split into bucket and blob path
-        bucket_name, blob_path = file_path.split('/', 1)
-        
-        # Initialize client
-        client = storage.Client()
-        bucket = client.bucket(bucket_name)
-        blob = bucket.blob(blob_path)
-        
-        # Delete the blob
-        blob.delete()
-
-    except Exception as e:
-        raise Exception(f"Error deleting file {file_path}: {str(e)}")
 
 def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.
-    
-    Args: directory_path: Full path including bucket name (e.g. 'bucket/path/to/dir/')
+    If directory exists, deletes any existing files first.
     """
     bucket_name = directory_path.split('/')[0]
     blob_name = '/'.join(directory_path.split('/')[1:])
     
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(blob_name)
     
     try:
+        # First check if directory exists and has files
+        blobs = bucket.list_blobs(prefix=blob_name)
+        
+        # Delete any existing files in the directory
+        for blob in blobs:
+            try:
+                bucket.blob(blob.name).delete()
+                logger.info(f"Deleted existing file: {blob.name}")
+            except Exception as e:
+                logger.warning(f"Failed to delete file {blob.name}: {e}")
+        
+        # Create the directory marker
+        blob = bucket.blob(blob_name)
         if not blob.exists():
             blob.upload_from_string('')
+            logger.info(f"Created directory: {directory_path}")
+            
     except Exception as e:
-        logger.error(f"Unable to create GCS bucket: {e}")
+        logger.error(f"Unable to process GCS directory {directory_path}: {e}")
         sys.exit(1)
+
 
 def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
     # Creates a DuckDB instance with a local database
