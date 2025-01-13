@@ -77,7 +77,7 @@ def convert_to_parquet():
         return "Unable to convert files to Parquet", 500
 
 @app.route('/fix_parquet', methods=['GET'])
-def convert_to_parquet():
+def fix_parquet_file():
     file_path: str = request.args.get('file_path')
     omop_version: str = request.args.get('omop_version')
 
