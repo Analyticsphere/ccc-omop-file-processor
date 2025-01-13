@@ -50,7 +50,51 @@ def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
     
     except Exception as e:
         raise Exception(f"Error listing files in GCS: {str(e)}")
-    
+
+def gcs_path_exists(path: str) -> bool:
+    """
+    Check if a GCS path exists.
+    """
+    try:
+        # Split bucket and prefix
+        bucket_name, prefix = path.split('/', 1)
+        
+        # Initialize client
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        
+        # List objects with the prefix and max_results=1 to check existence
+        blobs = list(bucket.list_blobs(prefix=prefix, max_results=1))
+        
+        # If we got any results or the prefix itself exists, return True
+        return len(blobs) > 0 or bucket.blob(prefix).exists()
+    except Exception as e:
+        logger.error(f"Error checking path existence for {path}: {str(e)}")
+        return False
+
+def delete_gcs_file(file_path: str) -> None:
+    """
+    Delete a single file from GCS.
+    """
+    try:
+        # Remove 'gs://' prefix if present
+        if file_path.startswith('gs://'):
+            file_path = file_path[5:]
+        
+        # Split into bucket and blob path
+        bucket_name, blob_path = file_path.split('/', 1)
+        
+        # Initialize client
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        
+        # Delete the blob
+        blob.delete()
+
+    except Exception as e:
+        raise Exception(f"Error deleting file {file_path}: {str(e)}")
+
 def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.
     
