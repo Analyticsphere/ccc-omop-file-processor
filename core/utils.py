@@ -72,7 +72,6 @@ def gcs_path_exists(path: str) -> bool:
         logger.error(f"Error checking path existence for {path}: {str(e)}")
         return False
 
-
 def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.
     If directory exists, deletes any existing files first.
@@ -104,7 +103,6 @@ def create_gcs_directory(directory_path: str) -> None:
     except Exception as e:
         logger.error(f"Unable to process GCS directory {directory_path}: {e}")
         sys.exit(1)
-
 
 def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
     # Creates a DuckDB instance with a local database
@@ -140,7 +138,6 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str,
         #shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
-
 
 def parse_duckdb_csv_error(error: duckdb.InvalidInputException) -> Optional[str]:
     """
