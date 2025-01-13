@@ -18,7 +18,7 @@ class ReportArtifact:
         self.value_as_number = value_as_number
 
     def save_artifact(self) -> None:
-        random_id = random.randint(-2**31, 2**31 - 1) # Random integer within 32 bit signed space
+        random_id = random.randint(0, 2**31 - 1) # Random, positive, integer within 32 bit signed space
         random_string = str(uuid.uuid4())
 
         file_path = f"{self.report_artifact_path}delivery_report_part_{random_string}{constants.PARQUET}"
@@ -39,7 +39,7 @@ class ReportArtifact:
                         SAFE_CAST('{self.value_as_number}' AS FLOAT) AS value_as_number,
                         SAFE_CAST('{date.today().strftime("%Y-%m-%d")}' AS DATE) AS metadata_date,
                         SAFE_CAST('{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' AS DATETIME) AS metadata_datetime
-                ) TO {file_path} {constants.DUCKDB_FORMAT_STRING}
+                ) TO '{file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
                 utils.logger.warning(f"record statement is {record_statement}")
                 conn.execute(record_statement)
