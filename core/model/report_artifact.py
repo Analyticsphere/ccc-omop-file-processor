@@ -7,8 +7,7 @@ from datetime import datetime, date
 import sys
 
 class ReportArtifact:
-    def __init__(self, site: str, delivery_date: str, gcs_path: str, concept_id: Optional[int], name: str, value_as_string: Optional[str], value_as_concept_id: Optional[int], value_as_number: Optional[float]):
-        self.site = site
+    def __init__(self, delivery_date: str, gcs_path: str, concept_id: Optional[int], name: str, value_as_string: Optional[str], value_as_concept_id: Optional[int], value_as_number: Optional[float]):
         self.delivery_date = delivery_date
         self.gcs_path = gcs_path
         self.report_artifact_path = f"{gcs_path}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP}"
@@ -18,7 +17,7 @@ class ReportArtifact:
         self.value_as_concept_id = value_as_concept_id if value_as_concept_id is not None else 0
         self.value_as_number = value_as_number
 
-    def create_artifact(self) -> None:
+    def save_artifact(self) -> None:
         random_id = random.randint(-2**31, 2**31 - 1) # Random integer within 32 bit signed space
         random_string = str(uuid.uuid4())
 

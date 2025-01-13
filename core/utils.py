@@ -132,8 +132,6 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str,
     # Destory DuckDB object to free memory, and remove temporary files
     try:
         conn.close()
-
-
         #os.remove(local_db_file)
         #shutil.rmtree(tmp_dir)
     except Exception as e:
