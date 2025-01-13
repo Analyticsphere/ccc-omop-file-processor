@@ -87,7 +87,7 @@ def fix_parquet_file():
 
         return "Fixed Parquet file", 200
     except:
-        "Unable to fix Parquet file", 500
+        return "Unable to fix Parquet file", 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
