@@ -31,14 +31,14 @@ class ReportArtifact:
                 COPY (
                     SELECT
                         CAST('{random_id}' AS INT) AS metadata_id,
-                        SAFE_CAST('{self.concept_id}' AS INT) AS metadata_concept_id,
+                        TRY_CAST('{self.concept_id}' AS INT) AS metadata_concept_id,
                         32880 AS metadata_type_concept_id,
                         '{self.name}' AS name,
                         CAST('{self.value_as_string}' AS STRING) AS value_as_string,
-                        SAFE_CAST('{self.value_as_concept_id}' AS INT) AS value_as_concept_id,
-                        SAFE_CAST('{self.value_as_number}' AS FLOAT) AS value_as_number,
-                        SAFE_CAST('{date.today().strftime("%Y-%m-%d")}' AS DATE) AS metadata_date,
-                        SAFE_CAST('{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' AS DATETIME) AS metadata_datetime
+                        TRY_CAST('{self.value_as_concept_id}' AS INT) AS value_as_concept_id,
+                        TRY_CAST('{self.value_as_number}' AS FLOAT) AS value_as_number,
+                        TRY_CAST('{date.today().strftime("%Y-%m-%d")}' AS DATE) AS metadata_date,
+                        TRY_CAST('{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' AS DATETIME) AS metadata_datetime
                 ) TO '{file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
                 utils.logger.warning(f"record statement is {record_statement}")
