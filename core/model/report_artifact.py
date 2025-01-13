@@ -31,7 +31,7 @@ class ReportArtifact:
                 COPY (
                     SELECT
                         CAST('{random_id}' AS INT) AS metadata_id,
-                        SAFE_CAST('{self.concept_id} AS INT) AS metadata_concept_id,
+                        SAFE_CAST('{self.concept_id}' AS INT) AS metadata_concept_id,
                         32880 AS metadata_type_concept_id,
                         '{self.name}' AS name,
                         CAST('{self.value_as_string}' AS STRING) AS value_as_string,
@@ -41,6 +41,7 @@ class ReportArtifact:
                         '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' AS metadata_datetime
                 ) TO {file_path} {constants.DUCKDB_FORMAT_STRING}
                 """
+                utils.logger.warning(f"record statement is {record_statement}")
                 conn.execute(record_statement)
                 utils.logger.info(f"Saved delivery report record to {file_path}")
         except Exception as e:
