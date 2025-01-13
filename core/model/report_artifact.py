@@ -41,7 +41,6 @@ class ReportArtifact:
                         TRY_CAST('{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' AS DATETIME) AS metadata_datetime
                 ) TO '{file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
-                utils.logger.warning(f"record statement is {record_statement}")
                 conn.execute(record_statement)
                 utils.logger.info(f"Saved delivery report record to {file_path}")
         except Exception as e:

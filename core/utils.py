@@ -89,7 +89,7 @@ def create_gcs_directory(directory_path: str) -> None:
         # Delete any existing files in the directory
         for blob in blobs:
             try:
-                #bucket.blob(blob.name).delete()
+                bucket.blob(blob.name).delete()
                 logger.info(f"Deleted existing file: {blob.name}")
             except Exception as e:
                 logger.warning(f"Failed to delete file {blob.name}: {e}")

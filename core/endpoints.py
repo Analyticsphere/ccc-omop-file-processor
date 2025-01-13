@@ -28,9 +28,6 @@ def get_files():
     
     file_list = utils.list_gcs_files(bucket, folder)
 
-    ra = report_artifact.ReportArtifact(folder, bucket, None, "Testing reporting", "test", None, 1.0)
-    ra.save_artifact()
-
     return jsonify({
         'status': 'healthy',
         'file_list': file_list,
