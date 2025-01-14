@@ -234,14 +234,15 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
         raise Exception(f"Unexpected error getting table schema: {str(e)}")
 
 def get_placeholder_value(field_name: str, field_type: str) -> str:
+    # Return string representation of default value
     if field_name.endswith("_concept_id"):
-        return "0"
+        return "'0'"
     
     return {
         "string": "''",
         "date": "'1970-01-01'",
-        "integer": "-1",
-        "float": "-1.0",
+        "integer": "'-1'",
+        "float": "'-1.0'",
         "datetime": "'1901-01-01 00:00:00'"
     }[field_type]
 
@@ -251,15 +252,32 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         - Converts data types of columns within Parquet file to OMOP CDM standard
         - Creates a new Parquet file with the invalid rows from original data file
         - Converts all column names to lower case
-        - Ensures consistant field order within Parquet
+        - Ensures consistent field order within Parquet
 
     This SQL has many functions, but it is far more efficient to do this all in one step,
-    as compared to read and writing the Parquet each time, for each piece of functionality
+    as compared to reading and writing the Parquet each time, for each piece of functionality.
     """
 
     utils.logger.warning("in get_fix_columns_sql_statement() function")
     utils.logger.warning(f"The file path is {gcs_file_path}")
     utils.logger.warning(f"OMOP version is {cdm_version}")
+
+    # --------------------------------------------------------------------------
+    # 0) Helper to map your custom schema types to DuckDB types
+    # --------------------------------------------------------------------------
+    def _map_schema_type_to_duckdb_type(schema_type: str) -> str:
+        # Adjust this map as needed for your environment
+        # For example, if you have "float" in your schema, map to "DOUBLE" or "FLOAT"
+        # If you have "bigint", map to "BIGINT", etc.
+        type_map = {
+            "string": "VARCHAR",
+            "integer": "INTEGER",
+            "float": "DOUBLE",
+            "date": "DATE",
+            "datetime": "TIMESTAMP",  # DuckDB doesn't have "DATETIME", so we use TIMESTAMP
+        }
+        # Default to VARCHAR if an unknown type is encountered
+        return type_map.get(schema_type.lower(), "VARCHAR")
 
     # Extract table name from file path
     table_name = get_table_name_from_path(gcs_file_path)
@@ -283,39 +301,47 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     required_conditions = []
     cast_statements_for_table = []
 
-    # Build up the CTE columns
+    # --------------------------------------------------------------------------
+    # 1) Build up the columns logic
+    # --------------------------------------------------------------------------
     for field_name in ordered_columns:
         field_info = fields[field_name]
-        field_type = field_info["type"]
+        field_type = field_info["type"].lower()  # e.g. 'string', 'integer', 'datetime'
         is_required = field_info["required"].lower() == "true"
-        
+
+        # Provide a placeholder if required but null
         default_value = get_placeholder_value(field_name, field_type) if is_required else "NULL"
-        # For the first CTE (source_with_defaults)
+        
+        # A) Source with defaults (coalesce)
         column_definitions.append(
-            f"COALESCE({field_name}, '{default_value}') AS {field_name}"
+            f"COALESCE({field_name}, {default_value}) AS {field_name}"
         )
 
-        # For the second CTE (conversion_check)
-        # Skip validation for string fields
+        # B) Conversion/validation checks
+        #    Only validate non-string fields (we skip validation for strings)
         if field_type != "string":
+            duckdb_type = _map_schema_type_to_duckdb_type(field_type)
             validation_checks.append(
-                f"TRY_CAST({field_name} AS {field_type.upper()}) IS NOT NULL AS {field_name}"
+                f"TRY_CAST({field_name} AS {duckdb_type}) IS NOT NULL AS {field_name}"
             )
-
+            # If required, it must be non-null AND valid
             if is_required:
                 required_conditions.append(f"{field_name}")
             else:
+                # If optional, it can be NULL or valid
                 required_conditions.append(f"({field_name} IS NULL OR {field_name})")
-        
-        # For creating the "valid_rows" table, we want to cast non-string columns
-        if field_type != "string":
-            cast_statements_for_table.append(f"CAST({field_name} AS {field_type.upper()}) AS {field_name}")
+
+            # C) Final cast in valid_rows
+            cast_statements_for_table.append(
+                f"CAST({field_name} AS {duckdb_type}) AS {field_name}"
+            )
         else:
+            # Strings remain as-is (no type conversion)
             cast_statements_for_table.append(field_name)
 
-    # -----------------------------------------------------
-    # 1) Create a temp table for valid_rows
-    # -----------------------------------------------------
+    # --------------------------------------------------------------------------
+    # 2) SQL for Creating valid_rows
+    # --------------------------------------------------------------------------
     create_valid_rows_sql = f"""
         CREATE OR REPLACE TEMP TABLE valid_rows AS
         WITH source_with_defaults AS (
@@ -326,18 +352,19 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         conversion_check AS (
             SELECT
                 *,
-                {', '.join(validation_checks)}
+                {', '.join(validation_checks) if validation_checks else ''}
             FROM source_with_defaults
         )
         SELECT
             {', '.join(cast_statements_for_table)}
         FROM conversion_check
-        WHERE {' AND '.join(required_conditions)};
+        WHERE {' AND '.join(required_conditions) if required_conditions else 'TRUE'};
     """.strip()
 
-    # -----------------------------------------------------
-    # 2) Create a temp table for invalid_rows
-    # -----------------------------------------------------
+    # --------------------------------------------------------------------------
+    # 3) SQL for Creating invalid_rows
+    #    Any row that didn't meet the "required_conditions"
+    # --------------------------------------------------------------------------
     create_invalid_rows_sql = f"""
         CREATE OR REPLACE TEMP TABLE invalid_rows AS
         WITH source_with_defaults AS (
@@ -348,42 +375,38 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         conversion_check AS (
             SELECT
                 *,
-                {', '.join(validation_checks)}
+                {', '.join(validation_checks) if validation_checks else ''}
             FROM source_with_defaults
         )
         SELECT
             conversion_check.*
         FROM conversion_check
         WHERE NOT (
-            {' AND '.join(required_conditions)}
+            {' AND '.join(required_conditions) if required_conditions else 'TRUE'}
         );
     """.strip()
 
-    # -----------------------------------------------------
-    # 3) COPY valid_rows back to the original file (overwrites it)
-    # -----------------------------------------------------
+    # --------------------------------------------------------------------------
+    # 4) COPY valid_rows back to the original file (overwrites it)
+    # --------------------------------------------------------------------------
     copy_valid_sql = f"""
         COPY valid_rows
         TO 'gs://{gcs_file_path}'
         {constants.DUCKDB_FORMAT_STRING};
     """.strip()
 
-    # -----------------------------------------------------
-    # 4) COPY invalid_rows to a new "invalid_<table>.parquet"
-    # -----------------------------------------------------
+    # --------------------------------------------------------------------------
+    # 5) COPY invalid_rows to a new "invalid_<table>.parquet"
+    # --------------------------------------------------------------------------
     copy_invalid_sql = f"""
         COPY invalid_rows
         TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}invalid_{table_name}{constants.PARQUET}'
         {constants.DUCKDB_FORMAT_STRING};
     """.strip()
 
-    # -----------------------------------------------------
-    # Return them as *either* a single multi-statement string
-    # or a list of statements. Many DuckDB clients allow
-    # multiple statements separated by semicolons.
-    # -----------------------------------------------------
-
-    # Option A: Return as one string with semicolon separators
+    # --------------------------------------------------------------------------
+    # 6) Return all as one SQL script
+    # --------------------------------------------------------------------------
     sql_script = f"""
         {create_valid_rows_sql};
 
