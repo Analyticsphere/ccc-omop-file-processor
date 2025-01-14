@@ -221,17 +221,10 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
 
     try:
         with open(schema_file, 'r') as f:
-            schema = json.load(f)
+            schema_json = f.read()
+            schema = json.loads(schema_json)
             utils.logger.warning(f"** THE SCHEMA FILE: {schema}")
-            
-            # Check if table exists and get its schema
-            if table_name in schema:
-                table_schema = schema[table_name]
-                return {
-                    'concept_id': table_schema['concept_id'],
-                    'fields': table_schema['fields']
-                }
-            return {}
+            return schema[table_name] if table_name in schema else {}
             
     except FileNotFoundError:
         raise Exception(f"Schema file not found: {schema_file}")
