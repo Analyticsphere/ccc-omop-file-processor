@@ -299,13 +299,13 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         # Skip validation for string fields
         if field_type != "string":
             validation_checks.append(
-                f"TRY_CAST({field_name} AS {field_type.upper()}) IS NOT NULL AS {field_name}_valid"
+                f"TRY_CAST({field_name} AS {field_type.upper()}) IS NOT NULL AS {field_name}"
             )
 
             if is_required:
-                required_conditions.append(f"{field_name}_valid")
+                required_conditions.append(f"{field_name}")
             else:
-                required_conditions.append(f"({field_name} IS NULL OR {field_name}_valid)")
+                required_conditions.append(f"({field_name} IS NULL OR {field_name})")
         
         # For creating the "valid_rows" table, we want to cast non-string columns
         if field_type != "string":
