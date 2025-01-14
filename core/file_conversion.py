@@ -216,10 +216,12 @@ def get_table_name_from_path(gcs_file_path: str) -> str:
 def get_table_schema(table_name: str, cdm_version: str) -> dict:
     utils.logger.warning(f"in get_table_schema() function")
     schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
+    utils.logger.warning(f"schema file location is {schema_file}")
 
     try:
         with open(schema_file, 'r') as f:
             schema = json.load(f)
+            utils.logger.warning(f"** THE SCHEMA FILE: {schema}")
             # If the table_name isn't in the schema, return an empty dictionary
             return schema.get(table_name, {})
     except FileNotFoundError:
@@ -367,4 +369,4 @@ def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
     utils.logger.warning(f"RUNNING fix_columns ; gcs_file_path IS {gcs_file_path} AND cdm_version IS {cdm_version}")
 
     utils.logger.warning("going to get SQL")
-    utils.logger.warning(f"The SQL to fix the Parquet is {get_fix_columns_sql_statement(gcs_file_path, cdm_version)}")
+    utils.logger.warning(f"!!!!!!!!!! The SQL to fix the Parquet for {gcs_file_path} is {get_fix_columns_sql_statement(gcs_file_path, cdm_version)}")
