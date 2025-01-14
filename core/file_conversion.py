@@ -217,13 +217,22 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
     utils.logger.warning(f"in get_table_schema() function")
     schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
     utils.logger.warning(f"schema file location is {schema_file}")
+    utils.logger.warning(f"going to get schema for table_name of {table_name}")
 
     try:
         with open(schema_file, 'r') as f:
             schema = json.load(f)
             utils.logger.warning(f"** THE SCHEMA FILE: {schema}")
-            # If the table_name isn't in the schema, return an empty dictionary
-            return schema.get(table_name, {})
+            
+            # Check if table exists and get its schema
+            if table_name in schema:
+                table_schema = schema[table_name]
+                return {
+                    'concept_id': table_schema['concept_id'],
+                    'fields': table_schema['fields']
+                }
+            return {}
+            
     except FileNotFoundError:
         raise Exception(f"Schema file not found: {schema_file}")
     except json.JSONDecodeError:
