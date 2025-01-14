@@ -209,23 +209,17 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         sys.exit(1)
 
 def get_table_name_from_path(gcs_file_path: str) -> str:
-    utils.logger.warning("In get_table_name_from_path() function")
     # Extract file name from path and remove .parquet extension
     return gcs_file_path.split('/')[-1].replace(constants.PARQUET, '').lower()
 
 def get_table_schema(table_name: str, cdm_version: str) -> dict:
-    utils.logger.warning(f"in get_table_schema() function")
     schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
-    utils.logger.warning(f"schema file location is {schema_file}")
-    utils.logger.warning(f"going to get schema for table_name of '{table_name}'")
 
     try:
         with open(schema_file, 'r') as f:
             schema_json = f.read()
             schema = json.loads(schema_json)
 
-            utils.logger.warning(f"** THE SCHEMA FILE: {schema}")
-            
         # Check if table exists in schema
         if table_name in schema:
             return {table_name: schema[table_name]}
@@ -269,7 +263,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 
     # Extract table name from file path
     table_name = get_table_name_from_path(gcs_file_path)
-    utils.logger.warning(f"table name is {table_name}")
     
     # Get schema for this table; return "" if no schema is found
     # Schema won't exist for tables NOT in the CDM
@@ -279,7 +272,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         return ""
     
     fields = schema[table_name]["fields"]
-    utils.logger.warning(f"fields is {fields}")
     ordered_columns = list(fields.keys())
 
     column_definitions = []
@@ -321,7 +313,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         WITH source_with_defaults AS (
             SELECT 
                 {', '.join(column_definitions)}
-            FROM {table_name}
+            FROM gs://{gcs_file_path}
         )"""
 
     conversion_check = f"""
@@ -374,7 +366,18 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     return sql
 
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
+    fix_sql = get_fix_columns_sql_statement(gcs_file_path, cdm_version)
     utils.logger.warning(f"RUNNING fix_columns ; gcs_file_path IS {gcs_file_path} AND cdm_version IS {cdm_version}")
 
-    utils.logger.warning("going to get SQL")
-    utils.logger.warning(f"!!!!!!!!!! The SQL to fix the Parquet for {gcs_file_path} is {get_fix_columns_sql_statement(gcs_file_path, cdm_version)}")
+    utils.logger.warning(f"!! The SQL to fix the Parquet for {gcs_file_path} is {fix_sql}")
+
+    conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
+
+    try:
+        with conn:
+            conn.execute(fix_sql)
+    except Exception as e:
+        utils.logger.error(f"Unable to fix Parquet file: {e}")
+        sys.exit(1)
+    finally:
+        utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
