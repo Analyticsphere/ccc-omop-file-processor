@@ -374,16 +374,21 @@ def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
     fix_sql = get_fix_columns_sql_statement(gcs_file_path, cdm_version)
     utils.logger.warning(f"RUNNING fix_columns ; gcs_file_path IS {gcs_file_path} AND cdm_version IS {cdm_version}")
 
-    utils.logger.warning(f"!! The SQL to fix the Parquet for {gcs_file_path} is {fix_sql}")
+    utils.logger.warning(f"!! The SQL to fix the Parquet for {gcs_file_path} is: ")
+    utils.logger.warning(fix_sql)
 
     conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
 
     if fix_sql and len(fix_columns) > 0:
+        utils.logger.warning("Will execute SQL")
         try:
             with conn:
+                utils.logger.warning("About to run the SQL statement!")
                 conn.execute(fix_sql)
         except Exception as e:
             utils.logger.error(f"Unable to fix Parquet file: {e}")
             sys.exit(1)
         finally:
             utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+    else:
+        utils.logger.warning("Will NOTTTTT execute SQL")
