@@ -257,7 +257,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     as compared to read and writing the Parquet each time, for each piece of functionality
     """
 
-    utils.logger.warning(f"in get_fix_columns_sql_statement() function")
+    utils.logger.warning("in get_fix_columns_sql_statement() function")
     utils.logger.warning(f"The file path is {gcs_file_path}")
     utils.logger.warning(f"OMOP version is {cdm_version}")
 
@@ -270,105 +270,131 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     utils.logger.warning(f"Subfolder: {subfolder}")
     
     # Get schema for this table; return "" if no schema is found
-    # Schema won't exist for tables NOT in the CDM
     schema = get_table_schema(table_name, cdm_version)
     if not schema or table_name not in schema:
         utils.logger.warning(f"No schema found for table {table_name}")
         return ""
-    
+
     fields = schema[table_name]["fields"]
     ordered_columns = list(fields.keys())
 
     column_definitions = []
     validation_checks = []
-    cast_statements = []
     required_conditions = []
-    
+    cast_statements_for_table = []
+
+    # Build up the CTE columns
     for field_name in ordered_columns:
         field_info = fields[field_name]
         field_type = field_info["type"]
         is_required = field_info["required"].lower() == "true"
         
         default_value = get_placeholder_value(field_name, field_type) if is_required else "NULL"
+        # For the first CTE (source_with_defaults)
         column_definitions.append(
             f"COALESCE({field_name}, {default_value}) AS {field_name}"
         )
-        
+
+        # For the second CTE (conversion_check)
         # Skip validation for string fields
         if field_type != "string":
             validation_checks.append(
                 f"TRY_CAST({field_name} AS {field_type.upper()}) IS NOT NULL AS {field_name}_valid"
             )
-            
+
             if is_required:
                 required_conditions.append(f"{field_name}_valid")
             else:
                 required_conditions.append(f"({field_name} IS NULL OR {field_name}_valid)")
         
-        # Generate CAST statement for the final output
+        # For creating the "valid_rows" table, we want to cast non-string columns
         if field_type != "string":
-            cast_statements.append(
-                f"CAST({field_name} AS {field_type.upper()}) AS {field_name}"
-            )
+            cast_statements_for_table.append(f"CAST({field_name} AS {field_type.upper()}) AS {field_name}")
         else:
-            cast_statements.append(field_name)
+            cast_statements_for_table.append(field_name)
 
-    # Build SQL parts separately
-    source_with_defaults = f"""
+    # -----------------------------------------------------
+    # 1) Create a temp table for valid_rows
+    # -----------------------------------------------------
+    create_valid_rows_sql = f"""
+        CREATE OR REPLACE TEMP TABLE valid_rows AS
         WITH source_with_defaults AS (
             SELECT 
                 {', '.join(column_definitions)}
             FROM 'gs://{gcs_file_path}'
-        )"""
-
-    conversion_check = f"""
-        , conversion_check AS (
-            SELECT *,
+        ),
+        conversion_check AS (
+            SELECT
+                *,
                 {', '.join(validation_checks)}
             FROM source_with_defaults
-        )"""
+        )
+        SELECT
+            {', '.join(cast_statements_for_table)}
+        FROM conversion_check
+        WHERE {' AND '.join(required_conditions)};
+    """.strip()
 
-    valid_rows = f"""
-        , valid_rows AS (
-            SELECT *
-            FROM conversion_check
-            WHERE {' AND '.join(required_conditions)}
-        )"""
-
-    invalid_rows = f"""
-        , invalid_rows AS (
-            SELECT *
-            FROM conversion_check
-            WHERE NOT (
-                {' AND '.join(required_conditions)}
-            )
-        )"""
-
-    copy_valid = f"""
-        -- Save valid rows with proper types, overwriting original Parquet file
-        COPY (
+    # -----------------------------------------------------
+    # 2) Create a temp table for invalid_rows
+    # -----------------------------------------------------
+    create_invalid_rows_sql = f"""
+        CREATE OR REPLACE TEMP TABLE invalid_rows AS
+        WITH source_with_defaults AS (
             SELECT 
-                {', '.join(cast_statements)}
-            FROM valid_rows
-        ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING};"""
+                {', '.join(column_definitions)}
+            FROM 'gs://{gcs_file_path}'
+        ),
+        conversion_check AS (
+            SELECT
+                *,
+                {', '.join(validation_checks)}
+            FROM source_with_defaults
+        )
+        SELECT
+            conversion_check.*
+        FROM conversion_check
+        WHERE NOT (
+            {' AND '.join(required_conditions)}
+        );
+    """.strip()
 
-    copy_invalid = f"""
-        -- Save invalid rows as-is for investigation, creating a new Parquet file
-        COPY (
-            SELECT * FROM invalid_rows
-        ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}invalid_{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING};"""
+    # -----------------------------------------------------
+    # 3) COPY valid_rows back to the original file (overwrites it)
+    # -----------------------------------------------------
+    copy_valid_sql = f"""
+        COPY valid_rows
+        TO 'gs://{gcs_file_path}'
+        {constants.DUCKDB_FORMAT_STRING};
+    """.strip()
 
-    # Combine all parts
-    sql = (
-        source_with_defaults +
-        conversion_check +
-        valid_rows +
-        invalid_rows +
-        copy_valid +
-        copy_invalid
-    )
+    # -----------------------------------------------------
+    # 4) COPY invalid_rows to a new "invalid_<table>.parquet"
+    # -----------------------------------------------------
+    copy_invalid_sql = f"""
+        COPY invalid_rows
+        TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}invalid_{table_name}{constants.PARQUET}'
+        {constants.DUCKDB_FORMAT_STRING};
+    """.strip()
 
-    return sql
+    # -----------------------------------------------------
+    # Return them as *either* a single multi-statement string
+    # or a list of statements. Many DuckDB clients allow
+    # multiple statements separated by semicolons.
+    # -----------------------------------------------------
+
+    # Option A: Return as one string with semicolon separators
+    sql_script = f"""
+        {create_valid_rows_sql};
+
+        {create_invalid_rows_sql};
+
+        {copy_valid_sql};
+
+        {copy_invalid_sql};
+    """.strip()
+
+    return sql_script
 
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
     fix_sql = get_fix_columns_sql_statement(gcs_file_path, cdm_version)
