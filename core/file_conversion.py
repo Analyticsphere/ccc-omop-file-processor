@@ -379,7 +379,7 @@ def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
 
     conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
 
-    if fix_sql and len(fix_columns) > 0:
+    if fix_sql and len(fix_sql) > 0:
         utils.logger.warning("Will execute SQL")
         try:
             with conn:
