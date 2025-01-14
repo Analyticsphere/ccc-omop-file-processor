@@ -263,6 +263,11 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 
     # Extract table name from file path
     table_name = get_table_name_from_path(gcs_file_path)
+
+    # Split the path by '/' and take the first two elements
+    bucket, subfolder = gcs_file_path.split('/')[:2]
+    utils.logger.warning(f"Bucket: {bucket}")
+    utils.logger.warning(f"Subfolder: {subfolder}")
     
     # Get schema for this table; return "" if no schema is found
     # Schema won't exist for tables NOT in the CDM
@@ -313,7 +318,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         WITH source_with_defaults AS (
             SELECT 
                 {', '.join(column_definitions)}
-            FROM gs://{gcs_file_path}
+            FROM 'gs://{gcs_file_path}'
         )"""
 
     conversion_check = f"""
@@ -351,7 +356,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         -- Save invalid rows as-is for investigation, creating a new Parquet file
         COPY (
             SELECT * FROM invalid_rows
-        ) TO 'gs://{constants.ArtifactPaths.INVALID_ROWS.value}invalid_{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING};"""
+        ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}invalid_{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING};"""
 
     # Combine all parts
     sql = (
@@ -373,11 +378,12 @@ def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
 
     conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
 
-    try:
-        with conn:
-            conn.execute(fix_sql)
-    except Exception as e:
-        utils.logger.error(f"Unable to fix Parquet file: {e}")
-        sys.exit(1)
-    finally:
-        utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+    if fix_sql and len(fix_columns) > 0:
+        try:
+            with conn:
+                conn.execute(fix_sql)
+        except Exception as e:
+            utils.logger.error(f"Unable to fix Parquet file: {e}")
+            sys.exit(1)
+        finally:
+            utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
