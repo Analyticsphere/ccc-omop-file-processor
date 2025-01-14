@@ -211,7 +211,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
 def get_table_name_from_path(gcs_file_path: str) -> str:
     utils.logger.warning("In get_table_name_from_path() function")
     # Extract file name from path and remove .parquet extension
-    return gcs_file_path.split('/')[-1].replace(constants.PARQUET, '')
+    return gcs_file_path.split('/')[-1].replace(constants.PARQUET, '').lower()
 
 def get_table_schema(table_name: str, cdm_version: str) -> dict:
     utils.logger.warning(f"in get_table_schema() function")
@@ -261,11 +261,17 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     table_name = get_table_name_from_path(gcs_file_path)
     utils.logger.warning(f"table name is {table_name}")
     
-    # Get schema for this table
-    fields = get_table_schema(table_name, cdm_version)[table_name]["fields"]
-    utils.logger.warning(f"tfields is {fields}")
-    ordered_columns = list(fields.keys())
+    # Get schema for this table; return "" if no schema is found
+    # Schema won't exist for tables NOT in the CDM
+    schema = get_table_schema(table_name, cdm_version)
+    if not schema or table_name not in schema:
+        utils.logger.warning(f"No schema found for table {table_name}")
+        return ""
     
+    fields = schema[table_name]["fields"]
+    utils.logger.warning(f"fields is {fields}")
+    ordered_columns = list(fields.keys())
+
     column_definitions = []
     validation_checks = []
     cast_statements = []
