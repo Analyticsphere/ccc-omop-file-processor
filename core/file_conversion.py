@@ -292,7 +292,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         default_value = get_placeholder_value(field_name, field_type) if is_required else "NULL"
         # For the first CTE (source_with_defaults)
         column_definitions.append(
-            f"COALESCE({field_name}, {default_value}) AS {field_name}"
+            f"COALESCE({field_name}, '{default_value}') AS {field_name}"
         )
 
         # For the second CTE (conversion_check)
@@ -405,7 +405,7 @@ def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
 
     conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
 
-    if fix_sql and len(fix_sql) > 0:
+    if fix_sql and len(fix_sql) > 1:
         utils.logger.warning("Will execute SQL")
         try:
             with conn:
