@@ -4,6 +4,7 @@ import core.utils as utils
 import core.constants as constants
 import core.file_conversion as file_conversion
 import os
+import core.model.report_artifact as report_artifact
 
 app = Flask(__name__)
 

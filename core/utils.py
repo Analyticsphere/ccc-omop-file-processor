@@ -3,11 +3,10 @@ import logging
 import sys
 import uuid
 import duckdb
-import os
-import shutil
 from fsspec import filesystem
 import core.constants as constants
 from typing import Optional
+
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -51,24 +50,37 @@ def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
     
     except Exception as e:
         raise Exception(f"Error listing files in GCS: {str(e)}")
-    
+
 def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.
-    
-    Args: directory_path: Full path including bucket name (e.g. 'bucket/path/to/dir/')
+    If directory exists, deletes any existing files first.
     """
     bucket_name = directory_path.split('/')[0]
     blob_name = '/'.join(directory_path.split('/')[1:])
     
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(blob_name)
     
     try:
+        # First check if directory exists and has files
+        blobs = bucket.list_blobs(prefix=blob_name)
+        
+        # Delete any existing files in the directory
+        for blob in blobs:
+            try:
+                bucket.blob(blob.name).delete()
+                logger.info(f"Deleted existing file: {blob.name}")
+            except Exception as e:
+                logger.warning(f"Failed to delete file {blob.name}: {e}")
+        
+        # Create the directory marker
+        blob = bucket.blob(blob_name)
         if not blob.exists():
             blob.upload_from_string('')
+            logger.info(f"Created directory: {directory_path}")
+            
     except Exception as e:
-        logger.error(f"Unable to create GCS bucket: {e}")
+        logger.error(f"Unable to process GCS directory {directory_path}: {e}")
         sys.exit(1)
 
 def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
@@ -99,13 +111,10 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str,
     # Destory DuckDB object to free memory, and remove temporary files
     try:
         conn.close()
-
-
         #os.remove(local_db_file)
         #shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
-
 
 def parse_duckdb_csv_error(error: duckdb.InvalidInputException) -> Optional[str]:
     """

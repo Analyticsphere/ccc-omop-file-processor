@@ -114,8 +114,6 @@ def csv_to_parquet(gcs_file_path: str) -> None:
     finally:
         utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
     
-    utils.logger.info("File successfully converted\n")
-
 def convert_csv_file_encoding(gcs_file_path: str) -> None:
     """
     Creates a copy of non-UTF8 CSV files as a new CSV file with UTF8 encoding.
