@@ -257,7 +257,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     This SQL has many functions, but it is far more efficient to do this all in one step,
     as compared to reading and writing the Parquet each time, for each piece of functionality.
     """
-    
+
     utils.logger.warning("in get_fix_columns_sql_statement() function")
     utils.logger.warning(f"The file path is {gcs_file_path}")
     utils.logger.warning(f"OMOP version is {cdm_version}")
@@ -272,7 +272,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         """
         type_map = {
             "string": "VARCHAR",
-            "integer": "INTEGER",
+            "integer": "BIGINT",
             "float": "DOUBLE",
             "date": "DATE",
             "datetime": "TIMESTAMP",  # 'datetime' => DuckDB 'TIMESTAMP'
