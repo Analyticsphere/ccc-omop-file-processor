@@ -413,7 +413,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 
     copy_invalid_sql = f"""
         COPY invalid_rows
-        TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}invalid_{table_name}{constants.PARQUET}'
+        TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}'
         {constants.DUCKDB_FORMAT_STRING};
     """.strip()
 
