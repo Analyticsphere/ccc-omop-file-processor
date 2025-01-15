@@ -244,11 +244,11 @@ def get_placeholder_value(field_name: str, field_type: str) -> str:
         return "'0'"
     
     return {
-        "string": "''",
-        "date": "'1970-01-01'",
-        "integer": "'-1'",
-        "float": "'-1.0'",
-        "datetime": "'1901-01-01 00:00:00'"
+        "VARCHAR": "''",
+        "DATE": "'1970-01-01'",
+        "BIGINT": "'-1'",
+        "DOUBLE": "'-1.0'",
+        "TIMESTAMP": "'1901-01-01 00:00:00'"
     }[field_type]
 
 def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
