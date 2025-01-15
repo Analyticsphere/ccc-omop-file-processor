@@ -280,14 +280,15 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # --------------------------------------------------------------------------
     utils.logger.warning("ABOUT TO GET SCHEMA")
     schema = get_table_schema(table_name, cdm_version)
-    utils.logger.warning("DID SCHEMA")
+    utils.logger.warning("DID GET SCHEMA")
     if not schema or table_name not in schema:
         utils.logger.warning(f"No schema found for table {table_name}")
         return ""
 
     fields = schema[table_name]["fields"]
+    utils.logger.warning(f"fields is {fields}")
     ordered_columns = list(fields.keys())  # preserve column order
-
+    utils.logger.warning(f"ordered_columns is {ordered_columns}")
     # --------------------------------------------------------------------------
     # 3) Initialize lists to build SQL expressions
     # --------------------------------------------------------------------------
@@ -422,7 +423,8 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 
         {copy_invalid_sql};
     """.strip()
-
+    
+    utils.logger.warning(f"GOING TO RETURN SQL SCRIPT: {sql_script}")
     return sql_script
 
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
