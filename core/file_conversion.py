@@ -213,18 +213,14 @@ def get_table_name_from_path(gcs_file_path: str) -> str:
     return gcs_file_path.split('/')[-1].replace(constants.PARQUET, '').lower()
 
 def get_table_schema(table_name: str, cdm_version: str) -> dict:
-    utils.logger.warning("GETTING SCHEMA 1")
     table_name = table_name.lower()
-    utils.logger.warning("GETTING SCHEMA 2")
     schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
-    utils.logger.warning("GETTING SCHEMA 3")
 
     try:
         with open(schema_file, 'r') as f:
             schema_json = f.read()
             schema = json.loads(schema_json)
 
-        utils.logger.warning("GETTING SCHEMA 4")
         # Check if table exists in schema
         if table_name in schema:
             return {table_name: schema[table_name]}
@@ -262,33 +258,23 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     This SQL has many functions, but it is far more efficient to do this all in one step,
     as compared to reading and writing the Parquet each time, for each piece of functionality.
     """
-
-    utils.logger.warning("in get_fix_columns_sql_statement() function")
-    utils.logger.warning(f"The file path is {gcs_file_path}")
-    utils.logger.warning(f"OMOP version is {cdm_version}")
-
     # --------------------------------------------------------------------------
-    # 1) Parse out table name and bucket/subfolder info
+    # 1) Parse out table name and bucket/subfolder info for saving files later on
     # --------------------------------------------------------------------------
     table_name = get_table_name_from_path(gcs_file_path)
     bucket, subfolder = gcs_file_path.split('/')[:2]
-    utils.logger.warning(f"Bucket: {bucket}")
-    utils.logger.warning(f"Subfolder: {subfolder}")
 
     # --------------------------------------------------------------------------
     # 2) Retrieve the table schema. If not found, return empty string
     # --------------------------------------------------------------------------
-    utils.logger.warning("ABOUT TO GET SCHEMA")
     schema = get_table_schema(table_name, cdm_version)
-    utils.logger.warning("DID GET SCHEMA")
     if not schema or table_name not in schema:
         utils.logger.warning(f"No schema found for table {table_name}")
         return ""
 
     fields = schema[table_name]["fields"]
-    utils.logger.warning(f"fields is {fields}")
     ordered_columns = list(fields.keys())  # preserve column order
-    utils.logger.warning(f"ordered_columns is {ordered_columns}")
+    
     # --------------------------------------------------------------------------
     # 3) Initialize lists to build SQL expressions
     # --------------------------------------------------------------------------
@@ -308,18 +294,13 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # 4) "source_with_defaults": Coalesce required fields if they're NULL
     # --------------------------------------------------------------------------
     for field_name in ordered_columns:
-        utils.logger.warning(f"field_name is {field_name}")
         field_type = fields[field_name]["type"]
-        utils.logger.warning(f"field_type is {field_type}")
         is_required = fields[field_name]["required"].lower() == "true"
-        utils.logger.warning(f"is_required is {is_required}")
         # Determine default value if a required field is NULL
         default_value = (
             get_placeholder_value(field_name, field_type) if is_required else "NULL"
         )
-        utils.logger.warning(f"default_value is {default_value}")
         coalesce_exprs.append(f"COALESCE({field_name}, {default_value}) AS {field_name}")
-        utils.logger.warning(f"coalesce_exprs IS {coalesce_exprs}")
     # Add the row ID
     coalesce_exprs.append(f"ROW_NUMBER() OVER () AS {row_id_col}")
 
@@ -427,28 +408,21 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         {copy_invalid_sql};
     """.strip()
     
-    utils.logger.warning(f"GOING TO RETURN SQL SCRIPT: {sql_script}")
     return sql_script
 
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
     fix_sql = get_fix_columns_sql_statement(gcs_file_path, cdm_version)
-    utils.logger.warning(f"RUNNING fix_columns ; gcs_file_path IS {gcs_file_path} AND cdm_version IS {cdm_version}")
-
-    utils.logger.warning(f"!! The SQL to fix the Parquet for {gcs_file_path} is: ")
-    utils.logger.warning(fix_sql)
 
     conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
-
+    
+    # Only run the fix SQL statement if it exists
+    # Statement will exist only for tables/files in OMOP CDM
     if fix_sql and len(fix_sql) > 1:
-        utils.logger.warning("Will execute SQL")
         try:
             with conn:
-                utils.logger.warning("About to run the SQL statement!")
                 conn.execute(fix_sql)
         except Exception as e:
             utils.logger.error(f"Unable to fix Parquet file: {e}")
             sys.exit(1)
         finally:
             utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
-    else:
-        utils.logger.warning("Will NOTTTTT execute SQL")
