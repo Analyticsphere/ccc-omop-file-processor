@@ -262,9 +262,9 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     utils.logger.warning(f"The file path is {gcs_file_path}")
     utils.logger.warning(f"OMOP version is {cdm_version}")
 
-    # -------------------------
+    # -----------------------------
     # 0) Helper: map schema type to DuckDB type
-    # -------------------------
+    # -----------------------------
     def _map_schema_type_to_duckdb_type(schema_type: str) -> str:
         type_map = {
             "string": "VARCHAR",
@@ -292,34 +292,40 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     fields = schema[table_name]["fields"]
     ordered_columns = list(fields.keys())
 
-    # Lists we'll build up
+    # We'll build these lists for dynamic SQL
     coalesce_definitions = []
     cast_definitions = []
     required_conditions = []
+    
+    # For the invalid rows, we want to force all columns to be strings (VARCHAR).
+    invalid_select_definitions = []
 
-    # -------------------------
-    # 1) Build COALESCE for required columns
-    # -------------------------
-    #   "source_with_defaults": If required col is missing, fill w/ placeholder
+    # -----------------------------------
+    # 1) Build COALESCE (for required) + row_number
+    # -----------------------------------
+    #   "source_with_defaults": 
+    #   - If required col is missing, fill w/ placeholder
+    #   - Also create a unique row id (row_number) for each row
+    coalesce_exprs = []
     for field_name in ordered_columns:
         field_info = fields[field_name]
         field_type = field_info["type"].lower()
         is_required = field_info["required"].lower() == "true"
 
-        # For required fields, set a default if NULL; else just keep it as is
-        default_value = get_placeholder_value(field_name, field_type) if is_required else "NULL"
-
-        coalesce_definitions.append(
-            f"COALESCE({field_name}, {default_value}) AS {field_name}"
+        default_value = (
+            get_placeholder_value(field_name, field_type) if is_required else "NULL"
         )
 
-    # -------------------------
-    # 2) In the second CTE, we do the actual overwrite cast
-    # -------------------------
-    #   "conversion_check": Overwrite each column with TRY_CAST(...) 
-    #                       for non-string fields 
-    #                       (string fields remain as-is).
-    #   If the cast fails, we get NULL in that column.
+        coalesce_exprs.append(f"COALESCE({field_name}, {default_value}) AS {field_name}")
+
+    # Add a row id so we can join back for invalid rows
+    # Partition/order can be arbitrary, we just need a stable row id.
+    row_id_col = "__rowid__"
+    coalesce_definitions_sql = ",\n                ".join(coalesce_exprs + [f"ROW_NUMBER() OVER () AS {row_id_col}"])
+
+    # -----------------------------------
+    # 2) Overwrite each column with TRY_CAST in conversion_check
+    # -----------------------------------
     for field_name in ordered_columns:
         field_info = fields[field_name]
         field_type = field_info["type"].lower()
@@ -327,91 +333,103 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         is_required = field_info["required"].lower() == "true"
 
         if field_type != "string":
+            # Overwrite the column with its casted version
             cast_definitions.append(f"TRY_CAST({field_name} AS {duckdb_type}) AS {field_name}")
+            # If required => must not be NULL
             if is_required:
-                # If required => must not be NULL after TRY_CAST
                 required_conditions.append(f"{field_name} IS NOT NULL")
         else:
-            # Keep the original as-is for strings
+            # Keep it as is for strings
             cast_definitions.append(field_name)
-            # if it's required => must not be NULL 
             if is_required:
                 required_conditions.append(f"{field_name} IS NOT NULL")
 
-    # Build the big WHERE clause for "valid" rows:
-    # If you have no required fields, this might be empty -> use 'TRUE'
-    where_clause_valid = " AND ".join(required_conditions) if required_conditions else "TRUE"
+    # Always include the rowid in the second CTE so we can join to source
+    cast_definitions.append(row_id_col)
 
-    # For invalid rows, we do the negation of the above
-    # But the negation is simply `NOT (fieldA IS NOT NULL AND fieldB IS NOT NULL AND ...)`
-    # which is `fieldA IS NULL OR fieldB IS NULL OR ...`
-    # We'll just do `NOT ( <the same AND> )`
+    # Build final select expression for second CTE
+    cast_definitions_sql = ",\n                ".join(cast_definitions)
+
+    # -----------------------------------
+    # 3) Prepare "valid vs invalid" conditions
+    # -----------------------------------
+    where_clause_valid = " AND ".join(required_conditions) if required_conditions else "TRUE"
     where_clause_invalid = f"NOT ({where_clause_valid})" if required_conditions else "FALSE"
 
-    # -------------------------
-    # 3) Create TEMP TABLE valid_rows
-    # -------------------------
+    # -----------------------------------
+    # 4) For invalid rows, we want everything as strings
+    #    We'll do: CAST(source_with_defaults.col AS VARCHAR) for each col
+    # -----------------------------------
+    for field_name in ordered_columns:
+        invalid_select_definitions.append(f"CAST(swd.{field_name} AS VARCHAR) AS {field_name}")
+
+    # Also include the row_id (useful for debugging, or can omit if not needed)
+    # but let's not output rowid in the final parquet if we don't want it
+    # invalid_select_definitions.append("swd.__rowid__")
+
+    invalid_select_sql = ",\n            ".join(invalid_select_definitions)
+
+    # -----------------------------------
+    # 5) Build the final SQL
+    # -----------------------------------
+
+    # A) Create valid_rows
     create_valid_rows_sql = f"""
         CREATE OR REPLACE TEMP TABLE valid_rows AS
         WITH source_with_defaults AS (
             SELECT
-                {', '.join(coalesce_definitions)}
+                {coalesce_definitions_sql}
             FROM 'gs://{gcs_file_path}'
         ),
         conversion_check AS (
             SELECT
-                {', '.join(cast_definitions)}
+                {cast_definitions_sql}
             FROM source_with_defaults
         )
         SELECT
-            *
-        FROM conversion_check
+            cc.*
+        FROM conversion_check cc
         WHERE {where_clause_valid};
     """.strip()
 
-    # -------------------------
-    # 4) Create TEMP TABLE invalid_rows
-    #    i.e., any row that didn't meet the "required conditions"
-    # -------------------------
+    # B) Create invalid_rows
+    #    We re-join source_with_defaults to conversion_check by rowid
+    #    and pick the rows that failed the "required" conditions.
     create_invalid_rows_sql = f"""
         CREATE OR REPLACE TEMP TABLE invalid_rows AS
         WITH source_with_defaults AS (
             SELECT
-                {', '.join(coalesce_definitions)}
+                {coalesce_definitions_sql}
             FROM 'gs://{gcs_file_path}'
         ),
         conversion_check AS (
             SELECT
-                {', '.join(cast_definitions)}
+                {cast_definitions_sql}
             FROM source_with_defaults
         )
         SELECT
-            *
-        FROM conversion_check
+            {invalid_select_sql}
+        FROM source_with_defaults swd
+        JOIN conversion_check cc
+          ON swd.{row_id_col} = cc.{row_id_col}
         WHERE {where_clause_invalid};
     """.strip()
 
-    # -------------------------
-    # 5) COPY valid_rows back to original Parquet (overwrite)
-    # -------------------------
+    # C) Copy valid_rows (casted) back to original Parquet
     copy_valid_sql = f"""
         COPY valid_rows
         TO 'gs://{gcs_file_path}'
         {constants.DUCKDB_FORMAT_STRING};
     """.strip()
 
-    # -------------------------
-    # 6) COPY invalid_rows to invalid_<table>.parquet
-    # -------------------------
+    # D) Copy invalid_rows (un-casted, all as strings) to invalid_*.parquet
     copy_invalid_sql = f"""
         COPY invalid_rows
         TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}invalid_{table_name}{constants.PARQUET}'
         {constants.DUCKDB_FORMAT_STRING};
     """.strip()
 
-    # -------------------------
-    # 7) Return as one multi-statement script
-    # -------------------------
+    # E) Combine into one script
     sql_script = f"""
         {create_valid_rows_sql};
 
