@@ -35,11 +35,11 @@ def get_files():
     }), 200
     
 @app.route('/validate_file', methods=['GET'])
-def validate_file() -> list[dict]:
+def validate_file():
     """
     Validates a file's name and schema against the OMOP standard.
     """
-        # Get parameters from query string
+    # Get parameters from query string
     file_path = request.args.get('file_path')
     omop_version = request.args.get('omop_version')
     
