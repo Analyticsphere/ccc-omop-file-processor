@@ -24,7 +24,11 @@ def validate_cdm_table_name(file_path: str, cdm_version: str) -> bool:
         utils.logger.warning(f"In validate_cdm_table_name, table_name is {table_name}")
 
         # Check if the filename matches any of the table keys in the JSON
-        return table_name in valid_table_names
+        valid_table_name = table_name in valid_table_names
+        if valid_table_name:
+            utils.logger.info(f"For {table_name_with_path}, '{table_name}' IS a valid OMOP table name.")
+        else:
+            utils.logger.info(f"For {table_name_with_path}, '{table_name}' IS NOT valid OMOP table name.")
 
     except FileNotFoundError:
         raise Exception(f"Schema file not found: {schema_file}")
