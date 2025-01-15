@@ -3,92 +3,92 @@
     "concept_id": "1147314",
     "fields": {
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147026"
       },
       "gender_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147027"
       },
       "year_of_birth": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147028"
       },
       "month_of_birth": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147029"
       },
       "day_of_birth": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147030"
       },
       "birth_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147480"
       },
       "race_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147032"
       },
       "ethnicity_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147033"
       },
       "location_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147034"
       },
       "provider_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147035"
       },
       "care_site_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147036"
       },
       "person_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147037"
       },
       "gender_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147038"
       },
       "gender_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147039"
       },
       "race_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147040"
       },
       "race_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147041"
       },
       "ethnicity_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147042"
       },
       "ethnicity_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147043"
       }
@@ -98,27 +98,27 @@
     "concept_id": "1147321",
     "fields": {
       "observation_period_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147044"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147045"
       },
       "observation_period_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147046"
       },
       "observation_period_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147595"
       },
       "period_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147596"
       }
@@ -128,87 +128,87 @@
     "concept_id": "1147332",
     "fields": {
       "visit_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147070"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147071"
       },
       "visit_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147072"
       },
       "visit_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147073"
       },
       "visit_start_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147492"
       },
       "visit_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147075"
       },
       "visit_end_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147491"
       },
       "visit_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147077"
       },
       "provider_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147078"
       },
       "care_site_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147079"
       },
       "visit_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147080"
       },
       "visit_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147081"
       },
       "admitting_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147537"
       },
       "admitting_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147538"
       },
       "discharge_to_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147539"
       },
       "discharge_to_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147540"
       },
       "preceding_visit_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147541"
       }
@@ -218,97 +218,97 @@
     "concept_id": "1147637",
     "fields": {
       "visit_detail_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147624"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147620"
       },
       "visit_detail_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147623"
       },
       "visit_detail_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147646"
       },
       "visit_detail_start_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147647"
       },
       "visit_detail_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147642"
       },
       "visit_detail_end_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147643"
       },
       "visit_detail_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147648"
       },
       "provider_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147622"
       },
       "care_site_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147617"
       },
       "visit_detail_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "902403"
       },
       "visit_detail_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "902402"
       },
       "admitting_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "902398"
       },
       "admitting_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "902397"
       },
       "discharge_to_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "902400"
       },
       "discharge_to_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "902399"
       },
       "preceding_visit_detail_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "902401"
       },
       "visit_detail_parent_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147625"
       },
       "visit_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147628"
       }
@@ -318,82 +318,82 @@
     "concept_id": "1147333",
     "fields": {
       "condition_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147127"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147128"
       },
       "condition_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147129"
       },
       "condition_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147130"
       },
       "condition_start_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147549"
       },
       "condition_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "false",
         "concept_id": "1147426"
       },
       "condition_end_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147427"
       },
       "condition_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147431"
       },
       "condition_status_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "902381"
       },
       "stop_reason": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "902384"
       },
       "provider_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "902383"
       },
       "visit_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "902386"
       },
       "visit_detail_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "902385"
       },
       "condition_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "902380"
       },
       "condition_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "902379"
       },
       "condition_status_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "902382"
       }
@@ -403,117 +403,117 @@
     "concept_id": "1147339",
     "fields": {
       "drug_exposure_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147094"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147095"
       },
       "drug_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147096"
       },
       "drug_exposure_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147097"
       },
       "drug_exposure_start_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147558"
       },
       "drug_exposure_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147501"
       },
       "drug_exposure_end_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147454"
       },
       "verbatim_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "false",
         "concept_id": "1147513"
       },
       "drug_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147504"
       },
       "stop_reason": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147512"
       },
       "refills": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147508"
       },
       "quantity": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147507"
       },
       "days_supply": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147499"
       },
       "sig": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147511"
       },
       "route_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147509"
       },
       "lot_number": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147505"
       },
       "provider_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147506"
       },
       "visit_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147514"
       },
       "visit_detail_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147562"
       },
       "drug_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147560"
       },
       "drug_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147559"
       },
       "route_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147561"
       },
       "dose_unit_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147557"
       }
@@ -523,72 +523,72 @@
     "concept_id": "1147301",
     "fields": {
       "procedure_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147082"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147083"
       },
       "procedure_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147084"
       },
       "procedure_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147085"
       },
       "procedure_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147611"
       },
       "procedure_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147485"
       },
       "modifier_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147481"
       },
       "quantity": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147488"
       },
       "provider_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147486"
       },
       "visit_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147489"
       },
       "visit_detail_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147614"
       },
       "procedure_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147613"
       },
       "procedure_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147612"
       },
       "modifier_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147610"
       }
@@ -598,77 +598,77 @@
     "concept_id": "1147305",
     "fields": {
       "device_exposure_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147115"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147116"
       },
       "device_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147117"
       },
       "device_exposure_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147118"
       },
       "device_exposure_start_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147553"
       },
       "device_exposure_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "false",
         "concept_id": "1147440"
       },
       "device_exposure_end_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147441"
       },
       "device_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147445"
       },
       "unique_device_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147448"
       },
       "quantity": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147447"
       },
       "provider_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147446"
       },
       "visit_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147449"
       },
       "visit_detail_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147556"
       },
       "device_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "902389"
       },
       "device_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147554"
       }
@@ -678,102 +678,102 @@
     "concept_id": "1147330",
     "fields": {
       "measurement_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147138"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147139"
       },
       "measurement_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147140"
       },
       "measurement_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147141"
       },
       "measurement_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147639"
       },
       "measurement_time": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147640"
       },
       "measurement_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147567"
       },
       "operator_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147568"
       },
       "value_as_number": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147575"
       },
       "value_as_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147574"
       },
       "unit_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147572"
       },
       "range_low": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147571"
       },
       "range_high": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147570"
       },
       "provider_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147569"
       },
       "visit_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147578"
       },
       "visit_detail_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147577"
       },
       "measurement_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147565"
       },
       "measurement_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147564"
       },
       "unit_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147573"
       },
       "value_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147576"
       }
@@ -783,92 +783,92 @@
     "concept_id": "1147304",
     "fields": {
       "observation_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147165"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147166"
       },
       "observation_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147167"
       },
       "observation_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147168"
       },
       "observation_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147475"
       },
       "observation_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147170"
       },
       "value_as_number": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147171"
       },
-      "value_as_string": {
-        "type": "string",
+      "value_as_VARCHAR": {
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147172"
       },
       "value_as_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147173"
       },
       "qualifier_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147174"
       },
       "unit_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147175"
       },
       "provider_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147176"
       },
       "visit_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147177"
       },
       "visit_detail_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147594"
       },
       "observation_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147591"
       },
       "observation_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147590"
       },
       "unit_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147593"
       },
       "qualifier_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147592"
       }
@@ -878,37 +878,37 @@
     "concept_id": "1147312",
     "fields": {
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147064"
       },
       "death_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147065"
       },
       "death_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147438"
       },
       "death_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "902388"
       },
       "cause_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147435"
       },
       "cause_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147437"
       },
       "cause_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147436"
       }
@@ -918,72 +918,72 @@
     "concept_id": "1147317",
     "fields": {
       "note_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147156"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147157"
       },
       "note_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147158"
       },
       "note_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147474"
       },
       "note_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147160"
       },
       "note_class_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147517"
       },
       "note_title": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147520"
       },
       "note_text": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "902395"
       },
       "encoding_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147515"
       },
       "language_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147516"
       },
       "provider_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147521"
       },
       "visit_occurrence_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147522"
       },
       "visit_detail_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147588"
       },
       "note_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147586"
       }
@@ -993,67 +993,67 @@
     "concept_id": "1147542",
     "fields": {
       "note_nlp_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147589"
       },
       "note_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147527"
       },
       "section_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147532"
       },
       "snippet": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147533"
       },
       "lexical_variant": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1147523"
       },
       "note_nlp_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147528"
       },
       "note_nlp_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147530"
       },
       "nlp_system": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147526"
       },
       "nlp_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147524"
       },
       "nlp_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147525"
       },
       "term_exists": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147534"
       },
       "term_temporal": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147536"
       },
       "term_modifiers": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147535"
       }
@@ -1063,77 +1063,77 @@
     "concept_id": "1147306",
     "fields": {
       "specimen_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147049"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147050"
       },
       "specimen_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147051"
       },
       "specimen_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147052"
       },
       "specimen_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147053"
       },
       "specimen_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147490"
       },
       "quantity": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147055"
       },
       "unit_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147056"
       },
       "anatomic_site_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147057"
       },
       "disease_status_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147058"
       },
       "specimen_source_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147059"
       },
       "specimen_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147060"
       },
       "unit_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147061"
       },
       "anatomic_site_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147062"
       },
       "disease_status_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147063"
       }
@@ -1143,27 +1143,27 @@
     "concept_id": "1147320",
     "fields": {
       "domain_concept_id_1": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147182"
       },
       "fact_id_1": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147183"
       },
       "domain_concept_id_2": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147184"
       },
       "fact_id_2": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147185"
       },
       "relationship_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147186"
       }
@@ -1173,42 +1173,42 @@
     "concept_id": "1147335",
     "fields": {
       "location_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147187"
       },
       "address_1": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147188"
       },
       "address_2": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147189"
       },
       "city": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147190"
       },
       "state": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147191"
       },
       "zip": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147192"
       },
       "county": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147193"
       },
       "location_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147194"
       }
@@ -1218,32 +1218,32 @@
     "concept_id": "1147313",
     "fields": {
       "care_site_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147195"
       },
       "care_site_name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147196"
       },
       "place_of_service_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147197"
       },
       "location_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147198"
       },
       "care_site_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147199"
       },
       "place_of_service_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147200"
       }
@@ -1253,67 +1253,67 @@
     "concept_id": "1147315",
     "fields": {
       "provider_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147201"
       },
       "provider_name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147202"
       },
       "npi": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147203"
       },
       "dea": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147204"
       },
       "specialty_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147205"
       },
       "care_site_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147206"
       },
       "year_of_birth": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147207"
       },
       "gender_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147208"
       },
       "provider_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147209"
       },
       "specialty_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147210"
       },
       "specialty_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147211"
       },
       "gender_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147212"
       },
       "gender_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147213"
       }
@@ -1323,87 +1323,87 @@
     "concept_id": "1147327",
     "fields": {
       "payer_plan_period_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147214"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147215"
       },
       "payer_plan_period_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147216"
       },
       "payer_plan_period_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147217"
       },
       "payer_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147598"
       },
       "payer_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147600"
       },
       "payer_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147599"
       },
       "plan_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147601"
       },
       "plan_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147603"
       },
       "plan_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147602"
       },
       "sponsor_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147604"
       },
       "sponsor_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147606"
       },
       "sponsor_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147605"
       },
       "family_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147597"
       },
       "stop_reason_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147607"
       },
       "stop_reason_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147641"
       },
       "stop_reason_source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147608"
       }
@@ -1413,112 +1413,112 @@
     "concept_id": "1147366",
     "fields": {
       "cost_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147344"
       },
       "cost_event_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147343"
       },
       "cost_domain_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1147342"
       },
       "cost_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147345"
       },
       "currency_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147346"
       },
       "total_charge": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147358"
       },
       "total_cost": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147359"
       },
       "total_paid": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147360"
       },
       "paid_by_payer": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147348"
       },
       "paid_by_patient": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147347"
       },
       "paid_patient_copay": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147353"
       },
       "paid_patient_coinsurance": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147352"
       },
       "paid_patient_deductible": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147354"
       },
       "paid_by_primary": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147349"
       },
       "paid_ingredient_cost": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147351"
       },
       "paid_dispensing_fee": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147350"
       },
       "payer_plan_period_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147355"
       },
       "amount_allowed": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147341"
       },
       "revenue_code_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147356"
       },
       "revenue_code_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "902387"
       },
       "drg_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147497"
       },
       "drg_source_value": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147498"
       }
@@ -1528,37 +1528,37 @@
     "concept_id": "1147303",
     "fields": {
       "drug_era_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147281"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147282"
       },
       "drug_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147283"
       },
       "drug_era_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "902393"
       },
       "drug_era_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "902392"
       },
       "drug_exposure_count": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147286"
       },
       "gap_days": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147287"
       }
@@ -1568,37 +1568,37 @@
     "concept_id": "1147324",
     "fields": {
       "dose_era_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147288"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147289"
       },
       "drug_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147290"
       },
       "unit_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147291"
       },
       "dose_value": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "true",
         "concept_id": "1147292"
       },
       "dose_era_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "902391"
       },
       "dose_era_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "902390"
       }
@@ -1608,32 +1608,32 @@
     "concept_id": "1147329",
     "fields": {
       "condition_era_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147295"
       },
       "person_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147296"
       },
       "condition_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147297"
       },
       "condition_era_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "902378"
       },
       "condition_era_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "902377"
       },
       "condition_occurrence_count": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147300"
       }
@@ -1643,37 +1643,37 @@
     "concept_id": "1147636",
     "fields": {
       "metadata_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147579"
       },
       "metadata_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147582"
       },
       "name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1147583"
       },
-      "value_as_string": {
-        "type": "string",
+      "value_as_VARCHAR": {
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "902394"
       },
       "value_as_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147584"
       },
       "metadata_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "false",
         "concept_id": "1147580"
       },
       "metadata_datetime": {
-        "type": "datetime",
+        "type": "TIMESTAMP",
         "required": "false",
         "concept_id": "1147581"
       }
@@ -1683,52 +1683,52 @@
     "concept_id": "1147325",
     "fields": {
       "cdm_source_name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1147016"
       },
       "cdm_source_abbreviation": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147017"
       },
       "cdm_holder": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147018"
       },
       "source_description": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147019"
       },
       "source_documentation_reference": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147020"
       },
       "cdm_etl_reference": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147021"
       },
       "source_release_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "false",
         "concept_id": "1147022"
       },
       "cdm_release_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "false",
         "concept_id": "1147023"
       },
       "cdm_version": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147024"
       },
       "vocabulary_version": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147025"
       }
@@ -1738,52 +1738,52 @@
     "concept_id": "1147311",
     "fields": {
       "concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146945"
       },
       "concept_name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146946"
       },
       "domain_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146947"
       },
       "vocabulary_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146948"
       },
       "concept_class_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146949"
       },
       "standard_concept": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1146950"
       },
       "concept_code": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146951"
       },
       "valid_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1146952"
       },
       "valid_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1146953"
       },
       "invalid_reason": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1146954"
       }
@@ -1793,27 +1793,27 @@
     "concept_id": "1147318",
     "fields": {
       "vocabulary_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146955"
       },
       "vocabulary_name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146956"
       },
       "vocabulary_reference": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1147634"
       },
       "vocabulary_version": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "902404"
       },
       "vocabulary_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146959"
       }
@@ -1823,17 +1823,17 @@
     "concept_id": "1147310",
     "fields": {
       "domain_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146960"
       },
       "domain_name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146961"
       },
       "domain_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146962"
       }
@@ -1843,17 +1843,17 @@
     "concept_id": "1147322",
     "fields": {
       "concept_class_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146963"
       },
       "concept_class_name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146964"
       },
       "concept_class_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146965"
       }
@@ -1863,32 +1863,32 @@
     "concept_id": "1147336",
     "fields": {
       "concept_id_1": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146966"
       },
       "concept_id_2": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146967"
       },
       "relationship_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146968"
       },
       "valid_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1146969"
       },
       "valid_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1146970"
       },
       "invalid_reason": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1146971"
       }
@@ -1898,32 +1898,32 @@
     "concept_id": "1147307",
     "fields": {
       "relationship_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146972"
       },
       "relationship_name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146973"
       },
       "is_hierarchical": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146974"
       },
       "defines_ancestry": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146975"
       },
       "reverse_relationship_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146976"
       },
       "relationship_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146977"
       }
@@ -1933,17 +1933,17 @@
     "concept_id": "1147308",
     "fields": {
       "concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146978"
       },
       "concept_synonym_name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146979"
       },
       "language_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146980"
       }
@@ -1953,22 +1953,22 @@
     "concept_id": "1147331",
     "fields": {
       "ancestor_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146981"
       },
       "descendant_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146982"
       },
       "min_levels_of_separation": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146983"
       },
       "max_levels_of_separation": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146984"
       }
@@ -1978,47 +1978,47 @@
     "concept_id": "1147334",
     "fields": {
       "source_code": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146985"
       },
       "source_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146986"
       },
       "source_vocabulary_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146987"
       },
       "source_code_description": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1146988"
       },
       "target_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146989"
       },
       "target_vocabulary_id": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1146990"
       },
       "valid_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1146991"
       },
       "valid_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1146992"
       },
       "invalid_reason": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1146993"
       }
@@ -2028,62 +2028,62 @@
     "concept_id": "1147337",
     "fields": {
       "drug_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146994"
       },
       "ingredient_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1146995"
       },
       "amount_value": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1146996"
       },
       "amount_unit_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1146997"
       },
       "numerator_value": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1146998"
       },
       "numerator_unit_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1146999"
       },
       "denominator_value": {
-        "type": "float",
+        "type": "DOUBLE",
         "required": "false",
         "concept_id": "1147362"
       },
       "denominator_unit_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147361"
       },
       "box_size": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "false",
         "concept_id": "1147469"
       },
       "valid_start_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147472"
       },
       "valid_end_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "true",
         "concept_id": "1147471"
       },
       "invalid_reason": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147470"
       }
@@ -2093,37 +2093,37 @@
     "concept_id": "1147323",
     "fields": {
       "cohort_definition_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147004"
       },
       "cohort_definition_name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1147005"
       },
       "cohort_definition_description": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147006"
       },
       "definition_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147007"
       },
       "cohort_definition_syntax": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147008"
       },
       "subject_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147009"
       },
       "cohort_initiation_date": {
-        "type": "date",
+        "type": "DATE",
         "required": "false",
         "concept_id": "1147010"
       }
@@ -2133,27 +2133,27 @@
     "concept_id": "1147302",
     "fields": {
       "attribute_definition_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147011"
       },
       "attribute_name": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "true",
         "concept_id": "1147012"
       },
       "attribute_description": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147013"
       },
       "attribute_type_concept_id": {
-        "type": "integer",
+        "type": "BIGINT",
         "required": "true",
         "concept_id": "1147014"
       },
       "attribute_syntax": {
-        "type": "string",
+        "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147015"
       }
