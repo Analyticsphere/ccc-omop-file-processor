@@ -249,7 +249,7 @@ def get_placeholder_value(field_name: str, field_type: str) -> str:
 
 def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     """
-    Generates a SQL statement that, when run: 
+    Generates a SQL statement that, when run:
         - Converts data types of columns within Parquet file to OMOP CDM standard
         - Creates a new Parquet file with the invalid rows from original data file
         - Converts all column names to lower case
@@ -264,27 +264,10 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     utils.logger.warning(f"OMOP version is {cdm_version}")
 
     # --------------------------------------------------------------------------
-    # 0) Helper function: Maps your schema's data type names to DuckDB data types
-    # --------------------------------------------------------------------------
-    def _map_schema_type_to_duckdb_type(schema_type: str) -> str:
-        """
-        Convert a custom schema type (e.g., 'datetime') to a DuckDB-compatible type (e.g., 'TIMESTAMP').
-        Default to 'VARCHAR' if an unrecognized type is encountered.
-        """
-        type_map = {
-            "string": "VARCHAR",
-            "integer": "BIGINT",
-            "float": "DOUBLE",
-            "date": "DATE",
-            "datetime": "TIMESTAMP",  # 'datetime' => DuckDB 'TIMESTAMP'
-        }
-        return type_map.get(schema_type.lower(), "VARCHAR")
-
-    # --------------------------------------------------------------------------
     # 1) Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
     table_name = get_table_name_from_path(gcs_file_path)
-    bucket, subfolder = gcs_file_path.split('/')[:2]  # e.g. 'my-bucket', 'some-folder'
+    bucket, subfolder = gcs_file_path.split('/')[:2]
     utils.logger.warning(f"Bucket: {bucket}")
     utils.logger.warning(f"Subfolder: {subfolder}")
 
@@ -317,11 +300,8 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # --------------------------------------------------------------------------
     # 4) "source_with_defaults": Coalesce required fields if they're NULL
     # --------------------------------------------------------------------------
-    #    - For each required field, use a placeholder if it's NULL.
-    #    - For optional fields, allow them to remain NULL.
-    #    - Also produce a row_id column.
     for field_name in ordered_columns:
-        field_type = fields[field_name]["type"].lower()
+        field_type = fields[field_name]["type"]
         is_required = fields[field_name]["required"].lower() == "true"
 
         # Determine default value if a required field is NULL
@@ -333,64 +313,50 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # Add the row ID
     coalesce_exprs.append(f"ROW_NUMBER() OVER () AS {row_id_col}")
 
-    # This will be something like:
-    #   COALESCE(person_id, 0) AS person_id,
-    #   COALESCE(gender_concept_id, 0) AS gender_concept_id,
-    #   ...
-    #   ROW_NUMBER() OVER () AS __rowid__
+    # Combine into one SQL snippet for the first CTE
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
 
     # --------------------------------------------------------------------------
     # 5) "conversion_check": Overwrite each column with TRY_CAST(...) AS field_name
     # --------------------------------------------------------------------------
-    #    - If the cast fails, the column becomes NULL
-    #    - For required fields, we note that cc.field_name must NOT be NULL later
+    #    - We assume field_type already matches DuckDB types (e.g., 'BIGINT', 'DATE', etc.).
+    #    - If the cast fails, the column becomes NULL.
+    #    - For required fields, we'll require cc.field_name IS NOT NULL.
     for field_name in ordered_columns:
-        field_type = fields[field_name]["type"].lower()
-        duckdb_type = _map_schema_type_to_duckdb_type(field_type)
+        field_type = fields[field_name]["type"].upper()  # standardize to uppercase
         is_required = fields[field_name]["required"].lower() == "true"
 
-        if field_type != "string":
-            # For non-string fields, do an in-place cast
-            cast_exprs.append(f"TRY_CAST({field_name} AS {duckdb_type}) AS {field_name}")
+        if field_type != "VARCHAR":
+            # For non-VARCHAR fields, do an in-place cast
+            cast_exprs.append(f"TRY_CAST({field_name} AS {field_type}) AS {field_name}")
             if is_required:
-                # We'll require cc.field_name to be NOT NULL later
                 required_conditions.append(f"cc.{field_name} IS NOT NULL")
         else:
-            # For string fields, no cast needed
+            # For VARCHAR fields, no cast needed
             cast_exprs.append(field_name)
             if is_required:
                 required_conditions.append(f"cc.{field_name} IS NOT NULL")
 
     # Also carry forward the row_id column so we can join back to the original data
     cast_exprs.append(row_id_col)
-
     cast_definitions_sql = ",\n                ".join(cast_exprs)
 
     # --------------------------------------------------------------------------
     # 6) Build the WHERE clauses for valid vs. invalid rows
     # --------------------------------------------------------------------------
-    #    If we have required columns, they must be NOT NULL for valid rows.
-    #    If there are no required cols, default to "TRUE" for valid rows.
     where_clause_valid = " AND ".join(required_conditions) if required_conditions else "TRUE"
-
-    # Invalid rows => NOT( valid-conditions ), or "FALSE" if no required cols
     where_clause_invalid = f"NOT ({where_clause_valid})" if required_conditions else "FALSE"
 
     # --------------------------------------------------------------------------
-    # 7) For invalid rows, we want to keep everything as a string
+    # 7) For invalid rows, keep everything as VARCHAR
     # --------------------------------------------------------------------------
-    #    We'll do: CAST(swd.field_name AS VARCHAR) AS field_name for each column
     for field_name in ordered_columns:
         invalid_select_exprs.append(f"CAST(swd.{field_name} AS VARCHAR) AS {field_name}")
-
     invalid_select_sql = ",\n            ".join(invalid_select_exprs)
 
     # --------------------------------------------------------------------------
     # 8) Construct the final SQL statements
     # --------------------------------------------------------------------------
-
-    # A) Create valid_rows: these rows have successfully casted (or remained non-null if required)
     create_valid_rows_sql = f"""
         CREATE OR REPLACE TEMP TABLE valid_rows AS
         WITH source_with_defaults AS (
@@ -409,9 +375,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         WHERE {where_clause_valid};
     """.strip()
 
-    # B) Create invalid_rows: rows that fail the "required_conditions" checks
-    #    We join source_with_defaults (for original string data) to conversion_check
-    #    so we can filter by row_id. Then we cast everything to VARCHAR.
     create_invalid_rows_sql = f"""
         CREATE OR REPLACE TEMP TABLE invalid_rows AS
         WITH source_with_defaults AS (
@@ -432,21 +395,18 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         WHERE {where_clause_invalid};
     """.strip()
 
-    # C) Overwrite the original Parquet with valid_rows
     copy_valid_sql = f"""
         COPY valid_rows
         TO 'gs://{gcs_file_path}'
         {constants.DUCKDB_FORMAT_STRING};
     """.strip()
 
-    # D) Write invalid rows to a new "invalid_<table>.parquet"
     copy_invalid_sql = f"""
         COPY invalid_rows
         TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}invalid_{table_name}{constants.PARQUET}'
         {constants.DUCKDB_FORMAT_STRING};
     """.strip()
 
-    # E) Combine everything into a single script, with semicolons between
     sql_script = f"""
         {create_valid_rows_sql};
 
@@ -458,7 +418,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     """.strip()
 
     return sql_script
-
 
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
     fix_sql = get_fix_columns_sql_statement(gcs_file_path, cdm_version)
