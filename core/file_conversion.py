@@ -259,17 +259,11 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     as compared to reading and writing the Parquet each time, for each piece of functionality.
     """
 
-    utils.logger.warning("in get_fix_columns_sql_statement() function")
-    utils.logger.warning(f"The file path is {gcs_file_path}")
-    utils.logger.warning(f"OMOP version is {cdm_version}")
-
     # --------------------------------------------------------------------------
     # 1) Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
     table_name = get_table_name_from_path(gcs_file_path)
     bucket, subfolder = gcs_file_path.split('/')[:2]
-    utils.logger.warning(f"Bucket: {bucket}")
-    utils.logger.warning(f"Subfolder: {subfolder}")
 
     # --------------------------------------------------------------------------
     # 2) Retrieve the table schema. If not found, return empty string
