@@ -262,32 +262,28 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     utils.logger.warning(f"The file path is {gcs_file_path}")
     utils.logger.warning(f"OMOP version is {cdm_version}")
 
-    # --------------------------------------------------------------------------
-    # 0) Helper to map your custom schema types to DuckDB types
-    # --------------------------------------------------------------------------
+    # -------------------------
+    # 0) Helper: map schema type to DuckDB type
+    # -------------------------
     def _map_schema_type_to_duckdb_type(schema_type: str) -> str:
-        # Adjust this map as needed for your environment
-        # For example, if you have "float" in your schema, map to "DOUBLE" or "FLOAT"
-        # If you have "bigint", map to "BIGINT", etc.
         type_map = {
             "string": "VARCHAR",
             "integer": "INTEGER",
             "float": "DOUBLE",
             "date": "DATE",
-            "datetime": "TIMESTAMP",  # DuckDB doesn't have "DATETIME", so we use TIMESTAMP
+            "datetime": "TIMESTAMP",  # "datetime" => DuckDB TIMESTAMP
         }
-        # Default to VARCHAR if an unknown type is encountered
         return type_map.get(schema_type.lower(), "VARCHAR")
 
     # Extract table name from file path
     table_name = get_table_name_from_path(gcs_file_path)
 
-    # Split the path by '/' and take the first two elements
+    # Split path for bucket/subfolder
     bucket, subfolder = gcs_file_path.split('/')[:2]
     utils.logger.warning(f"Bucket: {bucket}")
     utils.logger.warning(f"Subfolder: {subfolder}")
     
-    # Get schema for this table; return "" if no schema is found
+    # Get schema for this table
     schema = get_table_schema(table_name, cdm_version)
     if not schema or table_name not in schema:
         utils.logger.warning(f"No schema found for table {table_name}")
@@ -296,117 +292,126 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     fields = schema[table_name]["fields"]
     ordered_columns = list(fields.keys())
 
-    column_definitions = []
-    validation_checks = []
+    # Lists we'll build up
+    coalesce_definitions = []
+    cast_definitions = []
     required_conditions = []
-    cast_statements_for_table = []
 
-    # --------------------------------------------------------------------------
-    # 1) Build up the columns logic
-    # --------------------------------------------------------------------------
+    # -------------------------
+    # 1) Build COALESCE for required columns
+    # -------------------------
+    #   "source_with_defaults": If required col is missing, fill w/ placeholder
     for field_name in ordered_columns:
         field_info = fields[field_name]
-        field_type = field_info["type"].lower()  # e.g. 'string', 'integer', 'datetime'
+        field_type = field_info["type"].lower()
         is_required = field_info["required"].lower() == "true"
 
-        # Provide a placeholder if required but null
+        # For required fields, set a default if NULL; else just keep it as is
         default_value = get_placeholder_value(field_name, field_type) if is_required else "NULL"
-        
-        # A) Source with defaults (coalesce)
-        column_definitions.append(
+
+        coalesce_definitions.append(
             f"COALESCE({field_name}, {default_value}) AS {field_name}"
         )
 
-        # B) Conversion/validation checks
-        #    Only validate non-string fields (we skip validation for strings)
+    # -------------------------
+    # 2) In the second CTE, we do the actual overwrite cast
+    # -------------------------
+    #   "conversion_check": Overwrite each column with TRY_CAST(...) 
+    #                       for non-string fields 
+    #                       (string fields remain as-is).
+    #   If the cast fails, we get NULL in that column.
+    for field_name in ordered_columns:
+        field_info = fields[field_name]
+        field_type = field_info["type"].lower()
+        duckdb_type = _map_schema_type_to_duckdb_type(field_type)
+        is_required = field_info["required"].lower() == "true"
+
         if field_type != "string":
-            duckdb_type = _map_schema_type_to_duckdb_type(field_type)
-            validation_checks.append(
-                f"TRY_CAST({field_name} AS {duckdb_type}) IS NOT NULL AS {field_name}"
-            )
-            # If required, it must be non-null AND valid
+            cast_definitions.append(f"TRY_CAST({field_name} AS {duckdb_type}) AS {field_name}")
             if is_required:
-                required_conditions.append(f"{field_name}")
-            else:
-                # If optional, it can be NULL or valid
-                required_conditions.append(f"({field_name} IS NULL OR {field_name})")
-
-            # C) Final cast in valid_rows
-            cast_statements_for_table.append(
-                f"CAST({field_name} AS {duckdb_type}) AS {field_name}"
-            )
+                # If required => must not be NULL after TRY_CAST
+                required_conditions.append(f"{field_name} IS NOT NULL")
         else:
-            # Strings remain as-is (no type conversion)
-            cast_statements_for_table.append(field_name)
+            # Keep the original as-is for strings
+            cast_definitions.append(field_name)
+            # if it's required => must not be NULL 
+            if is_required:
+                required_conditions.append(f"{field_name} IS NOT NULL")
 
-    # --------------------------------------------------------------------------
-    # 2) SQL for Creating valid_rows
-    # --------------------------------------------------------------------------
+    # Build the big WHERE clause for "valid" rows:
+    # If you have no required fields, this might be empty -> use 'TRUE'
+    where_clause_valid = " AND ".join(required_conditions) if required_conditions else "TRUE"
+
+    # For invalid rows, we do the negation of the above
+    # But the negation is simply `NOT (fieldA IS NOT NULL AND fieldB IS NOT NULL AND ...)`
+    # which is `fieldA IS NULL OR fieldB IS NULL OR ...`
+    # We'll just do `NOT ( <the same AND> )`
+    where_clause_invalid = f"NOT ({where_clause_valid})" if required_conditions else "FALSE"
+
+    # -------------------------
+    # 3) Create TEMP TABLE valid_rows
+    # -------------------------
     create_valid_rows_sql = f"""
         CREATE OR REPLACE TEMP TABLE valid_rows AS
         WITH source_with_defaults AS (
-            SELECT 
-                {', '.join(column_definitions)}
+            SELECT
+                {', '.join(coalesce_definitions)}
             FROM 'gs://{gcs_file_path}'
         ),
         conversion_check AS (
             SELECT
-                *,
-                {', '.join(validation_checks) if validation_checks else ''}
+                {', '.join(cast_definitions)}
             FROM source_with_defaults
         )
         SELECT
-            {', '.join(cast_statements_for_table)}
+            *
         FROM conversion_check
-        WHERE {' AND '.join(required_conditions) if required_conditions else 'TRUE'};
+        WHERE {where_clause_valid};
     """.strip()
 
-    # --------------------------------------------------------------------------
-    # 3) SQL for Creating invalid_rows
-    #    Any row that didn't meet the "required_conditions"
-    # --------------------------------------------------------------------------
+    # -------------------------
+    # 4) Create TEMP TABLE invalid_rows
+    #    i.e., any row that didn't meet the "required conditions"
+    # -------------------------
     create_invalid_rows_sql = f"""
         CREATE OR REPLACE TEMP TABLE invalid_rows AS
         WITH source_with_defaults AS (
-            SELECT 
-                {', '.join(column_definitions)}
+            SELECT
+                {', '.join(coalesce_definitions)}
             FROM 'gs://{gcs_file_path}'
         ),
         conversion_check AS (
             SELECT
-                *,
-                {', '.join(validation_checks) if validation_checks else ''}
+                {', '.join(cast_definitions)}
             FROM source_with_defaults
         )
         SELECT
-            conversion_check.*
+            *
         FROM conversion_check
-        WHERE NOT (
-            {' AND '.join(required_conditions) if required_conditions else 'TRUE'}
-        );
+        WHERE {where_clause_invalid};
     """.strip()
 
-    # --------------------------------------------------------------------------
-    # 4) COPY valid_rows back to the original file (overwrites it)
-    # --------------------------------------------------------------------------
+    # -------------------------
+    # 5) COPY valid_rows back to original Parquet (overwrite)
+    # -------------------------
     copy_valid_sql = f"""
         COPY valid_rows
         TO 'gs://{gcs_file_path}'
         {constants.DUCKDB_FORMAT_STRING};
     """.strip()
 
-    # --------------------------------------------------------------------------
-    # 5) COPY invalid_rows to a new "invalid_<table>.parquet"
-    # --------------------------------------------------------------------------
+    # -------------------------
+    # 6) COPY invalid_rows to invalid_<table>.parquet
+    # -------------------------
     copy_invalid_sql = f"""
         COPY invalid_rows
         TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}invalid_{table_name}{constants.PARQUET}'
         {constants.DUCKDB_FORMAT_STRING};
     """.strip()
 
-    # --------------------------------------------------------------------------
-    # 6) Return all as one SQL script
-    # --------------------------------------------------------------------------
+    # -------------------------
+    # 7) Return as one multi-statement script
+    # -------------------------
     sql_script = f"""
         {create_valid_rows_sql};
 
