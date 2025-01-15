@@ -213,14 +213,18 @@ def get_table_name_from_path(gcs_file_path: str) -> str:
     return gcs_file_path.split('/')[-1].replace(constants.PARQUET, '').lower()
 
 def get_table_schema(table_name: str, cdm_version: str) -> dict:
+    utils.logger.warning("GETTING SCHEMA 1")
     table_name = table_name.lower()
+    utils.logger.warning("GETTING SCHEMA 2")
     schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
+    utils.logger.warning("GETTING SCHEMA 3")
 
     try:
         with open(schema_file, 'r') as f:
             schema_json = f.read()
             schema = json.loads(schema_json)
 
+        utils.logger.warning("GETTING SCHEMA 4")
         # Check if table exists in schema
         if table_name in schema:
             return {table_name: schema[table_name]}
@@ -274,7 +278,9 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # --------------------------------------------------------------------------
     # 2) Retrieve the table schema. If not found, return empty string
     # --------------------------------------------------------------------------
+    utils.logger.warning("ABOUT TO GET SCHEMA")
     schema = get_table_schema(table_name, cdm_version)
+    utils.logger.warning("DID SCHEMA")
     if not schema or table_name not in schema:
         utils.logger.warning(f"No schema found for table {table_name}")
         return ""
