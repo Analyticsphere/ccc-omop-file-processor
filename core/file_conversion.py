@@ -262,7 +262,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # --------------------------------------------------------------------------
     # 1) Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
-    table_name = get_table_name_from_path(gcs_file_path)
+    table_name = get_table_name_from_path(gcs_file_path).lower()
     bucket, subfolder = gcs_file_path.split('/')[:2]
 
     # --------------------------------------------------------------------------
