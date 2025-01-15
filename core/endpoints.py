@@ -5,6 +5,7 @@ import core.constants as constants
 import core.file_conversion as file_conversion
 import core.file_validation as file_validation
 import os
+import core.model.report_artifact as report_artifact
 
 app = Flask(__name__)
 
@@ -62,13 +63,14 @@ def create_artifact_buckets():
 
     utils.logger.info(f"Creating artifact buckets in gs://{parent_bucket}")
 
-    artifact_dir = f"{parent_bucket}/{constants.ArtifactPaths.ARTIFACTS.value}"
-    files_dir = f"{parent_bucket}/{constants.ArtifactPaths.CONVERTED_FILES.value}"
-    report_dir = f"{parent_bucket}/{constants.ArtifactPaths.REPORT.value}"
-    dqd_dir = f"{parent_bucket}/{constants.ArtifactPaths.DQD.value}"
+    directories = []
 
-    directories = [artifact_dir, files_dir, report_dir, dqd_dir]
-
+    # Create fully qualified paths for each artifact directory
+    for path in constants.ArtifactPaths:
+        full_path = f"{parent_bucket}/{path.value}"
+        directories.append(full_path)
+    
+    # Create the actual GCS directories
     for directory in directories:
         utils.create_gcs_directory(directory)
     
