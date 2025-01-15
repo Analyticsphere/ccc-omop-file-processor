@@ -308,15 +308,18 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # 4) "source_with_defaults": Coalesce required fields if they're NULL
     # --------------------------------------------------------------------------
     for field_name in ordered_columns:
+        utils.logger.warning(f"field_name is {field_name}")
         field_type = fields[field_name]["type"]
+        utils.logger.warning(f"field_type is {field_type}")
         is_required = fields[field_name]["required"].lower() == "true"
-
+        utils.logger.warning(f"is_required is {is_required}")
         # Determine default value if a required field is NULL
         default_value = (
             get_placeholder_value(field_name, field_type) if is_required else "NULL"
         )
+        utils.logger.warning(f"default_value is {default_value}")
         coalesce_exprs.append(f"COALESCE({field_name}, {default_value}) AS {field_name}")
-
+        utils.logger.warning(f"coalesce_exprs IS {coalesce_exprs}")
     # Add the row ID
     coalesce_exprs.append(f"ROW_NUMBER() OVER () AS {row_id_col}")
 
