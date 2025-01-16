@@ -63,8 +63,6 @@ def csv_to_parquet(gcs_file_path: str) -> None:
 
     try:
         with conn:
-            utils.logger.info(f"!!! Converting file gs://{gcs_file_path} to parquet...")
-
             file_name = utils.get_table_name_from_gcs_path(gcs_file_path)
             base_directory, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
             
