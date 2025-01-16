@@ -63,7 +63,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
 
     try:
         with conn:
-            utils.logger.info(f"Converting file gs://{gcs_file_path} to parquet...")
+            utils.logger.info(f"!!! Converting file gs://{gcs_file_path} to parquet...")
 
             # Get file name from GCS path
             #file_name = gcs_file_path.split('/')[-1].lower()
@@ -96,6 +96,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
                     FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True)
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
+            utils.logger.warning(f"!!! 5. convert statement is {convert_statement}")
             conn.execute(convert_statement)
             
     except duckdb.InvalidInputException as e:
