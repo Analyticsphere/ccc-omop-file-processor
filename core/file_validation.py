@@ -2,8 +2,7 @@ import json
 import os
 import core.constants as constants
 import core.utils as utils
-import sys
-import model.report_artifact as report_artifact
+import core.model.report_artifact as report_artifact
 
 def validate_cdm_table_name(file_path: str, cdm_version: str, delivery_date: str, gcs_path, str) -> bool:
     """
