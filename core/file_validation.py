@@ -33,7 +33,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
                 delivery_date=delivery_date,
                 gcs_path=gcs_path,
                 name=f"Invalid table name: {table_name}",
-                value_as_concept_id="763780",
+                value_as_concept_id=int(763780),
                 value_as_number=None,
                 value_as_string=None
             )
