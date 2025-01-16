@@ -55,7 +55,7 @@ def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.
     If directory exists, deletes any existing files first.
     """
-    bucket_name, _ = get_bucket_and_delivery_date_from_file_path(directory_path) #directory_path.split('/')[0]
+    bucket_name, _ = get_bucket_and_delivery_date_from_gcs_path(directory_path) #directory_path.split('/')[0]
     blob_name = '/'.join(directory_path.split('/')[1:])
     
     storage_client = storage.Client()
@@ -167,7 +167,7 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
     except Exception as e:
         raise Exception(f"Unexpected error getting table schema: {str(e)}")
     
-def get_bucket_and_delivery_date_from_file_path(gcs_file_path: str) -> Tuple[str, str]:
+def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str, str]:
     # Returns a tuple of the bucket_name and delivery date for a given file in GCS
     # e.g. synthea53/2024-12-31/care_site.parquet -> synthea53, 2024-12-31
     bucket_name, delivery_date = gcs_file_path.split('/')[:2]

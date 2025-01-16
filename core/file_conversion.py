@@ -65,29 +65,17 @@ def csv_to_parquet(gcs_file_path: str) -> None:
         with conn:
             utils.logger.info(f"!!! Converting file gs://{gcs_file_path} to parquet...")
 
-            # Get file name from GCS path
-            #file_name = gcs_file_path.split('/')[-1].lower()
             file_name = utils.get_table_name_from_gcs_path(gcs_file_path)
-            
-            # # Get the base directory path (everything before FIXED_FILES if present, or before the file name)
-            # if constants.ArtifactPaths.FIXED_FILES.value in gcs_file_path:
-            #     base_directory = gcs_file_path.split(constants.ArtifactPaths.FIXED_FILES.value)[0]
-            # else:
-            #     base_directory = '/'.join(gcs_file_path.split('/')[:-1])
-            base_directory, delivery_date = utils.get_bucket_and_delivery_date_from_file_path(gcs_file_path)
-            utils.logger.warning(f"!!! 1. base directory is {base_directory}")
+            base_directory, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
             
             # Remove trailing slash if present
             base_directory = base_directory.rstrip('/')
-            utils.logger.warning(f"!!! 2. base directory is {base_directory}")
             
             # Create the parquet file name
             parquet_file_name = f"{file_name}{constants.PARQUET}"
-            utils.logger.warning(f"!!! 3. parquet_file_name is {parquet_file_name}")
             
             # Construct the final parquet path
             parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
-            utils.logger.warning(f"!!! 4. parquet_path is {parquet_path}")
 
             convert_statement = f"""
                 COPY  (
@@ -96,7 +84,6 @@ def csv_to_parquet(gcs_file_path: str) -> None:
                     FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True)
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
-            utils.logger.warning(f"!!! 5. convert statement is {convert_statement}")
             conn.execute(convert_statement)
             
     except duckdb.InvalidInputException as e:
@@ -242,7 +229,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # 1) Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
     table_name = utils.get_table_name_from_gcs_path(gcs_file_path).lower()
-    bucket, subfolder = utils.get_bucket_and_delivery_date_from_file_path(gcs_file_path)
+    bucket, subfolder = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
 
     # --------------------------------------------------------------------------
     # 2) Retrieve the table schema. If not found, return empty string
