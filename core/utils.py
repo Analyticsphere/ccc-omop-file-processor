@@ -52,7 +52,7 @@ def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
     except Exception as e:
         raise Exception(f"Error listing files in GCS: {str(e)}")
 
-def validate_cdm_table_name(file_name: str, cdm_spec_path: str = 'omop_cdm_53_validation.json') -> bool:
+def validate_cdm_table_name(file_name: str, cdm_spec_path: str) -> bool:
     """
     Validates whether the filename (without extension) matches one of the
     OMOP CDM tables defined in the JSON specification file.
