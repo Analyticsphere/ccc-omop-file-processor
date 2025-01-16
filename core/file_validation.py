@@ -29,13 +29,12 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
         else:
             utils.logger.info(f"'{table_name}' IS NOT valid OMOP table name.")
             ra = report_artifact.ReportArtifact(
-                metadata_concept_id=schema["person"]["concept_id"],
+                concept_id=schema["person"]["concept_id"],
                 delivery_date=delivery_date,
                 gcs_path=gcs_path,
                 name=f"Missing table: {table_name}",
                 value_as_concept_id="9190",
                 value_as_number=None,
-                concept_id=None,
                 value_as_string=None
             )
             utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
