@@ -4,12 +4,12 @@ import core.constants as constants
 import core.utils as utils
 import core.model.report_artifact as report_artifact
 
-def validate_cdm_table_name(file_path: str, cdm_version: str, delivery_date: str, gcs_path, str) -> bool:
+def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> bool:
     """
     Validates whether the filename (without extension) matches one of the
     OMOP CDM tables defined in the schema.json file.
     """
-    schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
+    schema_file = f"{constants.CDM_SCHEMA_PATH}{omop_version}/{constants.CDM_SCHEMA_FILE_NAME}"
 
     try:
         with open(schema_file, 'r') as f:
