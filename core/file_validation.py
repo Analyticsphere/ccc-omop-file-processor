@@ -48,7 +48,7 @@ def validate_cdm_table_name(file_path: str, cdm_version: str, delivery_date: str
         raise Exception(f"Unexpected error validating CDM file: {str(e)}")
 
 
-def validate_filevalidate_file(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> list[dict]:
+def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> list[dict]:
     """
     Validates a file's name and schema against the OMOP standard.
 

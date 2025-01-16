@@ -5,7 +5,6 @@ import core.constants as constants
 import core.file_conversion as file_conversion
 import core.file_validation as file_validation
 import os
-import core.model.report_artifact as report_artifact
 
 app = Flask(__name__)
 
