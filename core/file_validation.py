@@ -33,7 +33,10 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
                 delivery_date=delivery_date,
                 gcs_path=gcs_path,
                 name=f"Missing table: {table_name}",
-                value_as_concept_id=schema["person"]["concept_id"]
+                value_as_concept_id=schema["person"]["concept_id"],
+                value_as_number=None,
+                concept_id=None,
+                value_as_string=None
             )
             utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
             ra.save_artifact()
