@@ -29,7 +29,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
         else:
             utils.logger.info(f"'{table_name}' IS NOT valid OMOP table name.")
             ra = report_artifact.ReportArtifact(
-                concept_id=schema["person"]["concept_id"],
+                concept_id=schema[{table_name}]["concept_id"],
                 delivery_date=delivery_date,
                 gcs_path=gcs_path,
                 name=f"Invalid table name: {table_name}",
