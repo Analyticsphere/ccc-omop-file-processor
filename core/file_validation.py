@@ -29,10 +29,11 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
         else:
             utils.logger.info(f"'{table_name}' IS NOT valid OMOP table name.")
             ra = report_artifact.ReportArtifact(
+                metadata_concept_id=schema["person"]["concept_id"],
                 delivery_date=delivery_date,
                 gcs_path=gcs_path,
                 name=f"Missing table: {table_name}",
-                value_as_concept_id=schema["person"]["concept_id"],
+                value_as_concept_id="9190",
                 value_as_number=None,
                 concept_id=None,
                 value_as_string=None
@@ -65,7 +66,7 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
     
     try:
         validate_cdm_table_name(file_path, omop_version, delivery_date, gcs_path)
-        # TODO validate_cdm_table_schema(file_path, omop_version, delivery_date, gcs_path)
+        # TODO validate_cdm_column_names(file_path, omop_version, delivery_date, gcs_path)
 
     except Exception as e:
         utils.logger.error(f"Error validating file {file_path}: {str(e)}")
