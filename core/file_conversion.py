@@ -75,17 +75,19 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             # else:
             #     base_directory = '/'.join(gcs_file_path.split('/')[:-1])
             base_directory, _ = utils.get_bucket_and_delivery_date_from_file_path(gcs_file_path)
+            utils.logger.warning(f"!!! 1. base directory is {base_directory}")
             
             # Remove trailing slash if present
             base_directory = base_directory.rstrip('/')
+            utils.logger.warning(f"!!! 2. base directory is {base_directory}")
             
             # Create the parquet file name (remove FIXED_FILE_TAG_STRING and change extension)
-            parquet_file_name = (file_name
-                               .replace(constants.FIXED_FILE_TAG_STRING, '')
-                               .replace(constants.CSV, constants.PARQUET))
+            parquet_file_name = f"{file_name}{constants.PARQUET}"
+            utils.logger.warning(f"!!! 3. parquet_file_name is {parquet_file_name}")
             
             # Construct the final parquet path
             parquet_path = f"{base_directory}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
+            utils.logger.warning(f"!!! 4. parquet_path is {parquet_path}")
 
             convert_statement = f"""
                 COPY  (
