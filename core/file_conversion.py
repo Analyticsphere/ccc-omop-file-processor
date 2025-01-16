@@ -387,21 +387,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         {copy_invalid_sql};
     """.strip()
 
-    if sql_script:
-        # Construct a filename such as 'subfolder/<table_name>.sql'
-        script_path = f"{subfolder}/{table_name}.sql" if subfolder else f"{table_name}.sql"
-
-        storage_client = storage.Client()
-        gcs_bucket = storage_client.bucket(bucket)
-        blob = gcs_bucket.blob(script_path)
-
-        blob.upload_from_string(
-            sql_script,
-            content_type="text/x-sql"  # or "text/plain"
-        )
-        utils.logger.info(f"SQL script written to gs://{bucket}/{script_path}")
-        utils.logger.warning(f"!*!* SQL SCRIPT IS: {sql_script}")
-
     return sql_script
 
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
