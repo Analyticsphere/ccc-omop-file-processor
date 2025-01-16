@@ -5,6 +5,7 @@ import random
 import uuid
 from datetime import datetime, date
 import sys
+import json
 
 class ReportArtifact:
     def __init__(self, delivery_date: str, gcs_path: str, concept_id: Optional[int], name: str, value_as_string: Optional[str], value_as_concept_id: Optional[int], value_as_number: Optional[float]):
@@ -48,3 +49,9 @@ class ReportArtifact:
             sys.exit(1)
         finally:
             utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+    
+    def to_json(self) -> str:
+        """
+        Returns a JSON string representation of the ReportArtifact's properties.
+        """
+        return json.dumps(self.__dict__)
