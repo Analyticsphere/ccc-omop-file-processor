@@ -32,8 +32,8 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
                 concept_id=schema["person"]["concept_id"],
                 delivery_date=delivery_date,
                 gcs_path=gcs_path,
-                name=f"Missing table: {table_name}",
-                value_as_concept_id="9190",
+                name=f"Invalid table name: {table_name}",
+                value_as_concept_id="763780",
                 value_as_number=None,
                 value_as_string=None
             )
