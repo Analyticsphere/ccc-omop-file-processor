@@ -66,13 +66,15 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             utils.logger.info(f"Converting file gs://{gcs_file_path} to parquet...")
 
             # Get file name from GCS path
-            file_name = gcs_file_path.split('/')[-1].lower()
+            #file_name = gcs_file_path.split('/')[-1].lower()
+            file_name = utils.get_table_name_from_gcs_path(gcs_file_path)
             
-            # Get the base directory path (everything before FIXED_FILES if present, or before the file name)
-            if constants.ArtifactPaths.FIXED_FILES.value in gcs_file_path:
-                base_directory = gcs_file_path.split(constants.ArtifactPaths.FIXED_FILES.value)[0]
-            else:
-                base_directory = '/'.join(gcs_file_path.split('/')[:-1])
+            # # Get the base directory path (everything before FIXED_FILES if present, or before the file name)
+            # if constants.ArtifactPaths.FIXED_FILES.value in gcs_file_path:
+            #     base_directory = gcs_file_path.split(constants.ArtifactPaths.FIXED_FILES.value)[0]
+            # else:
+            #     base_directory = '/'.join(gcs_file_path.split('/')[:-1])
+            base_directory, _ = utils.get_bucket_and_delivery_date_from_file_path(gcs_file_path)
             
             # Remove trailing slash if present
             base_directory = base_directory.rstrip('/')
@@ -208,32 +210,6 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         utils.logger.error(f"Unable to convert CSV to UTF8: {e}")
         sys.exit(1)
 
-def get_table_name_from_path(gcs_file_path: str) -> str:
-    # Extract file name from path and remove .parquet extension
-    return gcs_file_path.split('/')[-1].replace(constants.PARQUET, '').lower()
-
-def get_table_schema(table_name: str, cdm_version: str) -> dict:
-    table_name = table_name.lower()
-    schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
-
-    try:
-        with open(schema_file, 'r') as f:
-            schema_json = f.read()
-            schema = json.loads(schema_json)
-
-        # Check if table exists in schema
-        if table_name in schema:
-            return {table_name: schema[table_name]}
-        else:
-            return {}
-            
-    except FileNotFoundError:
-        raise Exception(f"Schema file not found: {schema_file}")
-    except json.JSONDecodeError:
-        raise Exception(f"Invalid JSON format in schema file: {schema_file}")
-    except Exception as e:
-        raise Exception(f"Unexpected error getting table schema: {str(e)}")
-
 def get_placeholder_value(field_name: str, field_type: str) -> str:
     # Return string representation of default value
     if field_name.endswith("_concept_id"):
@@ -262,13 +238,13 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # --------------------------------------------------------------------------
     # 1) Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
-    table_name = get_table_name_from_path(gcs_file_path).lower()
-    bucket, subfolder = gcs_file_path.split('/')[:2]
+    table_name = utils.get_table_name_from_gcs_path(gcs_file_path).lower()
+    bucket, subfolder = utils.get_bucket_and_delivery_date_from_file_path(gcs_file_path)
 
     # --------------------------------------------------------------------------
     # 2) Retrieve the table schema. If not found, return empty string
     # --------------------------------------------------------------------------
-    schema = get_table_schema(table_name, cdm_version)
+    schema = utils.get_table_schema(table_name, cdm_version)
     if not schema or table_name not in schema:
         utils.logger.warning(f"No schema found for table {table_name}")
         return ""
