@@ -135,7 +135,13 @@ def parse_duckdb_csv_error(error: duckdb.InvalidInputException) -> Optional[str]
 def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
     # Extract file name from a GCS path and removes extension
     # e.g. synthea53/2024-12-31/care_site.parquet -> care_site
-    return gcs_file_path.split('/')[-1].replace(constants.PARQUET, '').replace(constants.CSV, '').lower()
+    return (
+        gcs_file_path.split('/')[-1]
+        .replace(constants.PARQUET, '')
+        .replace(constants.CSV, '')
+        .replace(constants.FIXED_FILE_TAG_STRING, '')
+        .lower()
+    )
 
 def get_table_schema(table_name: str, cdm_version: str) -> dict:
     # Returns schema for specified OMOP table, if table exists in CDM

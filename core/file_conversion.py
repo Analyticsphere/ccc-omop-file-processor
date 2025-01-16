@@ -81,7 +81,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             base_directory = base_directory.rstrip('/')
             utils.logger.warning(f"!!! 2. base directory is {base_directory}")
             
-            # Create the parquet file name (remove FIXED_FILE_TAG_STRING and change extension)
+            # Create the parquet file name
             parquet_file_name = f"{file_name}{constants.PARQUET}"
             utils.logger.warning(f"!!! 3. parquet_file_name is {parquet_file_name}")
             
