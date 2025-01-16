@@ -21,7 +21,6 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
         # Get the base name of the file (without extension)
         table_name_with_path = os.path.basename(file_path)
         table_name, _ = os.path.splitext(table_name_with_path) 
-        utils.logger.warning(f"In validate_cdm_table_name, table_name is {table_name}")
 
         # Check if the filename matches any of the table keys in the JSON
         is_valid_table_name = table_name in valid_table_names
@@ -51,7 +50,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
         raise Exception(f"Unexpected error validating CDM file: {str(e)}")
 
 
-def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> list[dict]:
+def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> None:
     """
     Validates a file's name and schema against the OMOP standard.
 
@@ -65,19 +64,8 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
     utils.logger.info(f"Validating schema of {file_path} against OMOP v{omop_version}")
     
     try:
-        # Validate the file name
-        valid_file_name = validate_cdm_table_name(file_path, omop_version, delivery_date, gcs_path)
-
-        if not valid_file_name:
-            utils.logger.warning(f"File name validation failed for {file_path}")
-
-        # Compile results
-        results = [{
-            "file": file_path,
-            "valid_file_name": valid_file_name
-        }]
-
-        return results
+        validate_cdm_table_name(file_path, omop_version, delivery_date, gcs_path)
+        # TODO validate_cdm_table_schema(file_path, omop_version, delivery_date, gcs_path)
 
     except Exception as e:
         utils.logger.error(f"Error validating file {file_path}: {str(e)}")
