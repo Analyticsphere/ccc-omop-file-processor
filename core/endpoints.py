@@ -1,10 +1,9 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request # type: ignore
 from datetime import datetime
 import core.utils as utils
 import core.constants as constants
 import core.file_conversion as file_conversion
 import os
-import core.model.report_artifact as report_artifact
 
 app = Flask(__name__)
 

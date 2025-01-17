@@ -1,13 +1,13 @@
 import core.constants as constants
 import core.utils as utils
 import sys
-import chardet
+import chardet # type: ignore
 from io import StringIO
 import csv
 import codecs
-from google.cloud import storage
-import duckdb
-import json
+from google.cloud import storage # type: ignore
+import duckdb # type: ignore
+
 
 class StreamingCSVWriter:
     """Helper class to stream CSV data directly to and from GCS"""
@@ -170,7 +170,8 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
                 
                 # Create a text wrapper that handles the encoding
                 # If there's an issue with converting any of the non-UTF8 characters, replace them with a question mark symbol
-                text_stream = codecs.getreader(codec_name)(source_file, errors='replace')
+                 #mypy doesn't recognize that the stream reader constructor accepts the errors parameter; skip checking in mypy
+                text_stream = codecs.getreader(codec_name)(source_file, errors='replace') # type: ignore[call-arg]
 
                 csv_reader = csv.reader(text_stream)
                 

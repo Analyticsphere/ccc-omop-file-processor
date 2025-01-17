@@ -1,9 +1,9 @@
-from google.cloud import storage
+from google.cloud import storage # type: ignore
 import logging
 import sys
 import uuid
-import duckdb
-from fsspec import filesystem
+import duckdb # type: ignore
+from fsspec import filesystem # type: ignore
 import core.constants as constants
 from typing import Optional, Tuple
 import json
