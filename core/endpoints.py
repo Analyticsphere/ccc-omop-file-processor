@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request # type: ignore
 from datetime import datetime
 import core.utils as utils
 import core.constants as constants
@@ -26,14 +26,17 @@ def get_files():
 
     utils.logger.info(f"Obtaining files from {folder} folder in {bucket} bucket")
     
-    file_list = utils.list_gcs_files(bucket, folder)
+    try:
+        file_list = utils.list_gcs_files(bucket, folder)
 
-    return jsonify({
-        'status': 'healthy',
-        'file_list': file_list,
-        'service': constants.SERVICE_NAME
-    }), 200
-    
+        return jsonify({
+            'status': 'healthy',
+            'file_list': file_list,
+            'service': constants.SERVICE_NAME
+        }), 200
+        except:
+        return "Unable to get list of files to process", 500
+
 @app.route('/validate_file', methods=['GET'])
 def validate_file():
     """
@@ -67,16 +70,19 @@ def create_artifact_buckets():
 
     directories = []
 
-    # Create fully qualified paths for each artifact directory
-    for path in constants.ArtifactPaths:
-        full_path = f"{parent_bucket}/{path.value}"
-        directories.append(full_path)
-    
-    # Create the actual GCS directories
-    for directory in directories:
-        utils.create_gcs_directory(directory)
-    
-    return "Directories created successfully", 200
+    try:
+        # Create fully qualified paths for each artifact directory
+        for path in constants.ArtifactPaths:
+            full_path = f"{parent_bucket}/{path.value}"
+            directories.append(full_path)
+        
+        # Create the actual GCS directories
+        for directory in directories:
+            utils.create_gcs_directory(directory)
+        
+        return "Directories created successfully", 200
+    except:
+        return "Unable to create artifact buckets", 500
 
 @app.route('/convert_to_parquet', methods=['GET'])
 def convert_to_parquet():
@@ -95,6 +101,18 @@ def convert_to_parquet():
     except:
         return "Unable to convert files to Parquet", 500
 
+@app.route('/fix_parquet', methods=['GET'])
+def fix_parquet_file():
+    file_path: str = request.args.get('file_path')
+    omop_version: str = request.args.get('omop_version')
+
+    try:
+        utils.logger.info(f"Attempt to fix Parquet file {file_path}")
+        file_conversion.fix_columns(file_path, omop_version)
+
+        return "Fixed Parquet file", 200
+    except:
+        return "Unable to fix Parquet file", 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))

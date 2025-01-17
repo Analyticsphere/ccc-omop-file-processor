@@ -187,25 +187,25 @@
         "required": "false",
         "concept_id": "1147081"
       },
-      "admitting_source_concept_id": {
+      "admitted_from_concept_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147537"
+        "concept_id": "756341"
       },
-      "admitting_source_value": {
+      "admitted_from_source_value": {
         "type": "VARCHAR",
         "required": "false",
-        "concept_id": "1147538"
+        "concept_id": "756342"
       },
-      "discharge_to_concept_id": {
+      "discharged_to_concept_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147539"
+        "concept_id": "756343"
       },
-      "discharge_to_source_value": {
+      "discharged_to_source_value": {
         "type": "VARCHAR",
         "required": "false",
-        "concept_id": "1147540"
+        "concept_id": "756344"
       },
       "preceding_visit_occurrence_id": {
         "type": "BIGINT",
@@ -277,35 +277,35 @@
         "required": "false",
         "concept_id": "902402"
       },
-      "admitting_source_value": {
-        "type": "VARCHAR",
-        "required": "false",
-        "concept_id": "902398"
-      },
-      "admitting_source_concept_id": {
+      "admitted_from_concept_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "902397"
+        "concept_id": "756336"
       },
-      "discharge_to_source_value": {
+      "admitted_from_source_value": {
         "type": "VARCHAR",
         "required": "false",
-        "concept_id": "902400"
+        "concept_id": "756337"
       },
-      "discharge_to_concept_id": {
+      "discharged_to_source_value": {
+        "type": "VARCHAR",
+        "required": "false",
+        "concept_id": "756339"
+      },
+      "discharged_to_concept_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "902399"
+        "concept_id": "756338"
       },
       "preceding_visit_detail_id": {
         "type": "BIGINT",
         "required": "false",
         "concept_id": "902401"
       },
-      "visit_detail_parent_id": {
+      "parent_visit_detail_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147625"
+        "concept_id": "756340"
       },
       "visit_occurrence_id": {
         "type": "BIGINT",
@@ -547,50 +547,60 @@
         "required": "false",
         "concept_id": "1147611"
       },
+      "procedure_end_date": {
+        "type": "DATE",
+        "required": "false",
+        "concept_id": "756327"
+      },
+      "procedure_end_datetime": {
+        "type": "TIMESTAMP",
+        "required": "false",
+        "concept_id": "756328"
+      },
       "procedure_type_concept_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147485"
+        "concept_id": "756331"
       },
       "modifier_concept_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147481"
+        "concept_id": "756325"
       },
       "quantity": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147488"
+        "concept_id": "756333"
       },
       "provider_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147486"
+        "concept_id": "756332"
       },
       "visit_occurrence_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147489"
+        "concept_id": "756335"
       },
       "visit_detail_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147614"
+        "concept_id": "756334"
       },
       "procedure_source_value": {
         "type": "VARCHAR",
         "required": "false",
-        "concept_id": "1147613"
+        "concept_id": "756330"
       },
       "procedure_source_concept_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147612"
+        "concept_id": "756329"
       },
       "modifier_source_value": {
         "type": "VARCHAR",
         "required": "false",
-        "concept_id": "1147610"
+        "concept_id": "756326"
       }
     }
   },
@@ -640,37 +650,57 @@
       "unique_device_id": {
         "type": "VARCHAR",
         "required": "false",
-        "concept_id": "1147448"
+        "concept_id": "756281"
+      },
+      "production_id": {
+        "type": "VARCHAR",
+        "required": "false",
+        "concept_id": "756278"
       },
       "quantity": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147447"
+        "concept_id": "756280"
       },
       "provider_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147446"
+        "concept_id": "756279"
       },
       "visit_occurrence_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147449"
+        "concept_id": "756286"
       },
       "visit_detail_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147556"
+        "concept_id": "756285"
       },
       "device_source_value": {
         "type": "VARCHAR",
         "required": "false",
-        "concept_id": "902389"
+        "concept_id": "756277"
       },
       "device_source_concept_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147554"
+        "concept_id": "756276"
+      },
+      "unit_concept_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "756282"
+      },
+      "unit_source_value": {
+        "type": "VARCHAR",
+        "required": "false",
+        "concept_id": "756284"
+      },
+      "unit_source_concept_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "756283"
       }
     }
   },
@@ -772,10 +802,25 @@
         "required": "false",
         "concept_id": "1147573"
       },
+      "unit_source_concept_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "756309"
+      },
       "value_source_value": {
         "type": "VARCHAR",
         "required": "false",
-        "concept_id": "1147576"
+        "concept_id": "756310"
+      },
+      "measurement_event_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "798890"
+      },
+      "meas_event_field_concept_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "756307"
       }
     }
   },
@@ -871,6 +916,21 @@
         "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147592"
+      },
+      "value_source_value": {
+        "type": "VARCHAR",
+        "required": "false",
+        "concept_id": "756324"
+      },
+      "observation_event_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "798892"
+      },
+      "obs_event_field_concept_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "756323"
       }
     }
   },
@@ -986,6 +1046,16 @@
         "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147586"
+      },
+      "note_event_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "798891"
+      },
+      "note_event_field_concept_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "756320"
       }
     }
   },
@@ -1011,6 +1081,11 @@
         "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147533"
+      },
+      "offset": {
+        "type": "VARCHAR",
+        "required": "false",
+        "concept_id": "902396"
       },
       "lexical_variant": {
         "type": "VARCHAR",
@@ -1211,6 +1286,26 @@
         "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147194"
+      },
+      "country_concept_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "756303"
+      },
+      "country_source_value": {
+        "type": "VARCHAR",
+        "required": "false",
+        "concept_id": "756304"
+      },
+      "latitude": {
+        "type": "DOUBLE",
+        "required": "false",
+        "concept_id": "756305"
+      },
+      "longitude": {
+        "type": "DOUBLE",
+        "required": "false",
+        "concept_id": "756306"
       }
     }
   },
@@ -1545,12 +1640,12 @@
       "drug_era_start_date": {
         "type": "DATE",
         "required": "true",
-        "concept_id": "902393"
+        "concept_id": "798884"
       },
       "drug_era_end_date": {
         "type": "DATE",
         "required": "true",
-        "concept_id": "902392"
+        "concept_id": "798883"
       },
       "drug_exposure_count": {
         "type": "BIGINT",
@@ -1595,12 +1690,12 @@
       "dose_era_start_date": {
         "type": "DATE",
         "required": "true",
-        "concept_id": "902391"
+        "concept_id": "798882"
       },
       "dose_era_end_date": {
         "type": "DATE",
         "required": "true",
-        "concept_id": "902390"
+        "concept_id": "798881"
       }
     }
   },
@@ -1625,12 +1720,12 @@
       "condition_era_start_date": {
         "type": "DATE",
         "required": "true",
-        "concept_id": "902378"
+        "concept_id": "798880"
       },
       "condition_era_end_date": {
         "type": "DATE",
         "required": "true",
-        "concept_id": "902377"
+        "concept_id": "798879"
       },
       "condition_occurrence_count": {
         "type": "BIGINT",
@@ -1639,43 +1734,143 @@
       }
     }
   },
+  "episode": {
+    "concept_id": "756347",
+    "fields": {
+      "episode_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "798885"
+      },
+      "person_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "798887"
+      },
+      "episode_concept_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "756287"
+      },
+      "episode_start_date": {
+        "type": "DATE",
+        "required": "true",
+        "concept_id": "756296"
+      },
+      "episode_start_datetime": {
+        "type": "TIMESTAMP",
+        "required": "false",
+        "concept_id": "756297"
+      },
+      "episode_end_date": {
+        "type": "DATE",
+        "required": "false",
+        "concept_id": "756288"
+      },
+      "episode_end_datetime": {
+        "type": "TIMESTAMP",
+        "required": "false",
+        "concept_id": "756289"
+      },
+      "episode_parent_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "798886"
+      },
+      "episode_number": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "756291"
+      },
+      "episode_object_concept_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "756292"
+      },
+      "episode_type_concept_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "756298"
+      },
+      "episode_source_value": {
+        "type": "VARCHAR",
+        "required": "false",
+        "concept_id": "756295"
+      },
+      "episode_source_concept_id": {
+        "type": "BIGINT",
+        "required": "false",
+        "concept_id": "756294"
+      }
+    }
+  },
+  "episode_event": {
+    "concept_id": "756348",
+    "fields": {
+      "episode_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "798888"
+      },
+      "event_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "798889"
+      },
+      "episode_event_field_concept_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "756300"
+      }
+    }
+  },
   "metadata": {
     "concept_id": "1147636",
     "fields": {
+      "metadata_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "756314"
+      },
       "metadata_concept_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147579"
+        "concept_id": "756311"
       },
       "metadata_type_concept_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147582"
+        "concept_id": "756315"
       },
       "name": {
         "type": "VARCHAR",
         "required": "true",
-        "concept_id": "1147583"
+        "concept_id": "756316"
       },
       "value_as_string": {
         "type": "VARCHAR",
         "required": "false",
-        "concept_id": "902394"
+        "concept_id": "756319"
       },
       "value_as_concept_id": {
         "type": "BIGINT",
         "required": "false",
-        "concept_id": "1147584"
+        "concept_id": "756317"
+      },
+      "value_as_number": {
+        "type": "DOUBLE",
+        "required": "false",
+        "concept_id": "756318"
       },
       "metadata_date": {
         "type": "DATE",
         "required": "false",
-        "concept_id": "1147580"
+        "concept_id": "756312"
       },
       "metadata_datetime": {
         "type": "TIMESTAMP",
         "required": "false",
-        "concept_id": "1147581"
+        "concept_id": "756313"
       }
     }
   },
@@ -1689,13 +1884,13 @@
       },
       "cdm_source_abbreviation": {
         "type": "VARCHAR",
-        "required": "false",
-        "concept_id": "1147017"
+        "required": "true",
+        "concept_id": "756268"
       },
       "cdm_holder": {
         "type": "VARCHAR",
-        "required": "false",
-        "concept_id": "1147018"
+        "required": "true",
+        "concept_id": "756266"
       },
       "source_description": {
         "type": "VARCHAR",
@@ -1714,23 +1909,28 @@
       },
       "source_release_date": {
         "type": "DATE",
-        "required": "false",
-        "concept_id": "1147022"
+        "required": "true",
+        "concept_id": "756270"
       },
       "cdm_release_date": {
         "type": "DATE",
-        "required": "false",
-        "concept_id": "1147023"
+        "required": "true",
+        "concept_id": "756267"
       },
       "cdm_version": {
         "type": "VARCHAR",
         "required": "false",
         "concept_id": "1147024"
       },
+      "cdm_version_concept_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "756269"
+      },
       "vocabulary_version": {
         "type": "VARCHAR",
-        "required": "false",
-        "concept_id": "1147025"
+        "required": "true",
+        "concept_id": "756271"
       }
     }
   },
@@ -1804,8 +2004,8 @@
       },
       "vocabulary_reference": {
         "type": "VARCHAR",
-        "required": "true",
-        "concept_id": "1147634"
+        "required": "false",
+        "concept_id": "756345"
       },
       "vocabulary_version": {
         "type": "VARCHAR",
@@ -2089,6 +2289,31 @@
       }
     }
   },
+  "cohort": {
+    "concept_id": "756346",
+    "fields": {
+      "cohort_definition_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "756272"
+      },
+      "subject_id": {
+        "type": "BIGINT",
+        "required": "true",
+        "concept_id": "756275"
+      },
+      "cohort_start_date": {
+        "type": "DATE",
+        "required": "true",
+        "concept_id": "756274"
+      },
+      "cohort_end_date": {
+        "type": "DATE",
+        "required": "true",
+        "concept_id": "756273"
+      }
+    }
+  },
   "cohort_definition": {
     "concept_id": "1147323",
     "fields": {
@@ -2126,36 +2351,6 @@
         "type": "DATE",
         "required": "false",
         "concept_id": "1147010"
-      }
-    }
-  },
-  "attribute_definition": {
-    "concept_id": "1147302",
-    "fields": {
-      "attribute_definition_id": {
-        "type": "BIGINT",
-        "required": "true",
-        "concept_id": "1147011"
-      },
-      "attribute_name": {
-        "type": "VARCHAR",
-        "required": "true",
-        "concept_id": "1147012"
-      },
-      "attribute_description": {
-        "type": "VARCHAR",
-        "required": "false",
-        "concept_id": "1147013"
-      },
-      "attribute_type_concept_id": {
-        "type": "BIGINT",
-        "required": "true",
-        "concept_id": "1147014"
-      },
-      "attribute_syntax": {
-        "type": "VARCHAR",
-        "required": "false",
-        "concept_id": "1147015"
       }
     }
   }
