@@ -39,24 +39,25 @@ def validate_file():
     """
     Validates a file's name and schema against the OMOP standard.
     """
-    # Get parameters from query string
-    file_path = request.args.get('file_path')
-    omop_version = request.args.get('omop_version')
-    delivery_date = request.args.get('delivery_date')
-    gcs_path = request.args.get('gcs_path')
-    
-    utils.logger.info(f"Validating schema of {file_path} against OMOP v{omop_version}")
-    result = file_validation.validate_file(file_path=file_path, omop_version=omop_version, delivery_date=delivery_date, gcs_path=gcs_path)
-    utils.logger.info(f"Validation successful for {file_path}")
+    try:
+        # Get parameters from query string
+        file_path = request.args.get('file_path')
+        omop_version = request.args.get('omop_version')
+        delivery_date = request.args.get('delivery_date')
+        gcs_path = request.args.get('gcs_path')
+        
+        utils.logger.info(f"Validating schema of {file_path} against OMOP v{omop_version}")
+        result = file_validation.validate_file(file_path=file_path, omop_version=omop_version, delivery_date=delivery_date, gcs_path=gcs_path)
+        utils.logger.info(f"Validation successful for {file_path}")
 
-    return jsonify({
-        'status': 'success',
-        'result': result,
-        'service': constants.SERVICE_NAME
-    }), 200
-    
-    # TODO Write to BQ meta_data, but this will just show in Airflow logs.
-
+        return jsonify({
+            'status': 'success',
+            'result': result,
+            'service': constants.SERVICE_NAME
+        }), 200
+        
+    except Exception as e:
+        return f"Unable to run file validation: {e}", 500
     
 @app.route('/create_artifact_buckets', methods=['GET'])
 def create_artifact_buckets():
