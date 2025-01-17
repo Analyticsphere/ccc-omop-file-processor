@@ -203,7 +203,7 @@ def get_placeholder_value(field_name: str, field_type: str) -> str:
     # Return string representation of default value, based on field type
 
     # *All* fields that end in _concept_id must be populated
-    # If a concept is unknown, OHDSI convention is explicity populated with concept_id 0
+    # If a concept is unknown, OHDSI convention is to explicity populate field with concept_id 0
     if field_name.endswith("_concept_id"):
         return "'0'"
 
