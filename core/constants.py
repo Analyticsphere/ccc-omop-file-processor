@@ -22,3 +22,11 @@ class ArtifactPaths(str, Enum):
     REPORT_TMP = f"{ARTIFACTS}delivery_report/tmp/"
     DQD = f"{ARTIFACTS}dqd/"
     INVALID_ROWS = f"{ARTIFACTS}invalid_rows/"
+
+DEFAULT_FIELD_VALUES = {
+        "VARCHAR": "''",
+        "DATE": "'1970-01-01'",
+        "BIGINT": "'-1'",
+        "DOUBLE": "'-1.0'",
+        "TIMESTAMP": "'1901-01-01 00:00:00'"
+    }

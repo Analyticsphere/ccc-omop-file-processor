@@ -200,17 +200,16 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         sys.exit(1)
 
 def get_placeholder_value(field_name: str, field_type: str) -> str:
-    # Return string representation of default value
+    # Return string representation of default value, based on field type
+
+    # *All* fields that end in _concept_id must be populated
+    # If a concept is unknown, OHDSI convention is explicity populated with concept_id 0
     if field_name.endswith("_concept_id"):
         return "'0'"
+
+    default_value = constants.DEFAULT_FIELD_VALUES[field_type]
     
-    return {
-        "VARCHAR": "''",
-        "DATE": "'1970-01-01'",
-        "BIGINT": "'-1'",
-        "DOUBLE": "'-1.0'",
-        "TIMESTAMP": "'1901-01-01 00:00:00'"
-    }[field_type]
+    return default_value
 
 def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     """
