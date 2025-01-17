@@ -1,12 +1,12 @@
-from google.cloud import storage
+from google.cloud import storage # type: ignore
 import logging
 import sys
 import uuid
-import duckdb
-from fsspec import filesystem
+import duckdb # type: ignore
+from fsspec import filesystem # type: ignore
 import core.constants as constants
-from typing import Optional
-
+from typing import Optional, Tuple
+import json
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -55,7 +55,7 @@ def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.
     If directory exists, deletes any existing files first.
     """
-    bucket_name = directory_path.split('/')[0]
+    bucket_name, _ = get_bucket_and_delivery_date_from_gcs_path(directory_path) #directory_path.split('/')[0]
     blob_name = '/'.join(directory_path.split('/')[1:])
     
     storage_client = storage.Client()
@@ -131,3 +131,44 @@ def parse_duckdb_csv_error(error: duckdb.InvalidInputException) -> Optional[str]
     elif "csv error on line" in error_msg:  # Generic CSV error fallback
         return "CSV_FORMAT_ERROR"
     return None
+
+def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
+    # Extract file name from a GCS path and removes extension
+    # e.g. synthea53/2024-12-31/care_site.parquet -> care_site
+    return (
+        gcs_file_path.split('/')[-1]
+        .replace(constants.PARQUET, '')
+        .replace(constants.CSV, '')
+        .replace(constants.FIXED_FILE_TAG_STRING, '')
+        .lower()
+    )
+
+def get_table_schema(table_name: str, cdm_version: str) -> dict:
+    # Returns schema for specified OMOP table, if table exists in CDM
+    # Returns empty dictionary if table is not in OMOP
+    table_name = table_name.lower()
+    schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
+
+    try:
+        with open(schema_file, 'r') as f:
+            schema_json = f.read()
+            schema = json.loads(schema_json)
+
+        # Check if table exists in schema
+        if table_name in schema:
+            return {table_name: schema[table_name]}
+        else:
+            return {}
+            
+    except FileNotFoundError:
+        raise Exception(f"Schema file not found: {schema_file}")
+    except json.JSONDecodeError:
+        raise Exception(f"Invalid JSON format in schema file: {schema_file}")
+    except Exception as e:
+        raise Exception(f"Unexpected error getting table schema: {str(e)}")
+    
+def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str, str]:
+    # Returns a tuple of the bucket_name and delivery date for a given file in GCS
+    # e.g. synthea53/2024-12-31/care_site.parquet -> synthea53, 2024-12-31
+    bucket_name, delivery_date = gcs_file_path.split('/')[:2]
+    return bucket_name, delivery_date
