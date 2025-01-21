@@ -211,11 +211,188 @@ def get_placeholder_value(field_name: str, field_type: str) -> str:
     
     return default_value
 
+# def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
+#     """
+#     Generates a SQL statement that, when run:
+#         - Converts data types of columns within Parquet file to OMOP CDM standard
+#         - Creates a new Parquet file with the invalid rows from original data file
+#         - Converts all column names to lower case
+#         - Ensures consistent field order within Parquet
+
+#     This SQL has many functions, but it is far more efficient to do this all in one step,
+#     as compared to reading and writing the Parquet each time, for each piece of functionality.
+#     """
+
+#     # --------------------------------------------------------------------------
+#     # 1) Parse out table name and bucket/subfolder info
+#     # --------------------------------------------------------------------------
+#     table_name = utils.get_table_name_from_gcs_path(gcs_file_path).lower()
+#     bucket, subfolder = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+
+#     # --------------------------------------------------------------------------
+#     # 2) Retrieve the table schema. If not found, return empty string
+#     # --------------------------------------------------------------------------
+#     schema = utils.get_table_schema(table_name, cdm_version)
+#     if not schema or table_name not in schema:
+#         utils.logger.warning(f"No schema found for table {table_name}")
+#         return ""
+
+#     fields = schema[table_name]["fields"]
+#     ordered_columns = list(fields.keys())  # preserve column order
+
+#     # --------------------------------------------------------------------------
+#     # 3) Initialize lists to build SQL expressions
+#     # --------------------------------------------------------------------------
+#     coalesce_exprs = []         # for "source_with_defaults" CTE
+#     cast_exprs = []             # for "conversion_check" CTE
+#     required_conditions = []    # e.g. "cc.some_col IS NOT NULL AND ..."
+
+#     # For invalid rows, we want everything as strings (excluding __rowid__).
+#     invalid_select_exprs = []
+
+#     # We'll add a row ID to each row so we can join the casted data back to
+#     # the original data (for invalid rows). "ROW_NUMBER() OVER ()" will just
+#     # assign an incrementing integer to each row in the order they're read.
+#     row_id_col = "__rowid__"
+
+#     # --------------------------------------------------------------------------
+#     # 4) "source_with_defaults": Coalesce required fields if they're NULL
+#     # --------------------------------------------------------------------------
+#     for field_name in ordered_columns:
+#         field_type = fields[field_name]["type"]
+#         is_required = fields[field_name]["required"].lower() == "true"
+
+#         # Determine default value if a required field is NULL
+#         default_value = (
+#             get_placeholder_value(field_name, field_type) if is_required else "NULL"
+#         )
+#         coalesce_exprs.append(f"COALESCE({field_name}, {default_value}) AS {field_name}")
+
+#     # Add the row ID
+#     coalesce_exprs.append(f"ROW_NUMBER() OVER () AS {row_id_col}")
+#     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
+
+#     # --------------------------------------------------------------------------
+#     # 5) "conversion_check": Overwrite each column with TRY_CAST(...) AS field_name
+#     # --------------------------------------------------------------------------
+#     for field_name in ordered_columns:
+#         # We'll uppercase the type in case the schema says 'bigint' or 'BigInt'
+#         field_type = fields[field_name]["type"].upper()
+#         is_required = fields[field_name]["required"].lower() == "true"
+
+#         if field_type != "VARCHAR":
+#             # For non-VARCHAR fields, do an in-place cast
+#             cast_exprs.append(f"TRY_CAST({field_name} AS {field_type}) AS {field_name}")
+#             if is_required:
+#                 required_conditions.append(f"cc.{field_name} IS NOT NULL")
+#         else:
+#             # For VARCHAR fields, no cast needed
+#             cast_exprs.append(field_name)
+#             if is_required:
+#                 required_conditions.append(f"cc.{field_name} IS NOT NULL")
+
+#     # Carry forward the row_id column for joining, but we'll exclude it from final SELECT
+#     cast_exprs.append(row_id_col)
+#     cast_definitions_sql = ",\n                ".join(cast_exprs)
+
+#     # --------------------------------------------------------------------------
+#     # 6) Build the WHERE clauses for valid vs. invalid rows
+#     # --------------------------------------------------------------------------
+#     where_clause_valid = " AND ".join(required_conditions) if required_conditions else "TRUE"
+#     where_clause_invalid = f"NOT ({where_clause_valid})" if required_conditions else "FALSE"
+
+#     # --------------------------------------------------------------------------
+#     # 7) Build the SELECT lists for valid and invalid rows,
+#     #    explicitly excluding __rowid__
+#     # --------------------------------------------------------------------------
+#     # Valid rows: we select the casted columns from "cc", but skip __rowid__.
+#     valid_select_exprs = [f"cc.{col}" for col in ordered_columns]
+#     valid_select_sql = ",\n            ".join(valid_select_exprs)
+
+#     # Invalid rows: we select the original (un-casted) data from "swd",
+#     # casting each column to VARCHAR, also skipping __rowid__.
+#     for field_name in ordered_columns:
+#         invalid_select_exprs.append(f"CAST(swd.{field_name} AS VARCHAR) AS {field_name}")
+#     invalid_select_sql = ",\n            ".join(invalid_select_exprs)
+
+#     # --------------------------------------------------------------------------
+#     # 8) Construct the final SQL statements
+#     # --------------------------------------------------------------------------
+#     # A) valid_rows: these rows have successfully casted (or are non-null if required)
+#     create_valid_rows_sql = f"""
+#         CREATE OR REPLACE TEMP TABLE valid_rows AS
+#         WITH source_with_defaults AS (
+#             SELECT
+#                 {coalesce_definitions_sql}
+#             FROM 'gs://{gcs_file_path}'
+#         ),
+#         conversion_check AS (
+#             SELECT
+#                 {cast_definitions_sql}
+#             FROM source_with_defaults
+#         )
+#         SELECT
+#             {valid_select_sql}
+#         FROM conversion_check cc
+#         WHERE {where_clause_valid};
+#     """.strip()
+
+#     # B) invalid_rows: rows that fail the "required_conditions"
+#     #    We join source_with_defaults (for original string data) to conversion_check
+#     #    for the row ID, then pick only the columns we want as VARCHAR.
+#     create_invalid_rows_sql = f"""
+#         CREATE OR REPLACE TEMP TABLE invalid_rows AS
+#         WITH source_with_defaults AS (
+#             SELECT
+#                 {coalesce_definitions_sql}
+#             FROM 'gs://{gcs_file_path}'
+#         ),
+#         conversion_check AS (
+#             SELECT
+#                 {cast_definitions_sql}
+#             FROM source_with_defaults
+#         )
+#         SELECT
+#             {invalid_select_sql}
+#         FROM source_with_defaults swd
+#         JOIN conversion_check cc
+#           ON swd.{row_id_col} = cc.{row_id_col}
+#         WHERE {where_clause_invalid};
+#     """.strip()
+
+#     # C) Overwrite the original Parquet with valid_rows (no __rowid__ included)
+#     copy_valid_sql = f"""
+#         COPY valid_rows
+#         TO 'gs://{gcs_file_path}'
+#         {constants.DUCKDB_FORMAT_STRING};
+#     """.strip()
+
+#     # D) Write invalid rows to a new "<table>.parquet" (no __rowid__ included)
+#     copy_invalid_sql = f"""
+#         COPY invalid_rows
+#         TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}'
+#         {constants.DUCKDB_FORMAT_STRING};
+#     """.strip()
+
+#     # E) Combine everything into a single script
+#     sql_script = f"""
+#         {create_valid_rows_sql};
+
+#         {create_invalid_rows_sql};
+
+#         {copy_valid_sql};
+
+#         {copy_invalid_sql};
+#     """.strip()
+
+#     return sql_script
+
+
 def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     """
     Generates a SQL statement that, when run:
         - Converts data types of columns within Parquet file to OMOP CDM standard
-        - Creates a new Parquet file with the invalid rows from original data file
+        - Creates a new Parquet file with the invalid rows from the original data file
         - Converts all column names to lower case
         - Ensures consistent field order within Parquet
 
@@ -241,13 +418,17 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     ordered_columns = list(fields.keys())  # preserve column order
 
     # --------------------------------------------------------------------------
+    # 2a) Identify which columns actually exist in the Parquet file 
+    #     using our new helper function
+    # --------------------------------------------------------------------------
+    actual_columns = utils.get_columns_from_parquet(gcs_file_path)
+
+    # --------------------------------------------------------------------------
     # 3) Initialize lists to build SQL expressions
     # --------------------------------------------------------------------------
     coalesce_exprs = []         # for "source_with_defaults" CTE
     cast_exprs = []             # for "conversion_check" CTE
     required_conditions = []    # e.g. "cc.some_col IS NOT NULL AND ..."
-
-    # For invalid rows, we want everything as strings (excluding __rowid__).
     invalid_select_exprs = []
 
     # We'll add a row ID to each row so we can join the casted data back to
@@ -256,7 +437,8 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     row_id_col = "__rowid__"
 
     # --------------------------------------------------------------------------
-    # 4) "source_with_defaults": Coalesce required fields if they're NULL
+    # 4) "source_with_defaults": Coalesce required fields if they're NULL,
+    #    or generate a placeholder column if that field doesn't exist at all.
     # --------------------------------------------------------------------------
     for field_name in ordered_columns:
         field_type = fields[field_name]["type"]
@@ -266,7 +448,13 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         default_value = (
             get_placeholder_value(field_name, field_type) if is_required else "NULL"
         )
-        coalesce_exprs.append(f"COALESCE({field_name}, {default_value}) AS {field_name}")
+
+        if field_name in actual_columns:
+            # If the column exists in the Parquet file, coalesce it with the default value if required
+            coalesce_exprs.append(f"COALESCE({field_name}, {default_value}) AS {field_name}")
+        else:
+            # If the column doesn't exist, just produce a placeholder (NULL or a special default)
+            coalesce_exprs.append(f"{default_value} AS {field_name}")
 
     # Add the row ID
     coalesce_exprs.append(f"ROW_NUMBER() OVER () AS {row_id_col}")
@@ -291,7 +479,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
             if is_required:
                 required_conditions.append(f"cc.{field_name} IS NOT NULL")
 
-    # Carry forward the row_id column for joining, but we'll exclude it from final SELECT
+    # Carry forward the row_id column for joining, but we'll exclude it from the final SELECT
     cast_exprs.append(row_id_col)
     cast_definitions_sql = ",\n                ".join(cast_exprs)
 
@@ -386,6 +574,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     """.strip()
 
     return sql_script
+
 
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
     fix_sql = get_fix_columns_sql_statement(gcs_file_path, cdm_version)
