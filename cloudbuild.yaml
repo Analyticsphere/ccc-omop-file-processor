@@ -24,8 +24,8 @@ steps:
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL', # Directly use the substitution variable
     '--set-env-vars=PROJECT_ID=$PROJECT_ID',
-    '--containerConcurrency=1',
-    '--timeoutSeconds=3600'
+    '--concurrency=1',
+    '--timeout=3600'
   ]
 
 options:
