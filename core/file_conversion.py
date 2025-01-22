@@ -167,7 +167,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
     Args:
         gcs_file_path (str): Full GCS path including bucket (bucket/path/to/file.csv)
     """
-    utils.logger.info("Attemping to converting file encoding to UTF8")
+    utils.logger.info("Attemping to convert file encoding to UTF8")
 
     # Split file path into bucket and object path
     path_parts = gcs_file_path.split('/')
