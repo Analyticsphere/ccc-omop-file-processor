@@ -176,3 +176,52 @@ def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str,
     # e.g. synthea53/2024-12-31/care_site.parquet -> synthea53, 2024-12-31
     bucket_name, delivery_date = gcs_file_path.split('/')[:2]
     return bucket_name, delivery_date
+
+def get_columns_from_parquet(gcs_file_path: str) -> list:
+    """
+    Reads Parquet file schema from the specified 'gs://{gcs_file_path}' 
+    using DuckDB to introspect its columns. Returns a list of columns found 
+    in the Parquet file.
+
+    This function:
+        1. Creates a temporary DuckDB table from the Parquet file, limited to 0 rows.
+        2. Uses PRAGMA table_info(...) to retrieve column metadata.
+        3. Drops the temporary table.
+        4. Returns a list of the actual column names present in the file.
+    """
+
+    # Create a unique or table-specific name for introspection
+    table_name_for_introspection = "temp_introspect_table"
+
+    
+    conn, local_db_file, tmp_dir = create_duckdb_connection()
+    try:
+        with conn:
+            
+            # Drop any existing temp table with the same name, just to be safe
+            conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
+
+            # Create a temp table from the Parquet file with zero rows
+            conn.execute(f"""
+                CREATE TEMP TABLE {table_name_for_introspection} AS
+                SELECT * FROM 'gs://{gcs_file_path}' LIMIT 0
+            """)
+
+            # Retrieve column metadata from DuckDB
+            pragma_info = conn.execute(
+                f"PRAGMA table_info({table_name_for_introspection})"
+            ).fetchall() # Okay to use fetchall() because we are certain list will fit in memory
+
+            # The second element of each row in PRAGMA table_info is the column name
+            # https://duckdb.org/docs/configuration/pragmas#storage-information
+            actual_columns = [row[1] for row in pragma_info]
+
+            # Drop the temp table
+            conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
+    except Exception as e:
+        logger.error(f"Unable to get Parquet column list: {e}")
+        sys.exit(0)
+    finally:
+        close_duckdb_connection(conn, local_db_file, tmp_dir)
+        
+    return actual_columns

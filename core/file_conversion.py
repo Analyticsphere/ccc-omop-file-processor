@@ -203,7 +203,7 @@ def get_placeholder_value(field_name: str, field_type: str) -> str:
     # Return string representation of default value, based on field type
 
     # *All* fields that end in _concept_id must be populated
-    # If a concept is unknown, OHDSI convention is explicity populated with concept_id 0
+    # If a concept is unknown, OHDSI convention is to explicity populate field with concept_id 0
     if field_name.endswith("_concept_id"):
         return "'0'"
 
@@ -215,7 +215,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     """
     Generates a SQL statement that, when run:
         - Converts data types of columns within Parquet file to OMOP CDM standard
-        - Creates a new Parquet file with the invalid rows from original data file
+        - Creates a new Parquet file with the invalid rows from the original data file
         - Converts all column names to lower case
         - Ensures consistent field order within Parquet
 
@@ -241,13 +241,17 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     ordered_columns = list(fields.keys())  # preserve column order
 
     # --------------------------------------------------------------------------
+    # 2a) Identify which columns actually exist in the Parquet file 
+    #     using our new helper function
+    # --------------------------------------------------------------------------
+    actual_columns = utils.get_columns_from_parquet(gcs_file_path)
+
+    # --------------------------------------------------------------------------
     # 3) Initialize lists to build SQL expressions
     # --------------------------------------------------------------------------
     coalesce_exprs = []         # for "source_with_defaults" CTE
     cast_exprs = []             # for "conversion_check" CTE
     required_conditions = []    # e.g. "cc.some_col IS NOT NULL AND ..."
-
-    # For invalid rows, we want everything as strings (excluding __rowid__).
     invalid_select_exprs = []
 
     # We'll add a row ID to each row so we can join the casted data back to
@@ -256,7 +260,8 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     row_id_col = "__rowid__"
 
     # --------------------------------------------------------------------------
-    # 4) "source_with_defaults": Coalesce required fields if they're NULL
+    # 4) "source_with_defaults": Coalesce required fields if they're NULL,
+    #    or generate a placeholder column if that field doesn't exist at all.
     # --------------------------------------------------------------------------
     for field_name in ordered_columns:
         field_type = fields[field_name]["type"]
@@ -266,7 +271,13 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         default_value = (
             get_placeholder_value(field_name, field_type) if is_required else "NULL"
         )
-        coalesce_exprs.append(f"COALESCE({field_name}, {default_value}) AS {field_name}")
+
+        if field_name in actual_columns:
+            # If the column exists in the Parquet file, coalesce it with the default value if required
+            coalesce_exprs.append(f"COALESCE({field_name}, {default_value}) AS {field_name}")
+        else:
+            # If the column doesn't exist, just produce a placeholder (NULL or a special default)
+            coalesce_exprs.append(f"{default_value} AS {field_name}")
 
     # Add the row ID
     coalesce_exprs.append(f"ROW_NUMBER() OVER () AS {row_id_col}")
@@ -291,7 +302,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
             if is_required:
                 required_conditions.append(f"cc.{field_name} IS NOT NULL")
 
-    # Carry forward the row_id column for joining, but we'll exclude it from final SELECT
+    # Carry forward the row_id column for joining, but we'll exclude it from the final SELECT
     cast_exprs.append(row_id_col)
     cast_definitions_sql = ",\n                ".join(cast_exprs)
 
