@@ -8,7 +8,8 @@ import duckdb # type: ignore
 from fsspec import filesystem # type: ignore
 import core.constants as constants
 from typing import Optional, Tuple
-import jsonimport os
+import json
+import os
 
 
 """

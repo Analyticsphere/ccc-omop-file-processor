@@ -34,7 +34,7 @@ def get_files():
             'file_list': file_list,
             'service': constants.SERVICE_NAME
         }), 200
-        except:
+    except:
         return "Unable to get list of files to process", 500
 
 @app.route('/validate_file', methods=['GET'])
