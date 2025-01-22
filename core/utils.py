@@ -221,3 +221,20 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
         close_duckdb_connection(conn, local_db_file, tmp_dir)
         
     return actual_columns
+
+def valid_parquet_file(gcs_file_path: str) -> bool:
+    # Retuns bool indicating whether Parquet file is valid/can be read by DuckDB
+    conn, local_db_file, tmp_dir = create_duckdb_connection()
+
+    try:
+        with conn:
+            # If the file is not a valid Parquet file, this will throw an exception
+            conn.execute(f"DESCRIBE SELECT * FROM read_parquet('gs://{gcs_file_path}')")
+
+            # If we get to this point, we were able to describe the Parquet file and will assume it's valid
+            return True
+    except Exception as e:
+        logger.error(f"Unable to validate Parquet file: {e}")
+        return False
+    finally:
+        close_duckdb_connection(conn, local_db_file, tmp_dir)

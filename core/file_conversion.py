@@ -58,22 +58,76 @@ class StreamingCSVWriter:
         self._upload_buffer()
         self.buffer.close()
 
+def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
+    if file_type == constants.CSV:
+        csv_to_parquet(gcs_file_path)
+    elif file_type == constants.PARQUET:
+        process_incoming_parquet(gcs_file_path)
+    else:
+        utils.logger.info(f"Invalid source file format: {file_type}") 
+
+def get_parquet_artifact_location(gcs_file_path: str) -> str:
+    file_name = utils.get_table_name_from_gcs_path(gcs_file_path)
+    base_directory, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+    
+    # Remove trailing slash if present
+    base_directory = base_directory.rstrip('/')
+    
+    # Create the parquet file name
+    parquet_file_name = f"{file_name}{constants.PARQUET}"
+    
+    # Construct the final parquet path
+    parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
+
+    return parquet_path
+
+def process_incoming_parquet(gcs_file_path: str) -> None:
+    """
+    - Validates that the Parquet file at gcs_file_path in GCS is readable by DuckDB.
+    - Copies incoming Parquet file to artifact GCS directory, ensuring:
+       - The output file name is all lowercase
+       - All column names within the Parquet file are all lowercase.
+    """
+    if utils.valid_parquet_file(gcs_file_path):
+        # Built a SELECT statement which will copy original Parquet
+        # to a new Parquet file, converting column names to lower case
+        parquet_columns = utils.get_columns_from_parquet(gcs_file_path)
+
+        select_list = []
+        for column in parquet_columns:
+            select_list.append(f"'{column}' AS '{column.lower()}'")
+        select_clause = ", ".join(select_list)
+
+        conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
+
+        try:
+            with conn:
+
+                # Execute the SELECT statement
+                copy_sql = f"""
+                    COPY (
+                        SELECT {select_clause}
+                        FROM read_parquet('gs://{gcs_file_path}')
+                    )
+                    TO 'gs://{get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+                """
+                conn.execute(copy_sql)
+        except Exception as e:
+            utils.logger.error(f"Unable to processing incoming Parquet file: {e}")
+            sys.exit(1)
+        finally:
+            utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+    else:
+        utils.logger.error(f"Invalid Parquet file")
+        sys.exit(1)
+
+
 def csv_to_parquet(gcs_file_path: str) -> None:
     conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
 
     try:
         with conn:
-            file_name = utils.get_table_name_from_gcs_path(gcs_file_path)
-            base_directory, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
-            
-            # Remove trailing slash if present
-            base_directory = base_directory.rstrip('/')
-            
-            # Create the parquet file name
-            parquet_file_name = f"{file_name}{constants.PARQUET}"
-            
-            # Construct the final parquet path
-            parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
+            parquet_path = get_parquet_artifact_location(gcs_file_path)
 
             convert_statement = f"""
                 COPY  (
