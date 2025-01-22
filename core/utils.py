@@ -208,7 +208,8 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
                 f"PRAGMA table_info({table_name_for_introspection})"
             ).fetchall() # Okay to use fetchall() because we are certain list will fit in memory
 
-            # Obtain just column name
+            # The second element of each row in PRAGMA table_info is the column name
+            # https://duckdb.org/docs/configuration/pragmas#storage-information
             actual_columns = [row[1] for row in pragma_info]
 
             # Drop the temp table
