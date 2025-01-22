@@ -3,6 +3,7 @@ from datetime import datetime
 import core.utils as utils
 import core.constants as constants
 import core.file_conversion as file_conversion
+import core.file_validation as file_validation
 import os
 
 app = Flask(__name__)
@@ -36,6 +37,31 @@ def get_files():
     except:
         return "Unable to get list of files to process", 500
 
+@app.route('/validate_file', methods=['GET'])
+def validate_file():
+    """
+    Validates a file's name and schema against the OMOP standard.
+    """
+    try:
+        # Get parameters from query string
+        file_path = request.args.get('file_path')
+        omop_version = request.args.get('omop_version')
+        delivery_date = request.args.get('delivery_date')
+        gcs_path = request.args.get('gcs_path')
+        
+        utils.logger.info(f"Validating schema of {file_path} against OMOP v{omop_version}")
+        result = file_validation.validate_file(file_path=file_path, omop_version=omop_version, delivery_date=delivery_date, gcs_path=gcs_path)
+        utils.logger.info(f"Validation successful for {file_path}")
+
+        return jsonify({
+            'status': 'success',
+            'result': result,
+            'service': constants.SERVICE_NAME
+        }), 200
+        
+    except Exception as e:
+        return f"Unable to run file validation: {e}", 500
+    
 @app.route('/create_artifact_buckets', methods=['GET'])
 def create_artifact_buckets():
     parent_bucket = request.args.get('parent_bucket')
