@@ -19,8 +19,11 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
         valid_table_names = schema.keys()
 
         # Get the base name of the file (without extension)
-        table_name_with_path = os.path.basename(file_path)
-        table_name, _ = os.path.splitext(table_name_with_path) 
+        # table_name_with_path = os.path.basename(file_path)
+        # table_name, _ = os.path.splitext(table_name_with_path) 
+        utils.logger.warning(f"In file_validation.validate_cdm_table_name(), file_path is: '{file_path}'")
+        table_name = utils.get_table_name_from_gcs_path(file_path)
+        utils.logger.warning(f"In file_validation.validate_cdm_table_name(), table_name is: '{table_name}'")
 
         # Check if the filename matches any of the table keys in the JSON
         is_valid_table_name = table_name in valid_table_names
