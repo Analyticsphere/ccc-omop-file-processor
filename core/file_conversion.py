@@ -95,7 +95,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
 
         select_list = []
         for column in parquet_columns:
-            select_list.append(f"'{column}' AS '{column.lower()}'")
+            select_list.append(f"{column} AS {column.lower()}")
         
         utils.logger.warning(f"select list is {select_list}")
         select_clause = ", ".join(select_list)
