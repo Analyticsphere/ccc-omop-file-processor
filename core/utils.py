@@ -208,8 +208,8 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
                 f"PRAGMA table_info({table_name_for_introspection})"
             ).fetchall() # Okay to use fetchall() because we are certain list will fit in memory
 
-            # The second element of each row in PRAGMA table_info is the column name
-            actual_columns = [row[1] for row in pragma_info]
+            # Obtain just column name
+            actual_columns = [row["column_name"] for row in pragma_info]
 
             # Drop the temp table
             conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
