@@ -454,6 +454,9 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
     fix_sql = get_fix_columns_sql_statement(gcs_file_path, cdm_version)
 
+    utils.logger.warning(f"!!!SQL statement is: ")
+    utils.logger.warning(f"{fix_sql.replace('\n', '  ')}")
+
     conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
     
     # Only run the fix SQL statement if it exists
