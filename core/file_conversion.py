@@ -384,7 +384,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # --------------------------------------------------------------------------
     # A) valid_rows: these rows have successfully casted (or are non-null if required)
     create_valid_rows_sql = f"""
-        CREATE OR REPLACE TEMP TABLE valid_rows AS
+        CREATE OR REPLACE TABLE valid_rows AS
         WITH source_with_defaults AS (
             SELECT
                 {coalesce_definitions_sql}
@@ -405,7 +405,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     #    We join source_with_defaults (for original string data) to conversion_check
     #    for the row ID, then pick only the columns we want as VARCHAR.
     create_invalid_rows_sql = f"""
-        CREATE OR REPLACE TEMP TABLE invalid_rows AS
+        CREATE OR REPLACE TABLE invalid_rows AS
         WITH source_with_defaults AS (
             SELECT
                 {coalesce_definitions_sql}
