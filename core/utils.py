@@ -93,8 +93,11 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
     try:
         random_string = str(uuid.uuid4())
         local_db_file = f"/tmp/{random_string}.db"
-        tmp_dir = f"/tmp/"
+        tmp_dir = f"/tmp/{random_string}"
+        
+        f = open(f"/mnt/data/{local_db_file}", "a")
 
+        #conn = duckdb.connect(local_db_file)
         conn = duckdb.connect(local_db_file)
         conn.execute(f"SET temp_directory='{tmp_dir}'")
         # Set memory limit based on host machine hardware
