@@ -317,8 +317,12 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         # Determine default value if a required field is NULL
         default_value = get_placeholder_value(field_name, field_type) if is_required else "NULL"
 
+        # Build concat statement that will eventually be hashed to identify rows
+        row_hash_statement = "-".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
+
         if field_name in actual_columns:
             utils.logger.warning(f"field_name {field_name} does exist in table")
+            
             # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
             if default_value != "NULL":
                 utils.logger.warning(f"Adding TRY_CAST statement: TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS {field_name}")
@@ -344,7 +348,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
             coalesce_exprs.append(f"CAST({default_value} AS {field_type}) AS {field_name}")
 
             # If the field IS NOT PROVIDED but it's still required - this is not a failed row; just use a default value
-            # No need to add it row_validity check
+            # No need to add missing, required rows to row_validity check
 
 
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
@@ -352,31 +356,29 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     row_validity_sql = ", ".join(row_validity)
     utils.logger.warning(f"row_validity_sql is {row_validity_sql}")
 
-
-    # --------------------------------------------------------------------------
-    # 8) Construct the final SQL statements
-    # --------------------------------------------------------------------------
-    # A) valid_rows: these rows have successfully casted (or are non-null if required)
-    # sql_script = f"""
-    #     CREATE OR REPLACE TABLE row_check AS
-    #     WITH source_with_defaults AS (
-    #         SELECT
-    #             {coalesce_definitions_sql},
-    #             CASE WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN 'valid_row'
-    #             ELSE 'invalid_row' END AS 'row_validity'
-    #         FROM 'gs://{gcs_file_path}'
-    #     )
-    #     ;
-
-
-    # """.strip()
+    # Build row_check table with row_validity column to indicate whether row is valid or not
+    # Uniquely identify rows using hash generated from concatenting each column
+        # If two rows have the same values, it will result in same hash, but that is okay for this use case
+    # Use hash values to identify invalid rows from original Parquet, and save those rows to a seperate file
+        # Need to save from original file because row_check will have TRY_CAST result, and will obscure original, invalid values
+    # Resave over original parquet file, saving only the rows which are valid
     sql_script = f"""
         CREATE OR REPLACE TABLE row_check AS
             SELECT
                 {coalesce_definitions_sql},
                 CASE WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN 'valid_row'
-                ELSE 'invalid_row' END AS 'row_validity'
-            FROM 'gs://{gcs_file_path}'
+                ELSE 'invalid_row' END AS 'row_validity',
+                md5({row_hash_statement}) AS rowhash
+            FROM read_parquet('gs://{gcs_file_path}')
+        ;
+
+        COPY (
+            SELECT *
+            FROM read_parquet('gs://{gcs_file_path}')
+            WHERE md5({row_hash_statement}) IN (
+                SELECT rowhash FROM row_check WHERE row_validity = 'invalid_row'
+            )
+        ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
         COPY (
@@ -386,12 +388,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
-        COPY (
-            SELECT * EXCLUDE (row_validity)
-            FROM row_check
-            WHERE row_validity = 'invalid_row'
-        ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
-        ;
     """.strip()
     utils.logger.warning(f"!! sql_script is {sql_script}")
     #utils.logger.warning(f"!! sql_script is {sql_script.replace('\n', '')}")
