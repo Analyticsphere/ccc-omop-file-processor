@@ -318,7 +318,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         default_value = get_placeholder_value(field_name, field_type) if is_required else "NULL"
 
         # Build concat statement that will eventually be hashed to identify rows
-        row_hash_statement = "-".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
+        row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
 
         if field_name in actual_columns:
             utils.logger.warning(f"field_name {field_name} does exist in table")
@@ -382,7 +382,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         ;
 
         COPY (
-            SELECT * EXCLUDE (row_validity)
+            SELECT * EXCLUDE (row_validity,rowhash)
             FROM row_check
             WHERE row_validity = 'valid_row'
         ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
