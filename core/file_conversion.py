@@ -368,14 +368,14 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
                 {coalesce_definitions_sql},
                 CASE WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN 'valid_row'
                 ELSE 'invalid_row' END AS 'row_validity',
-                md5({row_hash_statement}) AS rowhash
+                md5(CONCAT({row_hash_statement})) AS rowhash
             FROM read_parquet('gs://{gcs_file_path}')
         ;
 
         COPY (
             SELECT *
             FROM read_parquet('gs://{gcs_file_path}')
-            WHERE md5({row_hash_statement}) IN (
+            WHERE md5(CONCAT({row_hash_statement})) IN (
                 SELECT rowhash FROM row_check WHERE row_validity = 'invalid_row'
             )
         ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
