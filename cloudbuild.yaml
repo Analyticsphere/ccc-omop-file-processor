@@ -26,8 +26,8 @@ steps:
     '--set-env-vars=PROJECT_ID=$PROJECT_ID',
     '--concurrency=1',
     '--timeout=3600',
-    '--add-volume name=duckdb_files,type=cloud-storage,bucket=synthea_cdm54',
-    '--add-volume-mount volume=duckdb_files,mount-path=/mnt/data'
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=synthea_cdm54',
+    '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data'
   ]
 
 options:
