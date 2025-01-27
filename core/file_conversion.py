@@ -277,13 +277,13 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     """
 
     # --------------------------------------------------------------------------
-    # 1) Parse out table name and bucket/subfolder info
+    # Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
     table_name = utils.get_table_name_from_gcs_path(gcs_file_path).lower()
     bucket, subfolder = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
 
     # --------------------------------------------------------------------------
-    # 2) Retrieve the table schema. If not found, return empty string
+    # Retrieve the table schema. If not found, return empty string
     # --------------------------------------------------------------------------
     schema = utils.get_table_schema(table_name, cdm_version)
     if not schema or table_name not in schema:
@@ -294,13 +294,13 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     ordered_columns = list(fields.keys())  # preserve column order
 
     # --------------------------------------------------------------------------
-    # 2a) Identify which columns actually exist in the Parquet file 
+    # Identify which columns actually exist in the Parquet file 
     #     using our new helper function
     # --------------------------------------------------------------------------
     actual_columns = utils.get_columns_from_parquet(gcs_file_path)
 
     # --------------------------------------------------------------------------
-    # 3) Initialize lists to build SQL expressions
+    # Initialize lists to build SQL expressions
     # --------------------------------------------------------------------------
     coalesce_exprs = []
     row_validity = []    # e.g. "cc.some_col IS NOT NULL AND ..."
@@ -310,7 +310,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     #    or generate a placeholder column if that field doesn't exist at all.
     # --------------------------------------------------------------------------
     for field_name in ordered_columns:
-        utils.logger.warning(f"Looking for field_name {field_name} in table {table_name}")
         field_type = fields[field_name]["type"]
         is_required = fields[field_name]["required"].lower() == "true"
 
@@ -320,22 +319,16 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         # Build concat statement that will eventually be hashed to identify rows
         row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
 
-        if field_name in actual_columns:
-            utils.logger.warning(f"field_name {field_name} does exist in table")
-            
+        if field_name in actual_columns:           
             # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
             if default_value != "NULL":
-                utils.logger.warning(f"Adding TRY_CAST statement: TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS {field_name}")
                 coalesce_exprs.append(f"TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS {field_name}")
             # If default value is NULL, don't coalesce
             else:
-                utils.logger.warning(f"Adding TRY_CAST statement: TRY_CAST({field_name} AS {field_type}) AS {field_name}")
                 coalesce_exprs.append(f"TRY_CAST({field_name} AS {field_type}) AS {field_name}")
             
             # If the field is provided, and it's required, add it to list of fields which must be of correct type
             if is_required:
-                utils.logger.warning(f"Adding to row_validity statement: CAST(TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS VARCHAR)")
-
                 # In the final SQL statement, need to confirm that ALL required fields can be cast to their correct types
                 # If any one of the fields cannot be cast to the correct type, the entire row fails
                 # To do this check in one shot, perform a single COALESCE within the SQL statement
@@ -344,7 +337,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         else:
             # If the column doesn't exist, just produce a placeholder (NULL or a special default)
             # Still need to cast to ensure consist field types
-            utils.logger.warning(f"Adding CAST statement: CAST({default_value} AS {field_type}) AS {field_name}")
             coalesce_exprs.append(f"CAST({default_value} AS {field_type}) AS {field_name}")
 
             # If the field IS NOT PROVIDED but it's still required - this is not a failed row; just use a default value
@@ -352,9 +344,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 
 
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
-    utils.logger.warning(f"coalesce_definitions_sql is {coalesce_definitions_sql}")
     row_validity_sql = ", ".join(row_validity)
-    utils.logger.warning(f"row_validity_sql is {row_validity_sql}")
 
     # Build row_check table with row_validity column to indicate whether row is valid or not
     # Uniquely identify rows using hash generated from concatenting each column
@@ -389,8 +379,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         ;
 
     """.strip()
-    utils.logger.warning(f"!! sql_script is {sql_script}")
-    #utils.logger.warning(f"!! sql_script is {sql_script.replace('\n', '')}")
+
     return sql_script
 
 def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
