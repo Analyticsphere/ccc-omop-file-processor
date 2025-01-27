@@ -368,19 +368,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     #     )
     #     ;
 
-    #     COPY (
-    #         SELECT * EXCLUDE (row_validity)
-    #         FROM row_check
-    #         WHERE row_validity = 'valid_row'
-    #     ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
-    #     ;
 
-    #     COPY (
-    #         SELECT * EXCLUDE (row_validity)
-    #         FROM row_check
-    #         WHERE row_validity = 'invalid_row'
-    #     ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
-    #     ;
     # """.strip()
     sql_script = f"""
         CREATE OR REPLACE TABLE row_check AS
@@ -389,6 +377,20 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
                 CASE WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN 'valid_row'
                 ELSE 'invalid_row' END AS 'row_validity'
             FROM 'gs://{gcs_file_path}'
+        ;
+
+        COPY (
+            SELECT * EXCLUDE (row_validity)
+            FROM row_check
+            WHERE row_validity = 'valid_row'
+        ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
+        ;
+
+        COPY (
+            SELECT * EXCLUDE (row_validity)
+            FROM row_check
+            WHERE row_validity = 'invalid_row'
+        ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         ;
     """.strip()
     utils.logger.warning(f"!! sql_script is {sql_script}")
