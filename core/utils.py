@@ -92,8 +92,11 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
     # Returns tuple of DuckDB object, name of db file, and path to db file
     try:
         random_string = str(uuid.uuid4())
-        local_db_file = f"/tmp/{random_string}.db"
-        tmp_dir = f"/tmp/{random_string}"
+        
+        #local_db_file = f"/tmp/{random_string}.db"
+        local_db_file = f"/mnt/data/tmp/{random_string}.db"
+        #tmp_dir = f"/tmp/{random_string}"
+        tmp_dir = f"/mnt/data/tmp/{random_string}"
         
         # 'Open' the file here to mount to GCS before connecting to file in DuckDB engine
         #f = open(local_db_file, "a")
