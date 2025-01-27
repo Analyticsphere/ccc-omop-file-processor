@@ -330,8 +330,13 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
             
             # If the field is provided, and it's required, add it to list of fields which must be of correct type
             if is_required:
-                utils.logger.warning(f"Adding to row_validity statement: TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type})")
-                row_validity.append(f"TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type})")
+                utils.logger.warning(f"Adding to row_validity statement: CAST(TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS VARCHAR)")
+
+                # In the final SQL statement, need to confirm that ALL required fields can be cast to their correct types
+                # If any one of the fields cannot be cast to the correct type, the entire row fails
+                # To do this check in one shot, perform a single COALESCE within the SQL statement
+                # ALL fields in a COALESCE must be of the same type, so casting everything to VARCHAR *after* trying to cast it to its correct type
+                row_validity.append(f"CAST(TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS VARCHAR)")
         else:
             # If the column doesn't exist, just produce a placeholder (NULL or a special default)
             # Still need to cast to ensure consist field types
