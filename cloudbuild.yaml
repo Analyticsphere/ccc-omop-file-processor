@@ -26,7 +26,9 @@ steps:
     '--set-env-vars=PROJECT_ID=$PROJECT_ID',
     '--concurrency=1',
     '--timeout=3600',
-    '--requests=ephemeral-storage=2Gi'
+    '--volumes=name=my-storage,mountPath=/mnt/data',
+    '--volume-mounts=my-storage:/mnt/data',
+    '--volumes-source=storage.googleapis.com/synthea_cdm54'
   ]
 
 options:
