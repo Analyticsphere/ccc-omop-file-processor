@@ -10,7 +10,7 @@ import core.constants as constants
 from typing import Optional, Tuple
 import json
 import os
-
+import shutil
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -115,8 +115,8 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str,
     # Destory DuckDB object to free memory, and remove temporary files
     try:
         conn.close()
-        #os.remove(local_db_file)
-        #shutil.rmtree(tmp_dir)
+        os.remove(local_db_file)
+        shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
