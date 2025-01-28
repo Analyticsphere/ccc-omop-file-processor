@@ -354,12 +354,18 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # Resave over original parquet file, saving only the rows which are valid
     sql_script = f"""
         CREATE OR REPLACE TABLE row_check AS
-            SELECT
-                {coalesce_definitions_sql},
-                CASE WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN 'valid_row'
-                ELSE 'invalid_row' END AS 'row_validity',
-                md5(CONCAT({row_hash_statement})) AS rowhash
-            FROM read_parquet('gs://{gcs_file_path}')
+            WITH row_check_cte AS (
+                SELECT
+                    {coalesce_definitions_sql},
+                    CASE WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN 'valid_row'
+                    ELSE 'invalid_row' END AS 'row_validity'
+                FROM read_parquet('gs://{gcs_file_path}')
+            )
+            SELECT *,
+                CASE 
+                    WHEN row_validity = 'invalid_row' THEN md5(CONCAT({row_hash_statement})) 
+                    ELSE NULL END AS rowhash
+            FROM row_check
         ;
 
         COPY (
