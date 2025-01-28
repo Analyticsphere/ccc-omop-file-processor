@@ -357,23 +357,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
                     ELSE NULL END AS row_hash
             FROM read_parquet('gs://{gcs_file_path}')
         ;
-
-        COPY (
-            SELECT *
-            FROM read_parquet('gs://{gcs_file_path}')
-            WHERE md5(CONCAT({row_hash_statement})) IN (
-                SELECT row_hash FROM row_check WHERE row_hash IS NOT NULL
-            )
-        ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
-        ;
-
-        COPY (
-            SELECT * EXCLUDE (row_hash)
-            FROM row_check
-            WHERE row_hash IS NULL
-        ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
-        ;
-
     """.strip()
 
     return sql_script
