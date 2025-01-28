@@ -357,14 +357,14 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
             WITH row_check_cte AS (
                 SELECT
                     {coalesce_definitions_sql},
-                    CASE WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN 'valid_row'
-                    ELSE 'invalid_row' END AS 'row_validity'
+                    CASE WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN '{constants.VALID_ROW_STRING}'
+                    ELSE '{constants.INVALID_ROW_STRING}' END AS '{constants.ROW_VALIDITY_COLUMN_STRING}'
                 FROM read_parquet('gs://{gcs_file_path}')
             )
             SELECT *,
                 CASE 
-                    WHEN row_validity = 'invalid_row' THEN md5(CONCAT({row_hash_statement})) 
-                    ELSE NULL END AS 'row_hash'
+                    WHEN row_validity = '{constants.INVALID_ROW_STRING}' THEN md5(CONCAT({row_hash_statement})) 
+                    ELSE NULL END AS '{constants.ROW_HASH_COLUMN_STRING}'
             FROM row_check_cte
         ;
 
@@ -372,15 +372,15 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
             SELECT *
             FROM read_parquet('gs://{gcs_file_path}')
             WHERE md5(CONCAT({row_hash_statement})) IN (
-                SELECT row_hash FROM row_check WHERE row_validity = 'invalid_row'
+                SELECT {constants.ROW_HASH_COLUMN_STRING} FROM row_check WHERE row_validity = '{constants.INVALID_ROW_STRING}'
             )
         ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
         COPY (
-            SELECT * EXCLUDE (row_validity,row_hash)
+            SELECT * EXCLUDE ({constants.ROW_VALIDITY_COLUMN_STRING},{constants.ROW_HASH_COLUMN_STRING})
             FROM row_check
-            WHERE row_validity = 'valid_row'
+            WHERE {constants.ROW_VALIDITY_COLUMN_STRING} = '{constants.VALID_ROW_STRING}'
         ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
