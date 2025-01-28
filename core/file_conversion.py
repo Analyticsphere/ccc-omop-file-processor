@@ -120,7 +120,6 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         utils.logger.error(f"Invalid Parquet file")
         sys.exit(1)
 
-
 def csv_to_parquet(gcs_file_path: str) -> None:
     conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
 
@@ -295,7 +294,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 
     # --------------------------------------------------------------------------
     # Identify which columns actually exist in the Parquet file 
-    #     using our new helper function
     # --------------------------------------------------------------------------
     actual_columns = utils.get_columns_from_parquet(gcs_file_path)
 
@@ -306,8 +304,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     row_validity = []    # e.g. "cc.some_col IS NOT NULL AND ..."
 
     # --------------------------------------------------------------------------
-    # "source_with_defaults": Coalesce required fields if they're NULL,
-    #    or generate a placeholder column if that field doesn't exist at all.
+    # Coalesce required fields if they're NULL, or generate a placeholder column if that field doesn't exist at all.
     # --------------------------------------------------------------------------
     for field_name in ordered_columns:
         field_type = fields[field_name]["type"]
@@ -341,7 +338,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 
             # If the field IS NOT PROVIDED but it's still required - this is not a failed row; just use a default value
             # No need to add missing, required rows to row_validity check
-
 
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
     row_validity_sql = ", ".join(row_validity)
