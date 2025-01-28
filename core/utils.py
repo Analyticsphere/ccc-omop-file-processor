@@ -123,7 +123,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
         # Improves performance for large queries
         conn.execute("SET preserve_insertion_order='false'")
 
-        conn.execute(f"SET threads={constants.DUCKDB_THREADS}")
+        #conn.execute(f"SET threads={constants.DUCKDB_THREADS}")
 
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
