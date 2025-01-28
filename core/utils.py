@@ -70,12 +70,13 @@ def create_gcs_directory(directory_path: str) -> None:
         blobs = bucket.list_blobs(prefix=blob_name)
         
         # Delete any existing files in the directory
-        for blob in blobs:
-            try:
-                bucket.blob(blob.name).delete()
-                logger.info(f"Deleted existing file: {blob.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete file {blob.name}: {e}")
+        # TODO: Uncomment this out after testing
+        # for blob in blobs:
+        #     try:
+        #         bucket.blob(blob.name).delete()
+        #         logger.info(f"Deleted existing file: {blob.name}")
+        #     except Exception as e:
+        #         logger.warning(f"Failed to delete file {blob.name}: {e}")
         
         # Create the directory marker
         blob = bucket.blob(blob_name)
