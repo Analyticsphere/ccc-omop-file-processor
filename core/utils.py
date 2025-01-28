@@ -129,9 +129,16 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
 def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str, tmp_dir: str) -> None:
     # Destory DuckDB object to free memory, and remove temporary files
     try:
+        # Close the DuckDB connection
         conn.close()
-        os.remove(local_db_file)
-        shutil.rmtree(tmp_dir)
+
+        # Remove the local database file if it exists
+        if os.path.exists(local_db_file):
+            os.remove(local_db_file)
+
+        # Remove the temporary directory if it exists
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
