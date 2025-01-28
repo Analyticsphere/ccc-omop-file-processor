@@ -3,6 +3,7 @@ from enum import Enum
 DUCKDB_FORMAT_STRING = "(FORMAT 'parquet', COMPRESSION 'zstd')"
 DUCKDB_MEMORY_LIMIT = "5GB"
 DUCKDB_MAX_SIZE = "500GB"
+#DUCKDB_THREADS = "6"
 DUCKDB_THREADS = "6"
 
 SERVICE_NAME = "omop-file-processor"

@@ -349,7 +349,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         # Need to save from original file because row_check will have TRY_CAST result, and will obscure original, invalid values
     # Resave over original parquet file, saving only the rows which are valid
     sql_script = f"""
-        CREATE OR REPLACE TABLE row_check AS
+        CREATE OR REPLACE TEMP TABLE row_check AS
             SELECT
                 *
             FROM read_parquet('gs://{gcs_file_path}')
