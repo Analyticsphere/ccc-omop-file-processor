@@ -357,8 +357,9 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
             WITH row_check_cte AS (
                 SELECT
                     {coalesce_definitions_sql},
-                    CASE WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN '{constants.VALID_ROW_STRING}'
-                    ELSE '{constants.INVALID_ROW_STRING}' END AS '{constants.ROW_VALIDITY_COLUMN_STRING}'
+                    CASE 
+                        WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN '{constants.VALID_ROW_STRING}'
+                        ELSE '{constants.INVALID_ROW_STRING}' END AS '{constants.ROW_VALIDITY_COLUMN_STRING}'
                 FROM read_parquet('gs://{gcs_file_path}')
             )
             SELECT *,
