@@ -347,7 +347,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     row_validity_sql = ", ".join(row_validity)
 
     # Build row_check table with row_validity column to indicate whether row is valid or not
-    # Uniquely identify invalid rows using hash generated from concatenting each column
+    # Uniquely identify rows using hash generated from concatenting each column
         # If two rows have the same values, it will result in same hash, but that is okay for this use case
     # Use hash values to identify invalid rows from original Parquet, and save those rows to a seperate file
         # Need to save from original file because row_check will have TRY_CAST result, and will obscure original, invalid values
@@ -358,30 +358,30 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
                 SELECT
                     {coalesce_definitions_sql},
                     CASE 
-                        WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN '{constants.VALID_ROW_STRING}'
-                        ELSE '{constants.INVALID_ROW_STRING}' END AS '{constants.ROW_VALIDITY_COLUMN_STRING}'
+                        WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN 'valid_row'
+                        ELSE 'invalid_row' END AS 'row_validity'
                 FROM read_parquet('gs://{gcs_file_path}')
             )
             SELECT *,
                 CASE 
-                    WHEN row_validity = '{constants.INVALID_ROW_STRING}' THEN md5(CONCAT({row_hash_statement})) 
-                    ELSE NULL END AS '{constants.ROW_HASH_COLUMN_STRING}'
-            FROM row_check_cte
+                    WHEN row_validity = 'invalid_row' THEN md5(CONCAT({row_hash_statement})) 
+                    ELSE NULL END AS row_hash
+            FROM row_check
         ;
 
         COPY (
             SELECT *
             FROM read_parquet('gs://{gcs_file_path}')
             WHERE md5(CONCAT({row_hash_statement})) IN (
-                SELECT {constants.ROW_HASH_COLUMN_STRING} FROM row_check WHERE row_validity = '{constants.INVALID_ROW_STRING}'
+                SELECT row_hash FROM row_check WHERE row_validity = 'invalid_row'
             )
         ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
         COPY (
-            SELECT * EXCLUDE ({constants.ROW_VALIDITY_COLUMN_STRING},{constants.ROW_HASH_COLUMN_STRING})
+            SELECT * EXCLUDE (row_validity,row_hash)
             FROM row_check
-            WHERE {constants.ROW_VALIDITY_COLUMN_STRING} = '{constants.VALID_ROW_STRING}'
+            WHERE row_validity = 'valid_row'
         ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
