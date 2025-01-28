@@ -357,7 +357,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
             SELECT
                 {coalesce_definitions_sql},
                 CASE 
-                    WHEN COALESCE({row_validity_sql}) IS NOT NULL THEN md5(CONCAT({row_hash_statement}))
+                    WHEN COALESCE({row_validity_sql}) IS NULL THEN md5(CONCAT({row_hash_statement}))
                     ELSE NULL END AS row_hash
             FROM read_parquet('gs://{gcs_file_path}')
         ;
