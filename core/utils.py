@@ -118,7 +118,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
         conn.execute(f"SET max_memory='{constants.DUCKDB_MEMORY_LIMIT}'")
 
         # Set max size to allow on disk
-        conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
+        #conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
 
         # Improves performance for large queries
         conn.execute("SET preserve_insertion_order='false'")
