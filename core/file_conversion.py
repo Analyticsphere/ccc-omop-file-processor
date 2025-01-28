@@ -366,7 +366,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
                 CASE 
                     WHEN row_validity = 'invalid_row' THEN md5(CONCAT({row_hash_statement})) 
                     ELSE NULL END AS row_hash
-            FROM row_check
+            FROM row_check_cte
         ;
 
         COPY (
