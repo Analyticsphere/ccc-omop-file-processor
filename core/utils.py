@@ -114,9 +114,16 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
         conn.execute(f"SET temp_directory='{tmp_dir}'")
         # Set memory limit based on host machine hardware
         # Should be 2-3GB under the maximum alloted to Docker
-        conn.execute(f"SET memory_limit = '{constants.DUCKDB_MEMORY_LIMIT}'")
+        conn.execute(f"SET memory_limit='{constants.DUCKDB_MEMORY_LIMIT}'")
+        conn.execute(f"SET max_memory='{constants.DUCKDB_MEMORY_LIMIT}'")
+
         # Set max size to allow on disk
         conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
+
+        # Improves performance for large queries
+        conn.execute("SET preserve_insertion_order='false'")
+
+        conn.execute(f"SET threads={constants.DUCKDB_THREADS}")
 
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
@@ -132,13 +139,13 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str,
         # Close the DuckDB connection
         conn.close()
 
-        # Remove the local database file if it exists
-        if os.path.exists(local_db_file):
-            os.remove(local_db_file)
+        # # Remove the local database file if it exists
+        # if os.path.exists(local_db_file):
+        #     os.remove(local_db_file)
 
-        # Remove the temporary directory if it exists
-        if os.path.exists(tmp_dir):
-            shutil.rmtree(tmp_dir)
+        # # Remove the temporary directory if it exists
+        # if os.path.exists(tmp_dir):
+        #     shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
