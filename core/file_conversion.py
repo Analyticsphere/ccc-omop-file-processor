@@ -351,10 +351,10 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     sql_script = f"""
         CREATE OR REPLACE TABLE row_check AS
             SELECT
-                {coalesce_definitions_sql},
+                {coalesce_definitions_sql}/*,
                 CASE 
                     WHEN COALESCE({row_validity_sql}) IS NULL THEN md5(CONCAT({row_hash_statement}))
-                    ELSE NULL END AS row_hash
+                    ELSE NULL END AS row_hash*/
             FROM read_parquet('gs://{gcs_file_path}')
         ;
     """.strip()
