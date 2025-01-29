@@ -342,10 +342,10 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
     row_validity_sql = ", ".join(row_validity)
 
-    # Build row_check table with row_validity column to indicate whether row is valid or not
+    # Build row_check table with row_hash column
     # Uniquely identify invalid rows using hash generated from concatenting each column
         # If two rows have the same values, it will result in same hash, but that is okay for this use case
-    # Use hash values to identify invalid rows from original Parquet, and save those rows to a seperate file
+    # Use the hash values to identify invalid rows from original Parquet, and save those rows to a seperate file
         # Need to save from original file because row_check will have TRY_CAST result, and will obscure original, invalid values
     # Resave over original parquet file, saving only the rows which are valid
     sql_script = f"""
