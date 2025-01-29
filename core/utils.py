@@ -210,7 +210,6 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
     # Create a unique or table-specific name for introspection
     table_name_for_introspection = "temp_introspect_table"
 
-    
     conn, local_db_file, tmp_dir = create_duckdb_connection()
     try:
         with conn:

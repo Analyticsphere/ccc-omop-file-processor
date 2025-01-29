@@ -311,7 +311,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
         is_required = fields[field_name]["required"].lower() == "true"
 
         # Determine default value if a required field is NULL
-        default_value = get_placeholder_value(field_name, field_type) if is_required else "NULL"
+        default_value = get_placeholder_value(field_name, field_type) if is_required or field_name.endswith("_concept_id") else "NULL"
 
         # Build concat statement that will eventually be hashed to identify rows
         row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
