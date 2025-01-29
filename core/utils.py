@@ -118,13 +118,17 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
         conn.execute(f"SET memory_limit='{constants.DUCKDB_MEMORY_LIMIT}'")
         conn.execute(f"SET max_memory='{constants.DUCKDB_MEMORY_LIMIT}'")
 
-        # Set max size to allow on disk
-        #conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
+
 
         # Improves performance for large queries
         conn.execute("SET preserve_insertion_order='false'")
 
-        #conn.execute(f"SET threads={constants.DUCKDB_THREADS}")
+        # Set to number of CPU cores
+        # https://duckdb.org/docs/configuration/overview.html#global-configuration-options
+        conn.execute(f"SET threads={constants.DUCKDB_THREADS}")
+
+        # Set max size to allow on disk
+        #conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
 
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
