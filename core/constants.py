@@ -14,10 +14,6 @@ CDM_SCHEMA_PATH = "reference/schemas/"
 CDM_SCHEMA_FILE_NAME = "schema.json"
 
 FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
-VALID_ROW_STRING = "valid_row"
-INVALID_ROW_STRING = "invalid_row"
-ROW_VALIDITY_COLUMN_STRING = "row_validity"
-ROW_HASH_COLUMN_STRING = "row_hash"
 
 class ArtifactPaths(str, Enum):
     ARTIFACTS = "artifacts/"
