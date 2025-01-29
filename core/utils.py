@@ -70,13 +70,12 @@ def create_gcs_directory(directory_path: str) -> None:
         blobs = bucket.list_blobs(prefix=blob_name)
         
         # Delete any existing files in the directory
-        # TODO: Uncomment this out after testing
-        # for blob in blobs:
-        #     try:
-        #         bucket.blob(blob.name).delete()
-        #         logger.info(f"Deleted existing file: {blob.name}")
-        #     except Exception as e:
-        #         logger.warning(f"Failed to delete file {blob.name}: {e}")
+        for blob in blobs:
+            try:
+                bucket.blob(blob.name).delete()
+                logger.info(f"Deleted existing file: {blob.name}")
+            except Exception as e:
+                logger.warning(f"Failed to delete file {blob.name}: {e}")
         
         # Create the directory marker
         blob = bucket.blob(blob_name)
@@ -94,31 +93,14 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
     try:
         random_string = str(uuid.uuid4())
         
-        #tmp_dir = f"/mnt/data/tmp/{random_string}"
-        #f1 = open(tmp_dir, "a")
-
-        #local_db_file = f"/tmp/{random_string}.db"
-        #local_db_file = f"{tmp_dir}/{random_string}.db"
-        #f2 = open(local_db_file, "a")
-
-        #tmp_dir = f"/tmp/{random_string}/"
-        #local_db_file = f"{tmp_dir}{random_string}.db"
-        
+        # GCS bucket mounted to /mnt/data/ in clouldbuild.yml
         tmp_dir = f"/mnt/data/"
         local_db_file = f"{tmp_dir}{random_string}.db"
 
-        # 'Open' the file here to mount to GCS before connecting to file in DuckDB engine
-        #f = open(local_db_file, "a")
-
-        #conn = duckdb.connect(local_db_file)
         conn = duckdb.connect(local_db_file)
         conn.execute(f"SET temp_directory='{tmp_dir}'")
-        # Set memory limit based on host machine hardware
-        # Should be 2-3GB under the maximum alloted to Docker
         conn.execute(f"SET memory_limit='{constants.DUCKDB_MEMORY_LIMIT}'")
         conn.execute(f"SET max_memory='{constants.DUCKDB_MEMORY_LIMIT}'")
-
-
 
         # Improves performance for large queries
         conn.execute("SET preserve_insertion_order='false'")
@@ -128,7 +110,8 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
         conn.execute(f"SET threads={constants.DUCKDB_THREADS}")
 
         # Set max size to allow on disk
-        #conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
+        # Unneeded when writing to GCS
+        # conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
 
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
@@ -144,13 +127,13 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str,
         # Close the DuckDB connection
         conn.close()
 
-        # # Remove the local database file if it exists
-        # if os.path.exists(local_db_file):
-        #     os.remove(local_db_file)
+        # Remove the local database file if it exists
+        if os.path.exists(local_db_file):
+            os.remove(local_db_file)
 
-        # # Remove the temporary directory if it exists
-        # if os.path.exists(tmp_dir):
-        #     shutil.rmtree(tmp_dir)
+        # Remove the temporary directory if it exists
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
