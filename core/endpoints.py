@@ -4,6 +4,7 @@ import core.utils as utils
 import core.constants as constants
 import core.file_conversion as file_conversion
 import core.file_validation as file_validation
+import core.bq_client as bq_client
 import os
 
 app = Flask(__name__)
@@ -107,6 +108,20 @@ def fix_parquet_file():
         return "Fixed Parquet file", 200
     except:
         return "Unable to fix Parquet file", 500
+
+@app.route('/parquet_to_bq', methods=['GET'])
+def parquet_gcs_to_bq():
+    file_path: str = request.args.get('file_path')
+    project_id: str = request.args.get('project_id')
+    dataset_id: str = request.args.get('dataset_id')
+
+    try:
+        utils.logger.info(f"Attempting to load file {file_path} to {project_id}.{dataset_id}")
+        bq_client.load_parquet_to_bigquery(file_path, project_id, dataset_id)
+
+        return "Loaded Parquet file to BigQuery", 200
+    except:
+        return "Unable to load Parquet file", 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))

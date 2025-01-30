@@ -66,21 +66,6 @@ def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
     else:
         utils.logger.info(f"Invalid source file format: {file_type}") 
 
-def get_parquet_artifact_location(gcs_file_path: str) -> str:
-    file_name = utils.get_table_name_from_gcs_path(gcs_file_path)
-    base_directory, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
-    
-    # Remove trailing slash if present
-    base_directory = base_directory.rstrip('/')
-    
-    # Create the parquet file name
-    parquet_file_name = f"{file_name}{constants.PARQUET}"
-    
-    # Construct the final parquet path
-    parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
-
-    return parquet_path
-
 def process_incoming_parquet(gcs_file_path: str) -> None:
     """
     - Validates that the Parquet file at gcs_file_path in GCS is readable by DuckDB.
@@ -108,7 +93,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
                         SELECT {select_clause}
                         FROM read_parquet('gs://{gcs_file_path}')
                     )
-                    TO 'gs://{get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+                    TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
                 """
                 conn.execute(copy_sql)
         except Exception as e:
@@ -125,7 +110,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
 
     try:
         with conn:
-            parquet_path = get_parquet_artifact_location(gcs_file_path)
+            parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
 
             convert_statement = f"""
                 COPY  (
