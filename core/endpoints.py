@@ -86,17 +86,11 @@ def create_artifact_buckets():
 
 @app.route('/convert_to_parquet', methods=['GET'])
 def convert_to_parquet():
+    file_type: str = request.args.get('file_type')
     file_path: str = request.args.get('file_path')
 
-    try:
-        if file_path.endswith(constants.CSV):
-            utils.logger.info(f"Converting CSV file {file_path} to Parquet format")
-            file_conversion.csv_to_parquet(file_path)
-        elif file_path.endswith(constants.PARQUET):
-            utils.logger.info(f"Received parquet file from site: {file_path}")
-        else:
-            utils.logger.info(f"Invalid source file format: {file_path}")
-    
+    try:  
+        file_conversion.process_incoming_file(file_type, file_path)    
         return "Converted file to Parquet", 200
     except:
         return "Unable to convert files to Parquet", 500
@@ -107,7 +101,7 @@ def fix_parquet_file():
     omop_version: str = request.args.get('omop_version')
 
     try:
-        utils.logger.info(f"Attempt to fix Parquet file {file_path}")
+        utils.logger.info(f"Attempting to fix Parquet file {file_path}")
         file_conversion.fix_columns(file_path, omop_version)
 
         return "Fixed Parquet file", 200

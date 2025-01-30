@@ -10,7 +10,7 @@ import core.constants as constants
 from typing import Optional, Tuple
 import json
 import os
-
+import shutil
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -92,16 +92,26 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
     # Returns tuple of DuckDB object, name of db file, and path to db file
     try:
         random_string = str(uuid.uuid4())
-        local_db_file = f"/tmp/{random_string}.db"
-        tmp_dir = f"/tmp/"
+        
+        # GCS bucket mounted to /mnt/data/ in clouldbuild.yml
+        tmp_dir = f"/mnt/data/"
+        local_db_file = f"{tmp_dir}{random_string}.db"
 
         conn = duckdb.connect(local_db_file)
         conn.execute(f"SET temp_directory='{tmp_dir}'")
-        # Set memory limit based on host machine hardware
-        # Should be 2-3GB under the maximum alloted to Docker
-        conn.execute(f"SET memory_limit = '{constants.DUCKDB_MEMORY_LIMIT}'")
+        conn.execute(f"SET memory_limit='{constants.DUCKDB_MEMORY_LIMIT}'")
+        conn.execute(f"SET max_memory='{constants.DUCKDB_MEMORY_LIMIT}'")
+
+        # Improves performance for large queries
+        conn.execute("SET preserve_insertion_order='false'")
+
+        # Set to number of CPU cores
+        # https://duckdb.org/docs/configuration/overview.html#global-configuration-options
+        conn.execute(f"SET threads={constants.DUCKDB_THREADS}")
+
         # Set max size to allow on disk
-        conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
+        # Unneeded when writing to GCS
+        # conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
 
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
@@ -114,9 +124,16 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
 def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str, tmp_dir: str) -> None:
     # Destory DuckDB object to free memory, and remove temporary files
     try:
+        # Close the DuckDB connection
         conn.close()
-        #os.remove(local_db_file)
-        #shutil.rmtree(tmp_dir)
+
+        # Remove the local database file if it exists
+        if os.path.exists(local_db_file):
+            os.remove(local_db_file)
+
+        # Remove the temporary directory if it exists
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
@@ -193,7 +210,6 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
     # Create a unique or table-specific name for introspection
     table_name_for_introspection = "temp_introspect_table"
 
-    
     conn, local_db_file, tmp_dir = create_duckdb_connection()
     try:
         with conn:
@@ -225,3 +241,20 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
         close_duckdb_connection(conn, local_db_file, tmp_dir)
         
     return actual_columns
+
+def valid_parquet_file(gcs_file_path: str) -> bool:
+    # Retuns bool indicating whether Parquet file is valid/can be read by DuckDB
+    conn, local_db_file, tmp_dir = create_duckdb_connection()
+
+    try:
+        with conn:
+            # If the file is not a valid Parquet file, this will throw an exception
+            conn.execute(f"DESCRIBE SELECT * FROM read_parquet('gs://{gcs_file_path}')")
+
+            # If we get to this point, we were able to describe the Parquet file and will assume it's valid
+            return True
+    except Exception as e:
+        logger.error(f"Unable to validate Parquet file: {e}")
+        return False
+    finally:
+        close_duckdb_connection(conn, local_db_file, tmp_dir)
