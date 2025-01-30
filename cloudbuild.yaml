@@ -27,7 +27,7 @@ steps:
     '--concurrency=1',
     '--timeout=3600',
     '--execution-environment=gen2',
-    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=ehr_pipeline_tmp_dev',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
     '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data'
   ]
 
