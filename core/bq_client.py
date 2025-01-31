@@ -2,7 +2,6 @@ from google.cloud import bigquery
 import core.utils as utils
 import sys
 
-
 def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str) -> None:
     """
     Load Parquet artifact file from GCS directly into BigQuery.
