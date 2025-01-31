@@ -8,7 +8,7 @@ def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str) ->
     Load Parquet artifact file from GCS directly into BigQuery.
     """
     table_name = utils.get_table_name_from_gcs_path(gcs_path)
-    parquet_path = utils.get_parquet_artifact_location(gcs_path)
+    parquet_path = f"gs://{utils.get_parquet_artifact_location(gcs_path)}"
 
     try:
         client = bigquery.Client(project=project_id)
