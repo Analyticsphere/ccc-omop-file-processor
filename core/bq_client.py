@@ -3,6 +3,9 @@ import core.utils as utils
 import sys
 
 def remove_all_tables(project_id: str, dataset_id: str) -> None:
+    """
+    Deletes all tables within a given BigQuery dataset
+    """
     try:
         client = bigquery.Client()
         qualified_dataset_id = f"{project_id}.{dataset_id}"
