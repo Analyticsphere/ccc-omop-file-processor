@@ -2,6 +2,24 @@ from google.cloud import bigquery
 import core.utils as utils
 import sys
 
+def remove_all_tables(project_id: str, dataset_id: str) -> None:
+    try:
+        client = bigquery.Client()
+        qualified_dataset_id = f"{project_id}.{dataset_id}"
+
+        # List all tables in the dataset
+        tables = client.list_tables(qualified_dataset_id)
+
+        # Delete each table
+        for table in tables:
+            table_id_full = f"{project_id}.{dataset_id}.{table.table_id}"
+            utils.logger.info(f"Deleting {table_id_full}...")
+            client.delete_table(table_id_full)
+            utils.logger.info(f"Deleted {table_id_full}")
+    except Exception as e:
+        utils.logger.error(f"Unable to delete BigQuery table: {e}")
+        sys.exit(1)
+
 def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str) -> None:
     """
     Load Parquet artifact file from GCS directly into BigQuery.

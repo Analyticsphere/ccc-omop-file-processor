@@ -123,6 +123,19 @@ def parquet_gcs_to_bq():
     except:
         return "Unable to load Parquet file", 500
 
+@app.route('/clear_bq_dataset', methods=['GET'])
+def clear_bq_tables():
+    project_id: str = request.args.get('project_id')
+    dataset_id: str = request.args.get('dataset_id')
+
+    try:
+        utils.logger.info(f"Removing all tables from {project_id}.{dataset_id}")
+        bq_client.remove_all_tables(project_id, dataset_id)
+
+        return "Removed all tables", 200
+    except:
+        return "Unable to delete tables within dataset", 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
