@@ -11,8 +11,8 @@ class PipelineLog:
         self.delivery_date = delivery_date
         self.status = status
         self.message = message
-        self.pipeline_start_datetime = datetime.now()
-        self.pipeline_end_datetime = datetime.now()
+        self.pipeline_start_datetime = datetime.now() if status == constants.PIPELINE_START_STRING else None
+        self.pipeline_end_datetime = datetime.now() if status != constants.PIPELINE_START_STRING else None
         self.file_format = file_format
         self.cdm_version = cdm_version
         self.run_id = run_id
