@@ -3,7 +3,7 @@ import core.utils as utils
 from typing import Optional
 from datetime import datetime
 from google.cloud import bigquery
-
+import sys
 
 class PipelineLog:
     def __init__(self, site_name: str, delivery_date: str, status: str, message: Optional[str], file_format: Optional[str], cdm_version: Optional[str], run_id: str):
@@ -89,7 +89,8 @@ class PipelineLog:
             query_job = client.query(query, job_config=job_config)
             query_job.result()  # Wait for the job to complete.
         except Exception as e:
-            utils.logger.error("Unable to add pipeline log record")
+            utils.logger.error(f"Unable to add pipeline log record: {e}")
+            sys.exit(1)
 
     def log_end(self) -> None:
         print()
