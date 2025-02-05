@@ -45,7 +45,6 @@ class PipelineLog:
                     delivery_date,
                     status,
                     pipeline_start_datetime,
-                    pipeline_end_datetime,
                     file_format,
                     cdm_version,
                     run_id
@@ -55,7 +54,6 @@ class PipelineLog:
                     @delivery_date,
                     @status,
                     @pipeline_start_datetime,
-                    @pipeline_end_datetime,
                     @file_format,
                     @cdm_version,
                     @run_id
@@ -73,11 +71,6 @@ class PipelineLog:
                         "pipeline_start_datetime",
                         "DATETIME",
                         self.pipeline_start_datetime.strftime("%Y-%m-%d %H:%M:%S")
-                    ),
-                    bigquery.ScalarQueryParameter(
-                        "pipeline_end_datetime",
-                        "DATETIME",
-                        self.pipeline_end_datetime.strftime("%Y-%m-%d %H:%M:%S")
                     ),
                     bigquery.ScalarQueryParameter("file_format", "STRING", self.file_format),
                     bigquery.ScalarQueryParameter("cdm_version", "STRING", self.cdm_version),
