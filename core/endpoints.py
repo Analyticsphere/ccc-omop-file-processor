@@ -148,17 +148,20 @@ def log_pipeline_state():
     run_id: str = request.args.get('run_id')
 
     try:
-        pipeline_logger = pipeline_log.PipelineLog(
-            site_name,
-            delivery_date,
-            status,
-            message,
-            file_type,
-            omop_version,
-            run_id
-        )
+        if status:
+            pipeline_logger = pipeline_log.PipelineLog(
+                site_name,
+                delivery_date,
+                status,
+                message,
+                file_type,
+                omop_version,
+                run_id
+            )
 
-        pipeline_logger.add_log_entry()
+            pipeline_logger.add_log_entry()
+        else:
+            return "Log status not provided", 400
 
         return "Complete BigQuery table write", 200
     except:
