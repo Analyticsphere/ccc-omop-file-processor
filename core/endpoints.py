@@ -147,17 +147,23 @@ def log_pipeline_state():
     omop_version: str = request.args.get('omop_version')
     run_id: str = request.args.get('run_id')
 
-    pipeline_logger = pipeline_log.PipelineLog(
-        site_name,
-        delivery_date,
-        status,
-        message,
-        file_type,
-        omop_version,
-        run_id
-    )
+    try:
+        pipeline_logger = pipeline_log.PipelineLog(
+            site_name,
+            delivery_date,
+            status,
+            message,
+            file_type,
+            omop_version,
+            run_id
+        )
 
-    pipeline_logger.add_log_entry()
+        pipeline_logger.add_log_entry()
+
+        return "Complete BigQuery table write", 200
+    except:
+        return "Unable to write to BigQuery table", 400
+        
 
 
 
