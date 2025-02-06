@@ -58,6 +58,15 @@ class PipelineLog:
                 ) AS source
                 ON target.site_name = source.site_name
                 AND target.delivery_date = source.delivery_date
+                WHEN MATCHED THEN
+                    UPDATE SET
+                        status = @status,
+                        message = @message,
+                        pipeline_start_datetime = @pipeline_start_datetime,
+                        pipeline_end_datetime = NULL,
+                        file_format = @file_format,
+                        cdm_version = @cdm_version,
+                        run_id = @run_id
                 WHEN NOT MATCHED THEN
                 INSERT (
                     site_name,
@@ -86,6 +95,7 @@ class PipelineLog:
                     bigquery.ScalarQueryParameter("site_name", "STRING", self.site_name),
                     bigquery.ScalarQueryParameter("delivery_date", "DATE", self.delivery_date),
                     bigquery.ScalarQueryParameter("status", "STRING", constants.PIPELINE_START_STRING),
+                    bigquery.ScalarQueryParameter("message", "STRING", self.message),
                     bigquery.ScalarQueryParameter(
                         "pipeline_start_datetime",
                         "DATETIME",
@@ -103,6 +113,7 @@ class PipelineLog:
         except Exception as e:
             utils.logger.error(f"Unable to add pipeline log record: {e}")
             sys.exit(1)
+
 
     def log_complete(self) -> None:
         """
