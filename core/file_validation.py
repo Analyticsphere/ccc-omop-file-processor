@@ -4,17 +4,16 @@ import core.constants as constants
 import core.utils as utils
 import core.model.report_artifact as report_artifact
 
+    
 def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> bool:
     """
     Validates whether the filename (without extension) matches one of the
     OMOP CDM tables defined in the schema.json file.
     """
-    schema_file = f"{constants.CDM_SCHEMA_PATH}{omop_version}/{constants.CDM_SCHEMA_FILE_NAME}"
+    
+    schema = utils.get_cdm_schema(omop_version=omop_version)
 
     try:
-        with open(schema_file, 'r') as f:
-            schema = json.load(f)
-
         # Extract the valid table names from the JSON spec
         valid_table_names = schema.keys()
 
@@ -56,7 +55,6 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
         raise Exception(f"Invalid JSON format in schema file: {schema_file}")
     except Exception as e:
         raise Exception(f"Unexpected error validating CDM file: {str(e)}")
-
 
 def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> None:
     """
