@@ -20,6 +20,10 @@ class PipelineLog:
     def add_log_entry(self) -> None:
         if self.status == constants.PIPELINE_START_STRING:
             self.log_start()
+        elif self.status == constants.PIPELINE_RUNNING_STRING:
+            self.log_running()
+        elif self.status == constants.PIPELINE_ERROR_STRING:
+            self.log_error()
         elif self.status == constants.PIPELINE_COMPLETE_STRING:
             self.log_complete()
 
@@ -142,8 +146,111 @@ class PipelineLog:
             utils.logger.error(f"Unable to add pipeline log record: {e}")
             sys.exit(1)
 
+    def log_running(self) -> None:
+        """
+        Checks if a log entry exists in BigQuery for the given site and delivery date.
+        If found, updates the record with the running status and removes end date
+        """
+        try:
+            client = bigquery.Client()
 
+            # First, check if a record exists for this site and delivery date.
+            select_query = f"""
+                SELECT 1
+                FROM `{constants.PIPELINE_LOG_TABLE}`
+                WHERE site_name = @site_name AND delivery_date = @delivery_date
+                LIMIT 1
+            """
+            select_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("site_name", "STRING", self.site_name),
+                    bigquery.ScalarQueryParameter("delivery_date", "DATE", self.delivery_date),
+                ]
+            )
 
+            select_job = client.query(select_query, job_config=select_config)
+            exists = list(select_job.result())
+
+            if exists:
+                # If the record exists, update it.
+                update_query = f"""
+                    UPDATE `{constants.PIPELINE_LOG_TABLE}`
+                    SET status = @status, pipeline_end_datetime = NULL
+                    WHERE site_name = @site_name AND delivery_date = @delivery_date
+                """
+
+                update_config = bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("status", "STRING", self.status),
+                        bigquery.ScalarQueryParameter("site_name", "STRING", self.site_name),
+                        bigquery.ScalarQueryParameter("delivery_date", "DATE", self.delivery_date),
+                    ]
+                )
+
+                update_job = client.query(update_query, job_config=update_config)
+                update_job.result()  # Wait for the update to complete.
+                utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
+            else:
+                # Optionally, log a warning or take some other action if the record doesn't exist.
+                utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
+        except Exception as e:
+            utils.logger.error(f"Unable to add pipeline log record: {e}")
+            sys.exit(1)
+
+    def log_error(self) -> None:
+        """
+        Checks if a log entry exists in BigQuery for the given site and delivery date.
+        If found, updates the record with the error status and pipeline_end_datetime.
+        """
+        try:
+            client = bigquery.Client()
+
+            # First, check if a record exists for this site and delivery date.
+            select_query = f"""
+                SELECT 1
+                FROM `{constants.PIPELINE_LOG_TABLE}`
+                WHERE site_name = @site_name AND delivery_date = @delivery_date
+                LIMIT 1
+            """
+            select_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("site_name", "STRING", self.site_name),
+                    bigquery.ScalarQueryParameter("delivery_date", "DATE", self.delivery_date),
+                ]
+            )
+
+            select_job = client.query(select_query, job_config=select_config)
+            exists = list(select_job.result())
+
+            if exists:
+                # If the record exists, update it.
+                update_query = f"""
+                    UPDATE `{constants.PIPELINE_LOG_TABLE}`
+                    SET status = @status,
+                        pipeline_end_datetime = @pipeline_end_datetime
+                    WHERE site_name = @site_name AND delivery_date = @delivery_date
+                """
+                # Ensure that pipeline_end_datetime is formatted for BigQuery (YYYY-MM-DD HH:MM:SS).
+                end_datetime_str = self.pipeline_end_datetime.strftime("%Y-%m-%d %H:%M:%S")
+
+                update_config = bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("status", "STRING", self.status),
+                        bigquery.ScalarQueryParameter("pipeline_end_datetime", "DATETIME", end_datetime_str),
+                        bigquery.ScalarQueryParameter("site_name", "STRING", self.site_name),
+                        bigquery.ScalarQueryParameter("delivery_date", "DATE", self.delivery_date),
+                    ]
+                )
+
+                update_job = client.query(update_query, job_config=update_config)
+                update_job.result()  # Wait for the update to complete.
+                utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
+            else:
+                # Optionally, log a warning or take some other action if the record doesn't exist.
+                utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
+        except Exception as e:
+            utils.logger.error(f"Unable to add pipeline log record: {e}")
+            sys.exit(1)
 
     # TODO: If pipeline log table doesn't exist, create it
     # TODO: If status is constants.PIPELINE_START_STRING, (first check if needed and then) create new entry in table with start time
