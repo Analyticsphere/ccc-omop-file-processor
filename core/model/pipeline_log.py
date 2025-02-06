@@ -27,6 +27,9 @@ class PipelineLog:
         elif self.status == constants.PIPELINE_COMPLETE_STRING:
             self.log_complete()
 
+    def create_bq_log_table() -> None:
+        print()
+
     def log_start(self) -> None:
         """
         Log the start of the pipeline run, but only if a record for
@@ -39,6 +42,19 @@ class PipelineLog:
 
             # Build the MERGE statement to only insert new records
             query = f"""
+                CREATE TABLE IF NOT EXISTS `{constants.PIPELINE_LOG_TABLE}`
+                (
+                    site_name STRING,
+                    delivery_date DATE,
+                    status STRING,
+                    message STRING,
+                    pipeline_start_datetime DATETIME,
+                    pipeline_end_datetime DATETIME,
+                    file_format STRING,
+                    cdm_version STRING,
+                    run_id STRING
+                );
+
                 MERGE `{constants.PIPELINE_LOG_TABLE}` AS target
                 USING (
                 SELECT @site_name AS site_name, @delivery_date AS delivery_date
@@ -256,11 +272,3 @@ class PipelineLog:
             sys.exit(1)
 
     # TODO: If pipeline log table doesn't exist, create it
-    # TODO: If status is constants.PIPELINE_START_STRING, (first check if needed and then) create new entry in table with start time
-        # Can set - site, delivery_date, status, message, start_datetime, file_format, cdm_version, run_id
-    # TODO: If status is constants.PIPELINE_END_STRING (first check if record exists), update existing record with end time
-        # Can set - status, message, end_datetime
-    # TODO: If status is constants.PIPELINE_ERROR_STRING (first check if record exists), update existing record with end time
-        # Can set - status, message, end_datetime
-
-    # If status != constants.PIPELINE_END_STRING, need to run the pipeline for that delivery
