@@ -5,7 +5,7 @@ import core.constants as constants
 import core.file_conversion as file_conversion
 import core.file_validation as file_validation
 import core.bq_client as bq_client
-import core.model.pipeline_log as pipeline_log
+import core.helpers.pipeline_log as pipeline_log
 import os
 
 app = Flask(__name__)

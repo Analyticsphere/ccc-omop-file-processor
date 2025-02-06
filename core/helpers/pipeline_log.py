@@ -27,9 +27,6 @@ class PipelineLog:
         elif self.status == constants.PIPELINE_COMPLETE_STRING:
             self.log_complete()
 
-    def create_bq_log_table() -> None:
-        print()
-
     def log_start(self) -> None:
         """
         Log the start of the pipeline run, but only if a record for
@@ -270,5 +267,3 @@ class PipelineLog:
         except Exception as e:
             utils.logger.error(f"Unable to add pipeline log record: {e}")
             sys.exit(1)
-
-    # TODO: If pipeline log table doesn't exist, create it
