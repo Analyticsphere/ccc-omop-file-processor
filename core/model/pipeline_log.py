@@ -121,7 +121,8 @@ class PipelineLog:
                 update_query = f"""
                     UPDATE `{constants.PIPELINE_LOG_TABLE}`
                     SET status = @status,
-                        pipeline_end_datetime = @pipeline_end_datetime
+                        pipeline_end_datetime = @pipeline_end_datetime,
+                        message = NULL
                     WHERE site_name = @site_name AND delivery_date = @delivery_date
                 """
                 # Ensure that pipeline_end_datetime is formatted for BigQuery (YYYY-MM-DD HH:MM:SS).
@@ -175,7 +176,7 @@ class PipelineLog:
                 # If the record exists, update it.
                 update_query = f"""
                     UPDATE `{constants.PIPELINE_LOG_TABLE}`
-                    SET status = @status, pipeline_end_datetime = NULL
+                    SET status = @status, pipeline_end_datetime = NULL, message = NULL
                     WHERE site_name = @site_name AND delivery_date = @delivery_date
                 """
 
