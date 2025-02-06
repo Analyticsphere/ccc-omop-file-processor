@@ -49,10 +49,6 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
             
         return is_valid_table_name
 
-    except FileNotFoundError:
-        raise Exception(f"Schema file not found: {schema_file}")
-    except json.JSONDecodeError:
-        raise Exception(f"Invalid JSON format in schema file: {schema_file}")
     except Exception as e:
         raise Exception(f"Unexpected error validating CDM file: {str(e)}")
 
