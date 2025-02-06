@@ -57,7 +57,6 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
     except Exception as e:
         raise Exception(f"Unexpected error validating CDM file: {str(e)}")
 
-
 def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> None:
     """
     Validates a file's name and schema against the OMOP standard.

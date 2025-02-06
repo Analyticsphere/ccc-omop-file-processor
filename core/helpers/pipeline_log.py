@@ -114,7 +114,6 @@ class PipelineLog:
             utils.logger.error(f"Unable to add pipeline log record: {e}")
             sys.exit(1)
 
-
     def log_complete(self) -> None:
         """
         Checks if a log entry exists in BigQuery for the given site and delivery date.
