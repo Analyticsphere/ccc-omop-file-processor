@@ -200,7 +200,7 @@ class PipelineLog:
     def log_error(self) -> None:
         """
         Checks if a log entry exists in BigQuery for the given site and delivery date.
-        If found, updates the record with the error status and pipeline_end_datetime.
+        If found, updates the record with the error status, message, and pipeline_end_datetime.
         """
         try:
             client = bigquery.Client()
@@ -227,7 +227,8 @@ class PipelineLog:
                 update_query = f"""
                     UPDATE `{constants.PIPELINE_LOG_TABLE}`
                     SET status = @status,
-                        pipeline_end_datetime = @pipeline_end_datetime
+                        pipeline_end_datetime = @pipeline_end_datetime,
+                        message = @message
                     WHERE site_name = @site_name AND delivery_date = @delivery_date
                 """
                 # Ensure that pipeline_end_datetime is formatted for BigQuery (YYYY-MM-DD HH:MM:SS).
@@ -237,6 +238,7 @@ class PipelineLog:
                     query_parameters=[
                         bigquery.ScalarQueryParameter("status", "STRING", self.status),
                         bigquery.ScalarQueryParameter("pipeline_end_datetime", "DATETIME", end_datetime_str),
+                        bigquery.ScalarQueryParameter("message", "STRING", self.message),
                         bigquery.ScalarQueryParameter("site_name", "STRING", self.site_name),
                         bigquery.ScalarQueryParameter("delivery_date", "DATE", self.delivery_date),
                     ]
