@@ -2,7 +2,7 @@ import core.constants as constants
 import core.utils as utils
 from typing import Optional
 from datetime import datetime
-from google.cloud import bigquery
+from google.cloud import bigquery # type: ignore
 import sys
 
 class PipelineLog:
@@ -90,6 +90,9 @@ class PipelineLog:
 
             # Set up the query parameters. For DATETIME, we format the Python datetime
             # object into a string that BigQuery expects (e.g., "YYYY-MM-DD HH:MM:SS").
+            if self.pipeline_start_datetime:
+                start_datetime_str = self.pipeline_start_datetime.strftime("%Y-%m-%d %H:%M:%S")
+
             job_config = bigquery.QueryJobConfig(
                 query_parameters=[
                     bigquery.ScalarQueryParameter("site_name", "STRING", self.site_name),
@@ -99,7 +102,7 @@ class PipelineLog:
                     bigquery.ScalarQueryParameter(
                         "pipeline_start_datetime",
                         "DATETIME",
-                        self.pipeline_start_datetime.strftime("%Y-%m-%d %H:%M:%S")
+                        start_datetime_str
                     ),
                     bigquery.ScalarQueryParameter("file_format", "STRING", self.file_format),
                     bigquery.ScalarQueryParameter("cdm_version", "STRING", self.cdm_version),
@@ -149,7 +152,8 @@ class PipelineLog:
                     WHERE site_name = @site_name AND delivery_date = @delivery_date
                 """
                 # Ensure that pipeline_end_datetime is formatted for BigQuery (YYYY-MM-DD HH:MM:SS).
-                end_datetime_str = self.pipeline_end_datetime.strftime("%Y-%m-%d %H:%M:%S")
+                if self.pipeline_end_datetime:
+                    end_datetime_str = self.pipeline_end_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
                 update_config = bigquery.QueryJobConfig(
                     query_parameters=[
@@ -256,7 +260,8 @@ class PipelineLog:
                     WHERE site_name = @site_name AND delivery_date = @delivery_date
                 """
                 # Ensure that pipeline_end_datetime is formatted for BigQuery (YYYY-MM-DD HH:MM:SS).
-                end_datetime_str = self.pipeline_end_datetime.strftime("%Y-%m-%d %H:%M:%S")
+                if self.pipeline_end_datetime:
+                    end_datetime_str = self.pipeline_end_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
                 update_config = bigquery.QueryJobConfig(
                     query_parameters=[

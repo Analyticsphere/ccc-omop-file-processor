@@ -1,5 +1,4 @@
 import json
-from google.cloud import storage
 from google.cloud import storage # type: ignore
 import logging
 import sys
