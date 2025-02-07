@@ -112,7 +112,7 @@ class PipelineLog:
 
             # Run the query as a job and wait for it to complete.
             query_job = client.query(query, job_config=job_config)
-            query_job.result()  # Wait for the job to complete.
+            #query_job.result()  # Wait for the job to complete.
         except Exception as e:
             utils.logger.error(f"Unable to add pipeline log record: {e}")
             sys.exit(1)
@@ -165,7 +165,7 @@ class PipelineLog:
                 )
 
                 update_job = client.query(update_query, job_config=update_config)
-                update_job.result()  # Wait for the update to complete.
+                #update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
                 # Optionally, log a warning or take some other action if the record doesn't exist.
@@ -216,7 +216,7 @@ class PipelineLog:
                 )
 
                 update_job = client.query(update_query, job_config=update_config)
-                update_job.result()  # Wait for the update to complete.
+                #update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
                 # Optionally, log a warning or take some other action if the record doesn't exist.
@@ -274,7 +274,7 @@ class PipelineLog:
                 )
 
                 update_job = client.query(update_query, job_config=update_config)
-                update_job.result()  # Wait for the update to complete.
+                #update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
                 # Optionally, log a warning or take some other action if the record doesn't exist.
