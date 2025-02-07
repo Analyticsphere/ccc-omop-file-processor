@@ -88,10 +88,14 @@ def create_artifact_buckets():
 
 @app.route('/convert_to_parquet', methods=['GET'])
 def convert_to_parquet():
+    utils.logger.warning(f"In convert_to_parquet()")
     file_type: str = request.args.get('file_type')
+    utils.logger.warning(f"In convert_to_parquet() and file_type is {file_type}")
     file_path: str = request.args.get('file_path')
+    utils.logger.warning(f"In convert_to_parquet() and file_path is {file_path}")
 
-    try:  
+    try:
+        utils.logger.warning(f"In try block of convert_to_parquet()")
         file_conversion.process_incoming_file(file_type, file_path)    
         return "Converted file to Parquet", 200
     except:
