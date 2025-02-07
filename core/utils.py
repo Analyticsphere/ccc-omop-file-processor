@@ -8,8 +8,6 @@ from fsspec import filesystem # type: ignore
 import core.constants as constants
 from typing import Optional, Tuple
 import json
-import os
-import shutil
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
