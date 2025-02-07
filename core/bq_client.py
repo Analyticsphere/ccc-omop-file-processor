@@ -1,4 +1,4 @@
-from google.cloud import bigquery
+from google.cloud import bigquery # type: ignore
 import core.utils as utils
 import sys
 

@@ -1,5 +1,5 @@
 import core.utils as utils
-import core.model.report_artifact as report_artifact
+import core.helpers.report_artifact as report_artifact
 
     
 def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> bool:
@@ -134,10 +134,3 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
             
     except Exception as e:
         utils.logger.error(f"Error validating file {file_path}: {str(e)}")
-        
-
-if __name__ == "__main__":
-    schema = utils.get_table_schema(table_name='person', cdm_version='5.3')
-    print(schema)
-    import pprint
-    pprint.pprint(schema)
