@@ -1,5 +1,4 @@
 import json
-import os
 import core.constants as constants
 import core.utils as utils
 import core.helpers.report_artifact as report_artifact
