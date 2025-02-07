@@ -52,8 +52,6 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
     except Exception as e:
         raise Exception(f"Unexpected error validating CDM file: {str(e)}")
 
-import duckdb
-
 def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> None:
     """
     Verify that column names in the parquet file are valid columns in the CDM schema
@@ -133,9 +131,10 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
     utils.logger.info(f"Validating schema of {file_path} against OMOP v{omop_version}")
     
     try:
-        validate_cdm_table_name(file_path, omop_version, delivery_date, gcs_path)
-        validate_cdm_table_columns(file_path, omop_version, delivery_date, gcs_path)
-
+        valid_table_name = validate_cdm_table_name(file_path, omop_version, delivery_date, gcs_path)
+        if valid_table_name:
+            validate_cdm_table_columns(file_path, omop_version, delivery_date, gcs_path)
+            
     except Exception as e:
         utils.logger.error(f"Error validating file {file_path}: {str(e)}")
         
