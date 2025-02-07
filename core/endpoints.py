@@ -143,6 +143,7 @@ def clear_bq_tables():
 
 @app.route('/pipeline_log', methods=['GET'])
 def log_pipeline_state():
+    utils.logger.warning(f"In log_pipeline_state()")
     site_name: str = request.args.get('site_name')
     delivery_date: str = request.args.get('delivery_date')
     status: str = request.args.get('status')
@@ -151,8 +152,12 @@ def log_pipeline_state():
     omop_version: str = request.args.get('omop_version')
     run_id: str = request.args.get('run_id')
 
+    utils.logger.warning(f"Set variables in log_pipeline_state()")
+    utils.logger.warning(f"")
+
     try:
         if status:
+            utils.logger.warning(f"about to create PipelineLog object")
             pipeline_logger = pipeline_log.PipelineLog(
                 site_name,
                 delivery_date,
@@ -162,8 +167,9 @@ def log_pipeline_state():
                 omop_version,
                 run_id
             )
-
+            utils.logger.warning(f"did create PipelineLog object; about to add_log_entry()")
             pipeline_logger.add_log_entry()
+            utils.logger.warning(f"did add_log_entry()")
         else:
             return "Log status not provided", 400
 
