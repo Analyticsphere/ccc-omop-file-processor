@@ -1,6 +1,3 @@
-import json
-import os
-import core.constants as constants
 import core.utils as utils
 import core.model.report_artifact as report_artifact
 
@@ -11,7 +8,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
     OMOP CDM tables defined in the schema.json file.
     """
     
-    schema = utils.get_cdm_schema(omop_version=omop_version)
+    schema = utils.get_cdm_schema(cdm_version=omop_version)
 
     try:
         # Extract the valid table names from the JSON spec
