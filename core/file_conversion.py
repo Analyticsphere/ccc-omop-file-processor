@@ -126,10 +126,9 @@ def csv_to_parquet(gcs_file_path: str) -> None:
         if error_type == "INVALID_UNICODE":
             utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
             convert_csv_file_encoding(gcs_file_path)
-
         elif error_type == "UNTERMINATED_QUOTE":
             utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
-            
+            sys.exit(1)
         elif error_type == "CSV_FORMAT_ERROR":
             utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
             sys.exit(1)
