@@ -5,6 +5,7 @@ import core.constants as constants
 import core.file_conversion as file_conversion
 import core.file_validation as file_validation
 import core.bq_client as bq_client
+import core.helpers.pipeline_log as pipeline_log
 import os
 
 app = Flask(__name__)
@@ -135,6 +136,37 @@ def clear_bq_tables():
         return "Removed all tables", 200
     except:
         return "Unable to delete tables within dataset", 500
+
+@app.route('/pipeline_log', methods=['GET'])
+def log_pipeline_state():
+    site_name: str = request.args.get('site_name')
+    delivery_date: str = request.args.get('delivery_date')
+    status: str = request.args.get('status')
+    message: str = request.args.get('message')
+    file_type: str = request.args.get('file_type')
+    omop_version: str = request.args.get('omop_version')
+    run_id: str = request.args.get('run_id')
+
+    try:
+        if status:
+            pipeline_logger = pipeline_log.PipelineLog(
+                site_name,
+                delivery_date,
+                status,
+                message,
+                file_type,
+                omop_version,
+                run_id
+            )
+
+            pipeline_logger.add_log_entry()
+        else:
+            return "Log status not provided", 400
+
+        return "Complete BigQuery table write", 200
+    except:
+        return "Unable to write to BigQuery table", 400
+        
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
