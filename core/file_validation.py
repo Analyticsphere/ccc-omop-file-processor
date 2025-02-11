@@ -75,7 +75,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date:
                     value_as_string="valid column name"
                 )
             else:
-                utils.logger.info(f"'{table_name}' is NOT a valid column in schema for {table_name}.")
+                utils.logger.warning(f"'{table_name}' is NOT a valid column in schema for {table_name}.")
                 ra = report_artifact.ReportArtifact(
                     concept_id=None,
                     delivery_date=delivery_date,
@@ -102,7 +102,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date:
                     value_as_string="missing column"
                 )
             else:
-                utils.logger.info(f"'{table_name}' IS NOT a valid column in schema for {table_name}.")
+                utils.logger.warning(f"'{table_name}' IS NOT a valid column in schema for {table_name}.")
                 ra = report_artifact.ReportArtifact(
                     concept_id=None,
                     delivery_date=delivery_date,
