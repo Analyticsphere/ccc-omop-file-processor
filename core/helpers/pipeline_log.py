@@ -257,6 +257,7 @@ class PipelineLog:
                         pipeline_end_datetime = @pipeline_end_datetime,
                         message = @message
                     WHERE run_id = @run_id
+                    AND message != '{constants.PIPELINE_DAG_FAIL_MESSAGE}'
                 """
                 # Ensure that pipeline_end_datetime is formatted for BigQuery (YYYY-MM-DD HH:MM:SS).
                 if self.pipeline_end_datetime:
