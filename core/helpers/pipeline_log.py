@@ -253,11 +253,16 @@ class PipelineLog:
                 # If the record exists, update it.
                 update_query = f"""
                     UPDATE `{constants.PIPELINE_LOG_TABLE}`
-                    SET status = @status,
-                        pipeline_end_datetime = @pipeline_end_datetime,
-                        message = @message
-                    WHERE run_id = @run_id
-                    AND message != '{constants.PIPELINE_DAG_FAIL_MESSAGE}'
+                    SET 
+                    status = @status,
+                    pipeline_end_datetime = @pipeline_end_datetime,
+                    message = CASE 
+                                WHEN IFNULL(message, '') != '' 
+                                    AND @message = '{constants.PIPELINE_DAG_FAIL_MESSAGE}' 
+                                THEN message 
+                                ELSE @message 
+                                END
+                    WHERE run_id = @run_id;
                 """
                 # Ensure that pipeline_end_datetime is formatted for BigQuery (YYYY-MM-DD HH:MM:SS).
                 if self.pipeline_end_datetime:
