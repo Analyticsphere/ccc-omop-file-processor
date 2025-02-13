@@ -114,7 +114,17 @@ class PipelineLog:
             query_job = client.query(query, job_config=job_config)
             query_job.result()  # Wait for the job to complete.
         except Exception as e:
-            utils.logger.error(f"Unable to add pipeline log record: {e}")
+            error_details = {
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'query_job_errors': None,
+                'context': {
+                    'site_name': self.site_name,
+                    'delivery_date': self.delivery_date,
+                    'status': self.status
+                }
+            }
+            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             sys.exit(1)
 
     def log_complete(self) -> None:
@@ -171,7 +181,17 @@ class PipelineLog:
                 # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
-            utils.logger.error(f"Unable to add pipeline log record: {e}")
+            error_details = {
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'query_job_errors': None,
+                'context': {
+                    'site_name': self.site_name,
+                    'delivery_date': self.delivery_date,
+                    'status': self.status
+                }
+            }
+            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             sys.exit(1)
 
     def log_running(self) -> None:
@@ -222,7 +242,17 @@ class PipelineLog:
                 # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
-            utils.logger.error(f"Unable to add pipeline log record: {e}")
+            error_details = {
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'query_job_errors': None,
+                'context': {
+                    'site_name': self.site_name,
+                    'delivery_date': self.delivery_date,
+                    'status': self.status
+                }
+            }
+            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             sys.exit(1)
 
     def log_error(self) -> None:
@@ -284,5 +314,15 @@ class PipelineLog:
                 # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
-            utils.logger.error(f"Unable to add pipeline log record: {e}")
+            error_details = {
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'query_job_errors': None,
+                'context': {
+                    'site_name': self.site_name,
+                    'delivery_date': self.delivery_date,
+                    'status': self.status
+                }
+            }
+            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             sys.exit(1)
