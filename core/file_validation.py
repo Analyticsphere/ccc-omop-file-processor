@@ -63,11 +63,12 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
         utils.logger.warning(f"table_name is {table_name}")
         schema = utils.get_table_schema(table_name=table_name, cdm_version=omop_version)
         utils.logger.warning(f"schema is {schema}")
+        utils.logger.warning(f"parquet artifact is at {utils.get_parquet_artifact_location(file_path)}")
         parquet_columns  = utils.get_columns_from_parquet(utils.get_parquet_artifact_location(file_path))
         utils.logger.warning(f"parquet_columns is {parquet_columns}")
         schema_columns = list(schema[table_name]['fields'].keys())
         utils.logger.warning(f"schema_columns is {schema_columns}")
-        
+
         # Check if parquet columns in the table schema
         for column in parquet_columns:
             if column in schema_columns:
