@@ -54,7 +54,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
     Verify that column names in the parquet file are valid columns in the CDM schema
     and that there are no columns in the table schema that are absent in the parquet file.
     """
-    
+    utils.logger.warning("Validating CDM table columns")
     try:
         bucket_name, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
         table_name = utils.get_table_name_from_gcs_path(file_path)
@@ -134,6 +134,7 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
     
     try:
         valid_table_name = validate_cdm_table_name(file_path, omop_version, delivery_date, gcs_path)
+        utils.logger.warning(f"valid_table_name is {valid_table_name}")
         # If it's not a valid table name, it does not have a schema to validate
         if valid_table_name:
             validate_cdm_table_columns(file_path, omop_version, delivery_date, gcs_path)
