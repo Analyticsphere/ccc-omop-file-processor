@@ -23,6 +23,7 @@ class ReportArtifact:
         random_string = str(uuid.uuid4())
 
         file_path = f"{self.report_artifact_path}delivery_report_part_{random_string}{constants.PARQUET}"
+        utils.logger.warning(f"saving record to file_path {file_path}")
 
         conn, local_db_file, tmp_dir = utils.create_duckdb_connection()    
 
