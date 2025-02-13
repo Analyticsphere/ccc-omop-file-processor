@@ -8,6 +8,7 @@ from fsspec import filesystem # type: ignore
 import core.constants as constants
 from typing import Optional, Tuple
 import json
+import os
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -125,12 +126,12 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str,
         conn.close()
 
         # Remove the local database file if it exists
-        #if os.path.exists(local_db_file):
-            #os.remove(local_db_file)
+        if os.path.exists(local_db_file):
+            os.remove(local_db_file)
 
         # Remove the temporary directory if it exists
-        #if os.path.exists(tmp_dir):
-            #shutil.rmtree(tmp_dir)
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
