@@ -88,14 +88,10 @@ def create_artifact_buckets():
 
 @app.route('/convert_to_parquet', methods=['GET'])
 def convert_to_parquet():
-    utils.logger.warning(f"In convert_to_parquet()")
     file_type: str = request.args.get('file_type')
-    utils.logger.warning(f"In convert_to_parquet() and file_type is {file_type}")
     file_path: str = request.args.get('file_path')
-    utils.logger.warning(f"In convert_to_parquet() and file_path is {file_path}")
 
     try:
-        utils.logger.warning(f"In try block of convert_to_parquet()")
         file_conversion.process_incoming_file(file_type, file_path)    
         return "Converted file to Parquet", 200
     except:
@@ -143,7 +139,6 @@ def clear_bq_tables():
 
 @app.route('/pipeline_log', methods=['GET'])
 def log_pipeline_state():
-    utils.logger.warning(f"In log_pipeline_state()")
     site_name: str = request.args.get('site_name')
     delivery_date: str = request.args.get('delivery_date')
     status: str = request.args.get('status')
@@ -152,12 +147,8 @@ def log_pipeline_state():
     omop_version: str = request.args.get('omop_version')
     run_id: str = request.args.get('run_id')
 
-    utils.logger.warning(f"Set variables in log_pipeline_state()")
-    utils.logger.warning(f"")
-
     try:
         if status:
-            utils.logger.warning(f"about to create PipelineLog object")
             pipeline_logger = pipeline_log.PipelineLog(
                 site_name,
                 delivery_date,
@@ -167,9 +158,7 @@ def log_pipeline_state():
                 omop_version,
                 run_id
             )
-            utils.logger.warning(f"did create PipelineLog object; about to add_log_entry()")
             pipeline_logger.add_log_entry()
-            utils.logger.warning(f"did add_log_entry()")
         else:
             return "Log status not provided", 400
 

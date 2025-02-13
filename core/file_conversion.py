@@ -59,13 +59,10 @@ class StreamingCSVWriter:
         self.buffer.close()
 
 def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
-    utils.logger.warning(f"In process_incoming_file() and file_type is {file_type}")
     if file_type == constants.CSV:
-        utils.logger.warning(f"Going to execute csv_to_parquet()")
         csv_to_parquet(gcs_file_path)
     elif file_type == constants.PARQUET:
         process_incoming_parquet(gcs_file_path)
-        utils.logger.warning(f"Going to execute process_incoming_parquet()")
     else:
         utils.logger.info(f"Invalid source file format: {file_type}") 
         sys.exit(1)
@@ -110,14 +107,11 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         sys.exit(1)
 
 def csv_to_parquet(gcs_file_path: str) -> None:
-    utils.logger.warning("In csv_to_parquet() function")
     conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
 
     try:
         with conn:
-            utils.logger.warning("In csv_to_parquet() function and going to get parquet path")
             parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
-            utils.logger.warning(f"In csv_to_parquet() function and parquet_path is {parquet_path}")
 
             convert_statement = f"""
                 COPY  (
