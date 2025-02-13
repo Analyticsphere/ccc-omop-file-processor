@@ -196,6 +196,7 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
 def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str, str]:
     # Returns a tuple of the bucket_name and delivery date for a given file in GCS
     # e.g. synthea53/2024-12-31/care_site.parquet -> synthea53, 2024-12-31
+    gcs_file_path = gcs_file_path.replace("gs://", "")
     bucket_name, delivery_date = gcs_file_path.split('/')[:2]
     return bucket_name, delivery_date
 
@@ -211,6 +212,8 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
         3. Drops the temporary table.
         4. Returns a list of the actual column names present in the file.
     """
+    
+    gcs_file_path = gcs_file_path.replace("gs://", "")
 
     # Create a unique or table-specific name for introspection
     table_name_for_introspection = "temp_introspect_table"
