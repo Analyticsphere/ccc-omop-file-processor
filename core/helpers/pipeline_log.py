@@ -220,11 +220,12 @@ class PipelineLog:
             exists = list(select_job.result())
 
             if exists:
-                # If the record exists, update it.
+                # If the record exists and isn't already set to running, update it.
                 update_query = f"""
                     UPDATE `{constants.PIPELINE_LOG_TABLE}`
                     SET status = @status, pipeline_end_datetime = NULL, message = NULL
                     WHERE site_name = @site_name AND delivery_date = @delivery_date
+                    AND status != @status
                 """
 
                 update_config = bigquery.QueryJobConfig(
