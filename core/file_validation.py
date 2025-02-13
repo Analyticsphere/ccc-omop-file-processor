@@ -49,16 +49,17 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
     except Exception as e:
         raise Exception(f"Unexpected error validating CDM file: {str(e)}")
 
-def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> None:
+def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_REMOVE: str, gcs_path_REMOVE: str) -> None:
     """
     Verify that column names in the parquet file are valid columns in the CDM schema
     and that there are no columns in the table schema that are absent in the parquet file.
     """
     
     try:
+        bucket_name, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
         table_name = utils.get_table_name_from_gcs_path(file_path)
         schema = utils.get_table_schema(table_name=table_name, cdm_version=omop_version)
-        parquet_columns  = utils.get_columns_from_parquet(gcs_file_path=file_path)
+        parquet_columns  = utils.get_columns_from_parquet(utils.get_parquet_artifact_location(file_path))
         schema_columns = list(schema[table_name]['fields'].keys())
 
         # Check if parquet columns in the table schema
@@ -68,7 +69,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date:
                 ra = report_artifact.ReportArtifact(
                     concept_id=schema['concept_id'],
                     delivery_date=delivery_date,
-                    gcs_path=gcs_path,
+                    gcs_path=bucket_name,
                     name=f"Valid column name: {column}",
                     value_as_concept_id=None,
                     value_as_number=None,
@@ -79,7 +80,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date:
                 ra = report_artifact.ReportArtifact(
                     concept_id=None,
                     delivery_date=delivery_date,
-                    gcs_path=gcs_path,
+                    gcs_path=bucket_name,
                     name=f"Invalid column name: {column}",
                     value_as_concept_id=None,
                     value_as_number=None,
@@ -95,18 +96,19 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date:
                 ra = report_artifact.ReportArtifact(
                     concept_id=schema['concept_id'],
                     delivery_date=delivery_date,
-                    gcs_path=gcs_path,
+                    gcs_path=bucket_name,
                     name=f"Missing column: {column}",
                     value_as_concept_id=None,
                     value_as_number=None,
                     value_as_string="missing column"
                 )
+            # TODO: Evaulate if this else block is needed
             else:
                 utils.logger.warning(f"'{table_name}' IS NOT a valid column in schema for {table_name}.")
                 ra = report_artifact.ReportArtifact(
                     concept_id=None,
                     delivery_date=delivery_date,
-                    gcs_path=gcs_path,
+                    gcs_path=bucket_name,
                     name=f"Invalid column name: {table_name}",
                     value_as_concept_id=763780,
                     value_as_number=None,

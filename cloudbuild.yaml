@@ -26,9 +26,9 @@ steps:
     '--set-env-vars=PROJECT_ID=$PROJECT_ID',
     '--concurrency=1',
     '--timeout=3600',
-    '--execution-environment=gen2'#,
-    # '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
-    # '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data'
+    '--execution-environment=gen2',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data'
   ]
 
 options:
