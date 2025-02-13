@@ -101,7 +101,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
             utils.logger.error(f"Unable to processing incoming Parquet file: {e}")
             sys.exit(1)
         finally:
-            utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+            utils.close_duckdb_connection(conn, local_db_file)
     else:
         utils.logger.error(f"Invalid Parquet file")
         sys.exit(1)
@@ -140,7 +140,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
         utils.logger.error(f"Unable to convert CSV file to Parquet: {e}")
         sys.exit(1)
     finally:
-        utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+        utils.close_duckdb_connection(conn, local_db_file)
     
 def convert_csv_file_encoding(gcs_file_path: str) -> None:
     """
@@ -378,4 +378,4 @@ def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
             utils.logger.error(f"Unable to fix Parquet file: {e}")
             sys.exit(1)
         finally:
-            utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+            utils.close_duckdb_connection(conn, local_db_file)
