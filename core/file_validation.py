@@ -168,7 +168,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
                 concept_id=schema[table_name]['concept_id'],
                 delivery_date=delivery_date,
                 gcs_path=bucket_name,
-                name=f"Valid column name: {column}",
+                name=f"Valid column name: {table_name}.{column}",
                 value_as_concept_id=None,
                 value_as_number=None,
                 value_as_string="valid column name"
@@ -183,7 +183,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
                 concept_id=None,
                 delivery_date=delivery_date,
                 gcs_path=bucket_name,
-                name=f"Invalid column name: {column}",
+                name=f"Invalid column name: {table_name}.{column}",
                 value_as_concept_id=None,
                 value_as_number=None,
                 value_as_string="invalid column name"
@@ -199,7 +199,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
                 concept_id=schema[table_name]['concept_id'],
                 delivery_date=delivery_date,
                 gcs_path=bucket_name,
-                name=f"Missing column: {column}",
+                name=f"Missing column: {table_name}.{column}",
                 value_as_concept_id=None,
                 value_as_number=None,
                 value_as_string="missing column"
