@@ -21,7 +21,7 @@ logging.basicConfig(
 # Create the logger at module level so its settings are applied throughout code base
 logger = logging.getLogger(__name__)
 
-def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
+def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
     """
     Lists files within a specific folder in a GCS bucket (non-recursively).
     """
@@ -45,8 +45,12 @@ def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
         blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
         
         # Get only the files in this directory level (not in subdirectories)
-        files = [blob.name for blob in blobs 
-                if blob.name != folder_prefix]
+        # Files must be of specific type
+        files = [
+            blob.name 
+            for blob in blobs 
+            if blob.name != folder_prefix and blob.name.endswith(file_format)
+        ]
         
         return files
     

@@ -25,11 +25,12 @@ def get_files():
     # Get parameters from query string
     bucket = request.args.get('bucket')
     folder = request.args.get('folder')
+    file_format = request.args.get('file_format')
 
     utils.logger.info(f"Obtaining files from {folder} folder in {bucket} bucket")
     
     try:
-        file_list = utils.list_gcs_files(bucket, folder)
+        file_list = utils.list_gcs_files(bucket, folder, file_format)
 
         return jsonify({
             'status': 'healthy',
