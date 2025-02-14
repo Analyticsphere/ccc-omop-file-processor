@@ -139,30 +139,27 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
     """
     utils.logger.warning("Validating CDM table columns")
     try:
-        utils.logger.warning(f"file_path is {file_path}")
         bucket_name, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
-        utils.logger.warning(f"bucket_name, delivery_date is {bucket_name}, {delivery_date}")
         table_name = utils.get_table_name_from_gcs_path(file_path)
-        utils.logger.warning(f"table_name is {table_name}")
         schema = utils.get_table_schema(table_name=table_name, cdm_version=omop_version)
-        utils.logger.warning(f"schema is {schema}")
         
         parquet_artifact_location = utils.get_parquet_artifact_location(file_path)
-        utils.logger.warning(f"parquet artifact is at {parquet_artifact_location}")
-        parquet_columns = utils.get_columns_from_parquet(parquet_artifact_location)
+        parquet_columns = set(utils.get_columns_from_parquet(parquet_artifact_location))
         utils.logger.warning(f"parquet_columns is {parquet_columns}")
         
-        # Get schema columns from the table schema and convert to list (for logging) and set (for lookups)
-        schema_columns = list(schema[table_name]['fields'].keys())
+        # Get schema columns from the table schema and convert to set (for O(1) lookups)
+        schema_columns = set(schema[table_name]['fields'].keys())
         utils.logger.warning(f"schema_columns is {schema_columns}")
 
-        # Convert lists to sets for O(1) membership checks
-        parquet_columns_set = set(parquet_columns)
-        schema_columns_set = set(schema_columns)
-
         # Identify valid and invalid columns from the parquet file
-        valid_columns = parquet_columns_set & schema_columns_set  # Intersection of sets
-        invalid_columns = parquet_columns_set - schema_columns_set  # Columns in parquet but not in schema
+        valid_columns = parquet_columns & schema_columns  # Intersection of sets
+        utils.logger.warning(f"valid columns set is {valid_columns}")
+        invalid_columns = parquet_columns - schema_columns  # Columns in parquet but not in schema
+        utils.logger.warning(f"invalid_columns set is {invalid_columns}")
+
+        # Identify missing columns: columns in the schema that are absent from the parquet file
+        missing_columns = schema_columns - parquet_columns
+        utils.logger.warning(f"missing columns is {missing_columns}")
 
         # Process valid columns
         for column in valid_columns:
@@ -194,8 +191,8 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
             utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
             ra.save_artifact()
 
-        # Identify missing columns: columns in the schema that are absent from the parquet file
-        missing_columns = schema_columns_set - parquet_columns_set
+        
+        
         for column in missing_columns:
             utils.logger.info(f"'{column}' is missing from {table_name}.")
             ra = report_artifact.ReportArtifact(
