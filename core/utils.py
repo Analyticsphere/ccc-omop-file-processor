@@ -163,16 +163,26 @@ def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
         .lower()
     )
 
+def get_cdm_schema(cdm_version: str) -> dict:
+    # Returns CDM schema for specified CDM version.
+    schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
+    try:
+        with open(schema_file, 'r') as f:
+            schema_json = f.read()
+        schema = json.loads(schema_json)
+        return schema
+    except FileNotFoundError:
+        raise Exception(f"Schema file not found: {schema_file}")
+    except json.JSONDecodeError:
+        raise Exception(f"Invalid JSON format in schema file: {schema_file}")
+
 def get_table_schema(table_name: str, cdm_version: str) -> dict:
     # Returns schema for specified OMOP table, if table exists in CDM
     # Returns empty dictionary if table is not in OMOP
     table_name = table_name.lower()
-    schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
 
     try:
-        with open(schema_file, 'r') as f:
-            schema_json = f.read()
-            schema = json.loads(schema_json)
+        schema = get_cdm_schema(cdm_version=cdm_version)
 
         # Check if table exists in schema
         if table_name in schema:
@@ -180,16 +190,13 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
         else:
             return {}
             
-    except FileNotFoundError:
-        raise Exception(f"Schema file not found: {schema_file}")
-    except json.JSONDecodeError:
-        raise Exception(f"Invalid JSON format in schema file: {schema_file}")
     except Exception as e:
         raise Exception(f"Unexpected error getting table schema: {str(e)}")
     
 def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str, str]:
     # Returns a tuple of the bucket_name and delivery date for a given file in GCS
     # e.g. synthea53/2024-12-31/care_site.parquet -> synthea53, 2024-12-31
+    gcs_file_path = gcs_file_path.replace("gs://", "")
     bucket_name, delivery_date = gcs_file_path.split('/')[:2]
     return bucket_name, delivery_date
 
@@ -205,6 +212,8 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
         3. Drops the temporary table.
         4. Returns a list of the actual column names present in the file.
     """
+    
+    gcs_file_path = gcs_file_path.replace("gs://", "")
 
     # Create a unique or table-specific name for introspection
     table_name_for_introspection = "temp_introspect_table"
