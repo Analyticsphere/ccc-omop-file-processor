@@ -78,7 +78,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
         for column in valid_columns:
             utils.logger.info(f"'{column}' is a valid column in schema for {table_name}.")
             ra = report_artifact.ReportArtifact(
-                concept_id=schema[table_name][column]['concept_id'],
+                concept_id=schema[table_name]['fields'][column]['concept_id'],
                 delivery_date=delivery_date,
                 gcs_path=bucket_name,
                 name=f"Valid column name: {table_name}.{column}",
@@ -107,7 +107,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
         for column in missing_columns:
             utils.logger.info(f"'{column}' is missing from {table_name}.")
             ra = report_artifact.ReportArtifact(
-                concept_id=schema[table_name][column]['concept_id'],
+                concept_id=schema[table_name]['fields'][column]['concept_id'],
                 delivery_date=delivery_date,
                 gcs_path=bucket_name,
                 name=f"Missing column: {table_name}.{column}",
