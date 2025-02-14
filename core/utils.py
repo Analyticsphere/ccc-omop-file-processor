@@ -9,7 +9,6 @@ import core.constants as constants
 from typing import Optional, Tuple
 import json
 import os
-import shutil
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -22,7 +21,7 @@ logging.basicConfig(
 # Create the logger at module level so its settings are applied throughout code base
 logger = logging.getLogger(__name__)
 
-def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
+def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
     """
     Lists files within a specific folder in a GCS bucket (non-recursively).
     """
@@ -46,8 +45,12 @@ def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
         blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
         
         # Get only the files in this directory level (not in subdirectories)
-        files = [blob.name for blob in blobs 
-                if blob.name != folder_prefix]
+        # Files must be of specific type
+        files = [
+            blob.name 
+            for blob in blobs 
+            if blob.name != folder_prefix and blob.name.endswith(file_format)
+        ]
         
         return files
     
@@ -120,7 +123,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
         logger.error(f"Unable to create DuckDB instance: {e}")
         sys.exit(1)
 
-def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str, tmp_dir: str) -> None:
+def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str) -> None:
     # Destory DuckDB object to free memory, and remove temporary files
     try:
         # Close the DuckDB connection
@@ -130,9 +133,6 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str,
         if os.path.exists(local_db_file):
             os.remove(local_db_file)
 
-        # Remove the temporary directory if it exists
-        if os.path.exists(tmp_dir):
-            shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
@@ -246,7 +246,7 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
         logger.error(f"Unable to get Parquet column list: {e}")
         sys.exit(0)
     finally:
-        close_duckdb_connection(conn, local_db_file, tmp_dir)
+        close_duckdb_connection(conn, local_db_file)
         
     return actual_columns
 
@@ -265,7 +265,7 @@ def valid_parquet_file(gcs_file_path: str) -> bool:
         logger.error(f"Unable to validate Parquet file: {e}")
         return False
     finally:
-        close_duckdb_connection(conn, local_db_file, tmp_dir)
+        close_duckdb_connection(conn, local_db_file)
 
 def get_parquet_artifact_location(gcs_file_path: str) -> str:
     file_name = get_table_name_from_gcs_path(gcs_file_path)
