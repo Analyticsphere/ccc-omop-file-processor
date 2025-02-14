@@ -71,7 +71,9 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
 
         # Check if parquet columns in the table schema
         for column in parquet_columns:
+            utils.logger.warning(f"IN LOOP1 and column is {column}")
             if column in schema_columns:
+                utils.logger.warning(f"IN LOOP1 and column is in schema_collumns")
                 utils.logger.info(f"'{column}' is a valid column in schema for {table_name}.")
                 ra = report_artifact.ReportArtifact(
                     concept_id=schema['concept_id'],
@@ -98,6 +100,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
         
         # Check if column in table schema is missing from parquet file   
         for column in schema_columns:
+            utils.logger.warning(f"IN LOOP1 and column is {column}")
             if column not in parquet_columns:
                 utils.logger.info(f"'{column}' is missing from {table_name}.")
                 ra = report_artifact.ReportArtifact(
