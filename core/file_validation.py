@@ -136,7 +136,6 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
     
     try:
         valid_table_name = validate_cdm_table_name(file_path, omop_version, delivery_date, gcs_path)
-        utils.logger.warning(f"valid_table_name is {valid_table_name}")
         # If it's not a valid table name, it does not have a schema to validate
         if valid_table_name:
             validate_cdm_table_columns(file_path, omop_version, delivery_date, gcs_path)
