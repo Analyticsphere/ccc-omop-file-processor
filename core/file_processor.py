@@ -248,7 +248,7 @@ def get_placeholder_value(field_name: str, field_type: str) -> str:
     
     return default_value
 
-def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
+def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     """
     Generates a SQL statement that, when run:
         - Converts data types of columns within Parquet file to OMOP CDM standard
@@ -363,8 +363,8 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 
     return sql_script
 
-def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
-    fix_sql = get_fix_columns_sql_statement(gcs_file_path, cdm_version)
+def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
+    fix_sql = get_normalization_sql_statement(gcs_file_path, cdm_version)
 
     conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
     
@@ -379,3 +379,7 @@ def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
             sys.exit(1)
         finally:
             utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+
+def get_row_count(gcs_file_path: str) -> None:
+    # TODO: Create record artifacts for count of valid and invalid rows
+    print()

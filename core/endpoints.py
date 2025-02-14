@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request # type: ignore
 from datetime import datetime
 import core.utils as utils
 import core.constants as constants
-import core.file_conversion as file_conversion
+import core.file_processor as file_processor
 import core.file_validation as file_validation
 import core.bq_client as bq_client
 import core.helpers.pipeline_log as pipeline_log
@@ -92,19 +92,19 @@ def convert_to_parquet():
     file_path: str = request.args.get('file_path')
 
     try:  
-        file_conversion.process_incoming_file(file_type, file_path)    
+        file_processor.process_incoming_file(file_type, file_path)    
         return "Converted file to Parquet", 200
     except:
         return "Unable to convert files to Parquet", 500
 
-@app.route('/fix_parquet', methods=['GET'])
-def fix_parquet_file():
+@app.route('/normalize_parquet', methods=['GET'])
+def normalize_parquet_file():
     file_path: str = request.args.get('file_path')
     omop_version: str = request.args.get('omop_version')
 
     try:
         utils.logger.info(f"Attempting to fix Parquet file {file_path}")
-        file_conversion.fix_columns(file_path, omop_version)
+        file_processor.normalize_file(file_path, omop_version)
 
         return "Fixed Parquet file", 200
     except:
