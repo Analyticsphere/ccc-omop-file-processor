@@ -25,11 +25,12 @@ def get_files():
     # Get parameters from query string
     bucket = request.args.get('bucket')
     folder = request.args.get('folder')
+    file_format = request.args.get('file_format')
 
     utils.logger.info(f"Obtaining files from {folder} folder in {bucket} bucket")
     
     try:
-        file_list = utils.list_gcs_files(bucket, folder)
+        file_list = utils.list_gcs_files(bucket, folder, file_format)
 
         return jsonify({
             'status': 'healthy',
@@ -91,7 +92,7 @@ def convert_to_parquet():
     file_type: str = request.args.get('file_type')
     file_path: str = request.args.get('file_path')
 
-    try:  
+    try:
         file_conversion.process_incoming_file(file_type, file_path)    
         return "Converted file to Parquet", 200
     except:
@@ -158,7 +159,6 @@ def log_pipeline_state():
                 omop_version,
                 run_id
             )
-
             pipeline_logger.add_log_entry()
         else:
             return "Log status not provided", 400

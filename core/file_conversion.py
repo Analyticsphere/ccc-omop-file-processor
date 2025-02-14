@@ -65,6 +65,7 @@ def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
         process_incoming_parquet(gcs_file_path)
     else:
         utils.logger.info(f"Invalid source file format: {file_type}") 
+        sys.exit(1)
 
 def process_incoming_parquet(gcs_file_path: str) -> None:
     """
@@ -100,7 +101,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
             utils.logger.error(f"Unable to processing incoming Parquet file: {e}")
             sys.exit(1)
         finally:
-            utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+            utils.close_duckdb_connection(conn, local_db_file)
     else:
         utils.logger.error(f"Invalid Parquet file")
         sys.exit(1)
@@ -126,10 +127,9 @@ def csv_to_parquet(gcs_file_path: str) -> None:
         if error_type == "INVALID_UNICODE":
             utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
             convert_csv_file_encoding(gcs_file_path)
-
         elif error_type == "UNTERMINATED_QUOTE":
             utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
-            
+            sys.exit(1)
         elif error_type == "CSV_FORMAT_ERROR":
             utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
             sys.exit(1)
@@ -140,7 +140,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
         utils.logger.error(f"Unable to convert CSV file to Parquet: {e}")
         sys.exit(1)
     finally:
-        utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+        utils.close_duckdb_connection(conn, local_db_file)
     
 def convert_csv_file_encoding(gcs_file_path: str) -> None:
     """
@@ -378,4 +378,4 @@ def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
             utils.logger.error(f"Unable to fix Parquet file: {e}")
             sys.exit(1)
         finally:
-            utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+            utils.close_duckdb_connection(conn, local_db_file)
