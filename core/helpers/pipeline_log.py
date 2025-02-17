@@ -1,9 +1,12 @@
+import sys
+from datetime import datetime
+from typing import Optional
+
+from google.cloud import bigquery  # type: ignore
+
 import core.constants as constants
 import core.utils as utils
-from typing import Optional
-from datetime import datetime
-from google.cloud import bigquery # type: ignore
-import sys
+
 
 class PipelineLog:
     def __init__(self, site_name: str, delivery_date: str, status: str, message: Optional[str], file_format: Optional[str], cdm_version: Optional[str], run_id: str):

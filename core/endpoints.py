@@ -1,12 +1,14 @@
-from flask import Flask, jsonify, request # type: ignore
+import os
 from datetime import datetime
-import core.utils as utils
+
+from flask import Flask, jsonify, request  # type: ignore
+
+import core.bq_client as bq_client
 import core.constants as constants
 import core.file_processor as file_processor
 import core.file_validation as file_validation
-import core.bq_client as bq_client
 import core.helpers.pipeline_log as pipeline_log
-import os
+import core.utils as utils
 
 app = Flask(__name__)
 

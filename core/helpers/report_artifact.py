@@ -1,11 +1,13 @@
+import json
+import random
+import sys
+import uuid
+from datetime import date, datetime
+from typing import Optional
+
 import core.constants as constants
 import core.utils as utils
-from typing import Optional
-import random
-import uuid
-from datetime import datetime, date
-import sys
-import json
+
 
 class ReportArtifact:
     def __init__(self, delivery_date: str, gcs_path: str, concept_id: Optional[int], name: str, value_as_string: Optional[str], value_as_concept_id: Optional[int], value_as_number: Optional[float]):

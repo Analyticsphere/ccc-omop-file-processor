@@ -1,13 +1,16 @@
-import core.constants as constants
-import core.utils as utils
-import core.helpers.report_artifact as report_artifact
-import sys
-import chardet # type: ignore
-from io import StringIO
-import csv
 import codecs
-from google.cloud import storage # type: ignore
-import duckdb # type: ignore
+import csv
+import sys
+from io import StringIO
+
+import chardet  # type: ignore
+import duckdb  # type: ignore
+from google.cloud import storage  # type: ignore
+
+import core.constants as constants
+import core.helpers.report_artifact as report_artifact
+import core.utils as utils
+
 
 class StreamingCSVWriter:
     """Helper class to stream CSV data directly to and from GCS"""

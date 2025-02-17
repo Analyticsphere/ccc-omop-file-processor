@@ -1,6 +1,9 @@
-from google.cloud import bigquery # type: ignore
-import core.utils as utils
 import sys
+
+from google.cloud import bigquery  # type: ignore
+
+import core.utils as utils
+
 
 def remove_all_tables(project_id: str, dataset_id: str) -> None:
     """

@@ -1,14 +1,15 @@
 import json
-from google.cloud import storage # type: ignore
 import logging
+import os
 import sys
 import uuid
-import duckdb # type: ignore
-from fsspec import filesystem # type: ignore
-import core.constants as constants
 from typing import Optional, Tuple
-import json
-import os
+
+import duckdb  # type: ignore
+from fsspec import filesystem  # type: ignore
+from google.cloud import storage  # type: ignore
+
+import core.constants as constants
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
