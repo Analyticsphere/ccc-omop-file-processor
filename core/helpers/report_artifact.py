@@ -58,4 +58,3 @@ class ReportArtifact:
         Returns a JSON string representation of the ReportArtifact's properties.
         """
         return json.dumps(self.__dict__)
-    

@@ -167,8 +167,7 @@ def log_pipeline_state():
 
         return "Complete BigQuery table write", 200
     except:
-        return "Unable to write to BigQuery table", 400
-        
+        return "Unable to write to BigQuery table", 400    
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))

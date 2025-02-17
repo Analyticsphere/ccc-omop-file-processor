@@ -9,7 +9,6 @@ import codecs
 from google.cloud import storage # type: ignore
 import duckdb # type: ignore
 
-
 class StreamingCSVWriter:
     """Helper class to stream CSV data directly to and from GCS"""
     def __init__(self, target_blob):
