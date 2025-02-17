@@ -89,7 +89,7 @@ def create_gcs_directory(directory_path: str) -> None:
         logger.error(f"Unable to process GCS directory {directory_path}: {e}")
         sys.exit(1)
 
-def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
+def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
     # Creates a DuckDB instance with a local database
     # Returns tuple of DuckDB object, name of db file, and path to db file
     try:
