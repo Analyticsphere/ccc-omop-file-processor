@@ -24,7 +24,7 @@ class ReportArtifact:
 
         file_path = f"{self.report_artifact_path}delivery_report_part_{random_string}{constants.PARQUET}"
 
-        conn, local_db_file, tmp_dir = utils.create_duckdb_connection()    
+        conn, local_db_file = utils.create_duckdb_connection()    
 
         try:
             with conn:

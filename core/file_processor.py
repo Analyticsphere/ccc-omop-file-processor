@@ -84,7 +84,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
             select_list.append(f"{column} AS {column.lower()}")
         select_clause = ", ".join(select_list)
 
-        conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
+        conn, local_db_file = utils.create_duckdb_connection()
 
         try:
             with conn:
@@ -107,7 +107,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         sys.exit(1)
 
 def csv_to_parquet(gcs_file_path: str) -> None:
-    conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
+    conn, local_db_file = utils.create_duckdb_connection()
 
     try:
         with conn:
@@ -264,7 +264,6 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
     table_name = utils.get_table_name_from_gcs_path(gcs_file_path).lower()
-    bucket, subfolder = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
 
     # --------------------------------------------------------------------------
     # Retrieve the table schema. If not found, return empty string
@@ -349,7 +348,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
             WHERE md5(CONCAT({row_hash_statement})) IN (
                 SELECT row_hash FROM row_check WHERE row_hash IS NOT NULL
             )
-        ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+        ) TO 'gs://{utils.get_invalid_rows_path_from_gcs_path(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
         COPY (
@@ -366,7 +365,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
 def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
     fix_sql = get_normalization_sql_statement(gcs_file_path, cdm_version)
 
-    conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
+    conn, local_db_file = utils.create_duckdb_connection()
     
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM

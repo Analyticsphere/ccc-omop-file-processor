@@ -49,7 +49,7 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
         files = [
             blob.name 
             for blob in blobs 
-            if blob.name != folder_prefix and blob.name.endswith(file_format)
+            if blob.name != folder_prefix and blob.name.lower().endswith(file_format)
         ]
         
         return files
@@ -118,7 +118,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
 
-        return conn, local_db_file, tmp_dir
+        return conn, local_db_file
     except Exception as e:
         logger.error(f"Unable to create DuckDB instance: {e}")
         sys.exit(1)
@@ -218,7 +218,7 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
     # Create a unique or table-specific name for introspection
     table_name_for_introspection = "temp_introspect_table"
 
-    conn, local_db_file, tmp_dir = create_duckdb_connection()
+    conn, local_db_file = create_duckdb_connection()
     try:
         with conn:
             
@@ -252,7 +252,7 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
 
 def valid_parquet_file(gcs_file_path: str) -> bool:
     # Retuns bool indicating whether Parquet file is valid/can be read by DuckDB
-    conn, local_db_file, tmp_dir = create_duckdb_connection()
+    conn, local_db_file = create_duckdb_connection()
 
     try:
         with conn:
@@ -281,3 +281,10 @@ def get_parquet_artifact_location(gcs_file_path: str) -> str:
     parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
 
     return parquet_path
+
+def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
+    table_name = get_table_name_from_gcs_path(gcs_file_path).lower()
+    bucket, subfolder = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+    invalid_rows_path = f"{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}"
+
+    return invalid_rows_path
