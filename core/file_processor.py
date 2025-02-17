@@ -406,6 +406,8 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
             gcs_path=bucket,
             concept_id=table_concept_id,
             name=f"{count_type}: {table_name}",
+            value_as_string=None,
+            value_as_concept_id=None,
             value_as_number=result
         )
         ra.save_artifact()
