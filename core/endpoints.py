@@ -103,9 +103,11 @@ def normalize_parquet_file():
     file_path: str = request.args.get('file_path')
     omop_version: str = request.args.get('omop_version')
 
+    parquet_file_path = utils.get_parquet_artifact_location(file_path)
+
     try:
-        utils.logger.info(f"Attempting to fix Parquet file {file_path}")
-        file_processor.normalize_file(file_path, omop_version)
+        utils.logger.info(f"Attempting to fix Parquet file {parquet_file_path}")
+        file_processor.normalize_file(parquet_file_path, omop_version)
 
         return "Fixed Parquet file", 200
     except:
