@@ -417,6 +417,16 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
         ra.save_artifact()
 
 def upgrade_file(gcs_file_path: str, cdm_version: str) -> None:
+    """
+     Upgrades an OMOP CDM table file from one version to another by applying version-specific transformations.
+    Currently supports upgrading from CDM v5.3 to v5.4.
+
+    The function handles three cases for table upgrades:
+    1. No changes needed (table remains the same in new version)
+    2. Table removed (file is deleted in new version)
+    3. Table changed and overwritten (SQL upgrade script is applied to transform the data)
+    """
+
     normalized_file_path = utils.get_parquet_artifact_location(gcs_file_path)
     table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
 
@@ -428,8 +438,30 @@ def upgrade_file(gcs_file_path: str, cdm_version: str) -> None:
             if constants.CDM_53_TO_54[table_name] == constants.REMOVED:
                 utils.delete_gcs_file(normalized_file_path)
             elif constants.CDM_53_TO_54[table_name] == constants.CHANGED:
-                # TODO: Execute SQL script against the file
-                print()
+                    try:
+                        upgrade_file_path = f"{constants.CDM_UPGRADE_SCRIPT_PATH}{table_name}.sql"
+                        with open(upgrade_file_path, 'r') as f:
+                            upgrade_script = f.read()
+                    
+                        conn, local_db_file = utils.create_duckdb_connection()
+                        try:
+                            with conn:
+                                select_statement = f"""
+                                    COPY (
+                                        {upgrade_script}
+                                        FROM read_parquet('gs://{normalized_file_path}')
+                                    ) TO 'gs://{normalized_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                                """
+                                conn.execute(select_statement)
+                        except Exception as e:
+                            utils.logger.error(f"Unable to upgrade file: {e}")
+                            sys.exit(1)
+                        finally:
+                            utils.close_duckdb_connection(conn, local_db_file)
+
+                    except Exception as e:
+                        utils.logger.error(f"Unable to open SQL upgrade file: {e}")
+                        sys.exit(1)
         else:
             utils.logger.info(f"No changes in {table_name} when upgrading from 5.3 to 5.4")
     else:
