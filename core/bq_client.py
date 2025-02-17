@@ -19,9 +19,8 @@ def remove_all_tables(project_id: str, dataset_id: str) -> None:
         # Delete each table
         for table in tables:
             table_id_full = f"{project_id}.{dataset_id}.{table.table_id}"
-            utils.logger.info(f"Deleting {table_id_full}...")
             client.delete_table(table_id_full)
-            utils.logger.info(f"Deleted {table_id_full}")
+            utils.logger.info(f"Deleted table {table_id_full}")
     except Exception as e:
         utils.logger.error(f"Unable to delete BigQuery table: {e}")
         sys.exit(1)

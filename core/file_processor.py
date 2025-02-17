@@ -367,6 +367,8 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
 
 def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
     fix_sql = get_normalization_sql_statement(gcs_file_path, cdm_version)
+
+    utils.logger.warning(f"fix_sql is {fix_sql}")
     
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM
