@@ -42,3 +42,23 @@ DEFAULT_FIELD_VALUES = {
         "DOUBLE": "'-1.0'",
         "TIMESTAMP": "'1901-01-01 00:00:00'"
     }
+
+CHANGED = "changed"
+REMOVED = "removed"
+ADDED = "added"
+CDM_53_TO_54 = {
+    "attribute_definition": REMOVED,
+    "visit_occurrence": CHANGED,
+    "visit_detail": CHANGED,
+    "procedure_occurrence": CHANGED,
+    "device_exposure": CHANGED,
+    "measurement": CHANGED,
+    "observation": CHANGED,
+    "note": CHANGED,
+    "location": CHANGED,
+    "metadata": CHANGED,
+    "cdm_source": CHANGED,
+    "episode": ADDED,
+    "episode_event": ADDED,
+    "cohort": ADDED
+}

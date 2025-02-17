@@ -115,6 +115,19 @@ def normalize_parquet_file():
     except:
         return "Unable to fix Parquet file", 500
 
+@app.route('/upgrade_cdm', methods=['GET'])
+def cdm_upgrade():
+    file_path: str = request.args.get('file_path')
+    omop_version: str = request.args.get('omop_version')
+
+    try:
+        utils.logger.info(f"Attempting to upgrade file {file_path}")
+        file_processor.upgrade_file(file_path, omop_version)
+
+        return "Upgraded file", 200
+    except:
+        return "Unable to upgrade file", 500
+
 @app.route('/parquet_to_bq', methods=['GET'])
 def parquet_gcs_to_bq():
     file_path: str = request.args.get('file_path')

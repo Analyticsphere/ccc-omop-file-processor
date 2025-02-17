@@ -289,3 +289,27 @@ def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
     invalid_rows_path = f"{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}"
 
     return invalid_rows_path
+
+def delete_gcs_file(gcs_path: str) -> None:
+    """
+    Deletes a file from Google Cloud Storage.
+    """
+    try:
+        # Initialize GCS client
+        storage_client = storage.Client()
+        
+        # Extract bucket name and blob path
+        # Remove 'gs://' prefix and split into bucket and path
+        path_without_prefix = gcs_path.replace('gs://', '')
+        bucket_name = path_without_prefix.split('/')[0]
+        blob_path = '/'.join(path_without_prefix.split('/')[1:])
+        
+        # Get bucket and blob
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        
+        # Delete the file
+        blob.delete()
+    except Exception as e:
+        logger.error(f"Error deleting file {gcs_path}: {e}")
+        sys.exit(1)
