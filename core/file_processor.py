@@ -1,5 +1,6 @@
 import core.constants as constants
 import core.utils as utils
+import core.helpers.report_artifact as report_artifact
 import sys
 import chardet # type: ignore
 from io import StringIO
@@ -364,17 +365,49 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
 
 def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
     fix_sql = get_normalization_sql_statement(gcs_file_path, cdm_version)
-
-    conn, local_db_file = utils.create_duckdb_connection()
     
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM
     if fix_sql and len(fix_sql) > 1:
+        conn, local_db_file = utils.create_duckdb_connection()
+
         try:
             with conn:
                 conn.execute(fix_sql)
+
+                # Get counts of valid/invalid rows for OMOP files
+                create_row_count_artifacts(gcs_file_path, cdm_version, conn)
         except Exception as e:
             utils.logger.error(f"Unable to fix Parquet file: {e}")
             sys.exit(1)
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
+
+def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckdb.DuckDBPyConnection) -> None:
+    table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
+    table_concept_id = utils.get_cdm_schema(cdm_version)[table_name]['concept_id']
+    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+
+    valid_rows_file = (utils.get_parquet_artifact_location(gcs_file_path), 'Valid row count')
+    invalid_rows_file = (utils.get_invalid_rows_path_from_gcs_path(gcs_file_path),  'Invalid row count')
+
+    files = [valid_rows_file, invalid_rows_file]
+
+    for file in files:
+        file_path, count_type = file
+
+        count_query = f"""
+            SELECT COUNT(*) FROM read_parquet('{file_path}')
+        """
+        result = conn.execute(count_query).fetchone()[0]
+
+        ra = report_artifact.ReportArtifact(
+            delivery_date=delivery_date,
+            gcs_path=bucket,
+            concept_id=table_concept_id,
+            name=f"{count_type}: {table_name}",
+            value_as_string=None,
+            value_as_concept_id=None,
+            value_as_number=result
+        )
+        ra.save_artifact()
