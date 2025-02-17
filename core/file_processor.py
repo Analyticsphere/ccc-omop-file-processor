@@ -131,7 +131,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
             convert_csv_file_encoding(gcs_file_path)
         elif error_type == "UNTERMINATED_QUOTE":
-            utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
+            utils.logger.error(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
             sys.exit(1)
         elif error_type == "CSV_FORMAT_ERROR":
             utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
@@ -367,8 +367,6 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
 
 def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
     fix_sql = get_normalization_sql_statement(gcs_file_path, cdm_version)
-
-    utils.logger.warning(f"fix_sql is {fix_sql}")
     
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM

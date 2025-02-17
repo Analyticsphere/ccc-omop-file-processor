@@ -181,7 +181,6 @@ class PipelineLog:
                 update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
-                # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
             error_details = {
@@ -243,7 +242,6 @@ class PipelineLog:
                 update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
-                # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
             error_details = {
@@ -315,7 +313,6 @@ class PipelineLog:
                 update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
-                # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
             error_details = {
