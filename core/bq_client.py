@@ -32,6 +32,12 @@ def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str) ->
     table_name = utils.get_table_name_from_gcs_path(gcs_path)
     parquet_path = f"gs://{utils.get_parquet_artifact_location(gcs_path)}"
 
+    # When upgrading to 5.4, some Parquet files may get deleted
+    # First confirm that Parquet file does exist before trying to load to BQ
+    if not utils.parquet_file_exists(parquet_path):
+        utils.logger.warning(f"Parquet file {parquet_path} does not exist, skipping")
+        return
+
     try:
         client = bigquery.Client(project=project_id)
         table_id_full = f"{project_id}.{dataset_id}.{table_name}"

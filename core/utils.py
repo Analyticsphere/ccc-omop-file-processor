@@ -313,3 +313,27 @@ def delete_gcs_file(gcs_path: str) -> None:
     except Exception as e:
         logger.error(f"Error deleting file {gcs_path}: {e}")
         sys.exit(1)
+
+def parquet_file_exists(file_path: str) -> bool:
+    """
+    Check if a Parquet file exists in Google Cloud Storage.
+    """
+    # Strip gs:// prefix if it exists
+    gcs_path = file_path.replace('gs://', '')
+    
+    # Parse bucket and blob name
+    path_parts = gcs_path.split('/')
+    bucket_name = path_parts[0]
+    blob_name = '/'.join(path_parts[1:])
+    
+    try:
+        # Initialize storage client with default credentials
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        
+        return blob.exists()
+    except Exception as e:
+        logger.error(f"Error checking Parquet file existence: {e}")
+        return False
+
