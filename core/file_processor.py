@@ -397,7 +397,7 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
         file_path, count_type = file
 
         count_query = f"""
-            SELECT COUNT(*) FROM read_parquet('{file_path}')
+            SELECT COUNT(*) FROM read_parquet('gs://{file_path}')
         """
         result = conn.execute(count_query).fetchone()[0]
 
