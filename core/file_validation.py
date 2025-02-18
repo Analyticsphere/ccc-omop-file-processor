@@ -140,3 +140,6 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
             
     except Exception as e:
         utils.logger.error(f"Error validating file {file_path}: {str(e)}")
+
+
+
