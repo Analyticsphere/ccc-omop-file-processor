@@ -24,10 +24,13 @@ class ReportArtifact:
 
         file_path = f"{self.report_artifact_path}delivery_report_part_{random_string}{constants.PARQUET}"
 
-        conn, local_db_file, tmp_dir = utils.create_duckdb_connection()    
+        conn, local_db_file = utils.create_duckdb_connection()    
 
         try:
             with conn:
+                value_as_string_sql = 'NULL' if self.value_as_string is None else f"'{self.value_as_string}'"
+                value_as_number_sql = 'NULL' if self.value_as_number is None else f"'{self.value_as_number}'"
+
                 record_statement = f"""
                 COPY (
                     SELECT
@@ -35,9 +38,9 @@ class ReportArtifact:
                         TRY_CAST('{self.concept_id}' AS INT) AS metadata_concept_id,
                         32880 AS metadata_type_concept_id,
                         '{self.name}' AS name,
-                        CAST('{self.value_as_string}' AS STRING) AS value_as_string,
+                        {value_as_string_sql} AS value_as_string,
                         TRY_CAST('{self.value_as_concept_id}' AS INT) AS value_as_concept_id,
-                        TRY_CAST('{self.value_as_number}' AS FLOAT) AS value_as_number,
+                        TRY_CAST({value_as_number_sql} AS FLOAT) AS value_as_number,
                         TRY_CAST('{date.today().strftime("%Y-%m-%d")}' AS DATE) AS metadata_date,
                         TRY_CAST('{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' AS DATETIME) AS metadata_datetime
                 ) TO '{file_path}' {constants.DUCKDB_FORMAT_STRING}
