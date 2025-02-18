@@ -48,7 +48,7 @@ class ReportArtifact:
             utils.logger.error(f"Unable to save : {e}")
             sys.exit(1)
         finally:
-            utils.close_duckdb_connection(conn, local_db_file, tmp_dir)
+            utils.close_duckdb_connection(conn, local_db_file)
     
     def to_json(self) -> str:
         """

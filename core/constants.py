@@ -13,6 +13,13 @@ PARQUET = ".parquet"
 CDM_SCHEMA_PATH = "reference/schemas/"
 CDM_SCHEMA_FILE_NAME = "schema.json"
 
+PIPELINE_LOG_TABLE = "nih-nci-dceg-connect-dev.ehr_pipeline_metadata.pipeline_runs"
+PIPELINE_START_STRING = "started"
+PIPELINE_RUNNING_STRING = "running"
+PIPELINE_COMPLETE_STRING = "completed"
+PIPELINE_ERROR_STRING = "error"
+PIPELINE_DAG_FAIL_MESSAGE = "DAG failed"
+
 FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
 
 class ArtifactPaths(str, Enum):

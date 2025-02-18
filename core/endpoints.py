@@ -5,6 +5,7 @@ import core.constants as constants
 import core.file_conversion as file_conversion
 import core.file_validation as file_validation
 import core.bq_client as bq_client
+import core.helpers.pipeline_log as pipeline_log
 import os
 
 app = Flask(__name__)
@@ -24,11 +25,12 @@ def get_files():
     # Get parameters from query string
     bucket = request.args.get('bucket')
     folder = request.args.get('folder')
+    file_format = request.args.get('file_format')
 
     utils.logger.info(f"Obtaining files from {folder} folder in {bucket} bucket")
     
     try:
-        file_list = utils.list_gcs_files(bucket, folder)
+        file_list = utils.list_gcs_files(bucket, folder, file_format)
 
         return jsonify({
             'status': 'healthy',
@@ -90,7 +92,7 @@ def convert_to_parquet():
     file_type: str = request.args.get('file_type')
     file_path: str = request.args.get('file_path')
 
-    try:  
+    try:
         file_conversion.process_incoming_file(file_type, file_path)    
         return "Converted file to Parquet", 200
     except:
@@ -122,6 +124,49 @@ def parquet_gcs_to_bq():
         return "Loaded Parquet file to BigQuery", 200
     except:
         return "Unable to load Parquet file", 500
+
+@app.route('/clear_bq_dataset', methods=['GET'])
+def clear_bq_tables():
+    project_id: str = request.args.get('project_id')
+    dataset_id: str = request.args.get('dataset_id')
+
+    try:
+        utils.logger.info(f"Removing all tables from {project_id}.{dataset_id}")
+        bq_client.remove_all_tables(project_id, dataset_id)
+
+        return "Removed all tables", 200
+    except:
+        return "Unable to delete tables within dataset", 500
+
+@app.route('/pipeline_log', methods=['GET'])
+def log_pipeline_state():
+    site_name: str = request.args.get('site_name')
+    delivery_date: str = request.args.get('delivery_date')
+    status: str = request.args.get('status')
+    message: str = request.args.get('message')
+    file_type: str = request.args.get('file_type')
+    omop_version: str = request.args.get('omop_version')
+    run_id: str = request.args.get('run_id')
+
+    try:
+        if status:
+            pipeline_logger = pipeline_log.PipelineLog(
+                site_name,
+                delivery_date,
+                status,
+                message,
+                file_type,
+                omop_version,
+                run_id
+            )
+            pipeline_logger.add_log_entry()
+        else:
+            return "Log status not provided", 400
+
+        return "Complete BigQuery table write", 200
+    except:
+        return "Unable to write to BigQuery table", 400
+        
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))

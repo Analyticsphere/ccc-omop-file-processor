@@ -1,5 +1,4 @@
 import json
-from google.cloud import storage
 from google.cloud import storage # type: ignore
 import logging
 import sys
@@ -10,7 +9,6 @@ import core.constants as constants
 from typing import Optional, Tuple
 import json
 import os
-import shutil
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -23,7 +21,7 @@ logging.basicConfig(
 # Create the logger at module level so its settings are applied throughout code base
 logger = logging.getLogger(__name__)
 
-def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
+def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
     """
     Lists files within a specific folder in a GCS bucket (non-recursively).
     """
@@ -47,8 +45,12 @@ def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
         blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
         
         # Get only the files in this directory level (not in subdirectories)
-        files = [blob.name for blob in blobs 
-                if blob.name != folder_prefix]
+        # Files must be of specific type
+        files = [
+            blob.name 
+            for blob in blobs 
+            if blob.name != folder_prefix and blob.name.endswith(file_format)
+        ]
         
         return files
     
@@ -142,7 +144,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
         logger.error(f"Unable to create DuckDB instance: {e}")
         sys.exit(1)
 
-def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str, tmp_dir: str) -> None:
+def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str) -> None:
     # Destory DuckDB object to free memory, and remove temporary files
     try:
         # Close the DuckDB connection
@@ -152,9 +154,6 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str,
         if os.path.exists(local_db_file):
             os.remove(local_db_file)
 
-        # Remove the temporary directory if it exists
-        if os.path.exists(tmp_dir):
-            shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
@@ -185,16 +184,26 @@ def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
         .lower()
     )
 
+def get_cdm_schema(cdm_version: str) -> dict:
+    # Returns CDM schema for specified CDM version.
+    schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
+    try:
+        with open(schema_file, 'r') as f:
+            schema_json = f.read()
+        schema = json.loads(schema_json)
+        return schema
+    except FileNotFoundError:
+        raise Exception(f"Schema file not found: {schema_file}")
+    except json.JSONDecodeError:
+        raise Exception(f"Invalid JSON format in schema file: {schema_file}")
+
 def get_table_schema(table_name: str, cdm_version: str) -> dict:
     # Returns schema for specified OMOP table, if table exists in CDM
     # Returns empty dictionary if table is not in OMOP
     table_name = table_name.lower()
-    schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
 
     try:
-        with open(schema_file, 'r') as f:
-            schema_json = f.read()
-            schema = json.loads(schema_json)
+        schema = get_cdm_schema(cdm_version=cdm_version)
 
         # Check if table exists in schema
         if table_name in schema:
@@ -202,16 +211,13 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
         else:
             return {}
             
-    except FileNotFoundError:
-        raise Exception(f"Schema file not found: {schema_file}")
-    except json.JSONDecodeError:
-        raise Exception(f"Invalid JSON format in schema file: {schema_file}")
     except Exception as e:
         raise Exception(f"Unexpected error getting table schema: {str(e)}")
     
 def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str, str]:
     # Returns a tuple of the bucket_name and delivery date for a given file in GCS
     # e.g. synthea53/2024-12-31/care_site.parquet -> synthea53, 2024-12-31
+    gcs_file_path = gcs_file_path.replace("gs://", "")
     bucket_name, delivery_date = gcs_file_path.split('/')[:2]
     return bucket_name, delivery_date
 
@@ -227,6 +233,8 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
         3. Drops the temporary table.
         4. Returns a list of the actual column names present in the file.
     """
+    
+    gcs_file_path = gcs_file_path.replace("gs://", "")
 
     # Create a unique or table-specific name for introspection
     table_name_for_introspection = "temp_introspect_table"
@@ -259,7 +267,7 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
         logger.error(f"Unable to get Parquet column list: {e}")
         sys.exit(0)
     finally:
-        close_duckdb_connection(conn, local_db_file, tmp_dir)
+        close_duckdb_connection(conn, local_db_file)
         
     return actual_columns
 
@@ -278,7 +286,7 @@ def valid_parquet_file(gcs_file_path: str) -> bool:
         logger.error(f"Unable to validate Parquet file: {e}")
         return False
     finally:
-        close_duckdb_connection(conn, local_db_file, tmp_dir)
+        close_duckdb_connection(conn, local_db_file)
 
 def get_parquet_artifact_location(gcs_file_path: str) -> str:
     file_name = get_table_name_from_gcs_path(gcs_file_path)
