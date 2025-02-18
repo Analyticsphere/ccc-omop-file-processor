@@ -9,7 +9,6 @@ import core.constants as constants
 from typing import Optional, Tuple
 import json
 import os
-import shutil
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -22,7 +21,7 @@ logging.basicConfig(
 # Create the logger at module level so its settings are applied throughout code base
 logger = logging.getLogger(__name__)
 
-def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
+def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
     """
     Lists files within a specific folder in a GCS bucket (non-recursively).
     """
@@ -46,14 +45,39 @@ def list_gcs_files(bucket_name: str, folder_prefix: str) -> list[str]:
         blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
         
         # Get only the files in this directory level (not in subdirectories)
-        files = [blob.name for blob in blobs 
-                if blob.name != folder_prefix]
+        # Files must be of specific type
+        files = [
+            blob.name 
+            for blob in blobs 
+            if blob.name != folder_prefix and blob.name.endswith(file_format)
+        ]
         
         return files
     
     except Exception as e:
         raise Exception(f"Error listing files in GCS: {str(e)}")
 
+def validate_cdm_table_name(file_name: str, cdm_spec_path: str = 'omop_cdm_53_validation.json') -> bool:
+    """
+    Validates whether the filename (without extension) matches one of the
+    OMOP CDM tables defined in the JSON specification file.
+    """
+    try:
+        with open(cdm_spec_path, 'r') as f:
+            cdm_spec = json.load(f)
+
+        # Extract the valid table names from the JSON spec
+        valid_table_names = cdm_spec.keys()
+
+        # Get the base name of the file (without extension), e.g., "person" from "person.csv"
+        table_name, _ = os.path.splitext(file_name)
+
+        # Check if the filename matches any of the table keys in the JSON
+        return table_name in valid_table_names
+
+    except Exception as e:
+        raise Exception(f"Error validating cdm file: {str(e)}")
+    
 def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.
     If directory exists, deletes any existing files first.
@@ -120,7 +144,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
         logger.error(f"Unable to create DuckDB instance: {e}")
         sys.exit(1)
 
-def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str, tmp_dir: str) -> None:
+def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str) -> None:
     # Destory DuckDB object to free memory, and remove temporary files
     try:
         # Close the DuckDB connection
@@ -130,9 +154,6 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str,
         if os.path.exists(local_db_file):
             os.remove(local_db_file)
 
-        # Remove the temporary directory if it exists
-        if os.path.exists(tmp_dir):
-            shutil.rmtree(tmp_dir)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
@@ -196,6 +217,7 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
 def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str, str]:
     # Returns a tuple of the bucket_name and delivery date for a given file in GCS
     # e.g. synthea53/2024-12-31/care_site.parquet -> synthea53, 2024-12-31
+    gcs_file_path = gcs_file_path.replace("gs://", "")
     bucket_name, delivery_date = gcs_file_path.split('/')[:2]
     return bucket_name, delivery_date
 
@@ -211,6 +233,8 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
         3. Drops the temporary table.
         4. Returns a list of the actual column names present in the file.
     """
+    
+    gcs_file_path = gcs_file_path.replace("gs://", "")
 
     # Create a unique or table-specific name for introspection
     table_name_for_introspection = "temp_introspect_table"
@@ -243,7 +267,7 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
         logger.error(f"Unable to get Parquet column list: {e}")
         sys.exit(0)
     finally:
-        close_duckdb_connection(conn, local_db_file, tmp_dir)
+        close_duckdb_connection(conn, local_db_file)
         
     return actual_columns
 
@@ -262,7 +286,7 @@ def valid_parquet_file(gcs_file_path: str) -> bool:
         logger.error(f"Unable to validate Parquet file: {e}")
         return False
     finally:
-        close_duckdb_connection(conn, local_db_file, tmp_dir)
+        close_duckdb_connection(conn, local_db_file)
 
 def get_parquet_artifact_location(gcs_file_path: str) -> str:
     file_name = get_table_name_from_gcs_path(gcs_file_path)

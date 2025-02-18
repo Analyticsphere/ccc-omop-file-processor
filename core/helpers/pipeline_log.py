@@ -114,7 +114,17 @@ class PipelineLog:
             query_job = client.query(query, job_config=job_config)
             query_job.result()  # Wait for the job to complete.
         except Exception as e:
-            utils.logger.error(f"Unable to add pipeline log record: {e}")
+            error_details = {
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'query_job_errors': None,
+                'context': {
+                    'site_name': self.site_name,
+                    'delivery_date': self.delivery_date,
+                    'status': self.status
+                }
+            }
+            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             sys.exit(1)
 
     def log_complete(self) -> None:
@@ -171,7 +181,17 @@ class PipelineLog:
                 # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
-            utils.logger.error(f"Unable to add pipeline log record: {e}")
+            error_details = {
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'query_job_errors': None,
+                'context': {
+                    'site_name': self.site_name,
+                    'delivery_date': self.delivery_date,
+                    'status': self.status
+                }
+            }
+            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             sys.exit(1)
 
     def log_running(self) -> None:
@@ -200,11 +220,12 @@ class PipelineLog:
             exists = list(select_job.result())
 
             if exists:
-                # If the record exists, update it.
+                # If the record exists and isn't already set to running, update it.
                 update_query = f"""
                     UPDATE `{constants.PIPELINE_LOG_TABLE}`
                     SET status = @status, pipeline_end_datetime = NULL, message = NULL
                     WHERE site_name = @site_name AND delivery_date = @delivery_date
+                    AND status != @status
                 """
 
                 update_config = bigquery.QueryJobConfig(
@@ -222,7 +243,17 @@ class PipelineLog:
                 # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
-            utils.logger.error(f"Unable to add pipeline log record: {e}")
+            error_details = {
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'query_job_errors': None,
+                'context': {
+                    'site_name': self.site_name,
+                    'delivery_date': self.delivery_date,
+                    'status': self.status
+                }
+            }
+            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             sys.exit(1)
 
     def log_error(self) -> None:
@@ -237,13 +268,12 @@ class PipelineLog:
             select_query = f"""
                 SELECT 1
                 FROM `{constants.PIPELINE_LOG_TABLE}`
-                WHERE site_name = @site_name AND delivery_date = @delivery_date
+                WHERE run_id = @run_id
                 LIMIT 1
             """
             select_config = bigquery.QueryJobConfig(
                 query_parameters=[
-                    bigquery.ScalarQueryParameter("site_name", "STRING", self.site_name),
-                    bigquery.ScalarQueryParameter("delivery_date", "DATE", self.delivery_date),
+                    bigquery.ScalarQueryParameter("run_id", "STRING", self.run_id),
                 ]
             )
 
@@ -254,10 +284,16 @@ class PipelineLog:
                 # If the record exists, update it.
                 update_query = f"""
                     UPDATE `{constants.PIPELINE_LOG_TABLE}`
-                    SET status = @status,
-                        pipeline_end_datetime = @pipeline_end_datetime,
-                        message = @message
-                    WHERE site_name = @site_name AND delivery_date = @delivery_date
+                    SET 
+                    status = @status,
+                    pipeline_end_datetime = @pipeline_end_datetime,
+                    message = CASE 
+                                WHEN IFNULL(message, '') != '' 
+                                    AND @message = '{constants.PIPELINE_DAG_FAIL_MESSAGE}' 
+                                THEN message 
+                                ELSE @message 
+                                END
+                    WHERE run_id = @run_id;
                 """
                 # Ensure that pipeline_end_datetime is formatted for BigQuery (YYYY-MM-DD HH:MM:SS).
                 if self.pipeline_end_datetime:
@@ -268,8 +304,7 @@ class PipelineLog:
                         bigquery.ScalarQueryParameter("status", "STRING", self.status),
                         bigquery.ScalarQueryParameter("pipeline_end_datetime", "DATETIME", end_datetime_str),
                         bigquery.ScalarQueryParameter("message", "STRING", self.message),
-                        bigquery.ScalarQueryParameter("site_name", "STRING", self.site_name),
-                        bigquery.ScalarQueryParameter("delivery_date", "DATE", self.delivery_date),
+                        bigquery.ScalarQueryParameter("run_id", "STRING", self.run_id)
                     ]
                 )
 
@@ -280,5 +315,15 @@ class PipelineLog:
                 # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
-            utils.logger.error(f"Unable to add pipeline log record: {e}")
+            error_details = {
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'query_job_errors': None,
+                'context': {
+                    'site_name': self.site_name,
+                    'delivery_date': self.delivery_date,
+                    'status': self.status
+                }
+            }
+            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             sys.exit(1)
