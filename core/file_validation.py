@@ -1,6 +1,9 @@
 import core.utils as utils
 import core.helpers.report_artifact as report_artifact
-
+from google.cloud import storage
+import os
+import tempfile
+import duckdb
     
 def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> bool:
     """
@@ -138,3 +141,58 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
             
     except Exception as e:
         utils.logger.error(f"Error validating file {file_path}: {str(e)}")
+
+
+def concatenate_report_artifacts(bucket_name: str, input_folder_prefix: str, output_folder_prifix: str) -> None:
+    # TODO pass in parner name and delivery date
+    # TODO get bucket name, output path, prefix, etc from constants
+    """
+    Downloads Parquet files from a GCS bucket into a temporary directory,
+    concatenates them  and uploads the result back to GCS.
+    """
+    # Initialize the GCS client and bucket.
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    
+    # List and filter files (i.e., blobs) that end with '.parquet'.
+    blobs = utils.list_gcs_files(bucket_name, input_folder_prefix)
+    
+    parquet_blobs = [blob for blobs in blob if blob.name.endswith('.parquet')]
+    if not parquet_blobs:
+        utils.logger.info(f"No Parquet files found in the bucket named {bucket_name} with the folder_prefix {input_folder_prefix}.")
+
+    utils.logger.info(f"Found {len(parquet_blobs)} Parquet files to process.")
+
+    # Create a temporary directory for downloading the files (which are small).
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Download each Parquet file to the temporary directory.
+        for blob in parquet_blobs:
+            local_path = os.path.join(tmpdir, os.path.basename(blob.name))
+            blob.download_to_filename(local_path) #TODO don't download! 
+            print(f"Downloaded {blob.name} to {local_path}")
+
+        # Define the output file path.
+        merge_path = os.path.join(tmpdir, "merge.parquet")
+        
+        # Create a glob pattern to match all Parquet files in the temporary directory.
+        parquet_pattern = os.path.join(tmpdir, "*.parquet")
+
+        # Use DuckDB to read all Parquet files matching the glob and write out a merged file.
+        # TODO COPY FROM BUCKET TO BUCKET
+        # TODO SELECT * FROM (*.parquet)
+        # create file list
+        # * from gcs.. ,
+        # generate union query with python
+        # execute with duckdb
+        duckdb.execute(f"""
+            COPY (SELECT * FROM '{parquet_pattern}') 
+            TO '{merge_path}' (FORMAT 'parquet'); 
+        """)
+        print(f"Concatenated Parquet file created at {merge_path}")
+
+        # Upload the merged file back to GCS.
+        output_blob_name = f"{output_folder_prifix}/concatinated_report_artifact"
+        output_blob = bucket.blob(output_blob_name)
+        output_blob.upload_from_filename(merge_path)
+        print(f"Uploaded merged file to gs://{bucket_name}/{output_blob_name}")
+
