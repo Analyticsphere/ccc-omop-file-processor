@@ -9,6 +9,7 @@ import core.file_processor as file_processor
 import core.file_validation as file_validation
 import core.helpers.pipeline_log as pipeline_log
 import core.utils as utils
+import core.omop_client as omop_client
 
 app = Flask(__name__)
 
@@ -21,6 +22,18 @@ def heartbeat():
         'timestamp': datetime.utcnow().isoformat(),
         'service': constants.SERVICE_NAME
     }), 200
+
+@app.route('/create_optimized_vocab', methods=['GET'])
+def create_optimized_vocab():
+    vocab_version: str = request.args.get('vocab_version')
+    vocab_gcs_bucket: str = request.args.get('vocab_gcs_bucket')
+
+    try:
+        omop_client.create_optimized_vocab_file(vocab_version, vocab_gcs_bucket)
+
+        return "Created optimized vocabulary file", 200
+    except:
+        return "Error creating optimized vocabulary", 500
 
 @app.route('/get_file_list', methods=['GET'])
 def get_files():
@@ -126,6 +139,19 @@ def cdm_upgrade():
         return "Upgraded file", 200
     except:
         return "Unable to upgrade file", 500
+
+@app.route('/harmonize_vocab', methods=['GET'])
+def vocab_harmonization():
+    file_path: str = request.args.get('file_path')
+    vocab_version: str = request.args.get('vocab_version')
+    vocab_gcs_bucket: str = request.args.get('vocab_gcs_bucket')
+
+    try:
+        print()
+
+        return f"Vocabulary harmonized to {vocab_version}", 200
+    except:
+        return "Unable to harmonize vocabulary", 500
 
 @app.route('/parquet_to_bq', methods=['GET'])
 def parquet_gcs_to_bq():

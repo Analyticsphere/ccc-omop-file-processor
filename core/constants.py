@@ -15,6 +15,11 @@ CDM_SCHEMA_FILE_NAME = "schema.json"
 
 CDM_UPGRADE_SCRIPT_PATH = "reference/sql/cdm_upgrade/"
 
+OPTIMIZED_VOCAB_FOLDER = "optimized"
+OPTIMIZED_VOCAB_FILE_NAME = f"optimized_vocab_file{PARQUET}"
+MAPPING_RELATIONSHIPS = "'Maps to','Maps to value','Maps to unit'"
+REPLACEMENT_RELATIONSHIPS = "'Concept replaced by','Concept was_a to','Concept poss_eq to','Concept same_as to','Concept alt_to to'"
+
 PIPELINE_START_STRING = "started"
 PIPELINE_RUNNING_STRING = "running"
 PIPELINE_COMPLETE_STRING = "completed"
