@@ -15,7 +15,6 @@ CDM_SCHEMA_FILE_NAME = "schema.json"
 
 CDM_UPGRADE_SCRIPT_PATH = "reference/sql/cdm_upgrade/"
 
-PIPELINE_LOG_TABLE = "nih-nci-dceg-connect-dev.ehr_pipeline_metadata.pipeline_runs"
 PIPELINE_START_STRING = "started"
 PIPELINE_RUNNING_STRING = "running"
 PIPELINE_COMPLETE_STRING = "completed"

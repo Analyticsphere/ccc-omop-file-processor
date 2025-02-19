@@ -156,6 +156,7 @@ def clear_bq_tables():
 
 @app.route('/pipeline_log', methods=['GET'])
 def log_pipeline_state():
+    logging_table: str = request.args.get('logging_table')
     site_name: str = request.args.get('site_name')
     delivery_date: str = request.args.get('delivery_date')
     status: str = request.args.get('status')
@@ -167,6 +168,7 @@ def log_pipeline_state():
     try:
         if status:
             pipeline_logger = pipeline_log.PipelineLog(
+                logging_table,
                 site_name,
                 delivery_date,
                 status,
