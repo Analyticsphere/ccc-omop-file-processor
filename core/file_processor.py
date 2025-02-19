@@ -437,7 +437,7 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
                 utils.delete_gcs_file(normalized_file_path)
             elif constants.CDM_53_TO_54[table_name] == constants.CHANGED:
                     try:
-                        upgrade_file_path = f"{constants.CDM_UPGRADE_SCRIPT_PATH}{cdm_version}_to_{target_omop_version}{table_name}.sql"
+                        upgrade_file_path = f"{constants.CDM_UPGRADE_SCRIPT_PATH}{cdm_version}_to_{target_omop_version}/{table_name}.sql"
                         with open(upgrade_file_path, 'r') as f:
                             upgrade_script = f.read()
                     
