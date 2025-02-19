@@ -1,12 +1,14 @@
-from flask import Flask, jsonify, request # type: ignore
+import os
 from datetime import datetime
-import core.utils as utils
+
+from flask import Flask, jsonify, request  # type: ignore
+
+import core.bq_client as bq_client
 import core.constants as constants
 import core.file_processor as file_processor
 import core.file_validation as file_validation
-import core.bq_client as bq_client
 import core.helpers.pipeline_log as pipeline_log
-import os
+import core.utils as utils
 
 app = Flask(__name__)
 
@@ -52,7 +54,6 @@ def validate_file():
         delivery_date = request.args.get('delivery_date')
         gcs_path = request.args.get('gcs_path')
         
-        utils.logger.info(f"Validating schema of {file_path} against OMOP v{omop_version}")
         result = file_validation.validate_file(file_path=file_path, omop_version=omop_version, delivery_date=delivery_date, gcs_path=gcs_path)
         utils.logger.info(f"Validation successful for {file_path}")
 
@@ -113,6 +114,20 @@ def normalize_parquet_file():
     except:
         return "Unable to fix Parquet file", 500
 
+@app.route('/upgrade_cdm', methods=['GET'])
+def cdm_upgrade():
+    file_path: str = request.args.get('file_path')
+    omop_version: str = request.args.get('omop_version')
+    target_omop_version: str = request.args.get('target_omop_version')
+
+    try:
+        utils.logger.info(f"Attempting to upgrade file {file_path} to {target_omop_version}")
+        file_processor.upgrade_file(file_path, omop_version, target_omop_version)
+
+        return "Upgraded file", 200
+    except:
+        return "Unable to upgrade file", 500
+
 @app.route('/parquet_to_bq', methods=['GET'])
 def parquet_gcs_to_bq():
     file_path: str = request.args.get('file_path')
@@ -167,8 +182,7 @@ def log_pipeline_state():
 
         return "Complete BigQuery table write", 200
     except:
-        return "Unable to write to BigQuery table", 400
-        
+        return "Unable to write to BigQuery table", 400    
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))

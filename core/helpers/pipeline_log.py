@@ -1,9 +1,12 @@
+import sys
+from datetime import datetime
+from typing import Optional
+
+from google.cloud import bigquery  # type: ignore
+
 import core.constants as constants
 import core.utils as utils
-from typing import Optional
-from datetime import datetime
-from google.cloud import bigquery # type: ignore
-import sys
+
 
 class PipelineLog:
     def __init__(self, site_name: str, delivery_date: str, status: str, message: Optional[str], file_format: Optional[str], cdm_version: Optional[str], run_id: str):
@@ -178,7 +181,6 @@ class PipelineLog:
                 update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
-                # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
             error_details = {
@@ -240,7 +242,6 @@ class PipelineLog:
                 update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
-                # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
             error_details = {
@@ -312,7 +313,6 @@ class PipelineLog:
                 update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
-                # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
             error_details = {

@@ -1,8 +1,12 @@
-import pytest
-import os
 import json
-from unittest.mock import patch, MagicMock
-from core.file_validation import validate_cdm_table_name, validate_cdm_table_schema, validate_file
+import os
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from core.file_validation import (validate_cdm_table_name,
+                                  validate_cdm_table_schema, validate_file)
+
 
 @pytest.fixture
 def mock_schema_file(tmp_path):

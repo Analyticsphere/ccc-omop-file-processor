@@ -1,6 +1,9 @@
-from google.cloud import bigquery # type: ignore
-import core.utils as utils
 import sys
+
+from google.cloud import bigquery  # type: ignore
+
+import core.utils as utils
+
 
 def remove_all_tables(project_id: str, dataset_id: str) -> None:
     """
@@ -16,9 +19,8 @@ def remove_all_tables(project_id: str, dataset_id: str) -> None:
         # Delete each table
         for table in tables:
             table_id_full = f"{project_id}.{dataset_id}.{table.table_id}"
-            utils.logger.info(f"Deleting {table_id_full}...")
             client.delete_table(table_id_full)
-            utils.logger.info(f"Deleted {table_id_full}")
+            utils.logger.info(f"Deleted table {table_id_full}")
     except Exception as e:
         utils.logger.error(f"Unable to delete BigQuery table: {e}")
         sys.exit(1)
@@ -29,6 +31,12 @@ def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str) ->
     """
     table_name = utils.get_table_name_from_gcs_path(gcs_path)
     parquet_path = f"gs://{utils.get_parquet_artifact_location(gcs_path)}"
+
+    # When upgrading to 5.4, some Parquet files may get deleted
+    # First confirm that Parquet file does exist before trying to load to BQ
+    if not utils.parquet_file_exists(parquet_path):
+        utils.logger.warning(f"Parquet file {parquet_path} does not exist, skipping")
+        return
 
     try:
         client = bigquery.Client(project=project_id)

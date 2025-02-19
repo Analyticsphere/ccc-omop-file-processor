@@ -13,6 +13,8 @@ PARQUET = ".parquet"
 CDM_SCHEMA_PATH = "reference/schemas/"
 CDM_SCHEMA_FILE_NAME = "schema.json"
 
+CDM_UPGRADE_SCRIPT_PATH = "reference/sql/cdm_upgrade/"
+
 PIPELINE_LOG_TABLE = "nih-nci-dceg-connect-dev.ehr_pipeline_metadata.pipeline_runs"
 PIPELINE_START_STRING = "started"
 PIPELINE_RUNNING_STRING = "running"
@@ -42,3 +44,23 @@ DEFAULT_FIELD_VALUES = {
         "DOUBLE": "'-1.0'",
         "TIMESTAMP": "'1901-01-01 00:00:00'"
     }
+
+CHANGED = "changed"
+REMOVED = "removed"
+ADDED = "added"
+CDM_53_TO_54 = {
+    "attribute_definition": REMOVED,
+    "visit_occurrence": CHANGED,
+    "visit_detail": CHANGED,
+    "procedure_occurrence": CHANGED,
+    "device_exposure": CHANGED,
+    "measurement": CHANGED,
+    "observation": CHANGED,
+    "note": CHANGED,
+    "location": CHANGED,
+    "metadata": CHANGED,
+    "cdm_source": CHANGED,
+    "episode": ADDED,
+    "episode_event": ADDED,
+    "cohort": ADDED
+}
