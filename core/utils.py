@@ -392,8 +392,8 @@ def combine_report_artifact_files(site: str, bucket: str, delivery_date: str) ->
                     COPY (
                         {select_statement}
                     ) TO 
-                        'gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.PARQUET}' 
-                        {constants.DUCKDB_FORMAT_STRING}
+                        'gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}' 
+                        (HEADER, DELIMITER ',')
                 """ 
                 conn.execute(join_files_query)
         except Exception as e:
