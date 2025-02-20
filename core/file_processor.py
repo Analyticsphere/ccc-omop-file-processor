@@ -425,6 +425,11 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
     3. Table changed and overwritten (SQL upgrade script is applied to transform the data)
     """
 
+    utils.logger.warning(f"IN upgrade_file()")
+    
+    utils.logger.warning(f"")
+
+
     normalized_file_path = utils.get_parquet_artifact_location(gcs_file_path)
     table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
 
@@ -432,8 +437,10 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
         utils.logger.info(f"CDM upgrade not needed")
         pass
     elif cdm_version == "5.3" and target_omop_version == "5.4":
+        utils.logger.warning(f"Upgrading 5.3 to 5.4")
         if table_name in constants.CDM_53_TO_54:
             if constants.CDM_53_TO_54[table_name] == constants.REMOVED:
+                utils.logger.warning(f"going to remove file {table_name}")
                 utils.delete_gcs_file(normalized_file_path)
             elif constants.CDM_53_TO_54[table_name] == constants.CHANGED:
                     try:
