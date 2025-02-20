@@ -68,3 +68,48 @@ CDM_53_TO_54 = {
     "episode_event": ADDED,
     "cohort": ADDED
 }
+
+TABLES_WITHOUT_SOURCE_ID = ["note", "specimen"]
+
+SOURCE_TARGET_FIELDS = {
+    "visit_occurrence": {
+        "source_concept_id": "visit_source_concept_id",
+        "target_concept_id": "visit_concept_id"
+    },
+    "visit_detail": {
+        "source_concept_id": "visit_detail_source_concept_id",
+        "target_concept_id": "visit_detail_concept_id"
+    },
+    "condition_occurrence": {
+        "source_concept_id": "condition_source_concept_id",
+        "target_concept_id": "condition_concept_id"
+    }, 
+    "drug_exposure": {
+        "source_concept_id": "drug_source_concept_id",
+        "target_concept_id": "drug_concept_id"
+    },
+    "procedure_occurrence": {
+        "source_concept_id": "procedure_source_concept_id",
+        "target_concept_id": "procedure_concept_id"
+    },
+    "device_exposure": {
+        "source_concept_id": "device_source_concept_id",
+        "target_concept_id": "device_concept_id"
+    },
+    "measurement": {
+        "source_concept_id": "measurement_source_concept_id",
+        "target_concept_id": "measurement_concept_id"
+    },
+    "observation": {
+        "source_concept_id": "observation_source_concept_id",
+        "target_concept_id": "observation_concept_id"
+    },
+    "note": {
+        "source_concept_id": "",
+        "target_concept_id": "note_class_concept_id"
+    },
+    "specimen": {
+        "source_concept_id": "",
+        "target_concept_id": "specimen_concept_id"
+    }
+}
