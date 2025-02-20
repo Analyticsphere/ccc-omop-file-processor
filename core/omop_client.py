@@ -37,7 +37,6 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                                 IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
                         ) TO 'gs://{optimized_vocab_path}' {constants.DUCKDB_FORMAT_STRING}
                         """
-                        utils.logger.warning(f"transform_query is {transform_query}")
                         conn.execute(transform_query)
                 except Exception as e:
                     utils.logger.error(f"Unable to create optimized vocab file: {e}")
