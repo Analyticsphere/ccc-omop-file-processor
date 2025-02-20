@@ -373,3 +373,35 @@ def gcs_bucket_exists(gcs_path: str) -> bool:
         # Handle any other unexpected errors
         print(f"Error checking GCS path: {e}")
         return False
+
+def combine_report_artifact_files(site: str, bucket: str, delivery_date: str) -> None:
+    #report_tmp_dir = get_report_tmp_artifact_gcs_path(bucket, delivery_date)
+    tmp_files = list_gcs_files(bucket, delivery_date, constants.PARQUET)
+
+    if len(tmp_files) > 0:
+        conn, local_db_file = create_duckdb_connection()
+        # Increase max_expression_depth in case there are many report artifacts
+        conn.execute("SET max_expression_depth TO 1000000")
+
+        # Build UNION ALL SELECT statement to join together files
+        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{file}')" for file in tmp_files])
+
+        try:
+            with conn:
+                join_files_query = f"""
+                    COPY (
+                        {select_statement}
+                    ) TO 
+                        'gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.PARQUET}' 
+                        {constants.DUCKDB_FORMAT_STRING}
+                """ 
+                conn.execute(join_files_query)
+        except Exception as e:
+            logger.error(f"Unable to merge reporting artifacts: {e}")
+            sys.exit(1)
+        finally:
+            close_duckdb_connection(conn, local_db_file)
+
+def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
+    report_tmp_dir = f"gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
+    return report_tmp_dir
