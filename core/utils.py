@@ -385,7 +385,7 @@ def combine_report_artifact_files(site: str, bucket: str, delivery_date: str) ->
         conn.execute("SET max_expression_depth TO 1000000")
 
         # Build UNION ALL SELECT statement to join together files
-        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{file}')" for file in tmp_files])
+        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{bucket}/{file}')" for file in tmp_files])
         logger.warning(f"select statement is {select_statement}")
 
         try:
