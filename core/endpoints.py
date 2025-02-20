@@ -188,6 +188,7 @@ def combine_artifact_files():
     delivery_date: str = request.args.get('delivery_date')
 
     try:
+        utils.logger.info(f"Generating delivery report for {delivery_date} delivery from {site}")
         utils.combine_report_artifact_files(site, gcs_bucket, delivery_date)
 
         return "Generated delivery report file", 200

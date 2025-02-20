@@ -377,6 +377,7 @@ def gcs_bucket_exists(gcs_path: str) -> bool:
 def combine_report_artifact_files(site: str, bucket: str, delivery_date: str) -> None:
     #report_tmp_dir = get_report_tmp_artifact_gcs_path(bucket, delivery_date)
     tmp_files = list_gcs_files(bucket, delivery_date, constants.PARQUET)
+    logger.warning(f"tmp_files is {tmp_files}")
 
     if len(tmp_files) > 0:
         conn, local_db_file = create_duckdb_connection()
@@ -385,6 +386,7 @@ def combine_report_artifact_files(site: str, bucket: str, delivery_date: str) ->
 
         # Build UNION ALL SELECT statement to join together files
         select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{file}')" for file in tmp_files])
+        logger.warning(f"select statement is {select_statement}")
 
         try:
             with conn:
@@ -395,6 +397,7 @@ def combine_report_artifact_files(site: str, bucket: str, delivery_date: str) ->
                         'gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}' 
                         (HEADER, DELIMITER ',')
                 """ 
+                logger.warning(f"join files query is {join_files_query}")
                 conn.execute(join_files_query)
         except Exception as e:
             logger.error(f"Unable to merge reporting artifacts: {e}")
