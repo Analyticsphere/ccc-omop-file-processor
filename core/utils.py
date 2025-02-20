@@ -375,8 +375,8 @@ def gcs_bucket_exists(gcs_path: str) -> bool:
         return False
 
 def combine_report_artifact_files(site: str, bucket: str, delivery_date: str) -> None:
-    #report_tmp_dir = get_report_tmp_artifact_gcs_path(bucket, delivery_date)
-    tmp_files = list_gcs_files(bucket, delivery_date, constants.PARQUET)
+    report_tmp_dir = get_report_tmp_artifacts_gcs_path(bucket, delivery_date)
+    tmp_files = list_gcs_files(bucket, report_tmp_dir, constants.PARQUET)
     logger.warning(f"tmp_files is {tmp_files}")
 
     if len(tmp_files) > 0:
