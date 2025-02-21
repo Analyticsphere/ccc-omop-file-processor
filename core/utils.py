@@ -376,7 +376,8 @@ def gcs_bucket_exists(gcs_path: str) -> bool:
         return False
 
 def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
-    vocabulary_parquet_file = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}/vocabulary{constants.PARQUET}"
+    vocabulary_parquet_file = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}vocabulary{constants.PARQUET}"
+    logger.warning(f"Looking for vocabulary parquet file in {vocabulary_parquet_file}")
 
     if parquet_file_exists(vocabulary_parquet_file):
         conn, local_db_file = create_duckdb_connection()
