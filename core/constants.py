@@ -73,7 +73,7 @@ TABLES_WITHOUT_SOURCE_ID = ["note", "specimen"]
 
 SOURCE_TARGET_FIELDS = {
     "visit_occurrence": {
-        "source_concept_id": "visit_source_concept_id",
+        "source_concept_id": ["visit_source_concept_id","",""],
         "target_concept_id": "visit_concept_id"
     },
     "visit_detail": {

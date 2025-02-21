@@ -426,8 +426,8 @@ def create_final_report_artifacts(report_data: dict) -> None:
 
 def generate_report(report_data: json) -> None:
     create_final_report_artifacts(report_data)
-    
-    site = report_data["delivery_date"]
+
+    site = report_data["site"]
     gcs_bucket = report_data["gcs_bucket"]
     delivery_date = report_data["delivery_date"]
 
