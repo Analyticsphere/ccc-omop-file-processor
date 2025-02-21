@@ -402,6 +402,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
     gcs_bucket = report_data["gcs_bucket"]
     delivery_date = report_data["delivery_date"]
 
+    delivery_date_value = (report_data["delivery_date"], "Delivery date")
     site_display_name = (report_data["site_display_name"], "Site")
     file_delivery_format = (report_data["file_delivery_format"], "File delivery format")
     delivered_cdm_version = (report_data["delivered_cdm_version"], "Delivered CDM version")
@@ -415,12 +416,14 @@ def create_final_report_artifacts(report_data: dict) -> None:
         data_point, value = report_data_point
         value_as_concept_id: int = None
 
+        logger.warning(f"data_point is {data_point} and value is {value}")
         if data_point in ["Delivered CDM version", "Standardized to vocabulary version"]:
             if value == "5.3":
                 value_as_concept_id = 1147543
             elif value == "5.4":
                 value_as_concept_id = 756265
 
+        logger.warning(f"value_as_concept_id is {value_as_concept_id}")
         ra = report_artifact.ReportArtifact(
             delivery_date=delivery_date,
             gcs_path=gcs_bucket,
