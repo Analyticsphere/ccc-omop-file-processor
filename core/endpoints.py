@@ -186,7 +186,7 @@ def generate_final_delivery_report():
     report_data = request.get_json()
 
     try:
-        utils.logger.info(f"Generating final delivery report for {report_data["delivery_date"]} delivery from {report_data["site"]}")
+        utils.logger.info(f"Generating final delivery report for {report_data['delivery_date']} delivery from {report_data['site']}")
         utils.generate_report(report_data)
 
         return "Generated delivery report file", 200
