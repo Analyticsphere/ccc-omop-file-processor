@@ -10,6 +10,7 @@ from fsspec import filesystem  # type: ignore
 from google.cloud import storage  # type: ignore
 
 import core.constants as constants
+import core.helpers.report_artifact as report_artifact
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -374,9 +375,64 @@ def gcs_bucket_exists(gcs_path: str) -> bool:
         print(f"Error checking GCS path: {e}")
         return False
 
-def combine_report_artifact_files(site: str, bucket: str, delivery_date: str) -> None:
+def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
+    vocabulary_parquet_file = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}/vocabulary{constants.PARQUET}"
+
+    if parquet_file_exists(vocabulary_parquet_file):
+        conn, local_db_file = create_duckdb_connection()
+        try:
+            with conn:
+                vocab_version_query = f"""
+                    SELECT vocabulary_version
+                    FROM read_parquet('gs://{vocabulary_parquet_file}')
+                    WHERE vocabulary_id = 'None'
+                """
+                vocab_version_string = conn.execute(vocab_version_query).fetchone()[0]
+                return vocab_version_string
+        except Exception as e:
+            logger.error(f"Unable to upgrade file: {e}")
+            return "Unknown vocabulary version"
+        finally:
+            close_duckdb_connection(conn, local_db_file)
+    else:
+        return "No vocabulary file provided"
+
+def create_final_report_artifacts(report_data: dict) -> None:
+    gcs_bucket = report_data["gcs_bucket"]
+    delivery_date = report_data["delivery_date"]
+
+    site_display_name = (report_data["site_display_name"], "Site")
+    file_delivery_format = (report_data["file_delivery_format"], "File delivery format")
+    delivered_cdm_version = (report_data["delivered_cdm_version"], "Delivered CDM version")
+    delivered_vocab_version = (get_delivery_vocabulary_version(gcs_bucket, delivery_date), "Delivered vocabulary version")
+    target_vocabulary_version = (report_data["target_vocabulary_version"], "Standardized to vocabulary version")
+    target_cdm_version = (report_data["target_cdm_version"], "Standardized to CDM version")
+
+    report_data_points = [site_display_name, file_delivery_format, delivered_cdm_version, delivered_vocab_version, target_vocabulary_version, target_cdm_version]
+
+    for report_data_point in report_data_points:
+        data_point, value = report_data_point
+
+        ra = report_artifact.ReportArtifact(
+            delivery_date=delivery_date,
+            gcs_path=gcs_bucket,
+            concept_id=0,
+            name=f"{data_point}",
+            value_as_string=value,
+            value_as_concept_id=None,
+            value_as_number=None
+        )
+        ra.save_artifact()
+
+def generate_report(report_data: json) -> None:
+    create_final_report_artifacts(report_data)
+    
+    site = report_data["delivery_date"]
+    gcs_bucket = report_data["gcs_bucket"]
+    delivery_date = report_data["delivery_date"]
+
     report_tmp_dir = f"{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
-    tmp_files = list_gcs_files(bucket, report_tmp_dir, constants.PARQUET)
+    tmp_files = list_gcs_files(gcs_bucket, report_tmp_dir, constants.PARQUET)
 
     if len(tmp_files) > 0:
         conn, local_db_file = create_duckdb_connection()
@@ -384,7 +440,7 @@ def combine_report_artifact_files(site: str, bucket: str, delivery_date: str) ->
         conn.execute("SET max_expression_depth TO 1000000")
 
         # Build UNION ALL SELECT statement to join together files
-        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{bucket}/{file}')" for file in tmp_files])
+        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{gcs_bucket}/{file}')" for file in tmp_files])
 
         try:
             with conn:
@@ -392,7 +448,7 @@ def combine_report_artifact_files(site: str, bucket: str, delivery_date: str) ->
                     COPY (
                         {select_statement}
                     ) TO 
-                        'gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}' 
+                        'gs://{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}' 
                         (HEADER, DELIMITER ',')
                 """ 
                 conn.execute(join_files_query)

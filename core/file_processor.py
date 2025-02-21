@@ -416,7 +416,7 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
 
 def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str) -> None:
     """
-     Upgrades an OMOP CDM table file from one version to another by applying version-specific transformations.
+    Upgrades an OMOP CDM table file from one version to another by applying version-specific transformations.
     Currently supports upgrading from CDM v5.3 to v5.4.
 
     The function handles three cases for table upgrades:

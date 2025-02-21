@@ -181,19 +181,17 @@ def clear_bq_tables():
     except:
         return "Unable to delete tables within dataset", 500
 
-@app.route('/generate_delivery_report', methods=['GET'])
-def combine_artifact_files():
-    site: str = request.args.get('site')
-    gcs_bucket: str = request.args.get('bucket')
-    delivery_date: str = request.args.get('delivery_date')
+@app.route('/generate_delivery_report', methods=['POST'])
+def generate_final_delivery_report():
+    report_data = request.get_json()
 
     try:
-        utils.logger.info(f"Generating delivery report for {delivery_date} delivery from {site}")
-        utils.combine_report_artifact_files(site, gcs_bucket, delivery_date)
+        utils.logger.info(f"Generating final delivery report for {report_data["delivery_date"]} delivery from {report_data["site"]}")
+        utils.generate_report(report_data)
 
         return "Generated delivery report file", 200
-    except Exception:
-        return "Unable to generate delivery report", 500
+    except Exception as e:
+        return f"Unable to generate delivery report: {e}", 500
 
 @app.route('/pipeline_log', methods=['GET'])
 def log_pipeline_state():
