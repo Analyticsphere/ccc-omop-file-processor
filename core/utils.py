@@ -410,7 +410,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
     target_vocabulary_version = (report_data["target_vocabulary_version"], "Standardized to vocabulary version")
     target_cdm_version = (report_data["target_cdm_version"], "Standardized to CDM version")
 
-    report_data_points = [site_display_name, file_delivery_format, delivered_cdm_version, delivered_vocab_version, target_vocabulary_version, target_cdm_version]
+    report_data_points = [delivery_date_value, site_display_name, file_delivery_format, delivered_cdm_version, delivered_vocab_version, target_vocabulary_version, target_cdm_version]
 
     for report_data_point in report_data_points:
         data_point, value = report_data_point
