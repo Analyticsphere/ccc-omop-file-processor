@@ -413,6 +413,13 @@ def create_final_report_artifacts(report_data: dict) -> None:
 
     for report_data_point in report_data_points:
         data_point, value = report_data_point
+        value_as_concept_id: int = None
+
+        if data_point in ["Delivered CDM version", "Standardized to vocabulary version"]:
+            if value == "5.3":
+                value_as_concept_id = 1147543
+            elif value == "5.4":
+                value_as_concept_id = 756265
 
         ra = report_artifact.ReportArtifact(
             delivery_date=delivery_date,
@@ -420,7 +427,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
             concept_id=0,
             name=f"{data_point}",
             value_as_string=value,
-            value_as_concept_id=None,
+            value_as_concept_id=value_as_concept_id,
             value_as_number=None
         )
         ra.save_artifact()
