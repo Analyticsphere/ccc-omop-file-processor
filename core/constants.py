@@ -13,7 +13,7 @@ PARQUET = ".parquet"
 CDM_SCHEMA_PATH = "reference/schemas/"
 CDM_SCHEMA_FILE_NAME = "schema.json"
 
-DDL_SQL_PATH = "reference/sql/ddl"
+DDL_SQL_PATH = "reference/sql/ddl/"
 DDL_FILE_NAME = "ddl.sql"
 DDL_PLACEHOLDER_STRING = "@cdmDatabaseSchema"
 
