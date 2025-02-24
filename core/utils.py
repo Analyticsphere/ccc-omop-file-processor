@@ -401,6 +401,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
     gcs_bucket = report_data["gcs_bucket"]
     delivery_date = report_data["delivery_date"]
 
+    # Create tuples to represent a value to add to delivery report, and what that value describes
     delivery_date_value = (delivery_date, constants.DELIVERY_DATE_REPORT_NAME)
     site_display_name = (report_data["site_display_name"], constants.SITE_DISPLAY_NAME_REPORT_NAME)
     file_delivery_format = (report_data["file_delivery_format"], constants.FILE_DELIVERY_FORMAT_REPORT_NAME)
@@ -412,9 +413,12 @@ def create_final_report_artifacts(report_data: dict) -> None:
     file_processor_version = (os.getenv('COMMIT_SHA'), constants.FILE_PROCESSOR_VERSION_REPORT_NAME)
     processed_date = (datetime.today().strftime('%Y-%m-%d'), constants.PROCESSED_DATE_REPORT_NAME)
 
+    # Create a list of the tuples
     report_data_points = [processed_date, file_processor_version, delivery_date_value, site_display_name, file_delivery_format, delivered_cdm_version, delivered_vocab_version, target_vocabulary_version, target_cdm_version]
 
+    # Iterate over each tuple
     for report_data_point in report_data_points:
+        # Seperate value and the thing it describes from tuple
         value, reporting_item = report_data_point
         value_as_concept_id: int = None
 
