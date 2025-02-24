@@ -377,7 +377,6 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
 
 def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
     vocabulary_parquet_file = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}vocabulary{constants.PARQUET}"
-    logger.warning(f"Looking for vocabulary parquet file in {vocabulary_parquet_file}")
 
     if parquet_file_exists(vocabulary_parquet_file):
         conn, local_db_file = create_duckdb_connection()
@@ -402,7 +401,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
     gcs_bucket = report_data["gcs_bucket"]
     delivery_date = report_data["delivery_date"]
 
-    delivery_date_value = (report_data["delivery_date"], constants.DELIVERY_DATE_REPORT_NAME)
+    delivery_date_value = (delivery_date, constants.DELIVERY_DATE_REPORT_NAME)
     site_display_name = (report_data["site_display_name"], constants.SITE_DISPLAY_NAME_REPORT_NAME)
     file_delivery_format = (report_data["file_delivery_format"], constants.FILE_DELIVERY_FORMAT_REPORT_NAME)
     delivered_cdm_version = (report_data["delivered_cdm_version"], constants.DELIVERED_CDM_VERSION_REPORT_NAME)
@@ -412,21 +411,18 @@ def create_final_report_artifacts(report_data: dict) -> None:
     target_cdm_version = (report_data["target_cdm_version"], constants.TARGET_CDM_VERSION_REPORT_NAME)
     file_processor_version = (datetime.today().strftime('%Y-%m-%d'), constants.PROCESSED_DATE_REPORT_NAME)
 
-
     report_data_points = [file_processor_version,delivery_date_value, site_display_name, file_delivery_format, delivered_cdm_version, delivered_vocab_version, target_vocabulary_version, target_cdm_version]
 
     for report_data_point in report_data_points:
         value, reporting_item = report_data_point
         value_as_concept_id: int = None
 
-        logger.warning(f"data_point is {reporting_item} and value is {value}")
         if reporting_item in [constants.DELIVERED_CDM_VERSION_REPORT_NAME, constants.TARGET_CDM_VERSION_REPORT_NAME]:
             if value == "5.3":
                 value_as_concept_id = 1147543
             elif value == "5.4":
                 value_as_concept_id = 756265
 
-        logger.warning(f"value_as_concept_id is {value_as_concept_id}")
         ra = report_artifact.ReportArtifact(
             delivery_date=delivery_date,
             gcs_path=gcs_bucket,
