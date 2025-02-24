@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
 from google.cloud import storage  # type: ignore
+from datetime import datetime
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
@@ -408,7 +409,8 @@ def create_final_report_artifacts(report_data: dict) -> None:
     delivered_vocab_version = (get_delivery_vocabulary_version(gcs_bucket, delivery_date), constants.DELIVERED_VOCABULARY_VERSION_REPORT_NAME)
     target_vocabulary_version = (report_data["target_vocabulary_version"], constants.TARGET_VOCABULARY_VERSION_REPORT_NAME)
     target_cdm_version = (report_data["target_cdm_version"], constants.TARGET_CDM_VERSION_REPORT_NAME)
-    file_processor_version = (os.getenv('COMMIT_SHA'), constants.FILE_PROCESSOR_VERSION_REPORT_NAME)
+    target_cdm_version = (report_data["target_cdm_version"], constants.TARGET_CDM_VERSION_REPORT_NAME)
+    file_processor_version = (datetime.today().strftime('%Y-%m-%d'), constants.PROCESSED_DATE_REPORT_NAME)
 
 
     report_data_points = [file_processor_version,delivery_date_value, site_display_name, file_delivery_format, delivered_cdm_version, delivered_vocab_version, target_vocabulary_version, target_cdm_version]
