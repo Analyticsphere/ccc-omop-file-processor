@@ -1,6 +1,5 @@
 import sys
 
-from google.cloud import storage  # type: ignore
 import core.constants as constants
 import core.utils as utils
 from google.cloud import bigquery

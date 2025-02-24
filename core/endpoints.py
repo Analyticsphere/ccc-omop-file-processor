@@ -194,7 +194,7 @@ def generate_final_delivery_report():
         return f"Unable to generate delivery report: {e}", 500
 
 @app.route('/create_missing_tables', methods=['GET'])
-def clear_bq_tables():
+def create_missing_omop_tables():
     project_id: str = request.args.get('project_id')
     dataset_id: str = request.args.get('dataset_id')
     omop_version: str = request.args.get('omop_version')
