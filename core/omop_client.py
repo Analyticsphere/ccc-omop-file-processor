@@ -15,7 +15,7 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
         # Ensure exisiting vocab file can be read
         if not utils.valid_parquet_file(optimized_vocab_path):
             # Ensure vocabulary version actually exists
-            if utils.gcs_bucket_exists(vocab_path):
+            if utils.vocab_gcs_path_exists(vocab_path):
                 conn, local_db_file = utils.create_duckdb_connection()
 
                 try:

@@ -342,10 +342,9 @@ def get_optimized_vocab_file_path(vocab_version: str, vocab_gcs_bucket: str) -> 
     optimized_vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{constants.OPTIMIZED_VOCAB_FILE_NAME}"
     return optimized_vocab_path
 
-def gcs_bucket_exists(gcs_path: str) -> bool:
+def vocab_gcs_path_exists(gcs_path: str) -> bool:
     """
     Check if a specific GCS path exists.
-
     """
     try:
         # Split the path into bucket name and blob path
