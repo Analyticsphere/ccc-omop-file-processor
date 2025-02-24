@@ -344,29 +344,30 @@ def get_optimized_vocab_file_path(vocab_version: str, vocab_gcs_bucket: str) -> 
 def gcs_bucket_exists(gcs_path: str) -> bool:
     """
     Check if a specific GCS path exists.
-
     """
     try:
         # Split the path into bucket name and blob path
-        parts = gcs_path.split('/', 1)
-        bucket_name = parts[0]
-        blob_path = parts[1] if len(parts) > 1 else None
+        # parts = gcs_path.split('/', 1)
+        # bucket_name = parts[0]
+        # blob_path = parts[1] if len(parts) > 1 else None
+
+        bucket, file_path = get_bucket_and_delivery_date_from_gcs_path(gcs_path)
         
         # Initialize the client
         client = storage.Client()
         
         # Check if bucket exists
         try:
-            bucket = client.get_bucket(bucket_name)
+            bucket = client.get_bucket(bucket)
         except Exception:
             return False
             
         # If no blob path, we're just checking bucket existence
-        if not blob_path:
+        if not file_path:
             return True
             
         # Check if blob exists
-        blob = bucket.blob(blob_path)
+        blob = bucket.blob(file_path)
         return blob.exists()
         
     except Exception as e:
