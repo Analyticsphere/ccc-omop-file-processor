@@ -49,3 +49,5 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
     else:
         utils.logger.info(f"Optimized vocabulary already exists")
 
+def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
+    print()

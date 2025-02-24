@@ -193,6 +193,20 @@ def generate_final_delivery_report():
     except Exception as e:
         return f"Unable to generate delivery report: {e}", 500
 
+@app.route('/create_missing_tables', methods=['GET'])
+def clear_bq_tables():
+    project_id: str = request.args.get('project_id')
+    dataset_id: str = request.args.get('dataset_id')
+    omop_version: str = request.args.get('omop_version')
+
+    try:
+        utils.logger.info(f"Creating any missing v{omop_version} tables in {project_id}.{dataset_id}")
+        omop_client.create_missing_tables(project_id, dataset_id, omop_version)
+
+        return "Created missing tables", 200
+    except Exception as e:
+        return f"Unable to create missing tables: {e}", 500
+
 @app.route('/pipeline_log', methods=['GET'])
 def log_pipeline_state():
     logging_table: str = request.args.get('logging_table')
