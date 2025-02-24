@@ -414,11 +414,11 @@ def create_final_report_artifacts(report_data: dict) -> None:
     report_data_points = [file_processor_version,delivery_date_value, site_display_name, file_delivery_format, delivered_cdm_version, delivered_vocab_version, target_vocabulary_version, target_cdm_version]
 
     for report_data_point in report_data_points:
-        data_point, value = report_data_point
+        value, reporting_item = report_data_point
         value_as_concept_id: int = None
 
-        logger.warning(f"data_point is {data_point} and value is {value}")
-        if data_point in ["Delivered CDM version", "Standardized to vocabulary version"]:
+        logger.warning(f"data_point is {reporting_item} and value is {value}")
+        if reporting_item in ["Delivered CDM version", "Standardized to vocabulary version"]:
             if value == "5.3":
                 value_as_concept_id = 1147543
             elif value == "5.4":
@@ -429,7 +429,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
             delivery_date=delivery_date,
             gcs_path=gcs_bucket,
             concept_id=0,
-            name=f"{data_point}",
+            name=f"{reporting_item}",
             value_as_string=value,
             value_as_concept_id=value_as_concept_id,
             value_as_number=None
