@@ -402,14 +402,15 @@ def create_final_report_artifacts(report_data: dict) -> None:
     gcs_bucket = report_data["gcs_bucket"]
     delivery_date = report_data["delivery_date"]
 
-    delivery_date_value = (report_data["delivery_date"], "Delivery date")
-    site_display_name = (report_data["site_display_name"], "Site")
-    file_delivery_format = (report_data["file_delivery_format"], "File delivery format")
-    delivered_cdm_version = (report_data["delivered_cdm_version"], "Delivered CDM version")
-    delivered_vocab_version = (get_delivery_vocabulary_version(gcs_bucket, delivery_date), "Delivered vocabulary version")
-    target_vocabulary_version = (report_data["target_vocabulary_version"], "Standardized to vocabulary version")
-    target_cdm_version = (report_data["target_cdm_version"], "Standardized to CDM version")
-    file_processor_version = (os.getenv('COMMIT_SHA'), "Pipeline file processor version")
+    delivery_date_value = (report_data["delivery_date"], constants.DELIVERY_DATE_REPORT_NAME)
+    site_display_name = (report_data["site_display_name"], constants.SITE_DISPLAY_NAME_REPORT_NAME)
+    file_delivery_format = (report_data["file_delivery_format"], constants.FILE_DELIVERY_FORMAT_REPORT_NAME)
+    delivered_cdm_version = (report_data["delivered_cdm_version"], constants.DELIVERED_CDM_VERSION_REPORT_NAME)
+    delivered_vocab_version = (get_delivery_vocabulary_version(gcs_bucket, delivery_date), constants.DELIVERED_VOCABULARY_VERSION_REPORT_NAME)
+    target_vocabulary_version = (report_data["target_vocabulary_version"], constants.TARGET_VOCABULARY_VERSION_REPORT_NAME)
+    target_cdm_version = (report_data["target_cdm_version"], constants.TARGET_CDM_VERSION_REPORT_NAME)
+    file_processor_version = (os.getenv('COMMIT_SHA'), constants.FILE_PROCESSOR_VERSION_REPORT_NAME)
+
 
     report_data_points = [file_processor_version,delivery_date_value, site_display_name, file_delivery_format, delivered_cdm_version, delivered_vocab_version, target_vocabulary_version, target_cdm_version]
 
@@ -418,7 +419,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
         value_as_concept_id: int = None
 
         logger.warning(f"data_point is {reporting_item} and value is {value}")
-        if reporting_item in ["Delivered CDM version", "Standardized to vocabulary version"]:
+        if reporting_item in [constants.DELIVERED_CDM_VERSION_REPORT_NAME, constants.TARGET_CDM_VERSION_REPORT_NAME]:
             if value == "5.3":
                 value_as_concept_id = 1147543
             elif value == "5.4":

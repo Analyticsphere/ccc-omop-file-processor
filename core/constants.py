@@ -113,3 +113,12 @@ SOURCE_TARGET_FIELDS = {
         "target_concept_id": "specimen_concept_id"
     }
 }
+
+DELIVERY_DATE_REPORT_NAME = "Delivery date"
+SITE_DISPLAY_NAME_REPORT_NAME = "Site"
+FILE_DELIVERY_FORMAT_REPORT_NAME = "File delivery format"
+DELIVERED_CDM_VERSION_REPORT_NAME = "Delivered CDM version"
+DELIVERED_VOCABULARY_VERSION_REPORT_NAME = "Delivered vocabulary version"
+TARGET_VOCABULARY_VERSION_REPORT_NAME = "Standardized to vocabulary version"
+TARGET_CDM_VERSION_REPORT_NAME = "Standardized to CDM version"
+FILE_PROCESSOR_VERSION_REPORT_NAME = "Pipeline file processor version"
