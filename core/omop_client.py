@@ -50,22 +50,26 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
 
 def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
     ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
+    utils.logger.warning(f"ddl file path is {ddl_file}")
 
     # Get DDL with CREATE OR REPLACE TABLE statements
     try:
         with open(create_missing_tables, 'r') as f:
             ddl_sql = f.read()
         create_sql = ddl_sql.replace(constants.DDL_PLACEHOLDER_STRING, f"{project_id}.{dataset_id}")
+        utils.logger.warning(f"create_sql is {create_sql}")
     except FileNotFoundError:
         raise Exception(f"DDL file not found: {ddl_file}")
     except Exception as e:
-        raise Exception(f"Invalid JSON format in schema file: {e}")
+        raise Exception(f"DDL file error: {e}")
     
     # Execute the CREATE OR REPLACE TABLE statements in BigQuery
     # Initialize the BigQuery client
+    
     client = bigquery.Client()
 
     # Run the query
+    utils.logger.warning(f"going to execute SQL statement")
     query_job = client.query(create_sql)
 
     # Wait for the job to complete
