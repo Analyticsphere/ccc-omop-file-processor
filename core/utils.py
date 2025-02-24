@@ -347,27 +347,25 @@ def gcs_bucket_exists(gcs_path: str) -> bool:
     """
     try:
         # Split the path into bucket name and blob path
-        # parts = gcs_path.split('/', 1)
-        # bucket_name = parts[0]
-        # blob_path = parts[1] if len(parts) > 1 else None
-
-        bucket, file_path = get_bucket_and_delivery_date_from_gcs_path(gcs_path)
+        parts = gcs_path.split('/', 1)
+        bucket_name = parts[0]
+        blob_path = parts[1] if len(parts) > 1 else None
         
         # Initialize the client
         client = storage.Client()
         
         # Check if bucket exists
         try:
-            bucket = client.get_bucket(bucket)
+            bucket = client.get_bucket(bucket_name)
         except Exception:
             return False
             
         # If no blob path, we're just checking bucket existence
-        if not file_path:
+        if not blob_path:
             return True
             
         # Check if blob exists
-        blob = bucket.blob(file_path)
+        blob = bucket.blob(blob_path)
         return blob.exists()
         
     except Exception as e:
