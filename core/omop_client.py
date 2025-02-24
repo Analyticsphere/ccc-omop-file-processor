@@ -56,10 +56,9 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
     try:
         with open(create_missing_tables, 'r') as f:
             ddl_sql = f.read()
+        utils.logger.warning(f"ddl SQL is {ddl_sql}")
         create_sql = ddl_sql.replace(constants.DDL_PLACEHOLDER_STRING, f"{project_id}.{dataset_id}")
         utils.logger.warning(f"create_sql is {create_sql}")
-    except FileNotFoundError:
-        raise Exception(f"DDL file not found: {ddl_file}")
     except Exception as e:
         raise Exception(f"DDL file error: {e}")
     
