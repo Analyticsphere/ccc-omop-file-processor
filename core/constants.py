@@ -15,7 +15,11 @@ CDM_SCHEMA_FILE_NAME = "schema.json"
 
 CDM_UPGRADE_SCRIPT_PATH = "reference/sql/cdm_upgrade/"
 
-PIPELINE_LOG_TABLE = "nih-nci-dceg-connect-dev.ehr_pipeline_metadata.pipeline_runs"
+OPTIMIZED_VOCAB_FOLDER = "optimized"
+OPTIMIZED_VOCAB_FILE_NAME = f"optimized_vocab_file{PARQUET}"
+MAPPING_RELATIONSHIPS = "'Maps to','Maps to value','Maps to unit'"
+REPLACEMENT_RELATIONSHIPS = "'Concept replaced by','Concept was_a to','Concept poss_eq to','Concept same_as to','Concept alt_to to'"
+
 PIPELINE_START_STRING = "started"
 PIPELINE_RUNNING_STRING = "running"
 PIPELINE_COMPLETE_STRING = "completed"
@@ -63,4 +67,49 @@ CDM_53_TO_54 = {
     "episode": ADDED,
     "episode_event": ADDED,
     "cohort": ADDED
+}
+
+TABLES_WITHOUT_SOURCE_ID = ["note", "specimen"]
+
+SOURCE_TARGET_FIELDS = {
+    "visit_occurrence": {
+        "source_concept_id": "visit_source_concept_id",
+        "target_concept_id": "visit_concept_id"
+    },
+    "visit_detail": {
+        "source_concept_id": "visit_detail_source_concept_id",
+        "target_concept_id": "visit_detail_concept_id"
+    },
+    "condition_occurrence": {
+        "source_concept_id": "condition_source_concept_id",
+        "target_concept_id": "condition_concept_id"
+    }, 
+    "drug_exposure": {
+        "source_concept_id": "drug_source_concept_id",
+        "target_concept_id": "drug_concept_id"
+    },
+    "procedure_occurrence": {
+        "source_concept_id": "procedure_source_concept_id",
+        "target_concept_id": "procedure_concept_id"
+    },
+    "device_exposure": {
+        "source_concept_id": "device_source_concept_id",
+        "target_concept_id": "device_concept_id"
+    },
+    "measurement": {
+        "source_concept_id": "measurement_source_concept_id",
+        "target_concept_id": "measurement_concept_id"
+    },
+    "observation": {
+        "source_concept_id": "observation_source_concept_id",
+        "target_concept_id": "observation_concept_id"
+    },
+    "note": {
+        "source_concept_id": "",
+        "target_concept_id": "note_class_concept_id"
+    },
+    "specimen": {
+        "source_concept_id": "",
+        "target_concept_id": "specimen_concept_id"
+    }
 }

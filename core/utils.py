@@ -337,3 +337,38 @@ def parquet_file_exists(file_path: str) -> bool:
         logger.error(f"Error checking Parquet file existence: {e}")
         return False
 
+def get_optimized_vocab_file_path(vocab_version: str, vocab_gcs_bucket: str) -> str:
+    optimized_vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{constants.OPTIMIZED_VOCAB_FILE_NAME}"
+    return optimized_vocab_path
+
+def vocab_gcs_path_exists(gcs_path: str) -> bool:
+    """
+    Check if a specific GCS path exists.
+    """
+    try:
+        # Split the path into bucket name and blob path
+        parts = gcs_path.split('/', 1)
+        bucket_name = parts[0]
+        blob_path = parts[1] if len(parts) > 1 else None
+        
+        # Initialize the client
+        client = storage.Client()
+        
+        # Check if bucket exists
+        try:
+            bucket = client.get_bucket(bucket_name)
+        except Exception:
+            return False
+            
+        # If no blob path, we're just checking bucket existence
+        if not blob_path:
+            return True
+            
+        # Check if blob exists
+        blob = bucket.blob(blob_path)
+        return blob.exists()
+        
+    except Exception as e:
+        # Handle any other unexpected errors
+        print(f"Error checking GCS path: {e}")
+        return False
