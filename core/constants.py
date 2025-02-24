@@ -13,6 +13,10 @@ PARQUET = ".parquet"
 CDM_SCHEMA_PATH = "reference/schemas/"
 CDM_SCHEMA_FILE_NAME = "schema.json"
 
+DDL_SQL_PATH = "reference/sql/ddl"
+DDL_FILE_NAME = "ddl.sql"
+DDL_PLACEHOLDER_STRING = "@cdmDatabaseSchema"
+
 CDM_UPGRADE_SCRIPT_PATH = "reference/sql/cdm_upgrade/"
 
 OPTIMIZED_VOCAB_FOLDER = "optimized"
