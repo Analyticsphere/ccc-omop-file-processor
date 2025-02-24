@@ -409,8 +409,9 @@ def create_final_report_artifacts(report_data: dict) -> None:
     delivered_vocab_version = (get_delivery_vocabulary_version(gcs_bucket, delivery_date), "Delivered vocabulary version")
     target_vocabulary_version = (report_data["target_vocabulary_version"], "Standardized to vocabulary version")
     target_cdm_version = (report_data["target_cdm_version"], "Standardized to CDM version")
+    file_processor_version = (os.getenv('COMMIT_SHA'), "Pipeline file processor version")
 
-    report_data_points = [delivery_date_value, site_display_name, file_delivery_format, delivered_cdm_version, delivered_vocab_version, target_vocabulary_version, target_cdm_version]
+    report_data_points = [file_processor_version,delivery_date_value, site_display_name, file_delivery_format, delivered_cdm_version, delivered_vocab_version, target_vocabulary_version, target_cdm_version]
 
     for report_data_point in report_data_points:
         data_point, value = report_data_point
