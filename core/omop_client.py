@@ -137,8 +137,6 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
             ]
         )
 
-        utils.logger.warning(f"insert query is {query}")
-
         # Run the query as a job and wait for it to complete.
         query_job = client.query(query, job_config=job_config)
         query_job.result()  # Wait for the job to complete.
