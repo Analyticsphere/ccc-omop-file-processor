@@ -101,7 +101,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
                 cdm_version_concept_id,
                 vocabulary_version
             )
-            VALUES (
+            SELECT
                 @cdm_source_name,
                 @cdm_source_abbreviation,
                 @cdm_holder,
@@ -113,7 +113,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
                 @cdm_version,
                 @cdm_version_concept_id,
                 @vocabulary_version
-            )
+            FROM (SELECT 1) dummy_table
             WHERE NOT EXISTS (
                 SELECT 1
                 FROM {project_id}.{dataset_id}.cdm_source
