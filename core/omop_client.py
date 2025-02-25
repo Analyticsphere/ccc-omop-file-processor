@@ -54,7 +54,7 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
 
     # Get DDL with CREATE OR REPLACE TABLE statements
     try:
-        with open(create_missing_tables, 'r') as f:
+        with open(ddl_file, 'r') as f:
             ddl_sql = f.read()
         utils.logger.warning(f"ddl SQL is {ddl_sql}")
         create_sql = ddl_sql.replace(constants.DDL_PLACEHOLDER_STRING, f"{project_id}.{dataset_id}")
