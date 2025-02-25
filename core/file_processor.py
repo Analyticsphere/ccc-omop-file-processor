@@ -431,7 +431,7 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
     if cdm_version == target_omop_version:
         utils.logger.info(f"CDM upgrade not needed")
         pass
-    elif cdm_version == "5.3" and target_omop_version == "5.4":
+    elif cdm_version == constants.CDM_v53 and target_omop_version == constants.CDM_v54:
         if table_name in constants.CDM_53_TO_54:
             if constants.CDM_53_TO_54[table_name] == constants.REMOVED:
                 utils.delete_gcs_file(normalized_file_path)

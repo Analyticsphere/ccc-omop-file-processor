@@ -10,6 +10,11 @@ SERVICE_NAME = "omop-file-processor"
 CSV = ".csv"
 PARQUET = ".parquet"
 
+CDM_v53 = "5.3"
+CDM_v53_CONCEPT_ID = 1147543
+CDM_v54 = "5.4"
+CDM_v54_CONCEPT_ID = 756265
+
 CDM_SCHEMA_PATH = "reference/schemas/"
 CDM_SCHEMA_FILE_NAME = "schema.json"
 
