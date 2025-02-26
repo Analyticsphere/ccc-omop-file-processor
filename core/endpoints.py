@@ -306,16 +306,6 @@ def log_pipeline_state() -> tuple:
     omop_version: Optional[str] = data.get('omop_version')
     run_id: Optional[str] = data.get('run_id')
 
-    utils.logger.warning(f"data JSON is {data}")
-    utils.logger.warning(f"logging_table is {logging_table}")
-    utils.logger.warning(f"site_name data is {site_name}")
-    utils.logger.warning(f"delivery_date data is {delivery_date}")
-    utils.logger.warning(f"status data is {status}")
-    utils.logger.warning(f"message data is {message}")
-    utils.logger.warning(f"file_type data is {file_type}")
-    utils.logger.warning(f"omop_version data is {omop_version}")
-    utils.logger.warning(f"run_id is {run_id}")
-
     try:
         # Check if required fields are present
         if not all([logging_table, site_name, delivery_date, status, run_id]):
