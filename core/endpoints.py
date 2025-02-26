@@ -326,8 +326,8 @@ def log_pipeline_state() -> tuple:
         return "Successfully logged to BigQuery", 200
 
     except Exception as e:
-        utils.logger.error(f"Unable to write to save logging information to BigQuery table: {str(e)}")
-        return f"Unable to write to save logging information to BigQuery table: {str(e)}", 500    
+        utils.logger.error(f"Unable to save logging information to BigQuery table: {str(e)}")
+        return f"Unable to save logging information to BigQuery table: {str(e)}", 500    
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
