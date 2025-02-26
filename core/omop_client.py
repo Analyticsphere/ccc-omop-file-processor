@@ -1,9 +1,8 @@
 import sys
 
-import duckdb  # type: ignore
-from google.cloud import storage  # type: ignore
 import core.constants as constants
 import core.utils as utils
+from google.cloud import bigquery
 
 
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
@@ -49,3 +48,25 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
     else:
         utils.logger.info(f"Optimized vocabulary already exists")
 
+def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
+    ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
+
+    # Get DDL with CREATE OR REPLACE TABLE statements
+    try:
+        with open(ddl_file, 'r') as f:
+            ddl_sql = f.read()
+        
+        # Add project_id and data_set to SQL statement
+        create_sql = ddl_sql.replace(constants.DDL_PLACEHOLDER_STRING, f"{project_id}.{dataset_id}")
+    except Exception as e:
+        raise Exception(f"DDL file error: {e}")
+    
+    # Execute the CREATE OR REPLACE TABLE statements in BigQuery
+    # Initialize the BigQuery client
+    client = bigquery.Client()
+
+    # Run the query
+    query_job = client.query(create_sql)
+
+    # Wait for the job to complete
+    _ = query_job.result()
