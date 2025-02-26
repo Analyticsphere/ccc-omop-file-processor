@@ -95,7 +95,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
                 copy_sql = f"""
                     COPY (
                         SELECT {select_clause}
-                        FROM aekijekedkc read_parquet('gs://{gcs_file_path}')
+                        FROM read_parquet('gs://{gcs_file_path}')
                     )
                     TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
                 """
@@ -118,7 +118,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
 
             convert_statement = f"""
                 COPY  (
-                    SELECT
+                    SELECT THIS SHOULD NOT BE HERE
                         *
                     FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True,strict_mode=False)
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
