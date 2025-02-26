@@ -39,12 +39,12 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                         conn.execute(transform_query)
                 except Exception as e:
                     utils.logger.error(f"Unable to create optimized vocab file: {e}")
-                    sys.exit(1)
+                    raise Exception(f"Unable to create optimized vocab file: {e}") from e
                 finally:
                     utils.close_duckdb_connection(conn, local_db_file)
             else:
                 utils.logger.error(f"Vocabulary GCS bucket {vocab_path} not found")
-                sys.exit(1)
+                raise Exception(f"Vocabulary GCS bucket {vocab_path} not found") from e
     else:
         utils.logger.info(f"Optimized vocabulary already exists")
 
@@ -146,5 +146,5 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
             'error_message': str(e),
         }
         utils.logger.error(f"Unable to add pipeline log record: {error_details}")
-        sys.exit(1)
+        raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 

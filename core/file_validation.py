@@ -20,7 +20,6 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
         # Check if the filename matches any of the table keys in the JSON
         is_valid_table_name = table_name in valid_table_names
         if is_valid_table_name:
-            utils.logger.info(f"'{table_name}' IS a valid OMOP table name.")
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['concept_id'],
                 delivery_date=delivery_date,
@@ -31,7 +30,6 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
                 value_as_string="valid table name"
             )
         else:
-            utils.logger.info(f"'{table_name}' is NOT valid OMOP table name.")
             ra = report_artifact.ReportArtifact(
                 concept_id=None,
                 delivery_date=delivery_date,
@@ -74,7 +72,6 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
 
         # Process valid columns
         for column in valid_columns:
-            utils.logger.info(f"'{column}' is a valid column in schema for {table_name}.")
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['fields'][column]['concept_id'],
                 delivery_date=delivery_date,
@@ -103,7 +100,6 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
             ra.save_artifact()
 
         for column in missing_columns:
-            utils.logger.info(f"'{column}' is missing from {table_name}.")
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['fields'][column]['concept_id'],
                 delivery_date=delivery_date,

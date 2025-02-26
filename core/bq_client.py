@@ -23,7 +23,7 @@ def remove_all_tables(project_id: str, dataset_id: str) -> None:
             utils.logger.info(f"Deleted table {table_id_full}")
     except Exception as e:
         utils.logger.error(f"Unable to delete BigQuery table: {e}")
-        sys.exit(1)
+        raise Exception(f"Unable to delete BigQuery table: {e}") from e
 
 def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str) -> None:
     """
@@ -58,9 +58,7 @@ def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str) ->
         # Execute result() so we wait for load to complete
         load_job.result()
         
-        # Get information about the loaded table
-        table = client.get_table(table_id_full)
-        utils.logger.info(f"Loaded {table.num_rows} rows and {len(table.schema)} columns to {table_id_full}")
+        utils.logger.info(f"Loaded data to BigQuery table {table_id_full}")
     except Exception as e:
         utils.logger.error(f"Error loading Parquet file to BigQuery: {e}")
-        sys.exit(1)
+        raise Exception(f"Error loading Parquet file to BigQuery: {e}") from e

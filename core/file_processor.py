@@ -68,7 +68,7 @@ def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
         process_incoming_parquet(gcs_file_path)
     else:
         utils.logger.info(f"Invalid source file format: {file_type}") 
-        sys.exit(1)
+        raise Exception(f"Invalid source file format: {file_type}")
 
 def process_incoming_parquet(gcs_file_path: str) -> None:
     """
@@ -102,12 +102,12 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
                 conn.execute(copy_sql)
         except Exception as e:
             utils.logger.error(f"Unable to processing incoming Parquet file: {e}")
-            sys.exit(1)
+            raise Exception(f"Unable to processing incoming Parquet file: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
     else:
         utils.logger.error(f"Invalid Parquet file")
-        sys.exit(1)
+        raise Exception(f"Invalid Parquet file: {e}") from e
 
 def csv_to_parquet(gcs_file_path: str) -> None:
     conn, local_db_file = utils.create_duckdb_connection()
@@ -132,16 +132,16 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             convert_csv_file_encoding(gcs_file_path)
         elif error_type == "UNTERMINATED_QUOTE":
             utils.logger.error(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
-            sys.exit(1)
+            raise Exception(f"Unescaped quote found in file gs://{gcs_file_path}: {e}") from e
         elif error_type == "CSV_FORMAT_ERROR":
             utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
-            sys.exit(1)
+            raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
         else:
             utils.logger.error(f"Unknown CSV error in file gs://{gcs_file_path}: {e}")
-            sys.exit(1)
+            raise Exception(f"Unknown CSV error in file gs://{gcs_file_path}: {e}") from e
     except Exception as e:
         utils.logger.error(f"Unable to convert CSV file to Parquet: {e}")
-        sys.exit(1)
+        raise Exception(f"Unable to convert CSV file to Parquet: {e}") from e
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
     
@@ -172,7 +172,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         # Verify the source file exists
         if not source_blob.exists():
             utils.logger.error(f"Source file does not exist: gs://{gcs_file_path}")
-            sys.exit(1)
+            raise Exception(f"Source file does not exist: gs://{gcs_file_path}")
 
         # Create output filename
         file_name_parts = file_path.rsplit('.', 1)
@@ -193,7 +193,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
 
         if not detected_encoding:
             utils.logger.error(f"Could not detect encoding for file: {gcs_file_path}")
-            sys.exit(1)
+            raise Exception(f"Could not detect encoding for file: {gcs_file_path}")
 
         utils.logger.info(f"Detected source encoding: {detected_encoding}")
 
@@ -206,7 +206,6 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             with source_blob.open("rb") as source_file:
                 # Map Windows encodings to their Python codec names
                 codec_name = detected_encoding.replace('Windows-', 'cp')
-                utils.logger.info(f"Using codec: {codec_name}")
                 
                 # Create a text wrapper that handles the encoding
                 # If there's an issue with converting any of the non-UTF8 characters, replace them with a question mark symbol
@@ -223,21 +222,20 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             streaming_writer.close()
 
             utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
-            utils.logger.info(f"Total bytes processed: {streaming_writer.total_bytes_uploaded}\n")
 
             # After creating new file with UTF8 encoding, try converting it to Parquet
             csv_to_parquet(f"{bucket_name}/{new_file_path}")
 
         except UnicodeDecodeError as e:
             utils.logger.error(f"Failed to decode content with detected encoding {detected_encoding}: {str(e)}")
-            sys.exit(1)
+            raise Exception(f"Failed to decode content with detected encoding {detected_encoding}: {str(e)}") from e
         except csv.Error as e:
             utils.logger.error(f"CSV parsing error: {str(e)}")
-            sys.exit(1)
+            raise Exception(f"CSV parsing error: {str(e)}") from e
 
     except Exception as e:
         utils.logger.error(f"Unable to convert CSV to UTF8: {e}")
-        sys.exit(1)
+        raise Exception(f"Unable to convert CSV to UTF8: {e}") from e
 
 def get_placeholder_value(field_name: str, field_type: str) -> str:
     # Return string representation of default value, based on field type
@@ -380,8 +378,8 @@ def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
                 # Get counts of valid/invalid rows for OMOP files
                 create_row_count_artifacts(gcs_file_path, cdm_version, conn)
         except Exception as e:
-            utils.logger.error(f"Unable to fix Parquet file: {e}")
-            sys.exit(1)
+            utils.logger.error(f"Unable to normalize Parquet file: {e}")
+            raise Exception(f"Unable to normalize Parquet file: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
 
@@ -453,16 +451,16 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
                             conn.execute(select_statement)
                     except Exception as e:
                         utils.logger.error(f"Unable to upgrade file: {e}")
-                        sys.exit(1)
+                        raise Exception(f"Unable to upgrade file: {e}") from e
                     finally:
                         utils.close_duckdb_connection(conn, local_db_file)
 
                 except Exception as e:
                     utils.logger.error(f"Unable to open SQL upgrade file: {e}")
-                    sys.exit(1)
+                    raise Exception(f"Unable to open SQL upgrade file: {e}") from e
         else:
             utils.logger.info(f"No changes in {table_name} when upgrading from 5.3 to 5.4")
     else:
         utils.logger.error(f"OMOP CDM version {cdm_version} not supported")
-        sys.exit(1)
+        raise Exception(f"OMOP CDM version {cdm_version} not supported")
     

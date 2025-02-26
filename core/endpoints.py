@@ -43,9 +43,7 @@ def get_files():
     bucket = request.args.get('bucket')
     folder = request.args.get('folder')
     file_format = request.args.get('file_format')
-
-    utils.logger.info(f"Obtaining files from {folder} folder in {bucket} bucket")
-    
+   
     try:
         file_list = utils.list_gcs_files(bucket, folder, file_format)
 
@@ -161,9 +159,9 @@ def vocab_harmonization():
     vocab_gcs_bucket = data.get('vocab_gcs_bucket')
 
     try:
-        # Function implementation seems missing in original
+        
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}")
-        # Add implementation here
+        # TODO: Function implementation missing; add implementation here
 
         return f"Vocabulary harmonized to {vocab_version}", 200
     except Exception as e:

@@ -90,7 +90,7 @@ def create_gcs_directory(directory_path: str) -> None:
             
     except Exception as e:
         logger.error(f"Unable to process GCS directory {directory_path}: {e}")
-        sys.exit(1)
+        raise Exception(f"Unable to process GCS directory {directory_path}: {e}") from e
 
 def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
     # Creates a DuckDB instance with a local database
@@ -124,7 +124,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         return conn, local_db_file
     except Exception as e:
         logger.error(f"Unable to create DuckDB instance: {e}")
-        sys.exit(1)
+        raise Exception(f"Unable to create DuckDB instance: {e}") from e
 
 def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str) -> None:
     # Destory DuckDB object to free memory, and remove temporary files
@@ -247,7 +247,7 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
             conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
     except Exception as e:
         logger.error(f"Unable to get Parquet column list: {e}")
-        sys.exit(0)
+        raise Exception(f"Unable to get Parquet column list: {e}") from e
     finally:
         close_duckdb_connection(conn, local_db_file)
         
@@ -314,7 +314,7 @@ def delete_gcs_file(gcs_path: str) -> None:
         blob.delete()
     except Exception as e:
         logger.error(f"Error deleting file {gcs_path}: {e}")
-        sys.exit(1)
+        raise Exception(f"Error deleting file {gcs_path}: {e}") from e
 
 def parquet_file_exists(file_path: str) -> bool:
     """
@@ -474,7 +474,7 @@ def generate_report(report_data: json) -> None:
                 conn.execute(join_files_query)
         except Exception as e:
             logger.error(f"Unable to merge reporting artifacts: {e}")
-            sys.exit(1)
+            raise Exception(f"Unable to merge reporting artifacts: {e}") from e
         finally:
             close_duckdb_connection(conn, local_db_file)
 
