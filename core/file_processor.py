@@ -95,7 +95,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
                 copy_sql = f"""
                     COPY (
                         SELECT {select_clause}
-                        FROM read_parquet('gs://{gcs_file_path}')
+                        FROM aekijekedkc read_parquet('gs://{gcs_file_path}')
                     )
                     TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
                 """
