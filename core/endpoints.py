@@ -319,7 +319,7 @@ def log_pipeline_state() -> tuple:
     try:
         # Check if required fields are present
         if not all([logging_table, site_name, delivery_date, status, run_id]):
-            return "Missing required fields", 400
+            return "Missing required fields for BigQuery logging", 400
 
         pipeline_logger = pipeline_log.PipelineLog(
             cast(str, logging_table),
