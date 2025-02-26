@@ -1,6 +1,5 @@
 import json
 import random
-import sys
 import uuid
 from datetime import date, datetime
 from typing import Optional

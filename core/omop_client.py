@@ -1,8 +1,6 @@
-import sys
-
 import core.constants as constants
 import core.utils as utils
-from google.cloud import bigquery
+from google.cloud import bigquery # type: ignore
 
 
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
@@ -44,7 +42,7 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                     utils.close_duckdb_connection(conn, local_db_file)
             else:
                 utils.logger.error(f"Vocabulary GCS bucket {vocab_path} not found")
-                raise Exception(f"Vocabulary GCS bucket {vocab_path} not found") from e
+                raise Exception(f"Vocabulary GCS bucket {vocab_path} not found")
     else:
         utils.logger.info(f"Optimized vocabulary already exists")
 

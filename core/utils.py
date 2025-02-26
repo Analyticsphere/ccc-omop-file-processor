@@ -428,7 +428,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
     for report_data_point in report_data_points:
         # Seperate value and the thing it describes from tuple
         value, reporting_item = report_data_point
-        value_as_concept_id: int = None
+        value_as_concept_id: int = 0
 
         if reporting_item in [constants.DELIVERED_CDM_VERSION_REPORT_NAME, constants.TARGET_CDM_VERSION_REPORT_NAME]:
             value_as_concept_id = get_cdm_version_concept_id(value)
@@ -444,7 +444,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
         )
         ra.save_artifact()
 
-def generate_report(report_data: json) -> None:
+def generate_report(report_data: dict) -> None:
     create_final_report_artifacts(report_data)
 
     site = report_data["site"]

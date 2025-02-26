@@ -1,6 +1,5 @@
 import codecs
 import csv
-import sys
 from io import StringIO
 
 import chardet  # type: ignore
@@ -107,7 +106,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
             utils.close_duckdb_connection(conn, local_db_file)
     else:
         utils.logger.error(f"Invalid Parquet file")
-        raise Exception(f"Invalid Parquet file: {e}") from e
+        raise Exception(f"Invalid Parquet file")
 
 def csv_to_parquet(gcs_file_path: str) -> None:
     conn, local_db_file = utils.create_duckdb_connection()
