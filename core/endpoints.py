@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from flask import Flask, jsonify, request  # type: ignore
 
@@ -297,35 +297,37 @@ def add_cdm_source_record() -> Tuple[str, int]:
 @app.route('/pipeline_log', methods=['POST'])
 def log_pipeline_state() -> tuple:
     data: dict = request.get_json()
-    logging_table: str = data.get('logging_table')
-    site_name: str = data.get('site_name')
-    delivery_date: str = data.get('delivery_date')
-    status: str = data.get('status')
-    message: str = data.get('message')
-    file_type: str = data.get('file_type')
-    omop_version: str = data.get('omop_version')
-    run_id: str = data.get('run_id')
+    logging_table: Optional[str] = data.get('logging_table')
+    site_name: Optional[str] = data.get('site_name')
+    delivery_date: Optional[str] = data.get('delivery_date')
+    status: Optional[str] = data.get('status')
+    message: Optional[str] = data.get('message')
+    file_type: Optional[str] = data.get('file_type')
+    omop_version: Optional[str] = data.get('omop_version')
+    run_id: Optional[str] = data.get('run_id')
 
     try:
-        if status:
-            pipeline_logger = pipeline_log.PipelineLog(
-                logging_table,
-                site_name,
-                delivery_date,
-                status,
-                message,
-                file_type,
-                omop_version,
-                run_id
-            )
-            pipeline_logger.add_log_entry()
-        else:
-            return "Log status not provided", 400
+        # Check if required fields are present
+        if not all([logging_table, site_name, delivery_date, status, run_id]):
+            return "Missing required fields", 400
 
-        return "Complete BigQuery table write", 200
+        pipeline_logger = pipeline_log.PipelineLog(
+            cast(str, logging_table),
+            cast(str, site_name),
+            cast(str, delivery_date),
+            cast(str, status),
+            message,  # Optional parameters don't need casting
+            file_type,
+            omop_version,
+            cast(str, run_id)
+        )
+        pipeline_logger.add_log_entry()
+
+        return "Successfully logged to BigQuery", 200
+
     except Exception as e:
-        utils.logger.error(f"Unable to write to BigQuery table: {str(e)}")
-        return f"Unable to write to BigQuery table: {str(e)}", 400    
+        utils.logger.error(f"Unable to write to save logging information to BigQuery table: {str(e)}")
+        return f"Unable to write to save logging information to BigQuery table: {str(e)}", 500    
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
