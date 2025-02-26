@@ -1,6 +1,7 @@
+from google.cloud import bigquery  # type: ignore
+
 import core.constants as constants
 import core.utils as utils
-from google.cloud import bigquery # type: ignore
 
 
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:

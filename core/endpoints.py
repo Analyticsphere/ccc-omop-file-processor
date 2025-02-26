@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import Optional, Dict, Any, Tuple, List, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Flask, jsonify, request  # type: ignore
 
@@ -9,8 +9,8 @@ import core.constants as constants
 import core.file_processor as file_processor
 import core.file_validation as file_validation
 import core.helpers.pipeline_log as pipeline_log
-import core.utils as utils
 import core.omop_client as omop_client
+import core.utils as utils
 
 app = Flask(__name__)
 
@@ -293,43 +293,7 @@ def add_cdm_source_record() -> Tuple[str, int]:
     except Exception as e:
         utils.logger.error(f"Unable to populate cdm_source table: {str(e)}")
         return f"Unable to populate cdm_source table: {str(e)}", 500 
-
-# @app.route('/pipeline_log', methods=['POST'])
-# def log_pipeline_state() -> Tuple[str, int]:
-#     data: Dict[str, Any] = request.get_json() or {}
-#     logging_table: Optional[str] = data.get('logging_table')
-#     site_name: Optional[str] = data.get('site_name')
-#     delivery_date: Optional[str] = data.get('delivery_date')
-#     status: Optional[str] = data.get('status')
-#     message: Optional[str] = data.get('message')
-#     file_type: Optional[str] = data.get('file_type')
-#     omop_version: Optional[str] = data.get('omop_version')
-#     run_id: Optional[str] = data.get('run_id')
-
-#     # Validate required parameters
-#     if not all([logging_table, site_name, delivery_date, status, run_id]):
-#         return "Missing required parameters for pipeline logging", 400
-
-#     try:
-#         if status:
-#             pipeline_logger = pipeline_log.PipelineLog(
-#                 logging_table,
-#                 site_name,
-#                 delivery_date,
-#                 status,
-#                 message or '',  # Default empty string for optional parameters
-#                 file_type or '',
-#                 omop_version or '',
-#                 run_id
-#             )
-#             pipeline_logger.add_log_entry()
-#         else:
-#             return "Log status not provided", 400
-
-#         return "Complete BigQuery table write", 200
-#     except Exception as e:
-#         utils.logger.error(f"Unable to write to BigQuery table: {str(e)}")
-#         return f"Unable to write to BigQuery table: {str(e)}", 400    
+ 
 @app.route('/pipeline_log', methods=['POST'])
 def log_pipeline_state() -> tuple:
     data: dict = request.get_json()

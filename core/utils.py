@@ -3,12 +3,12 @@ import logging
 import os
 import sys
 import uuid
+from datetime import datetime
 from typing import Optional, Tuple
 
 import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
 from google.cloud import storage  # type: ignore
-from datetime import datetime
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
