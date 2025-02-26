@@ -294,21 +294,53 @@ def add_cdm_source_record() -> Tuple[str, int]:
         utils.logger.error(f"Unable to populate cdm_source table: {str(e)}")
         return f"Unable to populate cdm_source table: {str(e)}", 500 
 
-@app.route('/pipeline_log', methods=['POST'])
-def log_pipeline_state() -> Tuple[str, int]:
-    data: Dict[str, Any] = request.get_json() or {}
-    logging_table: Optional[str] = data.get('logging_table')
-    site_name: Optional[str] = data.get('site_name')
-    delivery_date: Optional[str] = data.get('delivery_date')
-    status: Optional[str] = data.get('status')
-    message: Optional[str] = data.get('message')
-    file_type: Optional[str] = data.get('file_type')
-    omop_version: Optional[str] = data.get('omop_version')
-    run_id: Optional[str] = data.get('run_id')
+# @app.route('/pipeline_log', methods=['POST'])
+# def log_pipeline_state() -> Tuple[str, int]:
+#     data: Dict[str, Any] = request.get_json() or {}
+#     logging_table: Optional[str] = data.get('logging_table')
+#     site_name: Optional[str] = data.get('site_name')
+#     delivery_date: Optional[str] = data.get('delivery_date')
+#     status: Optional[str] = data.get('status')
+#     message: Optional[str] = data.get('message')
+#     file_type: Optional[str] = data.get('file_type')
+#     omop_version: Optional[str] = data.get('omop_version')
+#     run_id: Optional[str] = data.get('run_id')
 
-    # Validate required parameters
-    if not all([logging_table, site_name, delivery_date, status, run_id]):
-        return "Missing required parameters for pipeline logging", 400
+#     # Validate required parameters
+#     if not all([logging_table, site_name, delivery_date, status, run_id]):
+#         return "Missing required parameters for pipeline logging", 400
+
+#     try:
+#         if status:
+#             pipeline_logger = pipeline_log.PipelineLog(
+#                 logging_table,
+#                 site_name,
+#                 delivery_date,
+#                 status,
+#                 message or '',  # Default empty string for optional parameters
+#                 file_type or '',
+#                 omop_version or '',
+#                 run_id
+#             )
+#             pipeline_logger.add_log_entry()
+#         else:
+#             return "Log status not provided", 400
+
+#         return "Complete BigQuery table write", 200
+#     except Exception as e:
+#         utils.logger.error(f"Unable to write to BigQuery table: {str(e)}")
+#         return f"Unable to write to BigQuery table: {str(e)}", 400    
+@app.route('/pipeline_log', methods=['POST'])
+def log_pipeline_state() -> tuple:
+    data: dict = request.get_json()
+    logging_table: str = data.get('logging_table')
+    site_name: str = data.get('site_name')
+    delivery_date: str = data.get('delivery_date')
+    status: str = data.get('status')
+    message: str = data.get('message')
+    file_type: str = data.get('file_type')
+    omop_version: str = data.get('omop_version')
+    run_id: str = data.get('run_id')
 
     try:
         if status:
@@ -317,9 +349,9 @@ def log_pipeline_state() -> Tuple[str, int]:
                 site_name,
                 delivery_date,
                 status,
-                message or '',  # Default empty string for optional parameters
-                file_type or '',
-                omop_version or '',
+                message,
+                file_type,
+                omop_version,
                 run_id
             )
             pipeline_logger.add_log_entry()
