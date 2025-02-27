@@ -123,8 +123,10 @@ def csv_to_parquet(gcs_file_path: str) -> None:
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
             conn.execute(convert_statement)
-            
+    
+    
     except duckdb.InvalidInputException as e:
+        # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
         error_type = utils.parse_duckdb_csv_error(e)
         if error_type == "INVALID_UNICODE":
             utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
