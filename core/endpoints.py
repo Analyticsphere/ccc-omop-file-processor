@@ -43,17 +43,16 @@ def create_optimized_vocab() -> Tuple[str, int]:
 
 @app.route('/get_file_list', methods=['GET'])
 def get_files() -> Tuple[Any, int]:
-    # Keep this as GET since your client code is still using GET
     bucket: Optional[str] = request.args.get('bucket')
     folder: Optional[str] = request.args.get('folder')
     file_format: Optional[str] = request.args.get('file_format')
    
     # Validate required parameters
-    if not bucket or not folder:
+    if not bucket or not folder or not file_format:
         return "Missing required parameters: bucket and folder", 400
 
     try:
-        file_list: List[str] = utils.list_gcs_files(bucket, folder, file_format or '')
+        file_list: List[str] = utils.list_gcs_files(bucket, folder, file_format)
 
         return jsonify({
             'status': 'healthy',
@@ -77,15 +76,15 @@ def validate_file() -> Tuple[str, int]:
         gcs_path: Optional[str] = data.get('gcs_path')
         
         # Validate required parameters
-        if not file_path or not omop_version or not delivery_date:
-            return "Missing required parameters: file_path, omop_version, and delivery_date", 400
+        if not file_path or not omop_version or not delivery_date or not gcs_path:
+            return "Missing required parameters: file_path, omop_version, delivery_date, gcs_path", 400
 
         # Use empty string as default for optional params
         file_validation.validate_file(
             file_path=file_path, 
             omop_version=omop_version, 
             delivery_date=delivery_date, 
-            gcs_path=gcs_path or ''
+            gcs_path=gcs_path
         )
         utils.logger.info(f"Validation successful for {file_path}")
 
