@@ -130,8 +130,8 @@ def create_artifact_buckets() -> Tuple[str, int]:
         utils.logger.error(f"Unable to create artifact buckets: {str(e)}")
         return f"Unable to create artifact buckets: {str(e)}", 500
 
-@app.route('/convert_to_parquet', methods=['POST'])
-def convert_to_parquet() -> Tuple[str, int]:
+@app.route('/process_incoming_file', methods=['POST'])
+def process_file() -> Tuple[str, int]:
     data: Dict[str, Any] = request.get_json() or {}
     file_type: Optional[str] = data.get('file_type')
     file_path: Optional[str] = data.get('file_path')
