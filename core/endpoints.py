@@ -178,7 +178,7 @@ def cdm_upgrade() -> Tuple[str, int]:
 
     try:
         utils.logger.info(f"Attempting to upgrade file {file_path}")
-        file_processor.upgrade_file(file_path, omop_version, target_omop_version)
+        omop_client.upgrade_file(file_path, omop_version, target_omop_version)
 
         return "Upgraded file", 200
     except Exception as e:
