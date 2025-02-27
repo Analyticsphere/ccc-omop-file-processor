@@ -50,11 +50,7 @@ def get_files() -> Tuple[Any, int]:
    
     # Validate required parameters
     if not bucket or not folder:
-        return jsonify({
-            'status': 'error',
-            'message': 'Missing required parameters: bucket and folder',
-            'service': constants.SERVICE_NAME
-        }), 400
+        return "Missing required parameters: bucket and folder", 400
 
     try:
         file_list: List[str] = utils.list_gcs_files(bucket, folder, file_format or '')
@@ -66,11 +62,7 @@ def get_files() -> Tuple[Any, int]:
         }), 200
     except Exception as e:
         utils.logger.error(f"Unable to get list of files to process: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': f"Unable to get list of files to process: {str(e)}",
-            'service': constants.SERVICE_NAME
-        }), 500
+        return f"Unable to get list of files to process: {str(e)}", 500
 
 @app.route('/validate_file', methods=['POST'])
 def validate_file() -> Tuple[str, int]:
