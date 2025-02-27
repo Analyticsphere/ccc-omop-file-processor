@@ -70,3 +70,81 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
 
     # Wait for the job to complete
     _ = query_job.result()
+
+def populate_cdm_source(cdm_source_data: dict) -> None:
+    # Add a record to the cdm_source table, if it doesn't have any rows
+    project_id = cdm_source_data["project_id"]
+    dataset_id = cdm_source_data["dataset_id"]
+    gcs_bucket = cdm_source_data["gcs_bucket"]
+    delivery_date = cdm_source_data["source_release_date"]
+    cdm_version = cdm_source_data["cdm_version"]
+
+    vocab_version = utils.get_delivery_vocabulary_version(gcs_bucket, delivery_date)
+    cdm_version_concept_id = utils.get_cdm_version_concept_id(cdm_version)
+
+    try:
+        # Construct a BigQuery client object
+        client = bigquery.Client()
+
+        # Build the insert statement
+        query = f"""
+            INSERT INTO {project_id}.{dataset_id}.cdm_source (
+                cdm_source_name,
+                cdm_source_abbreviation,
+                cdm_holder,
+                source_description,
+                source_documentation_reference,
+                cdm_etl_reference,
+                source_release_date,
+                cdm_release_date,
+                cdm_version,
+                cdm_version_concept_id,
+                vocabulary_version
+            )
+            SELECT
+                @cdm_source_name,
+                @cdm_source_abbreviation,
+                @cdm_holder,
+                @source_description,
+                @source_documentation_reference,
+                @cdm_etl_reference,
+                @source_release_date,
+                @cdm_release_date,
+                @cdm_version,
+                @cdm_version_concept_id,
+                @vocabulary_version
+            FROM (SELECT 1) dummy_table
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM {project_id}.{dataset_id}.cdm_source
+                LIMIT 1
+            );
+        """
+
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("cdm_source_name", "STRING", cdm_source_data["cdm_source_name"]),
+                bigquery.ScalarQueryParameter("cdm_source_abbreviation", "STRING", cdm_source_data["cdm_source_abbreviation"]),
+                bigquery.ScalarQueryParameter("cdm_holder", "STRING", cdm_source_data["cdm_holder"]),
+                bigquery.ScalarQueryParameter("source_description", "STRING", cdm_source_data["source_description"]),
+                bigquery.ScalarQueryParameter("source_documentation_reference", "STRING", cdm_source_data["source_documentation_reference"]),
+                bigquery.ScalarQueryParameter("cdm_etl_reference", "STRING", cdm_source_data["cdm_etl_reference"]),
+                bigquery.ScalarQueryParameter("source_release_date", "DATE", delivery_date),
+                bigquery.ScalarQueryParameter("cdm_release_date", "DATE", cdm_source_data["cdm_release_date"]),
+                bigquery.ScalarQueryParameter("cdm_version", "STRING", cdm_version),
+                bigquery.ScalarQueryParameter("cdm_version_concept_id", "INT64", cdm_version_concept_id),
+                bigquery.ScalarQueryParameter("vocabulary_version", "STRING", vocab_version),
+            ]
+        )
+
+        # Run the query as a job and wait for it to complete.
+        query_job = client.query(query, job_config=job_config)
+        query_job.result()  # Wait for the job to complete.
+    except Exception as e:
+        error_details = {
+            'error_type': type(e).__name__,
+            'error_message': str(e),
+        }
+        utils.logger.error(f"Unable to add pipeline log record: {error_details}")
+        sys.exit(1)
+

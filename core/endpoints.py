@@ -207,6 +207,18 @@ def create_missing_omop_tables():
     except Exception as e:
         return f"Unable to create missing tables: {e}", 500
 
+@app.route('/populate_cdm_source', methods=['POST'])
+def add_cdm_source_record():
+    cdm_source_data = request.get_json()
+
+    try:
+        utils.logger.info(f"If empty, populating cdm_source table for {cdm_source_data['source_release_date']} delivery from {cdm_source_data['cdm_source_abbreviation']}")
+        omop_client.populate_cdm_source(cdm_source_data)
+
+        return "cdm_source table populated", 200
+    except Exception as e:
+        return f"Unable to populate cdm_source table: {e}", 500 
+
 @app.route('/pipeline_log', methods=['GET'])
 def log_pipeline_state():
     logging_table: str = request.args.get('logging_table')

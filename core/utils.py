@@ -397,6 +397,14 @@ def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
     else:
         return "No vocabulary file provided"
 
+def get_cdm_version_concept_id(cdm_version: str) -> int:
+    if cdm_version == constants.CDM_v53:
+        return constants.CDM_v53_CONCEPT_ID
+    elif cdm_version == constants.CDM_v54:
+        return constants.CDM_v54_CONCEPT_ID
+    else:
+        return 0
+    
 def create_final_report_artifacts(report_data: dict) -> None:
     gcs_bucket = report_data["gcs_bucket"]
     delivery_date = report_data["delivery_date"]
@@ -423,10 +431,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
         value_as_concept_id: int = None
 
         if reporting_item in [constants.DELIVERED_CDM_VERSION_REPORT_NAME, constants.TARGET_CDM_VERSION_REPORT_NAME]:
-            if value == "5.3":
-                value_as_concept_id = 1147543
-            elif value == "5.4":
-                value_as_concept_id = 756265
+            value_as_concept_id = get_cdm_version_concept_id(value)
 
         ra = report_artifact.ReportArtifact(
             delivery_date=delivery_date,
