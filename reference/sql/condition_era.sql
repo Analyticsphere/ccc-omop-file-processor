@@ -81,7 +81,7 @@ GROUP BY c.PERSON_ID,
         c.CONDITION_START_DATE;
 
 -- Step 5: Select the final result into a new table
-CREATE OR REPLACE TABLE finalConditionEra AS
+--CREATE OR REPLACE TABLE finalConditionEra AS
 SELECT row_number() OVER (ORDER BY person_id) AS condition_era_id,
     person_id,
     condition_concept_id,
