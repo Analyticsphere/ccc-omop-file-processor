@@ -43,7 +43,7 @@ FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
 CONDITION_ERA = "condition_era",
 DRUG_ERA = "drug_era",
 OBSERVATION_PERIOD = "observation_period"
-DERIVED_DATA_TABLES = set{CONDITION_ERA, DRUG_ERA, OBSERVATION_PERIOD}
+DERIVED_DATA_TABLES: set = {CONDITION_ERA, DRUG_ERA, OBSERVATION_PERIOD}
 
 class ArtifactPaths(str, Enum):
     ARTIFACTS = "artifacts/"
