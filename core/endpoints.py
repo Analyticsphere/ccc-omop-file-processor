@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Optional, cast
 
 from flask import Flask, jsonify, request  # type: ignore
 
@@ -15,7 +15,7 @@ import core.utils as utils
 app = Flask(__name__)
 
 @app.route('/heartbeat', methods=['GET'])
-def heartbeat() -> Tuple[Any, int]:
+def heartbeat() -> tuple[Any, int]:
     utils.logger.info("API status check called")
     
     return jsonify({
@@ -25,8 +25,8 @@ def heartbeat() -> Tuple[Any, int]:
     }), 200
 
 @app.route('/create_optimized_vocab', methods=['POST'])
-def create_optimized_vocab() -> Tuple[str, int]:
-    data: Dict[str, Any] = request.get_json() or {}
+def create_optimized_vocab() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
     vocab_version: str = data.get('vocab_version', '')
     vocab_gcs_bucket: str = data.get('vocab_gcs_bucket', '')
 
@@ -42,7 +42,7 @@ def create_optimized_vocab() -> Tuple[str, int]:
         return f"Error creating optimized vocabulary: {str(e)}", 500
 
 @app.route('/get_file_list', methods=['GET'])
-def get_files() -> Tuple[Any, int]:
+def get_files() -> tuple[Any, int]:
     bucket: Optional[str] = request.args.get('bucket')
     folder: Optional[str] = request.args.get('folder')
     file_format: Optional[str] = request.args.get('file_format')
@@ -52,7 +52,7 @@ def get_files() -> Tuple[Any, int]:
         return "Missing required parameters: bucket and folder", 400
 
     try:
-        file_list: List[str] = utils.list_gcs_files(bucket, folder, file_format)
+        file_list: list[str] = utils.list_gcs_files(bucket, folder, file_format)
 
         return jsonify({
             'status': 'healthy',
@@ -64,12 +64,12 @@ def get_files() -> Tuple[Any, int]:
         return f"Unable to get list of files to process: {str(e)}", 500
 
 @app.route('/validate_file', methods=['POST'])
-def validate_file() -> Tuple[str, int]:
+def validate_file() -> tuple[str, int]:
     """
     Validates a file's name and schema against the OMOP standard.
     """
     try:
-        data: Dict[str, Any] = request.get_json() or {}
+        data: dict[str, Any] = request.get_json() or {}
         file_path: Optional[str] = data.get('file_path')
         omop_version: Optional[str] = data.get('omop_version')
         delivery_date: Optional[str] = data.get('delivery_date')
@@ -95,8 +95,8 @@ def validate_file() -> Tuple[str, int]:
         return f"Unable to run file validation: {str(e)}", 500
     
 @app.route('/create_artifact_buckets', methods=['POST'])
-def create_artifact_buckets() -> Tuple[str, int]:
-    data: Dict[str, Any] = request.get_json() or {}
+def create_artifact_buckets() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
     parent_bucket: Optional[str] = data.get('parent_bucket')
 
     if not parent_bucket:
@@ -104,7 +104,7 @@ def create_artifact_buckets() -> Tuple[str, int]:
 
     utils.logger.info(f"Creating artifact buckets in gs://{parent_bucket}")
 
-    directories: List[str] = []
+    directories: list[str] = []
 
     try:
         # Create fully qualified paths for each artifact directory
@@ -122,8 +122,8 @@ def create_artifact_buckets() -> Tuple[str, int]:
         return f"Unable to create artifact buckets: {str(e)}", 500
 
 @app.route('/process_incoming_file', methods=['POST'])
-def process_file() -> Tuple[str, int]:
-    data: Dict[str, Any] = request.get_json() or {}
+def process_file() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
     file_type: Optional[str] = data.get('file_type')
     file_path: Optional[str] = data.get('file_path')
 
@@ -138,8 +138,8 @@ def process_file() -> Tuple[str, int]:
         return f"Unable to convert files to Parquet: {str(e)}", 500
 
 @app.route('/normalize_parquet', methods=['POST'])
-def normalize_parquet_file() -> Tuple[str, int]:
-    data: Dict[str, Any] = request.get_json() or {}
+def normalize_parquet_file() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     omop_version: Optional[str] = data.get('omop_version')
 
@@ -158,8 +158,8 @@ def normalize_parquet_file() -> Tuple[str, int]:
         return f"Unable to fix Parquet file: {str(e)}", 500
 
 @app.route('/upgrade_cdm', methods=['POST'])
-def cdm_upgrade() -> Tuple[str, int]:
-    data: Dict[str, Any] = request.get_json() or {}
+def cdm_upgrade() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     omop_version: Optional[str] = data.get('omop_version')
     target_omop_version: Optional[str] = data.get('target_omop_version')
@@ -177,8 +177,8 @@ def cdm_upgrade() -> Tuple[str, int]:
         return f"Unable to upgrade file: {str(e)}", 500
 
 @app.route('/harmonize_vocab', methods=['POST'])
-def vocab_harmonization() -> Tuple[str, int]:
-    data: Dict[str, Any] = request.get_json() or {}
+def vocab_harmonization() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
@@ -196,8 +196,8 @@ def vocab_harmonization() -> Tuple[str, int]:
         return f"Unable to harmonize vocabulary: {str(e)}", 500
 
 @app.route('/parquet_to_bq', methods=['POST'])
-def parquet_gcs_to_bq() -> Tuple[str, int]:
-    data: Dict[str, Any] = request.get_json() or {}
+def parquet_gcs_to_bq() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
@@ -215,8 +215,8 @@ def parquet_gcs_to_bq() -> Tuple[str, int]:
         return f"Unable to load Parquet file: {str(e)}", 500
 
 @app.route('/clear_bq_dataset', methods=['POST'])
-def clear_bq_tables() -> Tuple[str, int]:
-    data: Dict[str, Any] = request.get_json() or {}
+def clear_bq_tables() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
 
@@ -233,8 +233,8 @@ def clear_bq_tables() -> Tuple[str, int]:
         return f"Unable to delete tables within dataset: {str(e)}", 500
 
 @app.route('/generate_delivery_report', methods=['POST'])
-def generate_final_delivery_report() -> Tuple[str, int]:
-    report_data: Dict[str, Any] = request.get_json() or {}
+def generate_final_delivery_report() -> tuple[str, int]:
+    report_data: dict[str, Any] = request.get_json() or {}
     
     # Validate required fields for report
     if not report_data.get('delivery_date') or not report_data.get('site'):
@@ -250,8 +250,8 @@ def generate_final_delivery_report() -> Tuple[str, int]:
         return f"Unable to generate delivery report: {str(e)}", 500
 
 @app.route('/create_missing_tables', methods=['POST'])
-def create_missing_omop_tables() -> Tuple[str, int]:
-    data: Dict[str, Any] = request.get_json() or {}
+def create_missing_omop_tables() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
     omop_version: Optional[str] = data.get('omop_version')
@@ -269,8 +269,8 @@ def create_missing_omop_tables() -> Tuple[str, int]:
         return f"Unable to create missing tables: {str(e)}", 500
 
 @app.route('/populate_cdm_source', methods=['POST'])
-def add_cdm_source_record() -> Tuple[str, int]:
-    cdm_source_data: Dict[str, Any] = request.get_json() or {}
+def add_cdm_source_record() -> tuple[str, int]:
+    cdm_source_data: dict[str, Any] = request.get_json() or {}
     
     # Validate required fields
     if not cdm_source_data.get('source_release_date') or not cdm_source_data.get('cdm_source_abbreviation'):
@@ -320,9 +320,9 @@ def log_pipeline_state() -> tuple:
         utils.logger.error(f"Unable to save logging information to BigQuery table: {str(e)}")
         return f"Unable to save logging information to BigQuery table: {str(e)}", 500    
 
-@app.route('/populate_derived_data')
-def populate_dervied_data_table() -> tuple:
-    data: Dict[str, Any] = request.get_json() or {}
+@app.route('/populate_derived_data', methods=['POST'])
+def populate_dervied_data_table() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
     site: Optional[str] = data.get('site')
     delivery_date: Optional[str] = data.get('delivery_date')
     table_name: Optional[str] = data.get('table_name')
