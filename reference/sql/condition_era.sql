@@ -12,9 +12,6 @@
       WHERE
         TRY_CAST(CONDITION_START_DATE AS DATE) IS NOT NULL
         AND condition_concept_id != 0
-        AND CONDITION_START_DATE != default_date()
-        AND IFNULL(CONDITION_END_DATE, '') != default_date()
-        AND IFNULL(TRY_CAST(person_id AS BIGINT), -1) != -1
     ),
     cteCondEndDates AS (
       SELECT
