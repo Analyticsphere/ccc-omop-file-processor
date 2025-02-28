@@ -1,6 +1,5 @@
 import json
 import random
-import sys
 import uuid
 from datetime import date, datetime
 from typing import Optional
@@ -50,8 +49,8 @@ class ReportArtifact:
                 conn.execute(record_statement)
                 utils.logger.info(f"Saved delivery report record to {file_path}")
         except Exception as e:
-            utils.logger.error(f"Unable to save : {e}")
-            sys.exit(1)
+            utils.logger.error(f"Unable to save report artifact: {e}")
+            raise Exception(f"Unable to save report artifact: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
     

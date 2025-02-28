@@ -1,4 +1,3 @@
-import sys
 from datetime import datetime
 from typing import Optional
 
@@ -129,7 +128,7 @@ class PipelineLog:
                 }
             }
             utils.logger.error(f"Unable to add pipeline log record: {error_details}")
-            sys.exit(1)
+            raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
     def log_complete(self) -> None:
         """
@@ -195,7 +194,7 @@ class PipelineLog:
                 }
             }
             utils.logger.error(f"Unable to add pipeline log record: {error_details}")
-            sys.exit(1)
+            raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
     def log_running(self) -> None:
         """
@@ -256,7 +255,7 @@ class PipelineLog:
                 }
             }
             utils.logger.error(f"Unable to add pipeline log record: {error_details}")
-            sys.exit(1)
+            raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
     def log_error(self) -> None:
         """
@@ -327,4 +326,4 @@ class PipelineLog:
                 }
             }
             utils.logger.error(f"Unable to add pipeline log record: {error_details}")
-            sys.exit(1)
+            raise Exception(f"Unable to add pipeline log record: {error_details}") from e
