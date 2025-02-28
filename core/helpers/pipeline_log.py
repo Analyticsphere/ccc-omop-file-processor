@@ -184,7 +184,7 @@ class PipelineLog:
                 #update_job.result()  # Wait for the update to complete.
 
                 utils.execute_bq_sql(update_query, update_config)
-                utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
+                #utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
@@ -247,7 +247,7 @@ class PipelineLog:
                 # update_job = client.query(update_query, job_config=update_config)
                 # update_job.result()  # Wait for the update to complete.
                 utils.execute_bq_sql(update_query, update_config)
-                utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
+                #utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
@@ -321,7 +321,7 @@ class PipelineLog:
                 #update_job.result()  # Wait for the update to complete.
                 
                 utils.execute_bq_sql(update_query, update_config)
-                utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
+                #utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
