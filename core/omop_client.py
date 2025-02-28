@@ -230,7 +230,7 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str) -> Non
         # TODO: Execute the SQL in DuckDB, saving to parquet file
 
     except Exception as e:
-        raise(f"Unable to generate {table_name} derived data: {str(e)}") from e
+        raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
 
 
 def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str) -> str:
