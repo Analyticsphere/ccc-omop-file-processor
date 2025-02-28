@@ -3,12 +3,12 @@ import logging
 import os
 import sys
 import uuid
+from datetime import datetime
 from typing import Optional, Tuple
 
 import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
 from google.cloud import storage  # type: ignore
-from datetime import datetime
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
@@ -90,7 +90,7 @@ def create_gcs_directory(directory_path: str) -> None:
             
     except Exception as e:
         logger.error(f"Unable to process GCS directory {directory_path}: {e}")
-        sys.exit(1)
+        raise Exception(f"Unable to process GCS directory {directory_path}: {e}") from e
 
 def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
     # Creates a DuckDB instance with a local database
@@ -124,7 +124,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         return conn, local_db_file
     except Exception as e:
         logger.error(f"Unable to create DuckDB instance: {e}")
-        sys.exit(1)
+        raise Exception(f"Unable to create DuckDB instance: {e}") from e
 
 def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str) -> None:
     # Destory DuckDB object to free memory, and remove temporary files
@@ -247,7 +247,7 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
             conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
     except Exception as e:
         logger.error(f"Unable to get Parquet column list: {e}")
-        sys.exit(0)
+        raise Exception(f"Unable to get Parquet column list: {e}") from e
     finally:
         close_duckdb_connection(conn, local_db_file)
         
@@ -314,7 +314,7 @@ def delete_gcs_file(gcs_path: str) -> None:
         blob.delete()
     except Exception as e:
         logger.error(f"Error deleting file {gcs_path}: {e}")
-        sys.exit(1)
+        raise Exception(f"Error deleting file {gcs_path}: {e}") from e
 
 def parquet_file_exists(file_path: str) -> bool:
     """
@@ -428,7 +428,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
     for report_data_point in report_data_points:
         # Seperate value and the thing it describes from tuple
         value, reporting_item = report_data_point
-        value_as_concept_id: int = None
+        value_as_concept_id: int = 0
 
         if reporting_item in [constants.DELIVERED_CDM_VERSION_REPORT_NAME, constants.TARGET_CDM_VERSION_REPORT_NAME]:
             value_as_concept_id = get_cdm_version_concept_id(value)
@@ -444,7 +444,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
         )
         ra.save_artifact()
 
-def generate_report(report_data: json) -> None:
+def generate_report(report_data: dict) -> None:
     create_final_report_artifacts(report_data)
 
     site = report_data["site"]
@@ -474,7 +474,7 @@ def generate_report(report_data: json) -> None:
                 conn.execute(join_files_query)
         except Exception as e:
             logger.error(f"Unable to merge reporting artifacts: {e}")
-            sys.exit(1)
+            raise Exception(f"Unable to merge reporting artifacts: {e}") from e
         finally:
             close_duckdb_connection(conn, local_db_file)
 
