@@ -2,6 +2,7 @@ from google.cloud import bigquery  # type: ignore
 
 import core.constants as constants
 import core.utils as utils
+import core.bq_client as bq_client
 
 def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str) -> None:
     """
@@ -200,7 +201,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         utils.logger.error(f"Unable to add pipeline log record: {error_details}")
         raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
-def generate_derived_data(site: str, delivery_date: str, table_name: str) -> None:
+def generate_derived_data(site: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str) -> None:
     utils.logger.warning(f"IN generate_derived_data and site is {site} and delivery_date is {delivery_date} and table_name is {table_name}")
 
     # Execute SQL scripts to generate derived data table Parquet files
@@ -231,12 +232,20 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str) -> Non
             conn, local_db_file = utils.create_duckdb_connection()
 
             with conn:
+                # Generate the derived table parquet file
+                parquet_gcs_path = f"{site}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
                 sql_statement = f"""
                     COPY (
                         {select_statement}
-                    ) TO 'gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+                    ) TO 'gs://{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
                 utils.logger.warning(f"duckdb table sql is {sql_statement}")
+                conn.execute(sql_statement)
+
+                # Load the Parquet to BigQuery
+                # Because the task that executes this function occurs after load_bq(), 
+                #   this will overwrite the derived data delievered by the site
+                bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id)
         except Exception as e:
             raise Exception(f"Unable to execute SQl to generate {table_name}: {str(e)}") from e
         finally:
@@ -246,7 +255,6 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str) -> Non
 
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
-
 
 def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str) -> str:
     # Replaces table place holder strings in SQL scripts with paths to table parquet files

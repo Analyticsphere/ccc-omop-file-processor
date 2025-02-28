@@ -320,20 +320,21 @@ def log_pipeline_state() -> tuple:
         utils.logger.error(f"Unable to save logging information to BigQuery table: {str(e)}")
         return f"Unable to save logging information to BigQuery table: {str(e)}", 500    
 
-# TODO: API endpoint for derived data tables
 @app.route('/populate_derived_data')
 def populate_dervied_data_table() -> tuple:
     data: Dict[str, Any] = request.get_json() or {}
     site: Optional[str] = data.get('site')
     delivery_date: Optional[str] = data.get('delivery_date')
     table_name: Optional[str] = data.get('table_name')
+    project_id: Optional[str] = data.get('project_id')
+    dataset_id: Optional[str] = data.get('dataset_id')
 
-    if not site or not delivery_date or not table_name:
-        return "Missing required parameters: site, delivery_date, and table_name", 400
+    if not site or not delivery_date or not table_name or not project_id or not dataset_id:
+        return "Missing required parameters: site, delivery_date, table_name, project_id, dataset_id", 400
 
     try:
         utils.logger.info(f"Generating derived table {table_name} for {delivery_date} delivery from {site}")
-        omop_client.generate_derived_data(site, delivery_date, table_name)
+        omop_client.generate_derived_data(site, delivery_date, table_name, project_id, dataset_id)
         return "Created derived table", 200
     except Exception as e:
         utils.logger.error(f"Unable to create dervied table: {str(e)}")
