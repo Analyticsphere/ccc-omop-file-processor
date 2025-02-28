@@ -226,7 +226,8 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
 
         # Add table locations
         select_statement = placeholder_to_table_path(site, delivery_date, select_statement)
-        utils.logger.warning(f"script with replacements is {select_statement.replace('\n', ' ')}")
+        printselect = select_statement.replace('\n', ' ')
+        utils.logger.warning(f"script with replacements is {printselect}")
 
         try:
             conn, local_db_file = utils.create_duckdb_connection()
@@ -239,7 +240,8 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
                         {select_statement}
                     ) TO 'gs://{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
-                utils.logger.warning(f"duckdb table sql is {sql_statement.replace('\n',' ')}")
+                sqlstatementprint = sql_statement.replace('\n',' ')
+                utils.logger.warning(f"duckdb table sql is {sqlstatementprint}")
                 conn.execute(sql_statement)
 
                 # Load the Parquet to BigQuery
