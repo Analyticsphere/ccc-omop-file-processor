@@ -205,7 +205,7 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
     utils.logger.warning(f"IN generate_derived_data and site is {site} and delivery_date is {delivery_date} and table_name is {table_name}")
 
     # Execute SQL scripts to generate derived data table Parquet files
-    if table_name not in constants.DERIVED_DATA_TABLES_REQUIREMENTS:
+    if table_name not in constants.DERIVED_DATA_TABLES_REQUIREMENTS.keys():
         raise Exception(f"{table_name} is not a derived data table")
 
     # Check if tables necessary to generate dervied data exist in delivery
