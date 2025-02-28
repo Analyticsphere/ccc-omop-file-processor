@@ -250,6 +250,11 @@ def log_pipeline_state():
     except:
         return "Unable to write to BigQuery table", 400    
 
+# TODO: API endpoint for derived data tables
+@app.route('/populate_derived_data')
+def populate_dervied_data_table() -> tuple:
+    print()
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)

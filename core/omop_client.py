@@ -148,3 +148,23 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         utils.logger.error(f"Unable to add pipeline log record: {error_details}")
         sys.exit(1)
 
+def generate_derived_data(site: str, delivery_date: str, table_name: str) -> None:
+    if table_name not in constants.DERIVED_DATA_TABLES:
+        raise Exception(f"{table_name} is not a derived data table")
+
+    # TODO: Check if the required Parquet files are present
+    # Required tables will differ between derived_tales
+
+    try:
+        sql_path = f"{constants.SQL_PATH}{table_name}.sql"
+        with open(sql_path, 'r') as f:
+            sql_script = f.read()
+
+        # TODO: Figure out how to do replacements better...
+        # TODO: Need to get the path to each required table
+        sql_script = sql_script.replace(constants.CONDITION_OCCURRENCE_PLACEHOLDER_STRING, "TABLE PATH HERE")
+
+    except Exception as e:
+        raise(f"Unable to generate {table_name} derived data: {str(e)}") from e
+
+    print()

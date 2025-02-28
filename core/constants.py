@@ -22,7 +22,10 @@ DDL_SQL_PATH = "reference/sql/ddl/"
 DDL_FILE_NAME = "ddl.sql"
 DDL_PLACEHOLDER_STRING = "@cdmDatabaseSchema"
 
-CDM_UPGRADE_SCRIPT_PATH = "reference/sql/cdm_upgrade/"
+CONDITION_OCCURRENCE_PLACEHOLDER_STRING = "@CONDITION_OCCURRENCE_PATH"
+
+SQL_PATH = "reference/sql/"
+CDM_UPGRADE_SCRIPT_PATH = f"{SQL_PATH}cdm_upgrade/"
 
 OPTIMIZED_VOCAB_FOLDER = "optimized"
 OPTIMIZED_VOCAB_FILE_NAME = f"optimized_vocab_file{PARQUET}"
@@ -36,6 +39,11 @@ PIPELINE_ERROR_STRING = "error"
 PIPELINE_DAG_FAIL_MESSAGE = "DAG failed"
 
 FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
+
+CONDITION_ERA = "condition_era",
+DRUG_ERA = "drug_era",
+OBSERVATION_PERIOD = "observation_period"
+DERIVED_DATA_TABLES = set(CONDITION_ERA, DRUG_ERA, OBSERVATION_PERIOD)
 
 class ArtifactPaths(str, Enum):
     ARTIFACTS = "artifacts/"
