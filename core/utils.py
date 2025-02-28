@@ -9,6 +9,7 @@ from typing import Optional, Tuple
 import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
 from google.cloud import storage  # type: ignore
+from google.cloud import bigquery  # type: ignore
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
@@ -481,3 +482,18 @@ def generate_report(report_data: dict) -> None:
 def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
     report_tmp_dir = f"gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
     return report_tmp_dir
+
+def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig]) -> bigquery.table.RowIterator:
+    # Initialize the BigQuery client
+    client = bigquery.Client()
+
+    # Run the query
+    if job_config:
+        client.query(sql_script, job_config=job_config)
+    else:
+        query_job = client.query(sql_script)
+
+    # Wait for the job to complete
+    result = query_job.result()
+
+    return result

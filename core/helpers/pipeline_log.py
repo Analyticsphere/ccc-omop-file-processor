@@ -114,8 +114,10 @@ class PipelineLog:
             )
 
             # Run the query as a job and wait for it to complete.
-            query_job = client.query(query, job_config=job_config)
-            query_job.result()  # Wait for the job to complete.
+            #query_job = client.query(query, job_config=job_config)
+            #query_job.result()  # Wait for the job to complete.
+            utils.execute_bq_sql(query, job_config)
+
         except Exception as e:
             error_details = {
                 'error_type': type(e).__name__,
@@ -152,8 +154,9 @@ class PipelineLog:
                 ]
             )
 
-            select_job = client.query(select_query, job_config=select_config)
-            exists = list(select_job.result())
+            #select_job = client.query(select_query, job_config=select_config)
+            #exists = list(select_job.result())
+            exists = list(utils.execute_bq_sql(select_query, select_config))
 
             if exists:
                 # If the record exists, update it.
@@ -177,8 +180,10 @@ class PipelineLog:
                     ]
                 )
 
-                update_job = client.query(update_query, job_config=update_config)
-                update_job.result()  # Wait for the update to complete.
+                #update_job = client.query(update_query, job_config=update_query)
+                #update_job.result()  # Wait for the update to complete.
+
+                utils.execute_bq_sql(update_query, update_config)
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
@@ -218,8 +223,9 @@ class PipelineLog:
                 ]
             )
 
-            select_job = client.query(select_query, job_config=select_config)
-            exists = list(select_job.result())
+            #select_job = client.query(select_query, job_config=select_config)
+            #exists = list(select_job.result())
+            exists = list(utils.execute_bq_sql(select_query, select_config))
 
             if exists:
                 # If the record exists and isn't already set to running, update it.
@@ -238,8 +244,9 @@ class PipelineLog:
                     ]
                 )
 
-                update_job = client.query(update_query, job_config=update_config)
-                update_job.result()  # Wait for the update to complete.
+                # update_job = client.query(update_query, job_config=update_config)
+                # update_job.result()  # Wait for the update to complete.
+                utils.execute_bq_sql(update_query, update_config)
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
@@ -278,8 +285,9 @@ class PipelineLog:
                 ]
             )
 
-            select_job = client.query(select_query, job_config=select_config)
-            exists = list(select_job.result())
+            #select_job = client.query(select_query, job_config=select_config)
+            #exists = list(select_job.result())
+            exists = list(utils.execute_bq_sql(select_query, select_config))
 
             if exists:
                 # If the record exists, update it.
@@ -309,8 +317,10 @@ class PipelineLog:
                     ]
                 )
 
-                update_job = client.query(update_query, job_config=update_config)
-                update_job.result()  # Wait for the update to complete.
+                #update_job = client.query(update_query, job_config=update_config)
+                #update_job.result()  # Wait for the update to complete.
+                
+                utils.execute_bq_sql(update_query, update_config)
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")

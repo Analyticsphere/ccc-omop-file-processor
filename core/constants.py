@@ -22,8 +22,6 @@ DDL_SQL_PATH = "reference/sql/ddl/"
 DDL_FILE_NAME = "ddl.sql"
 DDL_PLACEHOLDER_STRING = "@cdmDatabaseSchema"
 
-CONDITION_OCCURRENCE_PLACEHOLDER_STRING = "@CONDITION_OCCURRENCE_PATH"
-
 SQL_PATH = "reference/sql/"
 CDM_UPGRADE_SCRIPT_PATH = f"{SQL_PATH}cdm_upgrade/"
 
@@ -44,6 +42,16 @@ CONDITION_ERA = "condition_era",
 DRUG_ERA = "drug_era",
 OBSERVATION_PERIOD = "observation_period"
 DERIVED_DATA_TABLES: set = {CONDITION_ERA, DRUG_ERA, OBSERVATION_PERIOD}
+DERIVED_DATA_TABLES_REQUIREMENTS = {
+    CONDITION_ERA: ["condition_occurrence"],
+    DRUG_ERA: ["drug_exposure"],
+    OBSERVATION_PERIOD: ["visit_occurrence"]
+}
+
+CONDITION_OCCURRENCE_PLACEHOLDER_STRING = "@CONDITION_OCCURRENCE_PATH"
+PATH_PLACEHOLDERS = {
+    CONDITION_OCCURRENCE_PLACEHOLDER_STRING: "condition_occurrence"
+}
 
 class ArtifactPaths(str, Enum):
     ARTIFACTS = "artifacts/"

@@ -112,14 +112,15 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
         raise Exception(f"DDL file error: {e}")
     
     # Execute the CREATE OR REPLACE TABLE statements in BigQuery
-    # Initialize the BigQuery client
-    client = bigquery.Client()
+    utils.execute_bq_sql(create_sql, None)
+    # # Initialize the BigQuery client
+    # client = bigquery.Client()
 
-    # Run the query
-    query_job = client.query(create_sql)
+    # # Run the query
+    # query_job = client.query(create_sql)
 
-    # Wait for the job to complete
-    _ = query_job.result()
+    # # Wait for the job to complete
+    # query_job.result()
 
 def populate_cdm_source(cdm_source_data: dict) -> None:
     # Add a record to the cdm_source table, if it doesn't have any rows
@@ -188,8 +189,9 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         )
 
         # Run the query as a job and wait for it to complete.
-        query_job = client.query(query, job_config=job_config)
-        query_job.result()  # Wait for the job to complete.
+        # query_job = client.query(query, job_config=job_config)
+        # query_job.result()  # Wait for the job to complete.
+        utils.execute_bq_sql(query, job_config)
     except Exception as e:
         error_details = {
             'error_type': type(e).__name__,
@@ -199,22 +201,42 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
 def generate_derived_data(site: str, delivery_date: str, table_name: str) -> None:
+    utils.logger.warning(f"IN generate_derived_data and site is {site} and delivery_date is {delivery_date} and table_name is {table_name}")
+
+    # Execute SQL scripts to generate derived data table Parquet files
     if table_name not in constants.DERIVED_DATA_TABLES:
         raise Exception(f"{table_name} is not a derived data table")
 
-    # TODO: Check if the required Parquet files are present
-    # Required tables will differ between derived_tales
-
+    # Check if tables necessary to generate dervied data exist in delivery
+    for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
+        parquet_path = f"{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
+        utils.logger.warning(f"checking for required table parquet in {parquet_path}")
+        if not utils.parquet_file_exists(parquet_path):
+            # Don't raise execption if required table doesn't exist, just log error
+            utils.logger.error(f"Required table {required_table} not in data delivery, cannot generate derived data table {table_name}")
+            pass
+    
+    # Get SQL script with place holder values for table locations
     try:
         sql_path = f"{constants.SQL_PATH}{table_name}.sql"
+        utils.logger.warning(f"looking for derived table sql in {sql_path}")
         with open(sql_path, 'r') as f:
             sql_script = f.read()
 
-        # TODO: Figure out how to do replacements better...
-        # TODO: Need to get the path to each required table
-        sql_script = sql_script.replace(constants.CONDITION_OCCURRENCE_PLACEHOLDER_STRING, "TABLE PATH HERE")
+        # Add table locations
+        sql_script = placeholder_to_table_path(site, delivery_date, sql_script)
+        utils.logger.warning(f"script with replacements is {sql_script}")
+
+        # TODO: Execute the SQL in DuckDB, saving to parquet file
 
     except Exception as e:
         raise(f"Unable to generate {table_name} derived data: {str(e)}") from e
 
-    print()
+
+def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str) -> str:
+    # Replaces table place holder strings in SQL scripts with paths to table parquet files
+    for placeholder, replacement in constants.PATH_PLACEHOLDERS.items():
+        table_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
+        result = sql_script.replace(placeholder, table_path)
+
+    return result

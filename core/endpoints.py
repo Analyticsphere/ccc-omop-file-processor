@@ -323,6 +323,22 @@ def log_pipeline_state() -> tuple:
 # TODO: API endpoint for derived data tables
 @app.route('/populate_derived_data')
 def populate_dervied_data_table() -> tuple:
+    data: Dict[str, Any] = request.get_json() or {}
+    site: Optional[str] = data.get('site')
+    delivery_date: Optional[str] = data.get('delivery_date')
+    table_name: Optional[str] = data.get('table_name')
+
+    if not site or not delivery_date or not table_name:
+        return "Missing required parameters: site, delivery_date, and table_name", 400
+
+    try:
+        utils.logger.info(f"Generating derived table {table_name} for {delivery_date} delivery from {site}")
+        omop_client.generate_derived_data(site, delivery_date, table_name)
+        return "Created derived table", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to create dervied table: {str(e)}")
+        return f"Unable to create derived tables: {str(e)}", 500
+       
     print()
 
 if __name__ == '__main__':
