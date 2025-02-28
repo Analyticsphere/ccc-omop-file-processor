@@ -221,11 +221,26 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str) -> Non
         sql_path = f"{constants.SQL_PATH}{table_name}.sql"
         utils.logger.warning(f"looking for derived table sql in {sql_path}")
         with open(sql_path, 'r') as f:
-            sql_script = f.read()
+            select_statement = f.read()
 
         # Add table locations
-        sql_script = placeholder_to_table_path(site, delivery_date, sql_script)
-        utils.logger.warning(f"script with replacements is {sql_script}")
+        select_statement = placeholder_to_table_path(site, delivery_date, select_statement)
+        utils.logger.warning(f"script with replacements is {select_statement}")
+
+        try:
+            conn, local_db_file = utils.create_duckdb_connection()
+
+            with conn:
+                sql_statement = f"""
+                    COPY (
+                        {select_statement}
+                    ) TO 'gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+                """
+                utils.logger.warning(f"duckdb table sql is {sql_statement}")
+        except Exception as e:
+            raise Exception(f"Unable to execute SQl to generate {table_name}: {str(e)}") from e
+        finally:
+            utils.close_duckdb_connection(conn, local_db_file)
 
         # TODO: Execute the SQL in DuckDB, saving to parquet file
 

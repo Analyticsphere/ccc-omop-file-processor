@@ -489,7 +489,7 @@ def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig
 
     # Run the query
     if job_config:
-        client.query(sql_script, job_config=job_config)
+        query_job = client.query(sql_script, job_config=job_config)
     else:
         query_job = client.query(sql_script)
 
