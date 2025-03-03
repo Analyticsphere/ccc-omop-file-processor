@@ -30,6 +30,9 @@ def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str, de
     table_name = utils.get_table_name_from_gcs_path(gcs_path)
     if derive_path:
         parquet_path = f"gs://{utils.get_parquet_artifact_location(gcs_path)}"
+    else:
+        parquet_path = gcs_path
+        
     utils.logger.warning(f"IN load_parquet_to_bigquery() and going to load parquet at path {parquet_path}")
 
     # When upgrading to 5.4, some Parquet files may get deleted

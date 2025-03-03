@@ -69,7 +69,7 @@ class ArtifactPaths(str, Enum):
 #   unlikely that this date will appear in real data
 DEFAULT_FIELD_VALUES = {
         "VARCHAR": "''",
-        "DATE": "'1970-02-01'",
+        "DATE": "'1970-01-01'",
         "BIGINT": "'-1'",
         "DOUBLE": "'-1.0'",
         "TIMESTAMP": "'1901-01-01 00:00:00'"
