@@ -13,6 +13,7 @@ from google.cloud import bigquery  # type: ignore
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
+import core.helpers.udf as udf
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -121,6 +122,9 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
 
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
+
+        # Register UDFs
+        udf.UDFManager(conn).register_udfs()
 
         return conn, local_db_file
     except Exception as e:

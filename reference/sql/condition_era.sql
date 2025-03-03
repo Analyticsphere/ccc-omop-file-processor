@@ -95,7 +95,7 @@
         c.PERSON_ID,
         c.CONDITION_CONCEPT_ID,
         c.CONDITION_START_DATE
-    )
+    ), hashed_ids as (
   SELECT
     ROW_NUMBER() OVER (ORDER BY PERSON_ID) AS condition_era_id,
     PERSON_ID,
@@ -108,3 +108,12 @@
     PERSON_ID,
     CONDITION_CONCEPT_ID,
     ERA_END_DATE
+    )
+    SELECT
+        generate_id(CONCAT('{site}', CAST(condition_era_id))) AS condition_era_id,
+        PERSON_ID AS person_id,
+        CONDITION_CONCEPT_ID AS condition_concept_id,
+        condition_era_start_date,
+        condition_era_end_date,
+        condition_occurrence_count
+    FROM cteConditionEnds
