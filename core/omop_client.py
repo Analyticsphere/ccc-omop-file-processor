@@ -253,7 +253,6 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
 
-        # TODO: Execute the SQL in DuckDB, saving to parquet file
 
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
