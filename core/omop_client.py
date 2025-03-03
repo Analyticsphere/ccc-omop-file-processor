@@ -215,7 +215,7 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
         if not utils.parquet_file_exists(parquet_path):
             # Don't raise execption if required table doesn't exist, just log error
             utils.logger.error(f"Required table {required_table} not in data delivery, cannot generate derived data table {table_name}")
-            pass
+            return
     
     # Get SQL script with place holder values for table locations
     try:
