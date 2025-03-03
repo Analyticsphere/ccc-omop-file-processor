@@ -138,8 +138,6 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
     else:
         utils.logger.info(f"Optimized vocabulary already exists")
 
-
-
 def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
     ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
 
@@ -242,7 +240,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         utils.logger.error(f"Unable to add pipeline log record: {error_details}")
         raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
-def generate_derived_data(site: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str) -> None:
+def generate_derived_data(site: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
     utils.logger.warning(f"IN generate_derived_data and site is {site} and delivery_date is {delivery_date} and table_name is {table_name}")
 
     # Execute SQL scripts to generate derived data table Parquet files
@@ -266,7 +264,7 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
             select_statement = f.read()
 
         # Add table locations
-        select_statement = placeholder_to_table_path(site, delivery_date, select_statement)
+        select_statement = placeholder_to_table_path(site, delivery_date, select_statement, vocab_version, vocab_gcs_bucket)
         printselect = select_statement.replace('\n', ' ')
         utils.logger.warning(f"script with replacements is {printselect}")
 
@@ -297,10 +295,16 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
 
-def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str) -> str:
-    # Replaces table place holder strings in SQL scripts with paths to table parquet files
-    for placeholder, replacement in constants.PATH_PLACEHOLDERS.items():
+def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
+    # Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
+    for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
         table_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
+        result = sql_script.replace(placeholder, table_path)
+
+    # # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
+    for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
+        table_path = f"gs://{vocab_gcs_bucket}{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
+        utils.logger.warning(f"replacement table path is {table_path}")
         result = sql_script.replace(placeholder, table_path)
     
     # Add site name 
