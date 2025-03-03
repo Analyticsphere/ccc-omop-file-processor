@@ -234,11 +234,11 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
 
             with conn:
                 # Generate the derived table parquet file
-                parquet_gcs_path = f"{site}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
+                parquet_gcs_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
                 sql_statement = f"""
                     COPY (
                         {select_statement}
-                    ) TO 'gs://{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
+                    ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
                 sqlstatementprint = sql_statement.replace('\n',' ')
                 utils.logger.warning(f"duckdb table sql is {sqlstatementprint}")
