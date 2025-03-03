@@ -12,6 +12,7 @@ WITH
       WHERE
         TRY_CAST(CONDITION_START_DATE AS DATE) IS NOT NULL
         AND condition_concept_id != 0
+        AND IFNULL(TRY_CAST(person_id AS BIGINT), -1) != -1
     ),
     cteCondEndDates AS (
       SELECT
@@ -95,7 +96,7 @@ WITH
         c.PERSON_ID,
         c.CONDITION_CONCEPT_ID,
         c.CONDITION_START_DATE
-    ), hashed_ids as (
+    ), final_select as (
   SELECT
     --ROW_NUMBER() OVER (ORDER BY PERSON_ID) AS condition_era_id,
     PERSON_ID,
@@ -121,4 +122,4 @@ SELECT
     condition_era_start_date,
     condition_era_end_date,
     condition_occurrence_count
-FROM hashed_ids
+FROM final_select
