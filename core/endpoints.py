@@ -34,6 +34,7 @@ def create_optimized_vocab() -> tuple[str, int]:
         return "Missing required parameters: vocab_version and vocab_gcs_bucket", 400
 
     try:
+        omop_client.convert_vocab_to_parquet(vocab_version, vocab_gcs_bucket)
         omop_client.create_optimized_vocab_file(vocab_version, vocab_gcs_bucket)
 
         return "Created optimized vocabulary file", 200
