@@ -62,7 +62,7 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
     """
     vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
-    utils.logger.warning(f"vocab files is {vocab_file}")
+    utils.logger.warning(f"vocab files is {vocab_files}")
 
     # Confirm desired vocabulary version exists in GCS
     if utils.vocab_gcs_path_exists(vocab_root_path):
