@@ -81,7 +81,7 @@
       WHERE (2 * E.START_ORDINAL) - E.OVERALL_ORD = 0
     ),
     cteConditionEnds AS (
-      SELECT
+      SELECT DISTINCT
         c.PERSON_ID,
         c.CONDITION_CONCEPT_ID,
         c.CONDITION_START_DATE,
