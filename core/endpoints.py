@@ -37,7 +37,7 @@ def create_optimized_vocab() -> tuple[str, int]:
         omop_client.convert_vocab_to_parquet(vocab_version, vocab_gcs_bucket)
         omop_client.create_optimized_vocab_file(vocab_version, vocab_gcs_bucket)
 
-        return "Created optimized vocabulary file", 200
+        return "Created optimized vocabulary files", 200
     except Exception as e:
         utils.logger.error(f"Error creating optimized vocabulary: {str(e)}")
         return f"Error creating optimized vocabulary: {str(e)}", 500
