@@ -253,7 +253,6 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
 
-
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
 
@@ -262,5 +261,8 @@ def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str) ->
     for placeholder, replacement in constants.PATH_PLACEHOLDERS.items():
         table_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
         result = sql_script.replace(placeholder, table_path)
+    
+    # Add site name 
+    result = result.replace(constants.SITE_PLACEHOLDER_STRING, site)
 
     return result

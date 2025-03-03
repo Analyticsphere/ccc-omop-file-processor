@@ -1,4 +1,4 @@
-  WITH
+WITH
     cteConditionTarget AS (
       SELECT
         co.PERSON_ID,
@@ -110,7 +110,12 @@
     ERA_END_DATE
     )
     SELECT
-        generate_id(CONCAT('{site}', CAST(condition_era_id))) AS condition_era_id,
+        generate_id(
+            CONCAT(
+                '@SITE', CAST(PERSON_ID AS STRING), CAST(CONDITION_CONCEPT_ID AS STRING), CAST(condition_era_start_date AS STRING), 
+                CAST(condition_era_end_date AS STRING), CAST(condition_occurrence_count AS STRING)
+            )
+        ) AS condition_era_id,
         PERSON_ID AS person_id,
         CONDITION_CONCEPT_ID AS condition_concept_id,
         condition_era_start_date,
