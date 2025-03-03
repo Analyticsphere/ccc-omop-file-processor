@@ -56,6 +56,44 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
         utils.logger.error(f"OMOP CDM version {cdm_version} not supported")
         raise Exception(f"OMOP CDM version {cdm_version} not supported")
 
+def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
+    """
+    Convert CSV vocabulary files from Athena to Parquet format
+    """
+    vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
+    vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
+
+    # Confirm desired vocabulary version exists in GCS
+    if utils.vocab_gcs_path_exists(vocab_root_path):
+        for vocab_file in vocab_files:
+            vocab_file_name = vocab_file.replace(constants.CSV, '').lower()
+            parquet_file_path = f"{vocab_root_path}{constants.OPTIMIZED_VOCAB_FOLDER}/{vocab_file_name}{constants.PARQUET}"
+            csv_file_path = f"{vocab_root_path}{vocab_file}"
+
+            utils.logger.warning(f"parquet_file_path for vocab is {parquet_file_path}")
+            utils.logger.warning(f"csv_file_path for vocab is {csv_file_path}")
+
+            # Continue only if the vocabulary file has not been created or is not valid
+            if not utils.parquet_file_exists(parquet_file_path) or not utils.valid_parquet_file(parquet_file_path):
+                
+                conn, local_db_file = utils.create_duckdb_connection()
+
+                try:
+                    with conn:
+                        convert_query = f"""
+                            COPY (
+                                SELECT * FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
+                            ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                        """
+                        utils.logger.warning(f"convert_query is {convert_query}")
+                        conn.execute(convert_query)
+                except Exception as e:
+                    
+                    #utils.logger.error(f"Unable to convert vocabulary CSV to Parquet: {e}")
+                    raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
+                finally:
+                    utils.close_duckdb_connection(conn, local_db_file)
+                
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
     vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     optimized_vocab_path = utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket)
@@ -98,6 +136,8 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                 raise Exception(f"Vocabulary GCS bucket {vocab_path} not found")
     else:
         utils.logger.info(f"Optimized vocabulary already exists")
+
+
 
 def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
     ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
