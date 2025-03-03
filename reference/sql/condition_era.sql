@@ -97,7 +97,7 @@ WITH
         c.CONDITION_START_DATE
     ), hashed_ids as (
   SELECT
-    ROW_NUMBER() OVER (ORDER BY PERSON_ID) AS condition_era_id,
+    --ROW_NUMBER() OVER (ORDER BY PERSON_ID) AS condition_era_id,
     PERSON_ID,
     CONDITION_CONCEPT_ID,
     MIN(CONDITION_START_DATE) AS condition_era_start_date,
@@ -108,17 +108,17 @@ WITH
     PERSON_ID,
     CONDITION_CONCEPT_ID,
     ERA_END_DATE
-    )
-    SELECT
-        generate_id(
-            CONCAT(
-                '@SITE', CAST(PERSON_ID AS STRING), CAST(CONDITION_CONCEPT_ID AS STRING), CAST(condition_era_start_date AS STRING), 
-                CAST(condition_era_end_date AS STRING), CAST(condition_occurrence_count AS STRING)
-            )
-        ) AS condition_era_id,
-        PERSON_ID AS person_id,
-        CONDITION_CONCEPT_ID AS condition_concept_id,
-        condition_era_start_date,
-        condition_era_end_date,
-        condition_occurrence_count
-    FROM cteConditionEnds
+)
+SELECT
+    generate_id(
+        CONCAT(
+            '@SITE', CAST(PERSON_ID AS STRING), CAST(CONDITION_CONCEPT_ID AS STRING), CAST(condition_era_start_date AS STRING), 
+            CAST(condition_era_end_date AS STRING), CAST(condition_occurrence_count AS STRING)
+        )
+    ) AS condition_era_id,
+    PERSON_ID AS person_id,
+    CONDITION_CONCEPT_ID AS condition_concept_id,
+    condition_era_start_date,
+    condition_era_end_date,
+    condition_occurrence_count
+FROM hashed_ids
