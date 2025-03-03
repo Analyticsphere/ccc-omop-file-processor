@@ -247,7 +247,7 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
                 # Load the Parquet to BigQuery
                 # Because the task that executes this function occurs after load_bq(), 
                 #   this will overwrite the derived data delievered by the site
-                bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id)
+                bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, False)
         except Exception as e:
             raise Exception(f"Unable to execute SQl to generate {table_name}: {str(e)}") from e
         finally:
