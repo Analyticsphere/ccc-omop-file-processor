@@ -243,7 +243,10 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
 def generate_derived_data(site: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
     utils.logger.warning(f"IN generate_derived_data and site is {site} and delivery_date is {delivery_date} and table_name is {table_name}")
 
-    # Execute SQL scripts to generate derived data table Parquet files
+    """
+    Execute SQL scripts to generate derived data table Parquet files
+    """
+
     if table_name not in constants.DERIVED_DATA_TABLES_REQUIREMENTS.keys():
         raise Exception(f"{table_name} is not a derived data table")
 
@@ -298,14 +301,14 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
 def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
     # Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
     for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-        table_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
-        result = sql_script.replace(placeholder, table_path)
+        clinical_data_table_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
+        result = sql_script.replace(placeholder, clinical_data_table_path)
 
     # # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
     for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
-        table_path = f"gs://{vocab_gcs_bucket}{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
-        utils.logger.warning(f"replacement table path is {table_path}")
-        result = sql_script.replace(placeholder, table_path)
+        vocab_table_path = f"gs://{vocab_gcs_bucket}{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
+        utils.logger.warning(f"replacement table path is {vocab_table_path}")
+        result = sql_script.replace(placeholder, vocab_table_path)
     
     # Add site name 
     result = result.replace(constants.SITE_PLACEHOLDER_STRING, site)
