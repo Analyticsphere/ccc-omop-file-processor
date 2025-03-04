@@ -337,7 +337,7 @@ def populate_dervied_data_table() -> tuple[str, int]:
 
     try:
         utils.logger.info(f"Generating derived table {table_name} for {delivery_date} delivery from {site}")
-        omop_client.generate_derived_data(site, delivery_date, table_name, project_id, dataset_id, vocab_gcs_bucket, vocab_version)
+        omop_client.generate_derived_data(site, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket)
         return "Created derived table", 200
     except Exception as e:
         utils.logger.error(f"Unable to create dervied table: {str(e)}")
