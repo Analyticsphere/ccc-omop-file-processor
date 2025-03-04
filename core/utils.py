@@ -459,8 +459,6 @@ def generate_report(report_data: dict) -> None:
     report_tmp_dir = f"{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
     tmp_files = list_gcs_files(gcs_bucket, report_tmp_dir, constants.PARQUET)
 
-    logger.warning(f"tmp_files list is {tmp_files}")
-
     if len(tmp_files) > 0:
         conn, local_db_file = create_duckdb_connection()
         # Increase max_expression_depth in case there are many report artifacts
@@ -479,7 +477,6 @@ def generate_report(report_data: dict) -> None:
                         (HEADER, DELIMITER ',')
                 """ 
                 NORETURN = join_files_query.replace('\n', '')
-                logger.warning(f"join files query is {NORETURN}")
                 conn.execute(join_files_query)
         except Exception as e:
             logger.error(f"Unable to merge reporting artifacts: {e}")
