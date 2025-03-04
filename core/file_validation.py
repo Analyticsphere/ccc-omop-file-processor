@@ -1,7 +1,7 @@
-import core.utils as utils
 import core.helpers.report_artifact as report_artifact
+import core.utils as utils
 
-    
+
 def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> bool:
     """
     Validates whether the filename (without extension) matches one of the
@@ -20,7 +20,6 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
         # Check if the filename matches any of the table keys in the JSON
         is_valid_table_name = table_name in valid_table_names
         if is_valid_table_name:
-            utils.logger.info(f"'{table_name}' IS a valid OMOP table name.")
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['concept_id'],
                 delivery_date=delivery_date,
@@ -31,7 +30,6 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
                 value_as_string="valid table name"
             )
         else:
-            utils.logger.info(f"'{table_name}' is NOT valid OMOP table name.")
             ra = report_artifact.ReportArtifact(
                 concept_id=None,
                 delivery_date=delivery_date,
@@ -48,8 +46,6 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
 
     except Exception as e:
         raise Exception(f"Unexpected error validating CDM file: {str(e)}")
-
-
 
 def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_REMOVE: str, gcs_path_REMOVE: str) -> None:
     """
@@ -76,7 +72,6 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
 
         # Process valid columns
         for column in valid_columns:
-            utils.logger.info(f"'{column}' is a valid column in schema for {table_name}.")
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['fields'][column]['concept_id'],
                 delivery_date=delivery_date,
@@ -105,7 +100,6 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
             ra.save_artifact()
 
         for column in missing_columns:
-            utils.logger.info(f"'{column}' is missing from {table_name}.")
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['fields'][column]['concept_id'],
                 delivery_date=delivery_date,
@@ -142,3 +136,6 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
             
     except Exception as e:
         utils.logger.error(f"Error validating file {file_path}: {str(e)}")
+
+
+

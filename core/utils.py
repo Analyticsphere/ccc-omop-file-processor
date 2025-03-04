@@ -1,14 +1,17 @@
 import json
-from google.cloud import storage # type: ignore
 import logging
+import os
 import sys
 import uuid
-import duckdb # type: ignore
-from fsspec import filesystem # type: ignore
-import core.constants as constants
+from datetime import datetime
 from typing import Optional, Tuple
-import json
-import os
+
+import duckdb  # type: ignore
+from fsspec import filesystem  # type: ignore
+from google.cloud import storage  # type: ignore
+
+import core.constants as constants
+import core.helpers.report_artifact as report_artifact
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -49,7 +52,7 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
         files = [
             blob.name 
             for blob in blobs 
-            if blob.name != folder_prefix and blob.name.endswith(file_format)
+            if blob.name != folder_prefix and blob.name.lower().endswith(file_format)
         ]
         
         return files
@@ -108,9 +111,9 @@ def create_gcs_directory(directory_path: str) -> None:
             
     except Exception as e:
         logger.error(f"Unable to process GCS directory {directory_path}: {e}")
-        sys.exit(1)
+        raise Exception(f"Unable to process GCS directory {directory_path}: {e}") from e
 
-def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
+def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
     # Creates a DuckDB instance with a local database
     # Returns tuple of DuckDB object, name of db file, and path to db file
     try:
@@ -139,10 +142,10 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str, str]:
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
 
-        return conn, local_db_file, tmp_dir
+        return conn, local_db_file
     except Exception as e:
         logger.error(f"Unable to create DuckDB instance: {e}")
-        sys.exit(1)
+        raise Exception(f"Unable to create DuckDB instance: {e}") from e
 
 def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str) -> None:
     # Destory DuckDB object to free memory, and remove temporary files
@@ -239,7 +242,7 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
     # Create a unique or table-specific name for introspection
     table_name_for_introspection = "temp_introspect_table"
 
-    conn, local_db_file, tmp_dir = create_duckdb_connection()
+    conn, local_db_file = create_duckdb_connection()
     try:
         with conn:
             
@@ -265,7 +268,7 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
             conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
     except Exception as e:
         logger.error(f"Unable to get Parquet column list: {e}")
-        sys.exit(0)
+        raise Exception(f"Unable to get Parquet column list: {e}") from e
     finally:
         close_duckdb_connection(conn, local_db_file)
         
@@ -273,7 +276,7 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
 
 def valid_parquet_file(gcs_file_path: str) -> bool:
     # Retuns bool indicating whether Parquet file is valid/can be read by DuckDB
-    conn, local_db_file, tmp_dir = create_duckdb_connection()
+    conn, local_db_file = create_duckdb_connection()
 
     try:
         with conn:
@@ -302,3 +305,200 @@ def get_parquet_artifact_location(gcs_file_path: str) -> str:
     parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
 
     return parquet_path
+
+def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
+    table_name = get_table_name_from_gcs_path(gcs_file_path).lower()
+    bucket, subfolder = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+    invalid_rows_path = f"{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}"
+
+    return invalid_rows_path
+
+def delete_gcs_file(gcs_path: str) -> None:
+    """
+    Deletes a file from Google Cloud Storage.
+    """
+    try:
+        # Initialize GCS client
+        storage_client = storage.Client()
+        
+        # Extract bucket name and blob path
+        # Remove 'gs://' prefix and split into bucket and path
+        path_without_prefix = gcs_path.replace('gs://', '')
+        bucket_name = path_without_prefix.split('/')[0]
+        blob_path = '/'.join(path_without_prefix.split('/')[1:])
+        
+        # Get bucket and blob
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        
+        # Delete the file
+        blob.delete()
+    except Exception as e:
+        logger.error(f"Error deleting file {gcs_path}: {e}")
+        raise Exception(f"Error deleting file {gcs_path}: {e}") from e
+
+def parquet_file_exists(file_path: str) -> bool:
+    """
+    Check if a Parquet file exists in Google Cloud Storage.
+    """
+    # Strip gs:// prefix if it exists
+    gcs_path = file_path.replace('gs://', '')
+    
+    # Parse bucket and blob name
+    path_parts = gcs_path.split('/')
+    bucket_name = path_parts[0]
+    blob_name = '/'.join(path_parts[1:])
+    
+    try:
+        # Initialize storage client with default credentials
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        
+        return blob.exists()
+    except Exception as e:
+        logger.error(f"Error checking Parquet file existence: {e}")
+        return False
+
+def get_optimized_vocab_file_path(vocab_version: str, vocab_gcs_bucket: str) -> str:
+    optimized_vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{constants.OPTIMIZED_VOCAB_FILE_NAME}"
+    return optimized_vocab_path
+
+def vocab_gcs_path_exists(gcs_path: str) -> bool:
+    """
+    Check if a specific GCS path exists.
+    """
+    try:
+        # Split the path into bucket name and blob path
+        parts = gcs_path.split('/', 1)
+        bucket_name = parts[0]
+        blob_path = parts[1] if len(parts) > 1 else None
+        
+        # Initialize the client
+        client = storage.Client()
+        
+        # Check if bucket exists
+        try:
+            bucket = client.get_bucket(bucket_name)
+        except Exception:
+            return False
+            
+        # If no blob path, we're just checking bucket existence
+        if not blob_path:
+            return True
+            
+        # Check if blob exists
+        blob = bucket.blob(blob_path)
+        return blob.exists()
+        
+    except Exception as e:
+        # Handle any other unexpected errors
+        print(f"Error checking GCS path: {e}")
+        return False
+
+def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
+    vocabulary_parquet_file = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}vocabulary{constants.PARQUET}"
+
+    if parquet_file_exists(vocabulary_parquet_file):
+        conn, local_db_file = create_duckdb_connection()
+        try:
+            with conn:
+                vocab_version_query = f"""
+                    SELECT vocabulary_version
+                    FROM read_parquet('gs://{vocabulary_parquet_file}')
+                    WHERE vocabulary_id = 'None'
+                """
+                vocab_version_string = conn.execute(vocab_version_query).fetchone()[0]
+                return vocab_version_string
+        except Exception as e:
+            logger.error(f"Unable to upgrade file: {e}")
+            return "Unknown vocabulary version"
+        finally:
+            close_duckdb_connection(conn, local_db_file)
+    else:
+        return "No vocabulary file provided"
+
+def get_cdm_version_concept_id(cdm_version: str) -> int:
+    if cdm_version == constants.CDM_v53:
+        return constants.CDM_v53_CONCEPT_ID
+    elif cdm_version == constants.CDM_v54:
+        return constants.CDM_v54_CONCEPT_ID
+    else:
+        return 0
+    
+def create_final_report_artifacts(report_data: dict) -> None:
+    gcs_bucket = report_data["gcs_bucket"]
+    delivery_date = report_data["delivery_date"]
+
+    # Create tuples to represent a value to add to delivery report, and what that value describes
+    delivery_date_value = (delivery_date, constants.DELIVERY_DATE_REPORT_NAME)
+    site_display_name = (report_data["site_display_name"], constants.SITE_DISPLAY_NAME_REPORT_NAME)
+    file_delivery_format = (report_data["file_delivery_format"], constants.FILE_DELIVERY_FORMAT_REPORT_NAME)
+    delivered_cdm_version = (report_data["delivered_cdm_version"], constants.DELIVERED_CDM_VERSION_REPORT_NAME)
+    delivered_vocab_version = (get_delivery_vocabulary_version(gcs_bucket, delivery_date), constants.DELIVERED_VOCABULARY_VERSION_REPORT_NAME)
+    target_vocabulary_version = (report_data["target_vocabulary_version"], constants.TARGET_VOCABULARY_VERSION_REPORT_NAME)
+    target_cdm_version = (report_data["target_cdm_version"], constants.TARGET_CDM_VERSION_REPORT_NAME)
+    target_cdm_version = (report_data["target_cdm_version"], constants.TARGET_CDM_VERSION_REPORT_NAME)
+    file_processor_version = (os.getenv('COMMIT_SHA'), constants.FILE_PROCESSOR_VERSION_REPORT_NAME)
+    processed_date = (datetime.today().strftime('%Y-%m-%d'), constants.PROCESSED_DATE_REPORT_NAME)
+
+    # Create a list of the tuples
+    report_data_points = [processed_date, file_processor_version, delivery_date_value, site_display_name, file_delivery_format, delivered_cdm_version, delivered_vocab_version, target_vocabulary_version, target_cdm_version]
+
+    # Iterate over each tuple
+    for report_data_point in report_data_points:
+        # Seperate value and the thing it describes from tuple
+        value, reporting_item = report_data_point
+        value_as_concept_id: int = 0
+
+        if reporting_item in [constants.DELIVERED_CDM_VERSION_REPORT_NAME, constants.TARGET_CDM_VERSION_REPORT_NAME]:
+            value_as_concept_id = get_cdm_version_concept_id(value)
+
+        ra = report_artifact.ReportArtifact(
+            delivery_date=delivery_date,
+            gcs_path=gcs_bucket,
+            concept_id=0,
+            name=f"{reporting_item}",
+            value_as_string=value,
+            value_as_concept_id=value_as_concept_id,
+            value_as_number=None
+        )
+        ra.save_artifact()
+
+def generate_report(report_data: dict) -> None:
+    create_final_report_artifacts(report_data)
+
+    site = report_data["site"]
+    gcs_bucket = report_data["gcs_bucket"]
+    delivery_date = report_data["delivery_date"]
+
+    report_tmp_dir = f"{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
+    tmp_files = list_gcs_files(gcs_bucket, report_tmp_dir, constants.PARQUET)
+
+    if len(tmp_files) > 0:
+        conn, local_db_file = create_duckdb_connection()
+        # Increase max_expression_depth in case there are many report artifacts
+        conn.execute("SET max_expression_depth TO 1000000")
+
+        # Build UNION ALL SELECT statement to join together files
+        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{gcs_bucket}/{file}')" for file in tmp_files])
+
+        try:
+            with conn:
+                join_files_query = f"""
+                    COPY (
+                        {select_statement}
+                    ) TO 
+                        'gs://{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}' 
+                        (HEADER, DELIMITER ',')
+                """ 
+                conn.execute(join_files_query)
+        except Exception as e:
+            logger.error(f"Unable to merge reporting artifacts: {e}")
+            raise Exception(f"Unable to merge reporting artifacts: {e}") from e
+        finally:
+            close_duckdb_connection(conn, local_db_file)
+
+def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
+    report_tmp_dir = f"gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
+    return report_tmp_dir

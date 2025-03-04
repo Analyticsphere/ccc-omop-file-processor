@@ -1,12 +1,14 @@
-import core.constants as constants
-import core.utils as utils
-import sys
-import chardet # type: ignore
-from io import StringIO
-import csv
 import codecs
-from google.cloud import storage # type: ignore
-import duckdb # type: ignore
+import csv
+from io import StringIO
+
+import chardet  # type: ignore
+import duckdb  # type: ignore
+from google.cloud import storage  # type: ignore
+
+import core.constants as constants
+import core.helpers.report_artifact as report_artifact
+import core.utils as utils
 
 
 class StreamingCSVWriter:
@@ -65,7 +67,7 @@ def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
         process_incoming_parquet(gcs_file_path)
     else:
         utils.logger.info(f"Invalid source file format: {file_type}") 
-        sys.exit(1)
+        raise Exception(f"Invalid source file format: {file_type}")
 
 def process_incoming_parquet(gcs_file_path: str) -> None:
     """
@@ -84,7 +86,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
             select_list.append(f"{column} AS {column.lower()}")
         select_clause = ", ".join(select_list)
 
-        conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
+        conn, local_db_file = utils.create_duckdb_connection()
 
         try:
             with conn:
@@ -99,15 +101,15 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
                 conn.execute(copy_sql)
         except Exception as e:
             utils.logger.error(f"Unable to processing incoming Parquet file: {e}")
-            sys.exit(1)
+            raise Exception(f"Unable to processing incoming Parquet file: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
     else:
         utils.logger.error(f"Invalid Parquet file")
-        sys.exit(1)
+        raise Exception(f"Invalid Parquet file")
 
 def csv_to_parquet(gcs_file_path: str) -> None:
-    conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
+    conn, local_db_file = utils.create_duckdb_connection()
 
     try:
         with conn:
@@ -117,28 +119,30 @@ def csv_to_parquet(gcs_file_path: str) -> None:
                 COPY  (
                     SELECT
                         *
-                    FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True)
+                    FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True,strict_mode=False)
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
             conn.execute(convert_statement)
-            
+    
+    
     except duckdb.InvalidInputException as e:
+        # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
         error_type = utils.parse_duckdb_csv_error(e)
         if error_type == "INVALID_UNICODE":
             utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
             convert_csv_file_encoding(gcs_file_path)
         elif error_type == "UNTERMINATED_QUOTE":
-            utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
-            sys.exit(1)
+            utils.logger.error(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
+            raise Exception(f"Unescaped quote found in file gs://{gcs_file_path}: {e}") from e
         elif error_type == "CSV_FORMAT_ERROR":
             utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
-            sys.exit(1)
+            raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
         else:
             utils.logger.error(f"Unknown CSV error in file gs://{gcs_file_path}: {e}")
-            sys.exit(1)
+            raise Exception(f"Unknown CSV error in file gs://{gcs_file_path}: {e}") from e
     except Exception as e:
         utils.logger.error(f"Unable to convert CSV file to Parquet: {e}")
-        sys.exit(1)
+        raise Exception(f"Unable to convert CSV file to Parquet: {e}") from e
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
     
@@ -169,7 +173,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         # Verify the source file exists
         if not source_blob.exists():
             utils.logger.error(f"Source file does not exist: gs://{gcs_file_path}")
-            sys.exit(1)
+            raise Exception(f"Source file does not exist: gs://{gcs_file_path}")
 
         # Create output filename
         file_name_parts = file_path.rsplit('.', 1)
@@ -190,7 +194,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
 
         if not detected_encoding:
             utils.logger.error(f"Could not detect encoding for file: {gcs_file_path}")
-            sys.exit(1)
+            raise Exception(f"Could not detect encoding for file: {gcs_file_path}")
 
         utils.logger.info(f"Detected source encoding: {detected_encoding}")
 
@@ -203,7 +207,6 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             with source_blob.open("rb") as source_file:
                 # Map Windows encodings to their Python codec names
                 codec_name = detected_encoding.replace('Windows-', 'cp')
-                utils.logger.info(f"Using codec: {codec_name}")
                 
                 # Create a text wrapper that handles the encoding
                 # If there's an issue with converting any of the non-UTF8 characters, replace them with a question mark symbol
@@ -220,21 +223,20 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             streaming_writer.close()
 
             utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
-            utils.logger.info(f"Total bytes processed: {streaming_writer.total_bytes_uploaded}\n")
 
             # After creating new file with UTF8 encoding, try converting it to Parquet
             csv_to_parquet(f"{bucket_name}/{new_file_path}")
 
         except UnicodeDecodeError as e:
             utils.logger.error(f"Failed to decode content with detected encoding {detected_encoding}: {str(e)}")
-            sys.exit(1)
+            raise Exception(f"Failed to decode content with detected encoding {detected_encoding}: {str(e)}") from e
         except csv.Error as e:
             utils.logger.error(f"CSV parsing error: {str(e)}")
-            sys.exit(1)
+            raise Exception(f"CSV parsing error: {str(e)}") from e
 
     except Exception as e:
         utils.logger.error(f"Unable to convert CSV to UTF8: {e}")
-        sys.exit(1)
+        raise Exception(f"Unable to convert CSV to UTF8: {e}") from e
 
 def get_placeholder_value(field_name: str, field_type: str) -> str:
     # Return string representation of default value, based on field type
@@ -248,7 +250,7 @@ def get_placeholder_value(field_name: str, field_type: str) -> str:
     
     return default_value
 
-def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
+def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     """
     Generates a SQL statement that, when run:
         - Converts data types of columns within Parquet file to OMOP CDM standard
@@ -264,7 +266,6 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
     # Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
     table_name = utils.get_table_name_from_gcs_path(gcs_file_path).lower()
-    bucket, subfolder = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
 
     # --------------------------------------------------------------------------
     # Retrieve the table schema. If not found, return empty string
@@ -349,7 +350,7 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
             WHERE md5(CONCAT({row_hash_statement})) IN (
                 SELECT row_hash FROM row_check WHERE row_hash IS NOT NULL
             )
-        ) TO 'gs://{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+        ) TO 'gs://{utils.get_invalid_rows_path_from_gcs_path(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
         COPY (
@@ -363,19 +364,52 @@ def get_fix_columns_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
 
     return sql_script
 
-def fix_columns(gcs_file_path: str, cdm_version: str) -> None:
-    fix_sql = get_fix_columns_sql_statement(gcs_file_path, cdm_version)
-
-    conn, local_db_file, tmp_dir = utils.create_duckdb_connection()
+def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
+    fix_sql = get_normalization_sql_statement(gcs_file_path, cdm_version)
     
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM
     if fix_sql and len(fix_sql) > 1:
+        conn, local_db_file = utils.create_duckdb_connection()
+
         try:
             with conn:
                 conn.execute(fix_sql)
+
+                # Get counts of valid/invalid rows for OMOP files
+                create_row_count_artifacts(gcs_file_path, cdm_version, conn)
         except Exception as e:
-            utils.logger.error(f"Unable to fix Parquet file: {e}")
-            sys.exit(1)
+            utils.logger.error(f"Unable to normalize Parquet file: {e}")
+            raise Exception(f"Unable to normalize Parquet file: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
+
+def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckdb.DuckDBPyConnection) -> None:
+    table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
+    table_concept_id = utils.get_cdm_schema(cdm_version)[table_name]['concept_id']
+    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+
+    valid_rows_file = (utils.get_parquet_artifact_location(gcs_file_path), 'Valid row count')
+    invalid_rows_file = (utils.get_invalid_rows_path_from_gcs_path(gcs_file_path),  'Invalid row count')
+
+    files = [valid_rows_file, invalid_rows_file]
+
+    for file in files:
+        file_path, count_type = file
+
+        count_query = f"""
+            SELECT COUNT(*) FROM read_parquet('gs://{file_path}')
+        """
+        result = conn.execute(count_query).fetchone()[0]
+
+        ra = report_artifact.ReportArtifact(
+            delivery_date=delivery_date,
+            gcs_path=bucket,
+            concept_id=table_concept_id,
+            name=f"{count_type}: {table_name}",
+            value_as_string=None,
+            value_as_concept_id=None,
+            value_as_number=result
+        )
+        ra.save_artifact()
+

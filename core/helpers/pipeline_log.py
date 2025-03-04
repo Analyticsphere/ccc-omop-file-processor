@@ -1,12 +1,15 @@
+from datetime import datetime
+from typing import Optional
+
+from google.cloud import bigquery  # type: ignore
+
 import core.constants as constants
 import core.utils as utils
-from typing import Optional
-from datetime import datetime
-from google.cloud import bigquery # type: ignore
-import sys
+
 
 class PipelineLog:
-    def __init__(self, site_name: str, delivery_date: str, status: str, message: Optional[str], file_format: Optional[str], cdm_version: Optional[str], run_id: str):
+    def __init__(self, logging_table: str, site_name: str, delivery_date: str, status: str, message: Optional[str], file_format: Optional[str], cdm_version: Optional[str], run_id: str):
+        self.logging_table = logging_table
         self.site_name = site_name
         self.delivery_date = delivery_date
         self.status = status
@@ -39,7 +42,7 @@ class PipelineLog:
 
             # Build the MERGE statement to only insert new records
             query = f"""
-                CREATE TABLE IF NOT EXISTS `{constants.PIPELINE_LOG_TABLE}`
+                CREATE TABLE IF NOT EXISTS `{self.logging_table}`
                 (
                     site_name STRING,
                     delivery_date DATE,
@@ -52,7 +55,7 @@ class PipelineLog:
                     run_id STRING
                 );
 
-                MERGE `{constants.PIPELINE_LOG_TABLE}` AS target
+                MERGE `{self.logging_table}` AS target
                 USING (
                 SELECT @site_name AS site_name, @delivery_date AS delivery_date
                 ) AS source
@@ -125,7 +128,7 @@ class PipelineLog:
                 }
             }
             utils.logger.error(f"Unable to add pipeline log record: {error_details}")
-            sys.exit(1)
+            raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
     def log_complete(self) -> None:
         """
@@ -138,7 +141,7 @@ class PipelineLog:
             # First, check if a record exists for this site and delivery date.
             select_query = f"""
                 SELECT 1
-                FROM `{constants.PIPELINE_LOG_TABLE}`
+                FROM `{self.logging_table}`
                 WHERE site_name = @site_name AND delivery_date = @delivery_date
                 LIMIT 1
             """
@@ -155,7 +158,7 @@ class PipelineLog:
             if exists:
                 # If the record exists, update it.
                 update_query = f"""
-                    UPDATE `{constants.PIPELINE_LOG_TABLE}`
+                    UPDATE `{self.logging_table}`
                     SET status = @status,
                         pipeline_end_datetime = @pipeline_end_datetime,
                         message = NULL
@@ -178,7 +181,6 @@ class PipelineLog:
                 update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
-                # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
             error_details = {
@@ -192,7 +194,7 @@ class PipelineLog:
                 }
             }
             utils.logger.error(f"Unable to add pipeline log record: {error_details}")
-            sys.exit(1)
+            raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
     def log_running(self) -> None:
         """
@@ -205,7 +207,7 @@ class PipelineLog:
             # First, check if a record exists for this site and delivery date.
             select_query = f"""
                 SELECT 1
-                FROM `{constants.PIPELINE_LOG_TABLE}`
+                FROM `{self.logging_table}`
                 WHERE site_name = @site_name AND delivery_date = @delivery_date
                 LIMIT 1
             """
@@ -222,7 +224,7 @@ class PipelineLog:
             if exists:
                 # If the record exists and isn't already set to running, update it.
                 update_query = f"""
-                    UPDATE `{constants.PIPELINE_LOG_TABLE}`
+                    UPDATE `{self.logging_table}`
                     SET status = @status, pipeline_end_datetime = NULL, message = NULL
                     WHERE site_name = @site_name AND delivery_date = @delivery_date
                     AND status != @status
@@ -240,7 +242,6 @@ class PipelineLog:
                 update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
-                # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
             error_details = {
@@ -254,7 +255,7 @@ class PipelineLog:
                 }
             }
             utils.logger.error(f"Unable to add pipeline log record: {error_details}")
-            sys.exit(1)
+            raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
     def log_error(self) -> None:
         """
@@ -267,7 +268,7 @@ class PipelineLog:
             # First, check if a record exists for this site and delivery date.
             select_query = f"""
                 SELECT 1
-                FROM `{constants.PIPELINE_LOG_TABLE}`
+                FROM `{self.logging_table}`
                 WHERE run_id = @run_id
                 LIMIT 1
             """
@@ -283,7 +284,7 @@ class PipelineLog:
             if exists:
                 # If the record exists, update it.
                 update_query = f"""
-                    UPDATE `{constants.PIPELINE_LOG_TABLE}`
+                    UPDATE `{self.logging_table}`
                     SET 
                     status = @status,
                     pipeline_end_datetime = @pipeline_end_datetime,
@@ -312,7 +313,6 @@ class PipelineLog:
                 update_job.result()  # Wait for the update to complete.
                 utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
             else:
-                # Optionally, log a warning or take some other action if the record doesn't exist.
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
             error_details = {
@@ -326,4 +326,4 @@ class PipelineLog:
                 }
             }
             utils.logger.error(f"Unable to add pipeline log record: {error_details}")
-            sys.exit(1)
+            raise Exception(f"Unable to add pipeline log record: {error_details}") from e
