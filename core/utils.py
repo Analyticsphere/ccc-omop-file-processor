@@ -52,7 +52,6 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
         # Get only the files in this directory level (not in subdirectories)
         # Files must be of specific type
         files = [
-            #blob.name 
             os.path.basename(blob.name) 
             for blob in blobs 
             if blob.name != folder_prefix and blob.name.lower().endswith(file_format)

@@ -21,7 +21,7 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
 
     if cdm_version == target_omop_version:
         utils.logger.info(f"CDM upgrade not needed")
-        pass
+        return
     elif cdm_version == constants.CDM_v53 and target_omop_version == constants.CDM_v54:
         if table_name in constants.CDM_53_TO_54:
             if constants.CDM_53_TO_54[table_name] == constants.REMOVED:
@@ -85,8 +85,6 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                         """
                         conn.execute(convert_query)
                 except Exception as e:
-                    
-                    #utils.logger.error(f"Unable to convert vocabulary CSV to Parquet: {e}")
                     raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
                 finally:
                     utils.close_duckdb_connection(conn, local_db_file)
@@ -149,14 +147,6 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
     
     # Execute the CREATE OR REPLACE TABLE statements in BigQuery
     utils.execute_bq_sql(create_sql, None)
-    # # Initialize the BigQuery client
-    # client = bigquery.Client()
-
-    # # Run the query
-    # query_job = client.query(create_sql)
-
-    # # Wait for the job to complete
-    # query_job.result()
 
 def populate_cdm_source(cdm_source_data: dict) -> None:
     # Add a record to the cdm_source table, if it doesn't have any rows
@@ -170,9 +160,6 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
     cdm_version_concept_id = utils.get_cdm_version_concept_id(cdm_version)
 
     try:
-        # Construct a BigQuery client object
-        client = bigquery.Client()
-
         # Build the insert statement
         query = f"""
             INSERT INTO {project_id}.{dataset_id}.cdm_source (
@@ -225,8 +212,6 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         )
 
         # Run the query as a job and wait for it to complete.
-        # query_job = client.query(query, job_config=job_config)
-        # query_job.result()  # Wait for the job to complete.
         utils.execute_bq_sql(query, job_config)
     except Exception as e:
         error_details = {

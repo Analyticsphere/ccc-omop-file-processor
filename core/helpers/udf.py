@@ -12,7 +12,6 @@ class UDFManager:
             "random_id",
         ]
 
-       
     def generate_id(self, input_string: Optional[str]) -> Optional[int]:
         if input_string is None:
             return None
