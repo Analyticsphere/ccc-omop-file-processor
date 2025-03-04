@@ -319,6 +319,6 @@ def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str, vo
         replacement_result = replacement_result.replace(placeholder, vocab_table_path)
     
     # Add site name 
-    result = result.replace(constants.SITE_PLACEHOLDER_STRING, site)
+    replacement_result = replacement_result.replace(constants.SITE_PLACEHOLDER_STRING, site)
 
-    return result
+    return replacement_result
