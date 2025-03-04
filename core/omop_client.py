@@ -3,6 +3,7 @@ from google.cloud import bigquery  # type: ignore
 import core.constants as constants
 import core.utils as utils
 import core.bq_client as bq_client
+import datetime
 
 def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str) -> None:
     """
@@ -62,7 +63,6 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
     """
     vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
-    utils.logger.warning(f"vocab files is {vocab_files}")
 
     # Confirm desired vocabulary version exists in GCS
     if utils.vocab_gcs_path_exists(vocab_root_path):
@@ -70,9 +70,6 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
             vocab_file_name = vocab_file.replace(constants.CSV, '').lower()
             parquet_file_path = f"{vocab_root_path}{constants.OPTIMIZED_VOCAB_FOLDER}/{vocab_file_name}{constants.PARQUET}"
             csv_file_path = f"{vocab_root_path}{vocab_file}"
-
-            utils.logger.warning(f"parquet_file_path for vocab is {parquet_file_path}")
-            utils.logger.warning(f"csv_file_path for vocab is {csv_file_path}")
 
             # Continue only if the vocabulary file has not been created or is not valid
             if not utils.parquet_file_exists(parquet_file_path) or not utils.valid_parquet_file(parquet_file_path):
@@ -86,7 +83,6 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                                 SELECT * FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
                             ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING}
                         """
-                        utils.logger.warning(f"convert_query is {convert_query}")
                         conn.execute(convert_query)
                 except Exception as e:
                     
@@ -241,8 +237,6 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
 def generate_derived_data(site: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
-    utils.logger.warning(f"IN generate_derived_data and site is {site} and delivery_date is {delivery_date} and table_name is {table_name}")
-
     """
     Execute SQL scripts to generate derived data table Parquet files
     """
@@ -253,7 +247,6 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
     # Check if tables necessary to generate dervied data exist in delivery
     for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
         parquet_path = f"{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
-        utils.logger.warning(f"checking for required table parquet in {parquet_path}")
         if not utils.parquet_file_exists(parquet_path):
             # Don't raise execption if required table doesn't exist, just log error
             utils.logger.error(f"Required table {required_table} not in data delivery, cannot generate derived data table {table_name}")
@@ -262,14 +255,11 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
     # Get SQL script with place holder values for table locations
     try:
         sql_path = f"{constants.SQL_PATH}{table_name}.sql"
-        utils.logger.warning(f"looking for derived table sql in {sql_path}")
         with open(sql_path, 'r') as f:
             select_statement_raw = f.read()
 
         # Add table locations
         select_statement = placeholder_to_table_path(site, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
-        printselect = select_statement.replace('\n', ' ')
-        utils.logger.warning(f"script with replacements is {printselect}")
 
         try:
             conn, local_db_file = utils.create_duckdb_connection()
@@ -282,8 +272,6 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
                         {select_statement}
                     ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
-                sqlstatementprint = sql_statement.replace('\n',' ')
-                utils.logger.warning(f"duckdb table sql is {sqlstatementprint}")
                 conn.execute(sql_statement)
 
                 # Load the Parquet to BigQuery
@@ -304,21 +292,19 @@ def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str, vo
     """
     replacement_result = sql_script
 
-    utils.logger.warning(f"clinical data items to replace are {constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items()}")
     for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
         clinical_data_table_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
-        utils.logger.warning(f"replacement clinical data table path is {clinical_data_table_path}")
         replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
-        replacement_result_no_return = replacement_result.replace('\n', '')
-        utils.logger.warning(f"site is {site} and before going to vocab replacements, SQL is {replacement_result_no_return}")
 
-    # # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
+    # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
     for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
         vocab_table_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
-        utils.logger.warning(f"replacement vocab table path is {vocab_table_path}")
         replacement_result = replacement_result.replace(placeholder, vocab_table_path)
     
     # Add site name 
     replacement_result = replacement_result.replace(constants.SITE_PLACEHOLDER_STRING, site)
+
+    # Add current date
+    replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
 
     return replacement_result

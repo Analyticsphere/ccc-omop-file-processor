@@ -86,7 +86,6 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
 
         # Process invalid columns (present in parquet but not in schema)
         for column in invalid_columns:
-            utils.logger.warning(f"'{column}' is NOT a valid column in schema for {table_name}.")
             ra = report_artifact.ReportArtifact(
                 concept_id=None,
                 delivery_date=delivery_date,

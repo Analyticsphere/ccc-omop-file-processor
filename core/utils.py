@@ -460,13 +460,15 @@ def generate_report(report_data: dict) -> None:
     report_tmp_dir = f"{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
     tmp_files = list_gcs_files(gcs_bucket, report_tmp_dir, constants.PARQUET)
 
+    logger.warning(f"tmp_files list is {tmp_files}")
+
     if len(tmp_files) > 0:
         conn, local_db_file = create_duckdb_connection()
         # Increase max_expression_depth in case there are many report artifacts
         conn.execute("SET max_expression_depth TO 1000000")
 
         # Build UNION ALL SELECT statement to join together files
-        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{gcs_bucket}/{file}')" for file in tmp_files])
+        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{gcs_bucket}/{report_tmp_dir}/{file}')" for file in tmp_files])
 
         try:
             with conn:
@@ -477,6 +479,8 @@ def generate_report(report_data: dict) -> None:
                         'gs://{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}' 
                         (HEADER, DELIMITER ',')
                 """ 
+                NORETURN = join_files_query.replace('\n', '')
+                logger.warning(f"join files query is {NORETURN}")
                 conn.execute(join_files_query)
         except Exception as e:
             logger.error(f"Unable to merge reporting artifacts: {e}")
