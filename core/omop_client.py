@@ -264,10 +264,10 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
         sql_path = f"{constants.SQL_PATH}{table_name}.sql"
         utils.logger.warning(f"looking for derived table sql in {sql_path}")
         with open(sql_path, 'r') as f:
-            select_statement = f.read()
+            select_statement_raw = f.read()
 
         # Add table locations
-        select_statement = placeholder_to_table_path(site, delivery_date, select_statement, vocab_version, vocab_gcs_bucket)
+        select_statement = placeholder_to_table_path(site, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
         printselect = select_statement.replace('\n', ' ')
         utils.logger.warning(f"script with replacements is {printselect}")
 
@@ -299,20 +299,24 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
         raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
 
 def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
-    # Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
+    """
+    Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
+    """
+    replacement_result = sql_script
+
     utils.logger.warning(f"clinical data items to replace are {constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items()}")
     for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
         clinical_data_table_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
         utils.logger.warning(f"replacement clinical data table path is {clinical_data_table_path}")
-        result = sql_script.replace(placeholder, clinical_data_table_path)
-        result_NO_RETURN = result.replace('\n', '')
-        utils.logger.warning(f"before going to vocab replacements, SQL is {result_NO_RETURN}")
+        replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
+        replacement_result_no_return = replacement_result.replace('\n', '')
+        utils.logger.warning(f"site is {site} and before going to vocab replacements, SQL is {replacement_result_no_return}")
 
     # # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
     for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
         vocab_table_path = f"gs://{vocab_gcs_bucket}{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
         utils.logger.warning(f"replacement vocab table path is {vocab_table_path}")
-        result = sql_script.replace(placeholder, vocab_table_path)
+        replacement_result = replacement_result.replace(placeholder, vocab_table_path)
     
     # Add site name 
     result = result.replace(constants.SITE_PLACEHOLDER_STRING, site)
