@@ -2,6 +2,8 @@ from google.cloud import bigquery  # type: ignore
 
 import core.constants as constants
 import core.utils as utils
+import core.bq_client as bq_client
+from datetime import datetime
 
 def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str) -> None:
     """
@@ -19,7 +21,7 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
 
     if cdm_version == target_omop_version:
         utils.logger.info(f"CDM upgrade not needed")
-        pass
+        return
     elif cdm_version == constants.CDM_v53 and target_omop_version == constants.CDM_v54:
         if table_name in constants.CDM_53_TO_54:
             if constants.CDM_53_TO_54[table_name] == constants.REMOVED:
@@ -55,14 +57,46 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
         utils.logger.error(f"OMOP CDM version {cdm_version} not supported")
         raise Exception(f"OMOP CDM version {cdm_version} not supported")
 
+def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
+    """
+    Convert CSV vocabulary files from Athena to Parquet format
+    """
+    vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
+    
+    # Confirm desired vocabulary version exists in GCS
+    if utils.vocab_gcs_path_exists(vocab_root_path):
+        vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
+        for vocab_file in vocab_files:
+            vocab_file_name = vocab_file.replace(constants.CSV, '').lower()
+            parquet_file_path = f"{vocab_root_path}{constants.OPTIMIZED_VOCAB_FOLDER}/{vocab_file_name}{constants.PARQUET}"
+            csv_file_path = f"{vocab_root_path}{vocab_file}"
+
+            # Continue only if the vocabulary file has not been created or is not valid
+            if not utils.parquet_file_exists(parquet_file_path) or not utils.valid_parquet_file(parquet_file_path):
+                
+                conn, local_db_file = utils.create_duckdb_connection()
+
+                try:
+                    with conn:
+                        convert_query = f"""
+                            COPY (
+                                SELECT * FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
+                            ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                        """
+                        conn.execute(convert_query)
+                except Exception as e:
+                    raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
+                finally:
+                    utils.close_duckdb_connection(conn, local_db_file)
+                
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
     vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
-    optimized_vocab_path = utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket)
+    optimized_file_path = utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket)
 
     # Create the optimized vocabulary file if it doesn't exist
-    if not utils.parquet_file_exists(optimized_vocab_path):
+    if not utils.parquet_file_exists(optimized_file_path):
         # Ensure exisiting vocab file can be read
-        if not utils.valid_parquet_file(optimized_vocab_path):
+        if not utils.valid_parquet_file(optimized_file_path):
             # Ensure vocabulary version actually exists
             if utils.vocab_gcs_path_exists(vocab_path):
                 conn, local_db_file = utils.create_duckdb_connection()
@@ -79,12 +113,12 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                                 cr.concept_id_2 AS target_concept_id, -- targets to concept_id's
                                 c2.standard_concept AS target_concept_id_standard, 
                                 c2.domain_id AS target_concept_id_domain
-                            FROM read_csv('gs://{vocab_path}CONCEPT.csv', delim='\t',strict_mode=False) c1
-                            LEFT JOIN read_csv('gs://{vocab_path}CONCEPT_RELATIONSHIP.csv', delim='\t',strict_mode=False) cr on c1.concept_id = cr.concept_id_1
-                            LEFT JOIN read_csv('gs://{vocab_path}CONCEPT.csv', delim='\t',strict_mode=False) c2 on cr.concept_id_2 = c2.concept_id
+                            FROM read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c1
+                            LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept_relationship{constants.PARQUET}') cr on c1.concept_id = cr.concept_id_1
+                            LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c2 on cr.concept_id_2 = c2.concept_id
                             WHERE IFNULL(cr.relationship_id, '') 
                                 IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
-                        ) TO 'gs://{optimized_vocab_path}' {constants.DUCKDB_FORMAT_STRING}
+                        ) TO 'gs://{optimized_file_path}' {constants.DUCKDB_FORMAT_STRING}
                         """
                         conn.execute(transform_query)
                 except Exception as e:
@@ -112,14 +146,7 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
         raise Exception(f"DDL file error: {e}")
     
     # Execute the CREATE OR REPLACE TABLE statements in BigQuery
-    # Initialize the BigQuery client
-    client = bigquery.Client()
-
-    # Run the query
-    query_job = client.query(create_sql)
-
-    # Wait for the job to complete
-    _ = query_job.result()
+    utils.execute_bq_sql(create_sql, None)
 
 def populate_cdm_source(cdm_source_data: dict) -> None:
     # Add a record to the cdm_source table, if it doesn't have any rows
@@ -133,9 +160,6 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
     cdm_version_concept_id = utils.get_cdm_version_concept_id(cdm_version)
 
     try:
-        # Construct a BigQuery client object
-        client = bigquery.Client()
-
         # Build the insert statement
         query = f"""
             INSERT INTO {project_id}.{dataset_id}.cdm_source (
@@ -188,8 +212,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         )
 
         # Run the query as a job and wait for it to complete.
-        query_job = client.query(query, job_config=job_config)
-        query_job.result()  # Wait for the job to complete.
+        utils.execute_bq_sql(query, job_config)
     except Exception as e:
         error_details = {
             'error_type': type(e).__name__,
@@ -198,3 +221,75 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         utils.logger.error(f"Unable to add pipeline log record: {error_details}")
         raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
+def generate_derived_data(site: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
+    """
+    Execute SQL scripts to generate derived data table Parquet files
+    """
+
+    if table_name not in constants.DERIVED_DATA_TABLES_REQUIREMENTS.keys():
+        raise Exception(f"{table_name} is not a derived data table")
+
+    # Check if tables necessary to generate dervied data exist in delivery
+    for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
+        parquet_path = f"{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
+        if not utils.parquet_file_exists(parquet_path):
+            # Don't raise execption if required table doesn't exist, just log error
+            utils.logger.error(f"Required table {required_table} not in data delivery, cannot generate derived data table {table_name}")
+            return
+    
+    # Get SQL script with place holder values for table locations
+    try:
+        sql_path = f"{constants.SQL_PATH}{table_name}.sql"
+        with open(sql_path, 'r') as f:
+            select_statement_raw = f.read()
+
+        # Add table locations
+        select_statement = placeholder_to_table_path(site, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
+
+        try:
+            conn, local_db_file = utils.create_duckdb_connection()
+
+            with conn:
+                # Generate the derived table parquet file
+                parquet_gcs_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
+                sql_statement = f"""
+                    COPY (
+                        {select_statement}
+                    ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
+                """
+                conn.execute(sql_statement)
+
+                # Load the Parquet to BigQuery
+                # Because the task that executes this function occurs after load_bq(), 
+                #   this will overwrite the derived data delievered by the site
+                bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, False)
+        except Exception as e:
+            raise Exception(f"Unable to execute SQl to generate {table_name}: {str(e)}") from e
+        finally:
+            utils.close_duckdb_connection(conn, local_db_file)
+
+    except Exception as e:
+        raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
+
+def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
+    """
+    Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
+    """
+    replacement_result = sql_script
+
+    for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
+        clinical_data_table_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
+        replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
+
+    # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
+    for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
+        vocab_table_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
+        replacement_result = replacement_result.replace(placeholder, vocab_table_path)
+    
+    # Add site name 
+    replacement_result = replacement_result.replace(constants.SITE_PLACEHOLDER_STRING, site)
+
+    # Add current date
+    replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
+
+    return replacement_result

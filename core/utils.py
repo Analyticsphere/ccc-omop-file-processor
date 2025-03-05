@@ -9,9 +9,11 @@ from typing import Optional, Tuple
 import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
 from google.cloud import storage  # type: ignore
+from google.cloud import bigquery  # type: ignore
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
+import core.helpers.udf as udf
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -50,7 +52,7 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
         # Get only the files in this directory level (not in subdirectories)
         # Files must be of specific type
         files = [
-            blob.name 
+            os.path.basename(blob.name) 
             for blob in blobs 
             if blob.name != folder_prefix and blob.name.lower().endswith(file_format)
         ]
@@ -120,6 +122,9 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
 
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
+
+        # Register UDFs
+        udf.UDFManager(conn).register_udfs()
 
         return conn, local_db_file
     except Exception as e:
@@ -460,7 +465,7 @@ def generate_report(report_data: dict) -> None:
         conn.execute("SET max_expression_depth TO 1000000")
 
         # Build UNION ALL SELECT statement to join together files
-        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{gcs_bucket}/{file}')" for file in tmp_files])
+        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{gcs_bucket}/{report_tmp_dir}{file}')" for file in tmp_files])
 
         try:
             with conn:
@@ -481,3 +486,18 @@ def generate_report(report_data: dict) -> None:
 def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
     report_tmp_dir = f"gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
     return report_tmp_dir
+
+def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig]) -> bigquery.table.RowIterator:
+    # Initialize the BigQuery client
+    client = bigquery.Client()
+
+    # Run the query
+    if job_config:
+        query_job = client.query(sql_script, job_config=job_config)
+    else:
+        query_job = client.query(sql_script)
+
+    # Wait for the job to complete
+    result = query_job.result()
+
+    return result

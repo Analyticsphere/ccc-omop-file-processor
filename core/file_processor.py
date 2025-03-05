@@ -210,7 +210,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
                 
                 # Create a text wrapper that handles the encoding
                 # If there's an issue with converting any of the non-UTF8 characters, replace them with a question mark symbol
-                 #mypy doesn't recognize that the stream reader constructor accepts the errors parameter; skip checking in mypy
+                    # mypy doesn't recognize that the stream reader constructor accepts the errors parameter; skip checking in mypy
                 text_stream = codecs.getreader(codec_name)(source_file, errors='replace') # type: ignore[call-arg]
 
                 csv_reader = csv.reader(text_stream)

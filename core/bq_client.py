@@ -23,13 +23,16 @@ def remove_all_tables(project_id: str, dataset_id: str) -> None:
         utils.logger.error(f"Unable to delete BigQuery table: {e}")
         raise Exception(f"Unable to delete BigQuery table: {e}") from e
 
-def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str) -> None:
+def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str, derive_path: bool = True) -> None:
     """
     Load Parquet artifact file from GCS directly into BigQuery.
     """
     table_name = utils.get_table_name_from_gcs_path(gcs_path)
-    parquet_path = f"gs://{utils.get_parquet_artifact_location(gcs_path)}"
-
+    if derive_path:
+        parquet_path = f"gs://{utils.get_parquet_artifact_location(gcs_path)}"
+    else:
+        parquet_path = gcs_path
+        
     # When upgrading to 5.4, some Parquet files may get deleted
     # First confirm that Parquet file does exist before trying to load to BQ
     if not utils.parquet_file_exists(parquet_path):
