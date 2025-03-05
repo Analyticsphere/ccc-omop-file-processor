@@ -62,10 +62,10 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
     Convert CSV vocabulary files from Athena to Parquet format
     """
     vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
-    vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
-
+    
     # Confirm desired vocabulary version exists in GCS
     if utils.vocab_gcs_path_exists(vocab_root_path):
+        vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
         for vocab_file in vocab_files:
             vocab_file_name = vocab_file.replace(constants.CSV, '').lower()
             parquet_file_path = f"{vocab_root_path}{constants.OPTIMIZED_VOCAB_FOLDER}/{vocab_file_name}{constants.PARQUET}"
