@@ -1,3 +1,7 @@
+-- https://ohdsi.github.io/CommonDataModel/sqlScripts.html#Condition_Eras
+-- Modified the OHDSI provided SQL script so it runs in DuckDB, and as a single SELECT statement
+-- Generating deterministic hash composite primary key using custom UDF generate_id()
+
 WITH
     cteConditionTarget AS (
       SELECT

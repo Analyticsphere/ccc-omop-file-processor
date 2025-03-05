@@ -1,3 +1,7 @@
+-- https://ohdsi.github.io/CommonDataModel/sqlScripts.html#Drug_Eras
+-- Modified the OHDSI provided SQL script so it runs in DuckDB
+-- Generating deterministic hash composite primary key using custom UDF generate_id()
+
 WITH ctePreDrugTarget(drug_exposure_id, person_id, ingredient_concept_id, drug_exposure_start_date, days_supply, drug_exposure_end_date) AS
 (
     SELECT

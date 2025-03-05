@@ -1,3 +1,7 @@
+-- Custom SQL to generate observation_period records that follow OHDSI recommendations/convensions:
+    -- https://ohdsi.github.io/CommonDataModel/ehrObsPeriods.html
+-- Generating deterministic hash composite primary key using custom UDF generate_id()
+
 WITH death_data AS (
     SELECT 
         person_id, 
