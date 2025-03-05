@@ -257,6 +257,8 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
                         {select_statement}
                     ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
+                sqlnoreturn = sql_statement.replace('\n', '')
+                utils.logger.warning(f"derived table {table_name} SQL is: {sqlnoreturn}")
                 conn.execute(sql_statement)
 
                 # Load the Parquet to BigQuery
