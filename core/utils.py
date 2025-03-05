@@ -476,7 +476,6 @@ def generate_report(report_data: dict) -> None:
                         'gs://{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}' 
                         (HEADER, DELIMITER ',')
                 """ 
-                NORETURN = join_files_query.replace('\n', '')
                 conn.execute(join_files_query)
         except Exception as e:
             logger.error(f"Unable to merge reporting artifacts: {e}")
