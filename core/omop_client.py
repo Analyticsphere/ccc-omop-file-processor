@@ -232,9 +232,10 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
     # Check if tables necessary to generate dervied data exist in delivery
     for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
         parquet_path = f"{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
+        utils.logger.warning(f"Looking for {site}'s {delivery_date} {required_table} table in {parquet_path}")
         if not utils.parquet_file_exists(parquet_path):
             # Don't raise execption if required table doesn't exist, just log error
-            utils.logger.error(f"Required table {required_table} not in data delivery, cannot generate derived data table {table_name}")
+            utils.logger.error(f"Required table {required_table} not in {site}'s {delivery_date} data delivery, cannot generate derived data table {table_name}")
             return
     
     # Get SQL script with place holder values for table locations
@@ -266,7 +267,7 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
                 #   this will overwrite the derived data delievered by the site
                 bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, False)
         except Exception as e:
-            raise Exception(f"Unable to execute SQl to generate {table_name}: {str(e)}") from e
+            raise Exception(f"Unable to execute SQL to generate {table_name}: {str(e)}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
 
