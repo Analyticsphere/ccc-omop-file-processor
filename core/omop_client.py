@@ -221,7 +221,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         utils.logger.error(f"Unable to add pipeline log record: {error_details}")
         raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
-def generate_derived_data(site: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
+def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
     """
     Execute SQL scripts to generate derived data table Parquet files
     """
@@ -231,7 +231,7 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
 
     # Check if tables necessary to generate dervied data exist in delivery
     for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
-        parquet_path = f"{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
+        parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
         utils.logger.warning(f"Looking for {site}'s {delivery_date} {required_table} table in {parquet_path}")
         if not utils.parquet_file_exists(parquet_path):
             # Don't raise execption if required table doesn't exist, just log error
@@ -245,14 +245,14 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
             select_statement_raw = f.read()
 
         # Add table locations
-        select_statement = placeholder_to_table_path(site, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
+        select_statement = placeholder_to_table_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
 
         try:
             conn, local_db_file = utils.create_duckdb_connection()
 
             with conn:
                 # Generate the derived table parquet file
-                parquet_gcs_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
+                parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
                 sql_statement = f"""
                     COPY (
                         {select_statement}
@@ -274,14 +274,14 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
 
-def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
+def placeholder_to_table_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
     """
     Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
     """
     replacement_result = sql_script
 
     for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-        clinical_data_table_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
+        clinical_data_table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
         replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
     # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
