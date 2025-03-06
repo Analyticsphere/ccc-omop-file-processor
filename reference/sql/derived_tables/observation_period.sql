@@ -9,4 +9,4 @@ SELECT DISTINCT
     CAST('1970-01-01' AS DATE) AS observation_period_start_date,
     CAST('@CURRENT_DATE') AS observation_period_end_date,
     32882 AS period_type_concept_id
-FROM '@PERSON'
+FROM read_parquet('@PERSON')
