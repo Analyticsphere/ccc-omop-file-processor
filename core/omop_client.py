@@ -231,7 +231,6 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
         raise Exception(f"{table_name} is not a derived data table")
 
     # Check if tables necessary to generate dervied data exist in delivery
-    # if table_name != constants.OBSERVATION_PERIOD:
     for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
         parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
         if not utils.parquet_file_exists(parquet_path):
@@ -256,7 +255,6 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
         else:
             sql_script_name = table_name
 
-        
     # Get SQL script with place holder values for table locations
     try:
         sql_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}.sql"
@@ -277,8 +275,6 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
                         {select_statement}
                     ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
-                sqlnoreturn = sql_statement.replace('\n', '')
-                utils.logger.warning(f"derived table {table_name} SQL is: {sqlnoreturn}")
                 conn.execute(sql_statement)
 
                 # Load the Parquet to BigQuery
