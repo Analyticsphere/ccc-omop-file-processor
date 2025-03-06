@@ -25,6 +25,8 @@ DDL_PLACEHOLDER_STRING = "@cdmDatabaseSchema"
 SQL_PATH = "reference/sql/"
 CDM_UPGRADE_SCRIPT_PATH = f"{SQL_PATH}cdm_upgrade/"
 
+DERIVED_TABLE_PATH = f"{SQL_PATH}derived_tables/"
+
 OPTIMIZED_VOCAB_FOLDER = "optimized"
 OPTIMIZED_VOCAB_FILE_NAME = f"optimized_vocab_file{PARQUET}"
 MAPPING_RELATIONSHIPS = "'Maps to','Maps to value','Maps to unit'"
@@ -44,7 +46,7 @@ OBSERVATION_PERIOD = "observation_period"
 DERIVED_DATA_TABLES_REQUIREMENTS = {
     CONDITION_ERA: ["condition_occurrence"],
     DRUG_ERA: ["drug_exposure"],
-    OBSERVATION_PERIOD: ["visit_occurrence"]
+    OBSERVATION_PERIOD: ["visit_occurrence","person","death"]
 }
 
 SITE_PLACEHOLDER_STRING = "@SITE"

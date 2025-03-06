@@ -225,22 +225,50 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
     """
     Execute SQL scripts to generate derived data table Parquet files
     """
+    # TODO: Dervied tables based on omop version
+    # Change folder structure to reference > 5.3 > schemas
+    #                               + reference > 5.3 > sql > ddl, derived_tables
+    #                               + reference > cdm_upgrade > 5.3_to_5.4
+
+    sql_script_name = table_name
 
     if table_name not in constants.DERIVED_DATA_TABLES_REQUIREMENTS.keys():
         raise Exception(f"{table_name} is not a derived data table")
 
     # Check if tables necessary to generate dervied data exist in delivery
-    for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
-        parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
-        utils.logger.warning(f"Looking for {site}'s {delivery_date} {required_table} table in {parquet_path}")
-        if not utils.parquet_file_exists(parquet_path):
-            # Don't raise execption if required table doesn't exist, just log error
-            utils.logger.error(f"Required table {required_table} not in {site}'s {delivery_date} data delivery, cannot generate derived data table {table_name}")
-            return
+    # observation_period table requires special logic
+    if table_name != constants.OBSERVATION_PERIOD:
+        for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
+            parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
+            utils.logger.warning(f"Looking for {site}'s {delivery_date} {required_table} table in {parquet_path}")
+            if not utils.parquet_file_exists(parquet_path):
+                # Don't raise execption if required table doesn't exist, just log error
+                utils.logger.error(f"Required table {required_table} not in {site}'s {delivery_date} data delivery, cannot generate derived data table {table_name}")
+                return
     
+    # observation_period records are necessary when using OHDSI analytic tools
+    # Create observation_period records using standard logic for all sites
+        # https://ohdsi.github.io/CommonDataModel/ehrObsPeriods.html
+    if table_name == constants.OBSERVATION_PERIOD:
+        visit_occurrence_table = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}visit_occurrence{constants.PARQUET}"
+        death_table = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}death{constants.PARQUET}"
+
+        # Need seperate SQL scripts for different file delivery scenarios 
+        # DuckDB doesn't support branch logic based on table/file availablity so choosing SQL script via Python
+            # visit_occurrence and death tables are included in delivery
+            # visit_occurrence table is in delivery, but death table is not
+            # visit_occurrence table is not delivery
+        if utils.parquet_file_exists(visit_occurrence_table) and utils.parquet_file_exists(death_table):
+            sql_script_name = "observation_period_vod"
+        elif utils.parquet_file_exists(visit_occurrence_table):
+            sql_script_name = "observation_period_vo"
+        else:
+            sql_script_name = table_name
+
+        
     # Get SQL script with place holder values for table locations
     try:
-        sql_path = f"{constants.SQL_PATH}{table_name}.sql"
+        sql_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}.sql"
         with open(sql_path, 'r') as f:
             select_statement_raw = f.read()
 
