@@ -325,6 +325,7 @@ def log_pipeline_state() -> tuple:
 def populate_dervied_data_table() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     site: Optional[str] = data.get('site')
+    site_bucket: Optional[str] = data.get('gcs_bucket')
     delivery_date: Optional[str] = data.get('delivery_date')
     table_name: Optional[str] = data.get('table_name')
     project_id: Optional[str] = data.get('project_id')
@@ -332,12 +333,12 @@ def populate_dervied_data_table() -> tuple[str, int]:
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
 
-    if not site or not delivery_date or not table_name or not project_id or not dataset_id or not vocab_version or not vocab_gcs_bucket:
-        return "Missing required parameters: site, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket", 400
+    if not site or not delivery_date or not table_name or not project_id or not dataset_id or not vocab_version or not vocab_gcs_bucket or not site_bucket:
+        return "Missing required parameters: site, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket, site_bucket", 400
 
     try:
         utils.logger.info(f"Generating derived table {table_name} for {delivery_date} delivery from {site}")
-        omop_client.generate_derived_data(site, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket)
+        omop_client.generate_derived_data(site, site_bucket, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket)
         return "Created derived table", 200
     except Exception as e:
         utils.logger.error(f"Unable to create dervied table: {str(e)}")

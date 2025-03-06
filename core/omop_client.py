@@ -221,37 +221,55 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         utils.logger.error(f"Unable to add pipeline log record: {error_details}")
         raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
-def generate_derived_data(site: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
+def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
     """
     Execute SQL scripts to generate derived data table Parquet files
     """
+    sql_script_name = table_name
 
     if table_name not in constants.DERIVED_DATA_TABLES_REQUIREMENTS.keys():
         raise Exception(f"{table_name} is not a derived data table")
 
     # Check if tables necessary to generate dervied data exist in delivery
     for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
-        parquet_path = f"{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
+        parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
         if not utils.parquet_file_exists(parquet_path):
-            # Don't raise execption if required table doesn't exist, just log error
-            utils.logger.error(f"Required table {required_table} not in data delivery, cannot generate derived data table {table_name}")
+            # Don't raise execption if required table doesn't exist, just log warning
+            utils.logger.warning(f"Required table {required_table} not in {site}'s {delivery_date} data delivery, cannot generate derived data table {table_name}")
             return
     
+    # observation_period table requires special logic
+    # observation_period records are necessary when using OHDSI analytic tools
+    # Create observation_period records using standard logic for all sites
+        # https://ohdsi.github.io/CommonDataModel/ehrObsPeriods.html
+    if table_name == constants.OBSERVATION_PERIOD:
+        visit_occurrence_table = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}visit_occurrence{constants.PARQUET}"
+        death_table = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}death{constants.PARQUET}"
+
+        # Need seperate SQL scripts for different file delivery scenarios 
+        # DuckDB doesn't support branch logic based on table/file availablity so choosing SQL script via Python
+        if utils.parquet_file_exists(visit_occurrence_table) and utils.parquet_file_exists(death_table):
+            sql_script_name = "observation_period_vod"
+        elif utils.parquet_file_exists(visit_occurrence_table):
+            sql_script_name = "observation_period_vo"
+        else:
+            sql_script_name = table_name
+
     # Get SQL script with place holder values for table locations
     try:
-        sql_path = f"{constants.SQL_PATH}{table_name}.sql"
+        sql_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}.sql"
         with open(sql_path, 'r') as f:
             select_statement_raw = f.read()
 
         # Add table locations
-        select_statement = placeholder_to_table_path(site, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
+        select_statement = placeholder_to_table_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
 
         try:
             conn, local_db_file = utils.create_duckdb_connection()
 
             with conn:
                 # Generate the derived table parquet file
-                parquet_gcs_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
+                parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
                 sql_statement = f"""
                     COPY (
                         {select_statement}
@@ -264,21 +282,21 @@ def generate_derived_data(site: str, delivery_date: str, table_name: str, projec
                 #   this will overwrite the derived data delievered by the site
                 bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, False)
         except Exception as e:
-            raise Exception(f"Unable to execute SQl to generate {table_name}: {str(e)}") from e
+            raise Exception(f"Unable to execute SQL to generate {table_name}: {str(e)}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
 
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
 
-def placeholder_to_table_path(site: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
+def placeholder_to_table_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
     """
     Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
     """
     replacement_result = sql_script
 
     for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-        clinical_data_table_path = f"gs://{site}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
+        clinical_data_table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
         replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
     # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
