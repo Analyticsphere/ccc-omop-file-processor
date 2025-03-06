@@ -231,15 +231,15 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
         raise Exception(f"{table_name} is not a derived data table")
 
     # Check if tables necessary to generate dervied data exist in delivery
-    # observation_period table requires special logic
-    if table_name != constants.OBSERVATION_PERIOD:
-        for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
-            parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
-            if not utils.parquet_file_exists(parquet_path):
-                # Don't raise execption if required table doesn't exist, just log warning
-                utils.logger.warning(f"Required table {required_table} not in {site}'s {delivery_date} data delivery, cannot generate derived data table {table_name}")
-                return
+    # if table_name != constants.OBSERVATION_PERIOD:
+    for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
+        parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
+        if not utils.parquet_file_exists(parquet_path):
+            # Don't raise execption if required table doesn't exist, just log warning
+            utils.logger.warning(f"Required table {required_table} not in {site}'s {delivery_date} data delivery, cannot generate derived data table {table_name}")
+            return
     
+    # observation_period table requires special logic
     # observation_period records are necessary when using OHDSI analytic tools
     # Create observation_period records using standard logic for all sites
         # https://ohdsi.github.io/CommonDataModel/ehrObsPeriods.html

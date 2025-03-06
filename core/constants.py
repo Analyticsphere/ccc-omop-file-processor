@@ -46,7 +46,7 @@ OBSERVATION_PERIOD = "observation_period"
 DERIVED_DATA_TABLES_REQUIREMENTS = {
     CONDITION_ERA: ["condition_occurrence"],
     DRUG_ERA: ["drug_exposure"],
-    OBSERVATION_PERIOD: ["visit_occurrence","person","death"]
+    OBSERVATION_PERIOD: ["person"]
 }
 
 SITE_PLACEHOLDER_STRING = "@SITE"
