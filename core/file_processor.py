@@ -328,8 +328,9 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
 
     utils.logger.warning(f"before replacement row_validity is {row_validity}")
+    # If row_validity list has no statements, add a string so SQL statement stays valid
     if not row_validity:
-        row_validity = "'faketext'"
+        row_validity.append("faketext")
     utils.logger.warning(f"after replacement row_validity is {row_validity}")
     row_validity_sql = ", ".join(row_validity)
     utils.logger.warning(f"row_validity_sql is {row_validity_sql}")
