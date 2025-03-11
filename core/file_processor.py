@@ -121,16 +121,21 @@ def csv_to_parquet(gcs_file_path: str) -> None:
                 FROM information_schema.columns
                 WHERE table_name = 'read_csv(''gs://{gcs_file_path}'', null_padding=true,ALL_VARCHAR=True,strict_mode=False)'
             """
+            utils.logger.warning(f"column_nam_query is {column_name_query}")
             column_names_df = conn.execute(column_name_query).fetchdf()
+            utils.logger.warning(f"column_names_df is {column_names_df}")
 
             # Extract column names and create lowercase versions
             original_columns = column_names_df['column_name'].tolist()
+            utils.logger.warning(f"original_columns is {original_columns}")
             lowercase_columns = [col.lower() for col in original_columns]
-            
+            utils.logger.warning(f"lowercase_columns is {lowercase_columns}")
+
             # Create column rename expressions for the SQL query
             rename_expressions = [f'"{orig}" as "{lower}"' for orig, lower in zip(original_columns, lowercase_columns)]
+            utils.logger.warning(f"rename_expressions is {rename_expressions}")
             rename_clause = ", ".join(rename_expressions)
-
+            utils.logger.warning(f"rename_clause is {rename_clause}")
 
             # Convert CSV to Parquet with lowercase column names
             convert_statement = f"""
@@ -139,7 +144,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
                     FROM read_csv('gs://{gcs_file_path}', null_padding=true, ALL_VARCHAR=True, strict_mode=False)
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
-
+            utils.logger.warning(f"convert_statement is {convert_statement}")
             conn.execute(convert_statement)
 
     except duckdb.InvalidInputException as e:
