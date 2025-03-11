@@ -87,9 +87,11 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
             select_list.append(f"{column} AS {column.lower()}")
         select_clause = ", ".join(select_list)
 
+        # First get rid of " characters in column names to prevent double double quoting
+        select_clause = select_clause.replace('"', '')
         # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
         # Need to add "" around offset column name to prevent parsing error
-        #select_clause = select_clause.replace('offset', '"offset"')
+        select_clause = select_clause.replace('offset', '"offset"')
         
         conn, local_db_file = utils.create_duckdb_connection()
 
@@ -129,6 +131,8 @@ def csv_to_parquet(gcs_file_path: str) -> None:
                 select_list.append(f"{column} AS {column.lower()}")
             select_clause = ", ".join(select_list)
 
+            # First get rid of " characters in column names to prevent double double quoting
+            select_clause = select_clause.replace('"', '')
             # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
             # Need to add "" around offset column name to prevent parsing error
             select_clause = select_clause.replace('offset', '"offset"')
