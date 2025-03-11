@@ -111,48 +111,48 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
 def csv_to_parquet(gcs_file_path: str) -> None:
     conn, local_db_file = utils.create_duckdb_connection()
 
-    try:
-        with conn:
-            parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
-
-            convert_statement = f"""
-                COPY  (
-                    SELECT
-                        *
-                    FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True,strict_mode=False)
-                ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
-            """
-            conn.execute(convert_statement)
     # try:
     #     with conn:
     #         parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
 
-    #         # Load CSV into a temporary DuckDB table
-    #         conn.execute(f"""
-    #             CREATE TEMP TABLE temp_csv AS
-    #             SELECT * FROM read_csv(
-    #                 'gs://{gcs_file_path}', 
-    #                 null_padding=true,
-    #                 ALL_VARCHAR=True,
-    #                 strict_mode=False,
-    #                 AUTO_DETECT=TRUE
-    #             )
-    #         """)
-
-    #         # Fetch column names and generate rename SQL
-    #         cols_df = conn.execute("DESCRIBE temp_csv").fetchdf()
-    #         rename_expr = ", ".join(
-    #             f'"{col}" AS "{col.lower()}"' for col in cols_df["column_name"]
-    #         )
-
-    #         # Write the Parquet file with lowercase columns
     #         convert_statement = f"""
-    #             COPY (
-    #                 SELECT {rename_expr} FROM temp_csv
+    #             COPY  (
+    #                 SELECT
+    #                     *
+    #                 FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True,strict_mode=False)
     #             ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
     #         """
-
     #         conn.execute(convert_statement)
+    try:
+        with conn:
+            parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
+
+            # Load CSV into a temporary DuckDB table
+            conn.execute(f"""
+                CREATE TEMP TABLE temp_csv AS
+                SELECT * FROM read_csv(
+                    'gs://{gcs_file_path}', 
+                    null_padding=true,
+                    ALL_VARCHAR=True,
+                    strict_mode=False,
+                    AUTO_DETECT=TRUE
+                )
+            """)
+
+            # Fetch column names and generate rename SQL
+            cols_df = conn.execute("DESCRIBE temp_csv").fetchdf()
+            rename_expr = ", ".join(
+                f'"{col}" AS "{col.lower()}"' for col in cols_df["column_name"]
+            )
+
+            # Write the Parquet file with lowercase columns
+            convert_statement = f"""
+                COPY (
+                    SELECT {rename_expr} FROM temp_csv
+                ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
+            """
+
+            conn.execute(convert_statement)
     except duckdb.InvalidInputException as e:
         # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
         error_type = utils.parse_duckdb_csv_error(e)
