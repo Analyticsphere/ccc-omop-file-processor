@@ -87,10 +87,6 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
             select_list.append(f"{column} AS {column.lower()}")
         select_clause = ", ".join(select_list)
 
-        # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
-        # Need to add "" around offset column name to prevent parsing error
-        select_clause = select_clause.replace('offset', '"offset"')
-
         conn, local_db_file = utils.create_duckdb_connection()
 
         try:
@@ -126,6 +122,10 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             for column in csv_column_names:
                 select_list.append(f"{column} AS {column.lower()}")
             select_clause = ", ".join(select_list)
+
+            # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
+            # Need to add "" around offset column name to prevent parsing error
+            select_clause = select_clause.replace('offset', '"offset"')
 
             # Convert CSV to Parquet with lowercase column names
             convert_statement = f"""
