@@ -136,39 +136,43 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
     if utils.valid_parquet_file(gcs_file_path):
         # Get columns from parquet file
         parquet_columns = utils.get_columns_from_file(gcs_file_path)
-        
+        select_list = []
+        for column in parquet_columns:
+            select_list.append(f"{column} AS {column.lower()}")
+        select_clause = ", ".join(select_list)
+
+        # First get rid of " characters in column names to prevent double double quoting
+        select_clause = select_clause.replace('"', '')
+        # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
+        # Need to add "" around offset column name to prevent parsing error
+        select_clause = select_clause.replace('offset', '"offset"')
         # Create a simple alias for each column, ensuring lowercase names
         # and properly escaping reserved keywords
-        select_parts = []
-        for col in parquet_columns:
-            # Remove existing quotes if present
-            clean_col = col.replace('"', '')
-            # If it's a reserved keyword like 'offset', properly quote it in both places
-            if clean_col.lower() == 'offset':
-                select_parts.append(f'offset AS "offset"')
-            else:
-                # For column names with quotes already, we need to handle differently
-                if '"' in col:
-                    select_parts.append(f'{col} AS {clean_col.lower()}')
-                else:
-                    select_parts.append(f'{col} AS {col.lower()}')
+        # select_parts = []
+        # for col in parquet_columns:
+        #     # Remove existing quotes if present
+        #     clean_col = col.replace('"', '')
+        #     # If it's a reserved keyword like 'offset', properly quote it in both places
+        #     if clean_col.lower() == 'offset':
+        #         select_parts.append(f'offset AS "offset"')
+        #     else:
+        #         # For column names with quotes already, we need to handle differently
+        #         if '"' in col:
+        #             select_parts.append(f'{col} AS {clean_col.lower()}')
+        #         else:
+        #             select_parts.append(f'{col} AS {col.lower()}')
                 
-        select_clause = ", ".join(select_parts)
+        #select_clause = ", ".join(select_parts)
         
         conn, local_db_file = utils.create_duckdb_connection()
         try:
             with conn:
-                # Create a view first to handle the problematic column names
-                conn.execute(f"""
-                    CREATE OR REPLACE TABLE temp_view AS 
-                    SELECT * FROM read_parquet('gs://{gcs_file_path}')
-                """)
-                
-                # Now select from the view with proper column handling
+
+                # Select from the view with proper column handling
                 copy_sql = f"""
                     COPY (
                         SELECT {select_clause}
-                        FROM temp_view
+                        FROM read_parquet('gs://{gcs_file_path}')
                     )
                     TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
                 """
