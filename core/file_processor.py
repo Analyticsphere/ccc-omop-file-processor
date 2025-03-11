@@ -103,6 +103,8 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
                     )
                     TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
                 """
+                copy_sql_no_return = copy_sql.replace('\n', ' ')
+                utils.logger.warning(f"parquet SQL is {copy_sql_no_return}")
                 conn.execute(copy_sql)
         except Exception as e:
             utils.logger.error(f"Unable to processing incoming Parquet file: {e}")
