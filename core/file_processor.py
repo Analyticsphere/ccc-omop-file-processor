@@ -160,7 +160,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
             with conn:
                 # Create a view first to handle the problematic column names
                 conn.execute(f"""
-                    CREATE OR REPLACE VIEW temp_view AS 
+                    CREATE OR REPLACE TABLE temp_view AS 
                     SELECT * FROM read_parquet('gs://{gcs_file_path}')
                 """)
                 
