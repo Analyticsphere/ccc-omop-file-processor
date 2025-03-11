@@ -111,30 +111,30 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
 def csv_to_parquet(gcs_file_path: str) -> None:
     conn, local_db_file = utils.create_duckdb_connection()
 
-    # try:
-    #     with conn:
-    #         parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
-
-    #         convert_statement = f"""
-    #             COPY  (
-    #                 SELECT
-    #                     *
-    #                 FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True,strict_mode=False)
-    #             ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
-    #         """
-    #         conn.execute(convert_statement)
     try:
         with conn:
             parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
 
-            # Convert all column names to lower case
             convert_statement = f"""
-                COPY (
-                    SELECT {', '.join([f'"' + col + '" AS "' + col.lower() + '"' for col in conn.execute(f"DESCRIBE SELECT * FROM read_csv('gs://{gcs_file_path}', AUTO_DETECT=TRUE)").fetchdf()['column_name']])}
-                    FROM read_csv('gs://{gcs_file_path}', null_padding=true, ALL_VARCHAR=True, strict_mode=False)
+                COPY  (
+                    SELECT
+                        *
+                    FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True,strict_mode=False)
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
             conn.execute(convert_statement)
+    # try:
+    #     with conn:
+    #         parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
+
+    #         # Convert all column names to lower case
+    #         convert_statement = f"""
+    #             COPY (
+    #                 SELECT {', '.join([f'"' + col + '" AS "' + col.lower() + '"' for col in conn.execute(f"DESCRIBE SELECT * FROM read_csv('gs://{gcs_file_path}', AUTO_DETECT=TRUE)").fetchdf()['column_name']])}
+    #                 FROM read_csv('gs://{gcs_file_path}', null_padding=true, ALL_VARCHAR=True, strict_mode=False)
+    #             ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
+    #         """
+    #         conn.execute(convert_statement)
     except duckdb.InvalidInputException as e:
         # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
         error_type = utils.parse_duckdb_csv_error(e)
@@ -336,6 +336,9 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
             # No need to add missing, required rows to row_validity check
 
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
+    # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
+    # Need to add "" to offset column name to prevent parsing error
+    coalesce_definitions_sql = coalesce_definitions_sql.replace('offset', '"offset"')
 
     # If row_validity list has no statements, add a string so SQL statement stays valid
     #if not row_validity:
