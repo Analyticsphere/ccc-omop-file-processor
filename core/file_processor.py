@@ -142,14 +142,13 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         # May come in as offset or "offset" and needs different handling for each scenario
         for column in parquet_columns:
             if column == '"offset"':
-                select_list.append(f'"""{column}""" AS "{column.lower()}"')
+                select_list.append(f'""{column}"" AS {column.lower()}')
             elif column == 'offset':
                 select_list.append(f'"{column}" AS "{column.lower()}"')
             else:
                 select_list.append(f"{column} AS {column.lower()}")
         select_clause = ", ".join(select_list)
 
-        
         conn, local_db_file = utils.create_duckdb_connection()
         try:
             with conn:
