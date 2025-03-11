@@ -116,34 +116,16 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
 
             csv_column_names = utils.get_columns_from_file(gcs_file_path)
-            utils.logger.warning(f"csv_column_names is {csv_column_names}")
-
-            # Get column names from the CSV
-            column_name_query = f"""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name = 'read_csv(''gs://{gcs_file_path}'', null_padding=true,ALL_VARCHAR=True,strict_mode=False)'
-            """
-            utils.logger.warning(f"column_nam_query is {column_name_query}")
-            column_names_df = conn.execute(column_name_query).fetchdf()
-            utils.logger.warning(f"column_names_df is {column_names_df}")
-
-            # Extract column names and create lowercase versions
-            original_columns = column_names_df['column_name'].tolist()
-            utils.logger.warning(f"original_columns is {original_columns}")
-            lowercase_columns = [col.lower() for col in original_columns]
-            utils.logger.warning(f"lowercase_columns is {lowercase_columns}")
-
-            # Create column rename expressions for the SQL query
-            rename_expressions = [f'"{orig}" as "{lower}"' for orig, lower in zip(original_columns, lowercase_columns)]
-            utils.logger.warning(f"rename_expressions is {rename_expressions}")
-            rename_clause = ", ".join(rename_expressions)
-            utils.logger.warning(f"rename_clause is {rename_clause}")
+            
+            select_list = []
+            for column in csv_column_names:
+                select_list.append(f"{column} AS {column.lower()}")
+            select_clause = ", ".join(select_list)
 
             # Convert CSV to Parquet with lowercase column names
             convert_statement = f"""
                 COPY (
-                    SELECT {rename_clause}
+                    SELECT {select_clause}
                     FROM read_csv('gs://{gcs_file_path}', null_padding=true, ALL_VARCHAR=True, strict_mode=False)
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
