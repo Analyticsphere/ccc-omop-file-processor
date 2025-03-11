@@ -246,7 +246,6 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
 
             # The second element of each row in PRAGMA table_info is the column name
             # https://duckdb.org/docs/configuration/pragmas#storage-information
-            # Set column names to lower case
             actual_columns = [row[1] for row in pragma_info]
 
             # Drop the temp table

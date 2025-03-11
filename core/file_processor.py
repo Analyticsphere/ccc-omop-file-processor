@@ -123,8 +123,6 @@ def csv_to_parquet(gcs_file_path: str) -> None:
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
             conn.execute(convert_statement)
-    
-    
     except duckdb.InvalidInputException as e:
         # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
         error_type = utils.parse_duckdb_csv_error(e)
@@ -330,7 +328,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     utils.logger.warning(f"before replacement row_validity is {row_validity}")
     # If row_validity list has no statements, add a string so SQL statement stays valid
     if not row_validity:
-        row_validity.append("faketext")
+        row_validity.append("'faketext'")
     utils.logger.warning(f"after replacement row_validity is {row_validity}")
     row_validity_sql = ", ".join(row_validity)
     utils.logger.warning(f"row_validity_sql is {row_validity_sql}")
