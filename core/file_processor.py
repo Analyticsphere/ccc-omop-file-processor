@@ -127,13 +127,31 @@ def csv_to_parquet(gcs_file_path: str) -> None:
     #     with conn:
     #         parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
 
-    #         # Convert all column names to lower case
+    #         # Load CSV into a temporary DuckDB table
+    #         conn.execute(f"""
+    #             CREATE TEMP TABLE temp_csv AS
+    #             SELECT * FROM read_csv(
+    #                 'gs://{gcs_file_path}', 
+    #                 null_padding=true,
+    #                 ALL_VARCHAR=True,
+    #                 strict_mode=False,
+    #                 AUTO_DETECT=TRUE
+    #             )
+    #         """)
+
+    #         # Fetch column names and generate rename SQL
+    #         cols_df = conn.execute("DESCRIBE temp_csv").fetchdf()
+    #         rename_expr = ", ".join(
+    #             f'"{col}" AS "{col.lower()}"' for col in cols_df["column_name"]
+    #         )
+
+    #         # Write the Parquet file with lowercase columns
     #         convert_statement = f"""
     #             COPY (
-    #                 SELECT {', '.join([f'"' + col + '" AS "' + col.lower() + '"' for col in conn.execute(f"DESCRIBE SELECT * FROM read_csv('gs://{gcs_file_path}', AUTO_DETECT=TRUE)").fetchdf()['column_name']])}
-    #                 FROM read_csv('gs://{gcs_file_path}', null_padding=true, ALL_VARCHAR=True, strict_mode=False)
+    #                 SELECT {rename_expr} FROM temp_csv
     #             ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
     #         """
+
     #         conn.execute(convert_statement)
     except duckdb.InvalidInputException as e:
         # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
@@ -336,9 +354,6 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
             # No need to add missing, required rows to row_validity check
 
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
-    # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
-    # Need to add "" to offset column name to prevent parsing error
-    coalesce_definitions_sql = coalesce_definitions_sql.replace('offset', '"offset"')
 
     # If row_validity list has no statements, add a string so SQL statement stays valid
     if not row_validity:
@@ -378,6 +393,10 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         ;
 
     """.strip()
+
+    # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
+    # Need to add "" around offset column name to prevent parsing error
+    sql_script = sql_script.replace('offset', '"offset"')
 
     return sql_script
 
