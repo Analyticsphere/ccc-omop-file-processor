@@ -145,7 +145,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
             clean_col = col.replace('"', '')
             # If it's a reserved keyword like 'offset', properly quote it in both places
             if clean_col.lower() == 'offset':
-                select_parts.append(f'\'''"offset"\''' AS "offset"')
+                select_parts.append(f'offset AS "offset"')
             else:
                 # For column names with quotes already, we need to handle differently
                 if '"' in col:
