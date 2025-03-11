@@ -137,8 +137,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         # Get columns from parquet file
         parquet_columns = utils.get_columns_from_file(gcs_file_path)
         
-        # Create a simple alias for each column, ensuring lowercase names
-        # and properly escaping reserved keywords
+        # Create a simple alias for each column, ensuring lowercase names, and properly escaping reserved keywords
         select_parts = []
         for col in parquet_columns:
             # Remove existing quotes if present
@@ -194,30 +193,20 @@ def csv_to_parquet(gcs_file_path: str) -> None:
 
             csv_column_names = utils.get_columns_from_file(gcs_file_path)
 
-            # select_list = []
-            # for column in csv_column_names:
-            #     select_list.append(f"{column} AS {column.lower()}")
-            # select_clause = ", ".join(select_list)
-
             select_clause = []
-
+            # Create a simple alias for each column, ensuring lowercase names, and properly escaping reserved keywords
             for col in csv_column_names:
                 # Remove existing quotes if present
                 clean_col = col.replace('"', '')
                 # If it's a reserved keyword like 'offset', properly quote it in both places
                 if clean_col.lower() == 'offset':
-                    select_clause.append(f'\'''"offset"\''' AS "offset"')
+                    select_clause.append(f'"offset" AS "offset"')
                 else:
                     # For column names with quotes already, we need to handle differently
                     if '"' in col:
                         select_clause.append(f'{col} AS {clean_col.lower()}')
                     else:
                         select_clause.append(f'{col} AS {col.lower()}')
-            # # First get rid of " characters in column names to prevent double double quoting
-            # select_clause = select_clause.replace('"', '')
-            # # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
-            # # Need to add "" around offset column name to prevent parsing error
-            # select_clause = select_clause.replace('offset', '"offset"')
 
             # Convert CSV to Parquet with lowercase column names
             convert_statement = f"""
