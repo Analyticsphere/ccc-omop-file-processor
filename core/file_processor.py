@@ -326,6 +326,9 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
             # No need to add missing, required rows to row_validity check
 
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
+    # If no columns are in file, replace COALESCE() with statement that always evaulates to false
+    coalesce_definitions_sql = coalesce_definitions_sql.replace('COALESCE()', '1=2')
+
     row_validity_sql = ", ".join(row_validity)
 
     # Build row_check table with row_hash column
