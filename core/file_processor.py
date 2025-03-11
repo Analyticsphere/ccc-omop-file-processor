@@ -115,6 +115,9 @@ def csv_to_parquet(gcs_file_path: str) -> None:
         with conn:
             parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
 
+            csv_column_names = utils.get_columns_from_file(gcs_file_path)
+            utils.logger.warning(f"csv_column_names is {csv_column_names}")
+
             # Get column names from the CSV
             column_name_query = f"""
                 SELECT column_name

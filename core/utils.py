@@ -258,6 +258,70 @@ def get_columns_from_parquet(gcs_file_path: str) -> list:
         
     return actual_columns
 
+
+def get_columns_from_file(gcs_file_path: str) -> list:
+    """
+    Reads file schema from the specified 'gs://{gcs_file_path}' using DuckDB
+    to introspect its columns. Supports both Parquet and CSV files.
+    Returns a list of columns found in the file.
+
+    This function:
+        1. Determines file type based on extension (.parquet or .csv)
+        2. Creates a temporary DuckDB table from the file, limited to 0 rows.
+        3. Uses PRAGMA table_info(...) to retrieve column metadata.
+        4. Drops the temporary table.
+        5. Returns a list of the actual column names present in the file.
+    """
+    
+    gcs_file_path = gcs_file_path.replace("gs://", "")
+    
+    # Determine file type by extension
+    is_csv = gcs_file_path.lower().endswith('.csv')
+    
+    # Create a unique table name for introspection
+    table_name_for_introspection = "temp_introspect_table"
+
+    conn, local_db_file = create_duckdb_connection()
+    try:
+        with conn:
+            # Drop any existing temp table with the same name
+            conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
+
+            # Create a temp table based on file type with zero rows
+            if is_csv:
+                conn.execute(f"""
+                    CREATE TEMP TABLE {table_name_for_introspection} AS
+                    SELECT * FROM read_csv('gs://{gcs_file_path}', 
+                                          null_padding=true, 
+                                          ALL_VARCHAR=True,
+                                          strict_mode=False) 
+                    LIMIT 0
+                """)
+            else:  # Parquet file
+                conn.execute(f"""
+                    CREATE TEMP TABLE {table_name_for_introspection} AS
+                    SELECT * FROM 'gs://{gcs_file_path}' 
+                    LIMIT 0
+                """)
+
+            # Retrieve column metadata from DuckDB
+            pragma_info = conn.execute(
+                f"PRAGMA table_info({table_name_for_introspection})"
+            ).fetchall()
+
+            # The second element of each row in PRAGMA table_info is the column name
+            actual_columns = [row[1] for row in pragma_info]
+
+            # Drop the temp table
+            conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
+    except Exception as e:
+        logger.error(f"Unable to get column list from {'CSV' if is_csv else 'Parquet'} file: {e}")
+        raise Exception(f"Unable to get column list from {'CSV' if is_csv else 'Parquet'} file: {e}") from e
+    finally:
+        close_duckdb_connection(conn, local_db_file)
+        
+    return actual_columns
+
 def valid_parquet_file(gcs_file_path: str) -> bool:
     # Retuns bool indicating whether Parquet file is valid/can be read by DuckDB
     conn, local_db_file = create_duckdb_connection()
