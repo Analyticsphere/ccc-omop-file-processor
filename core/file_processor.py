@@ -115,18 +115,35 @@ def csv_to_parquet(gcs_file_path: str) -> None:
         with conn:
             parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
 
+            # Step 1: Safely read only the header row to get columns
+            cols_df = conn.execute(f"""
+                SELECT * FROM read_csv(
+                    'gs://{gcs_file_path}',
+                    HEADER=TRUE,
+                    AUTO_DETECT=TRUE,
+                    SAMPLE_SIZE=-1,
+                    null_padding=true,
+                    ALL_VARCHAR=True,
+                    strict_mode=False
+                ) LIMIT 0
+            """).fetchdf()
+
+            # Get column names and build explicit rename expression
+            original_columns = cols_df.columns.tolist()
+            rename_expr = ", ".join([f'"{col}" AS "{col.lower()}"' for col in original_columns])
+
+            # Step 2: Use explicit SELECT with renamed columns to export to Parquet
             convert_statement = f"""
                 COPY (
-                    SELECT * EXCLUDE () REPLACE (COLUMNS(*) AS LOWER(COLUMNS(*)))
+                    SELECT {rename_expr}
                     FROM read_csv(
                         'gs://{gcs_file_path}',
                         null_padding=true,
                         ALL_VARCHAR=True,
                         strict_mode=False,
-                        AUTO_DETECT=true
+                        AUTO_DETECT=TRUE
                     )
-                )
-                TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
+                ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
 
             conn.execute(convert_statement)
