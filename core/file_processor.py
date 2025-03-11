@@ -89,7 +89,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
 
         # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
         # Need to add "" around offset column name to prevent parsing error
-        select_clause = select_clause.replace('offset', '"offset"')
+        #select_clause = select_clause.replace('offset', '"offset"')
         
         conn, local_db_file = utils.create_duckdb_connection()
 
@@ -107,8 +107,8 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
                 utils.logger.warning(f"parquet SQL is {copy_sql_no_return}")
                 conn.execute(copy_sql)
         except Exception as e:
-            utils.logger.error(f"Unable to processing incoming Parquet file: {e}")
-            raise Exception(f"Unable to processing incoming Parquet file: {e}") from e
+            utils.logger.error(f"Unable to process incoming Parquet file: {e}")
+            raise Exception(f"Unable to process incoming Parquet file: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
     else:
