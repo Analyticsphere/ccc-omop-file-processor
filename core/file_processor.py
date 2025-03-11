@@ -79,12 +79,17 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
     if utils.valid_parquet_file(gcs_file_path):
         # Built a SELECT statement which will copy original Parquet
         # to a new Parquet file, converting column names to lower case
-        parquet_columns = utils.get_columns_from_parquet(gcs_file_path)
+        #parquet_columns = utils.get_columns_from_parquet(gcs_file_path)
+        parquet_columns = utils.get_columns_from_file(gcs_file_path)
 
         select_list = []
         for column in parquet_columns:
             select_list.append(f"{column} AS {column.lower()}")
         select_clause = ", ".join(select_list)
+
+        # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
+        # Need to add "" around offset column name to prevent parsing error
+        select_clause = select_clause.replace('offset', '"offset"')
 
         conn, local_db_file = utils.create_duckdb_connection()
 
@@ -116,7 +121,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
 
             csv_column_names = utils.get_columns_from_file(gcs_file_path)
-            
+
             select_list = []
             for column in csv_column_names:
                 select_list.append(f"{column} AS {column.lower()}")
@@ -288,7 +293,8 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # --------------------------------------------------------------------------
     # Identify which columns actually exist in the Parquet file 
     # --------------------------------------------------------------------------
-    actual_columns = utils.get_columns_from_parquet(gcs_file_path)
+    #actual_columns = utils.get_columns_from_parquet(gcs_file_path)
+    actual_columns = utils.get_columns_from_file(gcs_file_path)
 
     # --------------------------------------------------------------------------
     # Initialize lists to build SQL expressions
