@@ -199,20 +199,20 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             #     select_list.append(f"{column} AS {column.lower()}")
             # select_clause = ", ".join(select_list)
 
-            select_list = []
+            select_clause = []
 
             for col in csv_column_names:
                 # Remove existing quotes if present
                 clean_col = col.replace('"', '')
                 # If it's a reserved keyword like 'offset', properly quote it in both places
                 if clean_col.lower() == 'offset':
-                    select_list.append(f'\'''"offset"\''' AS "offset"')
+                    select_clause.append(f'\'''"offset"\''' AS "offset"')
                 else:
                     # For column names with quotes already, we need to handle differently
                     if '"' in col:
-                        select_list.append(f'{col} AS {clean_col.lower()}')
+                        select_clause.append(f'{col} AS {clean_col.lower()}')
                     else:
-                        select_list.append(f'{col} AS {col.lower()}')
+                        select_clause.append(f'{col} AS {col.lower()}')
             # # First get rid of " characters in column names to prevent double double quoting
             # select_clause = select_clause.replace('"', '')
             # # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
