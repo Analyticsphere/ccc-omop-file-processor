@@ -111,15 +111,27 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
 def csv_to_parquet(gcs_file_path: str) -> None:
     conn, local_db_file = utils.create_duckdb_connection()
 
+    # try:
+    #     with conn:
+    #         parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
+
+    #         convert_statement = f"""
+    #             COPY  (
+    #                 SELECT
+    #                     *
+    #                 FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True,strict_mode=False)
+    #             ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
+    #         """
+    #         conn.execute(convert_statement)
     try:
         with conn:
             parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
 
+            # Convert all column names to lower case
             convert_statement = f"""
-                COPY  (
-                    SELECT
-                        *
-                    FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True,strict_mode=False)
+                COPY (
+                    SELECT {', '.join([f'"' + col + '" AS "' + col.lower() + '"' for col in conn.execute(f"DESCRIBE SELECT * FROM read_csv('gs://{gcs_file_path}', AUTO_DETECT=TRUE)").fetchdf()['column_name']])}
+                    FROM read_csv('gs://{gcs_file_path}', null_padding=true, ALL_VARCHAR=True, strict_mode=False)
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
             conn.execute(convert_statement)
@@ -325,13 +337,10 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
 
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
 
-    utils.logger.warning(f"before replacement row_validity is {row_validity}")
     # If row_validity list has no statements, add a string so SQL statement stays valid
-    if not row_validity:
-        row_validity.append("'faketext'")
-    utils.logger.warning(f"after replacement row_validity is {row_validity}")
+    #if not row_validity:
+    #    row_validity.append("'faketext'")
     row_validity_sql = ", ".join(row_validity)
-    utils.logger.warning(f"row_validity_sql is {row_validity_sql}")
 
     # Build row_check table with row_hash column
     # Uniquely identify invalid rows using hash generated from concatenting each column
