@@ -341,8 +341,8 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     coalesce_definitions_sql = coalesce_definitions_sql.replace('offset', '"offset"')
 
     # If row_validity list has no statements, add a string so SQL statement stays valid
-    #if not row_validity:
-    #    row_validity.append("'faketext'")
+    if not row_validity:
+        row_validity.append("'faketext'")
     row_validity_sql = ", ".join(row_validity)
 
     # Build row_check table with row_hash column
