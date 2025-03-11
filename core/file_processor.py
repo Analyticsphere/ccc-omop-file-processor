@@ -69,63 +69,6 @@ def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
         utils.logger.info(f"Invalid source file format: {file_type}") 
         raise Exception(f"Invalid source file format: {file_type}")
 
-# def process_incoming_parquet(gcs_file_path: str) -> None:
-#     """
-#     - Validates that the Parquet file at gcs_file_path in GCS is readable by DuckDB.
-#     - Copies incoming Parquet file to artifact GCS directory, ensuring:
-#        - The output file name is all lowercase
-#        - All column names within the Parquet file are all lowercase.
-#     """
-#     if utils.valid_parquet_file(gcs_file_path):
-#         # Built a SELECT statement which will copy original Parquet
-#         # to a new Parquet file, converting column names to lower case
-#         #parquet_columns = utils.get_columns_from_parquet(gcs_file_path)
-#         parquet_columns = utils.get_columns_from_file(gcs_file_path)
-
-#         select_list = []
-#         for column in parquet_columns:
-#             # Handle columns that already include quotes in their names
-#             clean_column = column.replace('"', '')
-            
-#             # Handle reserved keyword 'offset'
-#             if clean_column.lower() == 'offset':
-#                 select_list.append(f'{column} AS "offset"')
-#             else:
-#                 select_list.append(f'{column} AS {clean_column.lower()}')
-
-#         select_clause = ", ".join(select_list)
-#         #     select_list.append(f"{column} AS {column.lower()}")
-
-#         # First get rid of " characters in column names to prevent double double quoting
-#         #select_clause = select_clause.replace('"', '')
-#         # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
-#         # Need to add "" around offset column name to prevent parsing error
-#         #select_clause = select_clause.replace('offset', '"offset"')
-        
-#         conn, local_db_file = utils.create_duckdb_connection()
-
-#         try:
-#             with conn:
-#                 # Execute the SELECT statement to copy Parquet file
-#                 copy_sql = f"""
-#                     COPY (
-#                         SELECT {select_clause}
-#                         FROM read_parquet('gs://{gcs_file_path}')
-#                     )
-#                     TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
-#                 """
-#                 copy_sql_no_return = copy_sql.replace('\n', ' ')
-#                 utils.logger.warning(f"parquet SQL is {copy_sql_no_return}")
-#                 conn.execute(copy_sql)
-#         except Exception as e:
-#             utils.logger.error(f"Unable to process incoming Parquet file: {e}")
-#             raise Exception(f"Unable to process incoming Parquet file: {e}") from e
-#         finally:
-#             utils.close_duckdb_connection(conn, local_db_file)
-#     else:
-#         utils.logger.error(f"Invalid Parquet file")
-#         raise Exception(f"Invalid Parquet file")
-
 def process_incoming_parquet(gcs_file_path: str) -> None:
     """
     - Validates that the Parquet file at gcs_file_path in GCS is readable by DuckDB.
@@ -139,7 +82,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         select_list = []
 
         # Handle offset column in note_nlp
-        # May come in as offset or "offset" and needs different handling for each scenario
+        # May come in as offset or "offset" and need different handling for each scenario
         for column in parquet_columns:
             if column == '"offset"':
                 select_list.append(f'""{column}"" AS {column.lower()}')
@@ -153,7 +96,6 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         try:
             with conn:
 
-                # Select from the view with proper column handling
                 copy_sql = f"""
                     COPY (
                         SELECT {select_clause}
@@ -161,9 +103,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
                     )
                     TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
                 """
-                
-                copy_sql_no_return = copy_sql.replace('\n', ' ')
-                utils.logger.warning(f"parquet SQL is {copy_sql_no_return}")
+
                 conn.execute(copy_sql)
         except Exception as e:
             utils.logger.error(f"Unable to process incoming Parquet file: {e}")
@@ -201,7 +141,6 @@ def csv_to_parquet(gcs_file_path: str) -> None:
                     FROM read_csv('gs://{gcs_file_path}', null_padding=true, ALL_VARCHAR=True, strict_mode=False)
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
-            utils.logger.warning(f"convert_statement is {convert_statement}")
             conn.execute(convert_statement)
 
     except duckdb.InvalidInputException as e:
@@ -360,7 +299,6 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # --------------------------------------------------------------------------
     # Identify which columns actually exist in the Parquet file 
     # --------------------------------------------------------------------------
-    #actual_columns = utils.get_columns_from_parquet(gcs_file_path)
     actual_columns = utils.get_columns_from_file(gcs_file_path)
 
     # --------------------------------------------------------------------------
@@ -463,9 +401,7 @@ def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
         try:
             with conn:
                 sql_no_return = fix_sql.replace('\n', '')
-                utils.logger.warning(f"fix_sql script is: {sql_no_return}")
                 conn.execute(fix_sql)
-                utils.logger.warning("DID FINISH fix_sql")
                 # Get counts of valid/invalid rows for OMOP files
                 create_row_count_artifacts(gcs_file_path, cdm_version, conn)
         except Exception as e:

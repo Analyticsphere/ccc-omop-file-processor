@@ -58,7 +58,6 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
         schema = utils.get_table_schema(table_name=table_name, cdm_version=omop_version)
         
         parquet_artifact_location = utils.get_parquet_artifact_location(file_path)
-        #parquet_columns = set(utils.get_columns_from_parquet(parquet_artifact_location))
         parquet_columns = set(utils.get_columns_from_file(parquet_artifact_location))
 
         # Get schema columns from the table schema and convert to set (for O(1) lookups)
