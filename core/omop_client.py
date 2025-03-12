@@ -262,7 +262,7 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
         # The script is split into two parts: 
         #   1) SQL statements that create tables (which offloads data from memory to disk) and select from tables
         #   2) Performs a final select statement against "last" temp table
-        if table_name == 'drug_era':
+        if table_name == constants.DRUG_ERA:
             create_statement_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}_create.sql"
             with open(create_statement_path, 'r') as f:
                 create_statement_raw = f.read()
