@@ -1,7 +1,3 @@
--- https://ohdsi.github.io/CommonDataModel/sqlScripts.html#Drug_Eras
--- Modified the OHDSI provided SQL script so it runs in DuckDB
--- Generating deterministic hash composite primary key using custom UDF generate_id()
-
 CREATE OR REPLACE TABLE ctePreDrugTarget AS
     SELECT
         d.drug_exposure_id,
@@ -70,7 +66,7 @@ GROUP BY
     dt.ingredient_concept_id,
     dt.drug_exposure_start_date
 ;
---------------------------------------------------------------------------------------------------------------
+
 CREATE OR REPLACE TABLE cteSubExposures AS 
 SELECT ROW_NUMBER() OVER (PARTITION BY person_id, ingredient_concept_id, drug_sub_exposure_end_date ORDER BY person_id) AS row_number,
     person_id, ingredient_concept_id AS drug_concept_id, MIN(drug_exposure_start_date) AS drug_sub_exposure_start_date, drug_sub_exposure_end_date, COUNT(*) AS drug_exposure_count
@@ -78,20 +74,14 @@ FROM cteDrugExposureEnds
 GROUP BY person_id, ingredient_concept_id, drug_sub_exposure_end_date
 ;
 
---------------------------------------------------------------------------------------------------------------
-/*Everything above grouped exposures into sub_exposures if there was overlap between exposures.
-* So there was no persistence window. Now we can add the persistence window to calculate eras.
-*/
---------------------------------------------------------------------------------------------------------------
-
 CREATE OR REPLACE TABLE cteFinalTarget AS 
 SELECT row_number, person_id, drug_concept_id, drug_sub_exposure_start_date, drug_sub_exposure_end_date, drug_exposure_count,
     DATEDIFF('day', drug_sub_exposure_start_date, drug_sub_exposure_end_date) AS days_exposed
 FROM cteSubExposures
 ;
---------------------------------------------------------------------------------------------------------------
+
 CREATE OR REPLACE TABLE cteEndDates AS 
-SELECT person_id, drug_concept_id, event_date - INTERVAL '30' DAY AS end_date -- unpad the end date
+SELECT person_id, drug_concept_id, event_date - INTERVAL '30' DAY AS end_date
 FROM
 (
     SELECT person_id, drug_concept_id, event_date, event_type,
@@ -108,7 +98,6 @@ FROM
 
         UNION ALL
 
-        -- pad the end dates by 30 to allow a grace period for overlapping ranges.
         SELECT person_id, drug_concept_id, drug_sub_exposure_end_date + INTERVAL '30' DAY, 1 AS event_type, NULL
         FROM cteFinalTarget
     ) RAWDATA
@@ -136,7 +125,6 @@ GROUP BY
 
 CREATE OR REPLACE TABLE  final_select AS 
 SELECT DISTINCT
-    --ROW_NUMBER() OVER (ORDER BY person_id) AS drug_era_id,
     person_id,
     drug_concept_id,
     MIN(drug_sub_exposure_start_date) AS drug_era_start_date,
