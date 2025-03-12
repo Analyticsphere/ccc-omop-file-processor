@@ -400,7 +400,6 @@ def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
 
         try:
             with conn:
-                sql_no_return = fix_sql.replace('\n', '')
                 conn.execute(fix_sql)
                 # Get counts of valid/invalid rows for OMOP files
                 create_row_count_artifacts(gcs_file_path, cdm_version, conn)
