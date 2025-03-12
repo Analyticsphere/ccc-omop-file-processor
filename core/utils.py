@@ -208,51 +208,64 @@ def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str,
     bucket_name, delivery_date = gcs_file_path.split('/')[:2]
     return bucket_name, delivery_date
 
-def get_columns_from_parquet(gcs_file_path: str) -> list:
+def get_columns_from_file(gcs_file_path: str) -> list:
     """
-    Reads Parquet file schema from the specified 'gs://{gcs_file_path}' 
-    using DuckDB to introspect its columns. Returns a list of columns found 
-    in the Parquet file.
+    Reads file schema from the specified 'gs://{gcs_file_path}' using DuckDB
+    to introspect its columns. Supports both Parquet and CSV files.
+    Returns a list of columns found in the file.
 
     This function:
-        1. Creates a temporary DuckDB table from the Parquet file, limited to 0 rows.
-        2. Uses PRAGMA table_info(...) to retrieve column metadata.
-        3. Drops the temporary table.
-        4. Returns a list of the actual column names present in the file.
+        1. Determines file type based on extension (.parquet or .csv)
+        2. Creates a temporary DuckDB table from the file, limited to 0 rows.
+        3. Uses PRAGMA table_info(...) to retrieve column metadata.
+        4. Drops the temporary table.
+        5. Returns a list of the actual column names present in the file.
     """
     
     gcs_file_path = gcs_file_path.replace("gs://", "")
-
-    # Create a unique or table-specific name for introspection
+    
+    # Determine file type by extension
+    is_csv = gcs_file_path.lower().endswith('.csv')
+    
+    # Create a unique table name for introspection
     table_name_for_introspection = "temp_introspect_table"
 
     conn, local_db_file = create_duckdb_connection()
     try:
         with conn:
-            
-            # Drop any existing temp table with the same name, just to be safe
+            # Drop any existing temp table with the same name
             conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
 
-            # Create a temp table from the Parquet file with zero rows
-            conn.execute(f"""
-                CREATE TEMP TABLE {table_name_for_introspection} AS
-                SELECT * FROM 'gs://{gcs_file_path}' LIMIT 0
-            """)
+            # Create a temp table based on file type with zero rows
+            if is_csv:
+                conn.execute(f"""
+                    CREATE TEMP TABLE {table_name_for_introspection} AS
+                    SELECT * FROM read_csv('gs://{gcs_file_path}', 
+                                          null_padding=true, 
+                                          ALL_VARCHAR=True,
+                                          strict_mode=False) 
+                    LIMIT 0
+                """)
+            else:  # Parquet file
+                conn.execute(f"""
+                    CREATE TEMP TABLE {table_name_for_introspection} AS
+                    SELECT * FROM 'gs://{gcs_file_path}' 
+                    LIMIT 0
+                """)
 
             # Retrieve column metadata from DuckDB
             pragma_info = conn.execute(
                 f"PRAGMA table_info({table_name_for_introspection})"
-            ).fetchall() # Okay to use fetchall() because we are certain list will fit in memory
+            ).fetchall()
 
             # The second element of each row in PRAGMA table_info is the column name
-            # https://duckdb.org/docs/configuration/pragmas#storage-information
             actual_columns = [row[1] for row in pragma_info]
 
             # Drop the temp table
             conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
     except Exception as e:
-        logger.error(f"Unable to get Parquet column list: {e}")
-        raise Exception(f"Unable to get Parquet column list: {e}") from e
+        logger.error(f"Unable to get column list from {'CSV' if is_csv else 'Parquet'} file: {e}")
+        raise Exception(f"Unable to get column list from {'CSV' if is_csv else 'Parquet'} file: {e}") from e
     finally:
         close_duckdb_connection(conn, local_db_file)
         
