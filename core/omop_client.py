@@ -257,8 +257,11 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
 
     # Get SQL script with place holder values for table locations
     try:
-        # 
         create_statement = ""
+        # The drug_era script provided by OHDSI is resource intenstive
+        # The script is split into two parts: 
+        #   1) SQL statements that create and select from tables (which offloads data from memory to disk)
+        #   2) Performs a final select statement against "last" temp table\
         if table_name == 'drug_era':
             create_statement_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}_create.sql"
             with open(create_statement_path, 'r') as f:
@@ -285,8 +288,6 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
                         {select_statement}
                     ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
-                dervied_sql_no_returns = sql_statement.replace('\n', ' ')
-                utils.logger.warning(f"dervied SQL is {dervied_sql_no_returns}")
                 conn.execute(sql_statement)
 
                 # Load the Parquet to BigQuery
