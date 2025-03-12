@@ -260,7 +260,7 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
         create_statement = ""
         # The drug_era script provided by OHDSI is resource intenstive
         # The script is split into two parts: 
-        #   1) SQL statements that create tables (which offloads data from memory to disk) and select from tables
+        #   1) SQL statements that iteratively creates tables to derive drug_era records. Creating tables offloads data from memory to disk.
         #   2) Performs a final select statement against "last" temp table
         if table_name == constants.DRUG_ERA:
             create_statement_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}_create.sql"
