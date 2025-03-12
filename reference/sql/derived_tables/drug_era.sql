@@ -2,8 +2,7 @@
 -- Modified the OHDSI provided SQL script so it runs in DuckDB
 -- Generating deterministic hash composite primary key using custom UDF generate_id()
 
-WITH ctePreDrugTarget(drug_exposure_id, person_id, ingredient_concept_id, drug_exposure_start_date, days_supply, drug_exposure_end_date) AS
-(
+CREATE OR REPLACE TABLE ctePreDrugTarget AS
     SELECT
         d.drug_exposure_id,
         d.person_id,
@@ -30,9 +29,9 @@ WITH ctePreDrugTarget(drug_exposure_id, person_id, ingredient_concept_id, drug_e
     AND c.concept_class_id = 'Ingredient'
     AND d.drug_concept_id != 0
     AND IFNULL(TRY_CAST(d.person_id AS BIGINT), -1) != -1
-)
-, cteSubExposureEndDates (person_id, ingredient_concept_id, end_date) AS
-(
+;
+
+CREATE OR REPLACE TABLE cteSubExposureEndDates AS 
     SELECT person_id, ingredient_concept_id, event_date AS end_date
     FROM
     (
@@ -55,10 +54,9 @@ WITH ctePreDrugTarget(drug_exposure_id, person_id, ingredient_concept_id, drug_e
         ) RAWDATA
     ) e
     WHERE (2 * e.start_ordinal) - e.overall_ord = 0
-)
+;
 
-, cteDrugExposureEnds (person_id, drug_concept_id, drug_exposure_start_date, drug_sub_exposure_end_date) AS
-(
+CREATE OR REPLACE TABLE cteDrugExposureEnds AS 
 SELECT
     dt.person_id,
     dt.ingredient_concept_id,
@@ -71,56 +69,54 @@ GROUP BY
     dt.person_id,
     dt.ingredient_concept_id,
     dt.drug_exposure_start_date
-)
+;
 --------------------------------------------------------------------------------------------------------------
-, cteSubExposures(row_number, person_id, drug_concept_id, drug_sub_exposure_start_date, drug_sub_exposure_end_date, drug_exposure_count) AS
-(
-    SELECT ROW_NUMBER() OVER (PARTITION BY person_id, drug_concept_id, drug_sub_exposure_end_date ORDER BY person_id) AS row_number,
-        person_id, drug_concept_id, MIN(drug_exposure_start_date) AS drug_sub_exposure_start_date, drug_sub_exposure_end_date, COUNT(*) AS drug_exposure_count
-    FROM cteDrugExposureEnds
-    GROUP BY person_id, drug_concept_id, drug_sub_exposure_end_date
-)
+CREATE OR REPLACE TABLE cteSubExposures AS 
+SELECT ROW_NUMBER() OVER (PARTITION BY person_id, drug_concept_id, drug_sub_exposure_end_date ORDER BY person_id) AS row_number,
+    person_id, drug_concept_id, MIN(drug_exposure_start_date) AS drug_sub_exposure_start_date, drug_sub_exposure_end_date, COUNT(*) AS drug_exposure_count
+FROM cteDrugExposureEnds
+GROUP BY person_id, drug_concept_id, drug_sub_exposure_end_date
+;
+
 --------------------------------------------------------------------------------------------------------------
 /*Everything above grouped exposures into sub_exposures if there was overlap between exposures.
 * So there was no persistence window. Now we can add the persistence window to calculate eras.
 */
 --------------------------------------------------------------------------------------------------------------
-, cteFinalTarget(row_number, person_id, ingredient_concept_id, drug_sub_exposure_start_date, drug_sub_exposure_end_date, drug_exposure_count, days_exposed) AS
-(
-    SELECT row_number, person_id, drug_concept_id, drug_sub_exposure_start_date, drug_sub_exposure_end_date, drug_exposure_count,
-        DATEDIFF('day', drug_sub_exposure_start_date, drug_sub_exposure_end_date) AS days_exposed
-    FROM cteSubExposures
-)
+
+CREATE OR REPLACE TABLE cteFinalTarget AS 
+SELECT row_number, person_id, drug_concept_id, drug_sub_exposure_start_date, drug_sub_exposure_end_date, drug_exposure_count,
+    DATEDIFF('day', drug_sub_exposure_start_date, drug_sub_exposure_end_date) AS days_exposed
+FROM cteSubExposures
+;
 --------------------------------------------------------------------------------------------------------------
-, cteEndDates (person_id, ingredient_concept_id, end_date) AS -- the magic
+CREATE OR REPLACE TABLE cteEndDates AS 
+SELECT person_id, ingredient_concept_id, event_date - INTERVAL '30' DAY AS end_date -- unpad the end date
+FROM
 (
-    SELECT person_id, ingredient_concept_id, event_date - INTERVAL '30' DAY AS end_date -- unpad the end date
-    FROM
-    (
-        SELECT person_id, ingredient_concept_id, event_date, event_type,
-        MAX(start_ordinal) OVER (PARTITION BY person_id, ingredient_concept_id
-            ORDER BY event_date, event_type ROWS UNBOUNDED PRECEDING) AS start_ordinal,
-            ROW_NUMBER() OVER (PARTITION BY person_id, ingredient_concept_id
-                ORDER BY event_date, event_type) AS overall_ord
-        FROM (
-            SELECT person_id, ingredient_concept_id, drug_sub_exposure_start_date AS event_date,
-            -1 AS event_type,
-            ROW_NUMBER() OVER (PARTITION BY person_id, ingredient_concept_id
-                ORDER BY drug_sub_exposure_start_date) AS start_ordinal
-            FROM cteFinalTarget
+    SELECT person_id, ingredient_concept_id, event_date, event_type,
+    MAX(start_ordinal) OVER (PARTITION BY person_id, ingredient_concept_id
+        ORDER BY event_date, event_type ROWS UNBOUNDED PRECEDING) AS start_ordinal,
+        ROW_NUMBER() OVER (PARTITION BY person_id, ingredient_concept_id
+            ORDER BY event_date, event_type) AS overall_ord
+    FROM (
+        SELECT person_id, ingredient_concept_id, drug_sub_exposure_start_date AS event_date,
+        -1 AS event_type,
+        ROW_NUMBER() OVER (PARTITION BY person_id, ingredient_concept_id
+            ORDER BY drug_sub_exposure_start_date) AS start_ordinal
+        FROM cteFinalTarget
 
-            UNION ALL
+        UNION ALL
 
-            -- pad the end dates by 30 to allow a grace period for overlapping ranges.
-            SELECT person_id, ingredient_concept_id, drug_sub_exposure_end_date + INTERVAL '30' DAY, 1 AS event_type, NULL
-            FROM cteFinalTarget
-        ) RAWDATA
-    ) e
-    WHERE (2 * e.start_ordinal) - e.overall_ord = 0
+        -- pad the end dates by 30 to allow a grace period for overlapping ranges.
+        SELECT person_id, ingredient_concept_id, drug_sub_exposure_end_date + INTERVAL '30' DAY, 1 AS event_type, NULL
+        FROM cteFinalTarget
+    ) RAWDATA
+) e
+WHERE (2 * e.start_ordinal) - e.overall_ord = 0
+;
 
-)
-, cteDrugEraEnds (person_id, drug_concept_id, drug_sub_exposure_start_date, drug_era_end_date, drug_exposure_count, days_exposed) AS
-(
+CREATE OR REPLACE TABLE cteDrugEraEnds AS 
 SELECT
     ft.person_id,
     ft.ingredient_concept_id,
@@ -136,7 +132,9 @@ GROUP BY
     ft.drug_sub_exposure_start_date,
     drug_exposure_count,
     days_exposed
-), final_select AS (
+;
+
+CREATE OR REPLACE TABLE  final_select AS 
 SELECT DISTINCT
     --ROW_NUMBER() OVER (ORDER BY person_id) AS drug_era_id,
     person_id,
@@ -147,7 +145,8 @@ SELECT DISTINCT
     DATEDIFF('day', MIN(drug_sub_exposure_start_date), drug_era_end_date) - SUM(days_exposed) AS gap_days
 FROM cteDrugEraEnds dee
 GROUP BY person_id, drug_concept_id, drug_era_end_date
-)
+;
+
 SELECT
     generate_id(
         CONCAT(
@@ -162,3 +161,4 @@ SELECT
     drug_exposure_count,
     gap_days
 FROM final_select
+;
