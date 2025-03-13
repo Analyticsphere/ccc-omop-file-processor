@@ -1,3 +1,4 @@
+/*
 SELECT
     generate_id(
         CONCAT(
@@ -12,3 +13,6 @@ SELECT
     drug_exposure_count,
     gap_days
 FROM final_select
+*/
+
+SELECT '' AS thefield
