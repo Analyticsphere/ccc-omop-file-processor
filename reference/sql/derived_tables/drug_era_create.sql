@@ -138,54 +138,7 @@ CREATE OR REPLACE TABLE padded_exposures AS
 
 -- Step 9: Identify drug eras by finding connected sub-exposures
 -- Using a recursive CTE to group connected exposures
-CREATE OR REPLACE TABLE drug_era_groups AS
-WITH RECURSIVE era_grouping AS (
-    -- Anchor: Start with the earliest exposure for each person/drug
-    SELECT
-        person_id,
-        drug_concept_id,
-        drug_sub_exposure_start_date,
-        drug_sub_exposure_end_date,
-        padded_end_date,
-        drug_exposure_count,
-        days_exposed,
-        drug_sub_exposure_start_date AS era_start,
-        ROW_NUMBER() OVER (PARTITION BY person_id, drug_concept_id ORDER BY drug_sub_exposure_start_date) AS group_id
-    FROM padded_exposures
-    WHERE (person_id, drug_concept_id, drug_sub_exposure_start_date) IN (
-        SELECT person_id, drug_concept_id, MIN(drug_sub_exposure_start_date)
-        FROM padded_exposures
-        GROUP BY person_id, drug_concept_id
-    )
-    
-    UNION ALL
-    
-    -- Recursive: Add subsequent exposures that connect to the existing era
-    SELECT
-        p.person_id,
-        p.drug_concept_id,
-        p.drug_sub_exposure_start_date,
-        p.drug_sub_exposure_end_date,
-        p.padded_end_date,
-        p.drug_exposure_count,
-        p.days_exposed,
-        g.era_start,
-        g.group_id
-    FROM padded_exposures p
-    JOIN era_grouping g ON 
-        p.person_id = g.person_id AND
-        p.drug_concept_id = g.drug_concept_id AND
-        p.drug_sub_exposure_start_date > g.drug_sub_exposure_start_date AND
-        p.drug_sub_exposure_start_date <= g.padded_end_date
-    WHERE NOT EXISTS (
-        -- Ensure we haven't already included this exposure
-        SELECT 1 FROM era_grouping e
-        WHERE e.person_id = p.person_id
-        AND e.drug_concept_id = p.drug_concept_id
-        AND e.drug_sub_exposure_start_date = p.drug_sub_exposure_start_date
-    )
-)
-SELECT * FROM era_grouping;
+
 
 -- Step 10: Alternative without recursive CTE if that's not preferred
 -- This approach works by joining each exposure to potential "next" exposures
@@ -276,10 +229,10 @@ CREATE OR REPLACE TABLE final_drug_eras AS
 -- Step 14: Add gap days calculation and create final output
 CREATE OR REPLACE TABLE final_select AS
     SELECT
-        person_id,
-        drug_concept_id,
-        drug_era_start_date,
-        drug_era_end_date,
-        drug_exposure_count,
-        DATEDIFF('day', drug_era_start_date, drug_era_end_date) - total_days_exposed AS gap_days
+        CAST(person_id AS BIGINT) AS person_id,
+        CAST(drug_concept_id AS BIGINT) AS drug_concept_id,
+        CAST(drug_era_start_date AS DATE) AS drug_era_start_date,
+        CAST(drug_era_end_date AS DATE) AS drug_era_end_date,
+        CAST(drug_exposure_count AS BIGINT) AS drug_exposure_count,
+        CAST((DATEDIFF('day', drug_era_start_date, drug_era_end_date) - total_days_exposed) AS BIGINT) AS gap_days
     FROM final_drug_eras;
