@@ -24,28 +24,3 @@ CREATE OR REPLACE TABLE ctePreDrugTarget AS
     AND d.drug_concept_id != 0
     AND IFNULL(d.days_supply, 0) >= 0;
 
-CREATE OR REPLACE TABLE cteSubExposureEndDates AS 
-    SELECT person_id, ingredient_concept_id, event_date AS end_date
-    FROM
-    (
-        SELECT person_id, ingredient_concept_id, event_date, event_type,
-        MAX(start_ordinal) OVER (PARTITION BY person_id, ingredient_concept_id
-            ORDER BY event_date, event_type ROWS UNBOUNDED PRECEDING) AS start_ordinal,
-            ROW_NUMBER() OVER (PARTITION BY person_id, ingredient_concept_id
-                ORDER BY event_date, event_type) AS overall_ord
-        FROM (
-            SELECT person_id, ingredient_concept_id, drug_exposure_start_date AS event_date,
-            -1 AS event_type,
-            ROW_NUMBER() OVER (PARTITION BY person_id, ingredient_concept_id
-                ORDER BY drug_exposure_start_date) AS start_ordinal
-            FROM ctePreDrugTarget
-
-            UNION ALL
-
-            SELECT person_id, ingredient_concept_id, drug_exposure_end_date, 1 AS event_type, NULL
-            FROM ctePreDrugTarget
-        ) RAWDATA
-    ) e
-    WHERE (2 * e.start_ordinal) - e.overall_ord = 0
-;
-

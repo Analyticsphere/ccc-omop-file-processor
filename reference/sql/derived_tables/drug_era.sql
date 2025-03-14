@@ -15,4 +15,4 @@ SELECT
 FROM final_select
 */
 
-SELECT '' AS thefield
+SELECT * FROM ctePreDrugTarget
