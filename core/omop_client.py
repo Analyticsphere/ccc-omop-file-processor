@@ -316,7 +316,8 @@ def placeholder_to_table_path(site: str, site_bucket: str, delivery_date: str, s
 
     # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
     for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
-        vocab_table_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
+        #vocab_table_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
+        vocab_table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
         replacement_result = replacement_result.replace(placeholder, vocab_table_path)
     
     # Add site name 
