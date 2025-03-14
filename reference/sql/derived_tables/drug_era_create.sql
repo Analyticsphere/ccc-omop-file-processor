@@ -1,8 +1,3 @@
--- Optimized Drug Era generation script for DuckDB
--- Eliminates window functions while maintaining correct drug era logic
--- Allows for 30-day gaps between exposures
-
--- Step 1: Create the initial drug target data with normalized end dates
 CREATE OR REPLACE TABLE ctePreDrugTarget AS
     SELECT
         d.drug_exposure_id,
