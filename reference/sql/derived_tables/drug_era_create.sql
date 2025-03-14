@@ -1,4 +1,4 @@
-CREATE OR REPLACE TABLE ctePreDrugTarget AS
+CREATE OR REPLACE TEMP TABLE ctePreDrugTarget AS
     SELECT
         d.drug_exposure_id,
         d.person_id,
