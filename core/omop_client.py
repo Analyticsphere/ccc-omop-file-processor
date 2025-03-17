@@ -166,7 +166,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
     try:
         # Build the insert statement
         query = f"""
-            INSERT INTO {project_id}.{dataset_id}.cdm_source (
+            INSERT INTO `{project_id}.{dataset_id}.cdm_source` (
                 cdm_source_name,
                 cdm_source_abbreviation,
                 cdm_holder,
@@ -194,7 +194,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
             FROM (SELECT 1) dummy_table
             WHERE NOT EXISTS (
                 SELECT 1
-                FROM {project_id}.{dataset_id}.cdm_source
+                FROM `{project_id}.{dataset_id}.cdm_source`
                 LIMIT 1
             );
         """
