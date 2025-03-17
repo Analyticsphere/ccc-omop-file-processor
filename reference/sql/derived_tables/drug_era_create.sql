@@ -34,4 +34,6 @@ CREATE OR REPLACE TEMP TABLE ctePreDrugTarget AS
         ON ca.descendant_concept_id = d.drug_concept_id
     INNER JOIN concept_optimized c 
         ON ca.ancestor_concept_id = c.concept_id
+    WHERE c.vocabulary_id = 'RxNorm'
+    AND c.concept_class_id = 'Ingredient'
 ;
