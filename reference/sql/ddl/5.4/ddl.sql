@@ -1,5 +1,3 @@
---BigQuery CDM DDL Specification for OMOP Common Data Model 5.4
-
 CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.person` (
 			person_id INT64,
 			gender_concept_id INT64,
