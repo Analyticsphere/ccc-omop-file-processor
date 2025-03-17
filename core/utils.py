@@ -504,6 +504,8 @@ def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig
     # Initialize the BigQuery client
     client = bigquery.Client()
 
+    sql_script_troubleshooting = sql_script.replace('\n','')
+    logger.warning(f"*/*/*/*/* about to execute BQ script: {sql_script_troubleshooting}")
     # Run the query
     if job_config:
         query_job = client.query(sql_script, job_config=job_config)
