@@ -7,18 +7,20 @@ CREATE OR REPLACE TEMP TABLE drug_exposure_optimized AS
         days_supply,
         drug_exposure_end_date
     FROM read_parquet('@DRUG_EXPOSURE')
+    WHERE drug_concept_id != 0
+    AND IFNULL(TRY_CAST(person_id AS BIGINT), -1) != -1
 ;
 
 
 CREATE OR REPLACE TEMP TABLE concept_ancestor_optimized AS
-    SELECT * FROM read_parquet('@CONCEPT_ANCESTOR')
+    SELECT descendant_concept_id, ancestor_concept_id FROM read_parquet('@CONCEPT_ANCESTOR')
     WHERE descendant_concept_id IN (
         SELECT DISTINCT drug_concept_id FROM drug_exposure_optimized
     )
 ;
 
 CREATE OR REPLACE TEMP TABLE concept_optimized AS
-    SELECT * FROM read_parquet('@CONCEPT')
+    SELECT concept_id, vocabulary_id, concept_class_id FROM read_parquet('@CONCEPT')
     WHERE concept_id IN (
         SELECT DISTINCT ancestor_concept_id FROM concept_ancestor_optimized
     )
