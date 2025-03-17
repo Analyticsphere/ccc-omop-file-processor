@@ -26,13 +26,25 @@ CREATE OR REPLACE TEMP TABLE concept_optimized AS
     )
 ;
 
-CREATE OR REPLACE TEMP TABLE ctePreDrugTarget AS
+CREATE OR REPLACE TABLE ctePreDrugTarget AS
     SELECT
-        d.*
+        d.drug_exposure_id,
+        d.person_id,
+        c.concept_id AS ingredient_concept_id,
+        d.drug_exposure_start_date,
+        d.days_supply AS days_supply,
+        COALESCE(
+            d.drug_exposure_end_date,
+            CASE 
+                WHEN d.days_supply IS NOT NULL AND d.drug_exposure_start_date IS NOT NULL 
+                THEN d.drug_exposure_start_date + d.days_supply * INTERVAL '1' DAY 
+            END,
+            d.drug_exposure_start_date + INTERVAL '1' DAY
+        ) AS drug_exposure_end_date
     FROM drug_exposure_optimized d
-    INNER JOIN concept_ancestor_optimized ca 
+    JOIN concept_ancestor_optimized ca 
         ON ca.descendant_concept_id = d.drug_concept_id
-    INNER JOIN concept_optimized c 
+    JOIN concept_optimized c 
         ON ca.ancestor_concept_id = c.concept_id
     WHERE c.vocabulary_id = 'RxNorm'
     AND c.concept_class_id = 'Ingredient'
