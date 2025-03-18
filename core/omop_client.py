@@ -142,11 +142,14 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
         
         # Add project_id and data_set to SQL statement
         create_sql = ddl_sql.replace(constants.DDL_PLACEHOLDER_STRING, f"{project_id}.{dataset_id}")
+
+        # Execute the CREATE OR REPLACE TABLE statements in BigQuery
+        utils.execute_bq_sql(create_sql, None)
+
     except Exception as e:
         raise Exception(f"DDL file error: {e}")
     
-    # Execute the CREATE OR REPLACE TABLE statements in BigQuery
-    utils.execute_bq_sql(create_sql, None)
+    
 
 def populate_cdm_source(cdm_source_data: dict) -> None:
     # Add a record to the cdm_source table, if it doesn't have any rows
@@ -162,7 +165,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
     try:
         # Build the insert statement
         query = f"""
-            INSERT INTO {project_id}.{dataset_id}.cdm_source (
+            INSERT INTO `{project_id}.{dataset_id}.cdm_source` (
                 cdm_source_name,
                 cdm_source_abbreviation,
                 cdm_holder,
@@ -190,7 +193,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
             FROM (SELECT 1) dummy_table
             WHERE NOT EXISTS (
                 SELECT 1
-                FROM {project_id}.{dataset_id}.cdm_source
+                FROM `{project_id}.{dataset_id}.cdm_source`
                 LIMIT 1
             );
         """

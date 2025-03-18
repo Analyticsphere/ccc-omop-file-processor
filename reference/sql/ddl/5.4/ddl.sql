@@ -1,6 +1,4 @@
---BigQuery CDM DDL Specification for OMOP Common Data Model 5.4
-
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.person (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.person` (
 			person_id INT64,
 			gender_concept_id INT64,
 			year_of_birth INT64,
@@ -20,14 +18,14 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.person (
 			ethnicity_source_value STRING,
 			ethnicity_source_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.observation_period (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.observation_period` (
 			observation_period_id INT64,
 			person_id INT64,
 			observation_period_start_date DATE,
 			observation_period_end_date DATE,
 			period_type_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.visit_occurrence (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.visit_occurrence` (
 			visit_occurrence_id INT64,
 			person_id INT64,
 			visit_concept_id INT64,
@@ -46,7 +44,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.visit_occurrence (
 			discharged_to_source_value STRING,
 			preceding_visit_occurrence_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.visit_detail (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.visit_detail` (
 			visit_detail_id INT64,
 			person_id INT64,
 			visit_detail_concept_id INT64,
@@ -67,7 +65,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.visit_detail (
 			parent_visit_detail_id INT64,
 			visit_occurrence_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.condition_occurrence (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.condition_occurrence` (
 			condition_occurrence_id INT64,
 			person_id INT64,
 			condition_concept_id INT64,
@@ -85,7 +83,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.condition_occurrence (
 			condition_source_concept_id INT64,
 			condition_status_source_value STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.drug_exposure (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.drug_exposure` (
 			drug_exposure_id INT64,
 			person_id INT64,
 			drug_concept_id INT64,
@@ -110,7 +108,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.drug_exposure (
 			route_source_value STRING,
 			dose_unit_source_value STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.procedure_occurrence (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.procedure_occurrence` (
 			procedure_occurrence_id INT64,
 			person_id INT64,
 			procedure_concept_id INT64,
@@ -128,7 +126,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.procedure_occurrence (
 			procedure_source_concept_id INT64,
 			modifier_source_value STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.device_exposure (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.device_exposure` (
 			device_exposure_id INT64,
 			person_id INT64,
 			device_concept_id INT64,
@@ -149,7 +147,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.device_exposure (
 			unit_source_value STRING,
 			unit_source_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.measurement (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.measurement` (
 			measurement_id INT64,
 			person_id INT64,
 			measurement_concept_id INT64,
@@ -174,7 +172,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.measurement (
 			measurement_event_id INT64,
 			meas_event_field_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.observation (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.observation` (
 			observation_id INT64,
 			person_id INT64,
 			observation_concept_id INT64,
@@ -197,7 +195,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.observation (
 			observation_event_id INT64,
 			obs_event_field_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.death (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.death` (
 			person_id INT64,
 			death_date DATE,
 			death_TIMESTAMP TIMESTAMP,
@@ -206,7 +204,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.death (
 			cause_source_value STRING,
 			cause_source_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.note (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.note` (
 			note_id INT64,
 			person_id INT64,
 			note_date DATE,
@@ -224,7 +222,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.note (
 			note_event_id INT64,
 			note_event_field_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.note_nlp (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.note_nlp` (
 			note_nlp_id INT64,
 			note_id INT64,
 			section_concept_id INT64,
@@ -240,7 +238,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.note_nlp (
 			term_temporal STRING,
 			term_modifiers STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.specimen (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.specimen` (
 			specimen_id INT64,
 			person_id INT64,
 			specimen_concept_id INT64,
@@ -257,14 +255,14 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.specimen (
 			anatomic_site_source_value STRING,
 			disease_status_source_value STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.fact_relationship (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.fact_relationship` (
 			domain_concept_id_1 INT64,
 			fact_id_1 INT64,
 			domain_concept_id_2 INT64,
 			fact_id_2 INT64,
 			relationship_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.location (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.location` (
 			location_id INT64,
 			address_1 STRING,
 			address_2 STRING,
@@ -278,7 +276,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.location (
 			latitude FLOAT64,
 			longitude FLOAT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.care_site (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.care_site` (
 			care_site_id INT64,
 			care_site_name STRING,
 			place_of_service_concept_id INT64,
@@ -286,7 +284,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.care_site (
 			care_site_source_value STRING,
 			place_of_service_source_value STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.provider (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.provider` (
 			provider_id INT64,
 			provider_name STRING,
 			npi STRING,
@@ -301,7 +299,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.provider (
 			gender_source_value STRING,
 			gender_source_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.payer_plan_period (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.payer_plan_period` (
 			payer_plan_period_id INT64,
 			person_id INT64,
 			payer_plan_period_start_date DATE,
@@ -320,7 +318,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.payer_plan_period (
 			stop_reason_source_value STRING,
 			stop_reason_source_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.cost (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cost` (
 			cost_id INT64,
 			cost_event_id INT64,
 			cost_domain_id STRING,
@@ -344,7 +342,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.cost (
 			drg_concept_id INT64,
 			drg_source_value STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.drug_era (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.drug_era` (
 			drug_era_id INT64,
 			person_id INT64,
 			drug_concept_id INT64,
@@ -353,7 +351,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.drug_era (
 			drug_exposure_count INT64,
 			gap_days INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.dose_era (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.dose_era` (
 			dose_era_id INT64,
 			person_id INT64,
 			drug_concept_id INT64,
@@ -362,7 +360,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.dose_era (
 			dose_era_start_date DATE,
 			dose_era_end_date date );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.condition_era (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.condition_era` (
 			condition_era_id INT64,
 			person_id INT64,
 			condition_concept_id INT64,
@@ -370,7 +368,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.condition_era (
 			condition_era_end_date DATE,
 			condition_occurrence_count INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.episode (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.episode` (
 			episode_id INT64,
 			person_id INT64,
 			episode_concept_id INT64,
@@ -385,12 +383,12 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.episode (
 			episode_source_value STRING,
 			episode_source_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.episode_event (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.episode_event` (
 			episode_id INT64,
 			event_id INT64,
 			episode_event_field_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.metadata (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.metadata` (
 			metadata_id INT64,
 			metadata_concept_id INT64,
 			metadata_type_concept_id INT64,
@@ -401,7 +399,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.metadata (
 			metadata_date DATE,
 			metadata_TIMESTAMP TIMESTAMP );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.cdm_source (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cdm_source` (
 			cdm_source_name STRING,
 			cdm_source_abbreviation STRING,
 			cdm_holder STRING,
@@ -414,7 +412,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.cdm_source (
 			cdm_version_concept_id INT64,
 			vocabulary_version STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.concept (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept` (
 			concept_id INT64,
 			concept_name STRING,
 			domain_id STRING,
@@ -426,24 +424,24 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.concept (
 			valid_end_date DATE,
 			invalid_reason STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.vocabulary (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.vocabulary` (
 			vocabulary_id STRING,
 			vocabulary_name STRING,
 			vocabulary_reference STRING,
 			vocabulary_version STRING,
 			vocabulary_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.domain (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.domain` (
 			domain_id STRING,
 			domain_name STRING,
 			domain_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.concept_class (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_class` (
 			concept_class_id STRING,
 			concept_class_name STRING,
 			concept_class_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.concept_relationship (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_relationship` (
 			concept_id_1 INT64,
 			concept_id_2 INT64,
 			relationship_id STRING,
@@ -451,7 +449,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.concept_relationship (
 			valid_end_date DATE,
 			invalid_reason STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.relationship (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.relationship` (
 			relationship_id STRING,
 			relationship_name STRING,
 			is_hierarchical STRING,
@@ -459,18 +457,18 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.relationship (
 			reverse_relationship_id STRING,
 			relationship_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.concept_synonym (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_synonym` (
 			concept_id INT64,
 			concept_synonym_name STRING,
 			language_concept_id INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.concept_ancestor (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_ancestor` (
 			ancestor_concept_id INT64,
 			descendant_concept_id INT64,
 			min_levels_of_separation INT64,
 			max_levels_of_separation INT64 );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.source_to_concept_map (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.source_to_concept_map` (
 			source_code STRING,
 			source_concept_id INT64,
 			source_vocabulary_id STRING,
@@ -481,7 +479,7 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.source_to_concept_map (
 			valid_end_date DATE,
 			invalid_reason STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.drug_strength (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.drug_strength` (
 			drug_concept_id INT64,
 			ingredient_concept_id INT64,
 			amount_value FLOAT64,
@@ -495,13 +493,13 @@ CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.drug_strength (
 			valid_end_date DATE,
 			invalid_reason STRING );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.cohort (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cohort` (
 			cohort_definition_id INT64,
 			subject_id INT64,
 			cohort_start_date DATE,
 			cohort_end_date date );
 
-CREATE TABLE IF NOT EXISTS @cdmDatabaseSchema.cohort_definition (
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cohort_definition` (
 			cohort_definition_id INT64,
 			cohort_definition_name STRING,
 			cohort_definition_description STRING,

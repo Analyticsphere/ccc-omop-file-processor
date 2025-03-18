@@ -118,7 +118,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
 
         # Set max size to allow on disk
         # Unneeded when writing to GCS
-        # conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
+        conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
 
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
