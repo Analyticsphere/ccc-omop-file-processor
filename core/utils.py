@@ -514,3 +514,56 @@ def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig
     result = query_job.result()
 
     return result
+
+def download_from_gcs(gcs_file_path: str) -> str:
+    """
+    Downloads a CSV file from Google Cloud Storage to a local directory.
+    """
+    try:
+        # Define paths
+        bucket, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+        filename = f"{get_table_name_from_gcs_path(gcs_file_path)}"
+        source_blob = f"{delivery_date}/{filename}{constants.CSV}"
+        destination_file_path = f"/tmp/{filename}{constants.CSV}"
+
+        # Create directory to store file
+        os.makedirs('/tmp', exist_ok=True)
+
+        # Initialize a storage client
+        storage_client = storage.Client()
+        
+        # Get the bucket
+        bucket = storage_client.bucket(bucket)
+        
+        # Get the blob (file)
+        blob = bucket.blob(source_blob)
+
+        # Get the remote file size before downloading
+        blob.reload()  # Ensure we have the latest metadata
+        remote_size_bytes = blob.size
+        remote_size_gb = float(float(remote_size_bytes) / float((1024 * 1024 * 1024)))
+
+        # If the size of the file is greater than half of what is allocated to DuckDB, return exception
+        if remote_size_gb > float(constants.DUCKDB_MEMORY_LIMIT.replace('GB', '')) * 0.5:
+            raise Exception(f"CSV file {gcs_file_path} has invalid quoting, but cannot be fixed due to size constraints. Allocate at least {remote_size_gb * 2}GB of memory to the Cloud Run function")
+        
+        # Download the file
+        blob.download_to_filename(destination_file_path)
+        
+        return destination_file_path
+    
+    except Exception as e:
+        raise Exception(f"Error downloading file: {e}")
+    
+def upload_to_gcs(local_file_path, bucket_name, destination_blob_name):
+    """Uploads a file to the specified GCS bucket.
+    """
+    # Initialize the GCS client
+    storage_client = storage.Client()
+    
+    # Get the bucket
+    bucket = storage_client.bucket(bucket_name)
+    
+    # Create a blob object and upload the file
+    blob = bucket.blob(destination_blob_name)
+    blob.upload_from_filename(local_file_path)

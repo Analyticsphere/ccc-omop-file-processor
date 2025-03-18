@@ -10,7 +10,7 @@ from google.cloud import storage  # type: ignore
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
 import core.utils as utils
-
+from pathlib import Path
 
 class StreamingCSVWriter:
     """Helper class to stream CSV data directly to and from GCS"""
@@ -143,23 +143,6 @@ def csv_to_parquet(gcs_file_path: str) -> None:
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
             conn.execute(convert_statement)
-
-    # except duckdb.InvalidInputException as e:
-    #     # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
-    #     error_type = utils.parse_duckdb_csv_error(e)
-    #     if error_type == "INVALID_UNICODE":
-    #         utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
-    #         convert_csv_file_encoding(gcs_file_path)
-    #     elif error_type == "UNTERMINATED_QUOTE":
-    #         utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
-    #         fix_csv_quoting(gcs_file_path)
-    #         #raise Exception(f"Unescaped quote found in file gs://{gcs_file_path}: {e}") from e
-    #     elif error_type == "CSV_FORMAT_ERROR":
-    #         utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
-    #         raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
-    #     else:
-    #         utils.logger.error(f"Unknown CSV error in file gs://{gcs_file_path}: {e}")
-    #         raise Exception(f"Unknown CSV error in file gs://{gcs_file_path}: {e}") from e
     except Exception as e:
         # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
         error_type = utils.parse_duckdb_csv_error(e)
@@ -169,15 +152,12 @@ def csv_to_parquet(gcs_file_path: str) -> None:
         elif error_type == "UNTERMINATED_QUOTE":
             utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
             fix_csv_quoting(gcs_file_path)
-            #raise Exception(f"Unescaped quote found in file gs://{gcs_file_path}: {e}") from e
         elif error_type == "CSV_FORMAT_ERROR":
             utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
             raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
         else:
             utils.logger.error(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}")
             raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e        
-        #utils.logger.error(f"Unable to convert CSV file to Parquet: {e}")
-        #raise Exception(f"Unable to convert CSV file to Parquet: {e}") from e
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
     
@@ -462,51 +442,83 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
     # When reading CSV file from GCS to VM, there seems to be some kind of 
     # GCS parsing issue that breaks this logic, so it gets run locally
     # Ideally, we would read/write directly to/from GCS
-    encoding = 'utf-8'
+    encoding: str = 'utf-8'
+    batch_size: int = 1000
 
     utils.logger.warning(f"*-*-*-*-*-*-* GOING TO DOWNLOAD FILE -*-*-*-*-*-")
 
-    local_csv_path = download_csv_from_gcs(gcs_file_path)
-    utils.logger.warning(f"****local csv path is {local_csv_path}")
+    # Download and get path to local CSV file
+    broken_csv_path = Path(utils.download_from_gcs(gcs_file_path))
 
+    # Create output path, renaming original file
+    filename = utils.get_table_name_from_gcs_path(gcs_file_path)
+    output_csv_path = broken_csv_path.replace(filename, f"{filename}{constants.FIXED_FILE_TAG_STRING}")
 
-def download_csv_from_gcs(gcs_file_path: str) -> str:
-    """
-    Downloads a CSV file from Google Cloud Storage to a local directory.
-    """
     try:
-        # Define paths
-        bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
-        filename = f"{utils.get_table_name_from_gcs_path(gcs_file_path)}"
-        source_blob = f"{delivery_date}/{filename}{constants.CSV}"
-        destination_file_path = f"/tmp/{filename}_{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
+        with open(broken_csv_path, 'r', encoding=encoding) as infile, \
+             open(output_csv_path, 'w', encoding=encoding, newline='') as outfile:
+            
+            # Process header separately to preserve it exactly as is
+            header = next(infile, None)
+            if header is not None:
+                outfile.write(header)
+            
+            # Process the rest of the file in batches
+            batch = []
+            for line in infile:
+                batch.append(clean_csv_row(line.strip()))
+                
+                if len(batch) >= batch_size:
+                    outfile.write('\n'.join(batch) + '\n')
+                    batch = []
+            
+            # Write any remaining rows
+            if batch:
+                outfile.write('\n'.join(batch) + '\n')
 
-        # Create directory to store file
-        os.makedirs('/tmp', exist_ok=True)
+            # Build GCS location to move file
+            bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+            destination_blob = f"{delivery_date}/{constants.ArtifactPaths.FIXED_FILES.value}{filename}{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
+            # Upload fixed file back to GCS
+            utils.upload_to_gcs(output_csv_path, bucket, destination_blob)
 
-        # Initialize a storage client
-        storage_client = storage.Client()
-        
-        # Get the bucket
-        bucket = storage_client.bucket(bucket)
-        
-        # Get the blob (file)
-        blob = bucket.blob(source_blob)
-
-        # Get the remote file size before downloading
-        blob.reload()  # Ensure we have the latest metadata
-        remote_size_bytes = blob.size
-        remote_size_gb = float(float(remote_size_bytes) / float((1024 * 1024 * 1024)))
-
-        # If the size of the file is greater than half of what is allocated to DuckDB, return exception
-        if remote_size_gb > float(constants.DUCKDB_MEMORY_LIMIT.replace('GB', '')) * 0.5:
-            raise Exception(f"CSV file {gcs_file_path} has invalid quoting, but cannot be fixed due to size constraints. Allocate at least {remote_size_gb * 2}GB of memory to the Cloud Run function")
-        
-        # Download the file
-        blob.download_to_filename(destination_file_path)
-        
-        utils.logger.warning(f"Downloaded {gcs_file_path} to {destination_file_path}")
-        return destination_file_path
+            # Delete local files
+            os.remove(broken_csv_path)
+            os.remove(output_csv_path)
+            
+            # After creating new file with fixed quoting, try converting it to Parquet
+            csv_to_parquet(f"{bucket}/{destination_blob}")
+                
+    except UnicodeDecodeError:
+        raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
     
-    except Exception as e:
-        raise Exception(f"Error downloading file: {e}")
+    utils.logger.warning(f"****local csv path is {broken_csv_path}")
+
+    # TODO: Recreate script here, working on local file
+    # Send file to GCS created directory once complete
+
+def clean_csv_row(row: str) -> str:
+    """
+    Clean a CSV row by properly escaping unquoted quotes within quoted fields.
+    """
+
+    # Regular expression to match quoted fields
+    pattern = r'(?<!^)(?<!,)"(?!,|$)'
+    
+    # Replace unquoted quotes with escaped quotes
+    cleaned_row = re.sub(pattern, "'", row)
+    
+    # Ensure the row is properly quoted
+    fields = cleaned_row.split(',')
+    cleaned_fields = []
+    
+    for field in fields:
+        field = field.strip()
+        # If the field contains an escaped quote or comma, ensure it's quoted
+        if '\\"' in field or ',' in field:
+            if not (field.startswith('"') and field.endswith('"')):
+                field = f'"{field}"'
+        cleaned_fields.append(field)
+    
+    return ','.join(cleaned_fields)
+
