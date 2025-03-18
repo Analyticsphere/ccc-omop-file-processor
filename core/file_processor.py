@@ -144,7 +144,23 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             """
             conn.execute(convert_statement)
 
-    except duckdb.InvalidInputException as e:
+    # except duckdb.InvalidInputException as e:
+    #     # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
+    #     error_type = utils.parse_duckdb_csv_error(e)
+    #     if error_type == "INVALID_UNICODE":
+    #         utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
+    #         convert_csv_file_encoding(gcs_file_path)
+    #     elif error_type == "UNTERMINATED_QUOTE":
+    #         utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
+    #         fix_csv_quoting(gcs_file_path)
+    #         #raise Exception(f"Unescaped quote found in file gs://{gcs_file_path}: {e}") from e
+    #     elif error_type == "CSV_FORMAT_ERROR":
+    #         utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
+    #         raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
+    #     else:
+    #         utils.logger.error(f"Unknown CSV error in file gs://{gcs_file_path}: {e}")
+    #         raise Exception(f"Unknown CSV error in file gs://{gcs_file_path}: {e}") from e
+    except Exception as e:
         # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
         error_type = utils.parse_duckdb_csv_error(e)
         if error_type == "INVALID_UNICODE":
@@ -158,11 +174,10 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
             raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
         else:
-            utils.logger.error(f"Unknown CSV error in file gs://{gcs_file_path}: {e}")
-            raise Exception(f"Unknown CSV error in file gs://{gcs_file_path}: {e}") from e
-    except Exception as e:
-        utils.logger.error(f"Unable to convert CSV file to Parquet: {e}")
-        raise Exception(f"Unable to convert CSV file to Parquet: {e}") from e
+            utils.logger.error(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}")
+            raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e        
+        #utils.logger.error(f"Unable to convert CSV file to Parquet: {e}")
+        #raise Exception(f"Unable to convert CSV file to Parquet: {e}") from e
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
     
@@ -448,6 +463,8 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
     # GCS parsing issue that breaks this logic, so it gets run locally
     # Ideally, we would read/write directly to/from GCS
     encoding = 'utf-8'
+
+    utils.logger.warning(f"*-*-*-*-*-*-* GOING TO DOWNLOAD FILE -*-*-*-*-*-")
 
     local_csv_path = download_csv_from_gcs(gcs_file_path)
     utils.logger.warning(f"****local csv path is {local_csv_path}")
