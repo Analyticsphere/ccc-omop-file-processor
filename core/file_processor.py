@@ -471,6 +471,7 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             # Process the rest of the file in batches
             batch = []
             for line in infile:
+                # For each line, apply the improved clean_csv_row function
                 batch.append(clean_csv_row(line.strip()))
                 
                 if len(batch) >= batch_size:
@@ -484,18 +485,23 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             # Build GCS location for locally fixed file
             bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
             destination_blob = f"{delivery_date}/{constants.ArtifactPaths.FIXED_FILES.value}{filename}{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
+            
             # Upload fixed file to GCS
             utils.logger.warning(f"going to upload to GCS")
             utils.upload_to_gcs(output_csv_path, bucket, destination_blob)
             utils.logger.warning(f"DID upload to GCS")
+            
             # Delete local files
             utils.logger.warning(f"going to delete")
             os.remove(broken_csv_path)
             os.remove(output_csv_path)
             utils.logger.warning(f"DID delete")
             
-            # After creating new file with fixed quoting, try converting it to Parquet
-            csv_to_parquet(f"{bucket}/{destination_blob}")
+            try:
+                # After creating new file with fixed quoting, try converting it to Parquet
+                csv_to_parquet(f"{bucket}/{destination_blob}")
+            except Exception as e:
+                raise Exception(f"Unable to convert CSV to Parquet: {str(e)}")
                 
     except UnicodeDecodeError:
         raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
@@ -503,26 +509,64 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
 
 def clean_csv_row(row: str) -> str:
     """
-    Clean a CSV row by properly escaping unquoted quotes within quoted fields.
+    Clean a CSV row by properly handling problematic characters,
+    especially single quotes within fields that should be properly quoted.
     """
-
-    # Regular expression to match quoted fields
-    pattern = r'(?<!^)(?<!,)"(?!,|$)'
+    # Split the row into fields, preserving quotes
+    fields = []
+    in_quotes = False
+    current_field = ""
+    i = 0
     
-    # Replace unquoted quotes with escaped quotes
-    cleaned_row = re.sub(pattern, "'", row)
+    while i < len(row):
+        char = row[i]
+        
+        # Handle quote characters
+        if char == '"':
+            # Check if this is an escaped quote
+            if i + 1 < len(row) and row[i + 1] == '"':
+                current_field += '"'
+                i += 2
+                continue
+            
+            # Toggle in_quotes flag
+            in_quotes = not in_quotes
+            current_field += char
+        
+        # Handle commas
+        elif char == ',' and not in_quotes:
+            fields.append(current_field)
+            current_field = ""
+        
+        # Handle any other character
+        else:
+            current_field += char
+        
+        i += 1
     
-    # Ensure the row is properly quoted
-    fields = cleaned_row.split(',')
+    # Add the last field
+    fields.append(current_field)
+    
+    # Process each field to ensure proper quoting
     cleaned_fields = []
     
     for field in fields:
         field = field.strip()
-        # If the field contains an escaped quote or comma, ensure it's quoted
-        if '\\"' in field or ',' in field:
-            if not (field.startswith('"') and field.endswith('"')):
-                field = f'"{field}"'
-        cleaned_fields.append(field)
+        
+        # Check if field contains problematic characters (single quotes, commas, newlines)
+        needs_quoting = ("'" in field or "," in field or "\n" in field or "\r" in field)
+        
+        # If field already has quotes, ensure they're proper
+        if field.startswith('"') and field.endswith('"') and len(field) >= 2:
+            # Field is already quoted, keep as is
+            cleaned_fields.append(field)
+        elif needs_quoting:
+            # Field needs quoting but doesn't have it
+            # Escape any existing double quotes
+            escaped_field = field.replace('"', '""')
+            cleaned_fields.append(f'"{escaped_field}"')
+        else:
+            # No special handling needed
+            cleaned_fields.append(field)
     
     return ','.join(cleaned_fields)
-
