@@ -499,7 +499,7 @@ def download_csv_from_gcs(gcs_file_path: str) -> str:
         remote_size_gb = remote_size_bytes / (1024 * 1024 * 1024)
 
         # If the size of the file is greater than half of what is allocated to DuckDB, return exception
-        if remote_size_gb > float(constants.DUCKDB_MEMORY_LIMIT.replace('GB', '') * 0.5):
+        if float(remote_size_gb) > float(constants.DUCKDB_MEMORY_LIMIT.replace('GB', '')) * 0.5:
             raise Exception(f"CSV file {gcs_file_path} has invalid quoting, but cannot be fixed due to size constraints. Allocate at least {remote_size_gb * 2}GB of memory to the Cloud Run function")
         
         # Download the file
