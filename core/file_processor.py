@@ -138,7 +138,7 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             convert_statement = f"""
                 COPY (
                     SELECT {select_clause}
-                    FROM read_csv('gs://{gcs_file_path}', null_padding=true, ALL_VARCHAR=True, strict_mode=False)
+                    FROM read_csv('gs://{gcs_file_path}', null_padding=true, ALL_VARCHAR=True, strict_mode=False, parallel=False)
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
             conn.execute(convert_statement)
