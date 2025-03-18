@@ -129,10 +129,11 @@ def csv_to_parquet(gcs_file_path: str) -> None:
                 select_list.append(f"{column} AS {column.lower()}")
             select_clause = ", ".join(select_list)
 
+            # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
+            # Special handling required to prevent parsing error
             # First get rid of " characters in column names to prevent double double quoting
             select_clause = select_clause.replace('"', '')
-            # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
-            # Need to add "" around offset column name to prevent parsing error
+            # Then re-add double quotes to prevent DuckDB from returning parsing error
             select_clause = select_clause.replace('offset', '"offset"')
 
             # Convert CSV to Parquet with lowercase column names
@@ -437,22 +438,26 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
 
 def fix_csv_quoting(gcs_file_path: str) -> None:
     # Properly handles unquoted quotes in CSV files 
+    # Each CSV row is evaulated as a single string, 
+    # and regex replacements are made to escape problematic characters
     
     # File gets downloaded from GCS to VM executing Cloud Function
-    # When reading CSV file from GCS to VM, there seems to be some kind of 
-    # GCS parsing issue that breaks this logic, so it gets run locally
-    # Ideally, we would read/write directly to/from GCS
+    # When streaming CSV file directly from GCS to VM, there seems to be some kind of 
+    # automated parsing that breaks this logic, so the logic must execute against a local file
+    # Ideally, we would read/write directly to/from GCS...
     encoding: str = 'utf-8'
     batch_size: int = 1000
 
     utils.logger.warning(f"*-*-*-*-*-*-* GOING TO DOWNLOAD FILE -*-*-*-*-*-")
 
     # Download and get path to local CSV file
-    broken_csv_path = Path(utils.download_from_gcs(gcs_file_path))
+    broken_csv_path = utils.download_from_gcs(gcs_file_path)
+    utils.logger.warning(f"broken_csv_path is {broken_csv_path}")
 
     # Create output path, renaming original file
     filename = utils.get_table_name_from_gcs_path(gcs_file_path)
     output_csv_path = broken_csv_path.replace(filename, f"{filename}{constants.FIXED_FILE_TAG_STRING}")
+    utils.logger.warning(f"output_csv_path is {output_csv_path}")
 
     try:
         with open(broken_csv_path, 'r', encoding=encoding) as infile, \
@@ -480,11 +485,14 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
             destination_blob = f"{delivery_date}/{constants.ArtifactPaths.FIXED_FILES.value}{filename}{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
             # Upload fixed file to GCS
+            utils.logger.warning(f"going to upload to GCS")
             utils.upload_to_gcs(output_csv_path, bucket, destination_blob)
-
+            utils.logger.warning(f"DID upload to GCS")
             # Delete local files
+            utils.logger.warning(f"going to delete")
             os.remove(broken_csv_path)
             os.remove(output_csv_path)
+            utils.logger.warning(f"DID delete")
             
             # After creating new file with fixed quoting, try converting it to Parquet
             csv_to_parquet(f"{bucket}/{destination_blob}")
