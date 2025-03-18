@@ -1,7 +1,7 @@
 import codecs
 import csv
 from io import StringIO
-
+import re
 import os
 import chardet  # type: ignore
 import duckdb  # type: ignore
@@ -476,10 +476,10 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             if batch:
                 outfile.write('\n'.join(batch) + '\n')
 
-            # Build GCS location to move file
+            # Build GCS location for locally fixed file
             bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
             destination_blob = f"{delivery_date}/{constants.ArtifactPaths.FIXED_FILES.value}{filename}{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
-            # Upload fixed file back to GCS
+            # Upload fixed file to GCS
             utils.upload_to_gcs(output_csv_path, bucket, destination_blob)
 
             # Delete local files
@@ -492,10 +492,6 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
     except UnicodeDecodeError:
         raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
     
-    utils.logger.warning(f"****local csv path is {broken_csv_path}")
-
-    # TODO: Recreate script here, working on local file
-    # Send file to GCS created directory once complete
 
 def clean_csv_row(row: str) -> str:
     """
