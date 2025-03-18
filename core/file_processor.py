@@ -2,6 +2,7 @@ import codecs
 import csv
 from io import StringIO
 
+import os
 import chardet  # type: ignore
 import duckdb  # type: ignore
 from google.cloud import storage  # type: ignore
@@ -150,8 +151,9 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
             convert_csv_file_encoding(gcs_file_path)
         elif error_type == "UNTERMINATED_QUOTE":
-            utils.logger.error(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
-            raise Exception(f"Unescaped quote found in file gs://{gcs_file_path}: {e}") from e
+            utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
+            fix_csv_quoting(gcs_file_path)
+            #raise Exception(f"Unescaped quote found in file gs://{gcs_file_path}: {e}") from e
         elif error_type == "CSV_FORMAT_ERROR":
             utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
             raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
@@ -438,3 +440,56 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
         )
         ra.save_artifact()
 
+def fix_csv_quoting(gcs_file_path: str) -> None:
+    # Properly handles unquoted quotes in CSV files 
+    
+    # File gets downloaded from GCS to VM executing Cloud Function
+    # When reading CSV file from GCS to VM, there seems to be some kind of 
+    # GCS parsing issue that breaks this logic, so it gets run locally
+    # Ideally, we would read/write directly to/from GCS
+    encoding = 'utf-8'
+
+    local_csv_path = download_csv_from_gcs(gcs_file_path)
+    utils.logger.warning(f"****local csv path is {local_csv_path}")
+
+
+def download_csv_from_gcs(gcs_file_path: str) -> str:
+    """
+    Downloads a CSV file from Google Cloud Storage to a local directory.
+    """
+    try:
+        # Define paths
+        bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+        filename = f"{utils.get_table_name_from_gcs_path}"
+        source_blob = f"{delivery_date}/{filename}{constants.CSV}"
+        destination_file_path = f"/tmp/{filename}_{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
+
+        # Create directory to store file
+        os.makedirs('/tmp', exist_ok=True)
+
+        # Initialize a storage client
+        storage_client = storage.Client()
+        
+        # Get the bucket
+        bucket = storage_client.bucket(bucket)
+        
+        # Get the blob (file)
+        blob = bucket.blob(source_blob)
+
+        # Get the remote file size before downloading
+        blob.reload()  # Ensure we have the latest metadata
+        remote_size_bytes = blob.size
+        remote_size_gb = remote_size_bytes / (1024 * 1024 * 1024)
+
+        # If the size of the file is greater than half of what is allocated to DuckDB, return exception
+        if remote_size_gb > float(constants.DUCKDB_MEMORY_LIMIT.replace('GB', '') * 0.5):
+            raise Exception(f"CSV file {gcs_file_path} has invalid quoting, but cannot be fixed due to size constraints. Allocate at least {remote_size_gb * 2}GB of memory to the Cloud Run function")
+        
+        # Download the file
+        blob.download_to_filename(destination_file_path)
+        
+        utils.logger.warning(f"Downloaded {gcs_file_path} to {destination_file_path}")
+        return destination_file_path
+    
+    except Exception as e:
+        raise Exception(f"Error downloading file: {e}")

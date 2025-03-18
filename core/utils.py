@@ -154,7 +154,7 @@ def parse_duckdb_csv_error(error: duckdb.InvalidInputException) -> Optional[str]
     
     if "invalid unicode" in error_msg or "byte sequence mismatch" in error_msg:
         return "INVALID_UNICODE"
-    elif "unterminated quote" in error_msg:
+    elif "unterminated quote" in error_msg or "parallel scanner does not support null_padding in conjunction with quoted new lines" in error_msg:
         return "UNTERMINATED_QUOTE"
     elif "csv error on line" in error_msg:  # Generic CSV error fallback
         return "CSV_FORMAT_ERROR"
