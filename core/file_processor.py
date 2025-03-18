@@ -477,7 +477,7 @@ def download_csv_from_gcs(gcs_file_path: str) -> str:
     try:
         # Define paths
         bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
-        filename = f"{utils.get_table_name_from_gcs_path}"
+        filename = f"{utils.get_table_name_from_gcs_path(gcs_file_path)}"
         source_blob = f"{delivery_date}/{filename}{constants.CSV}"
         destination_file_path = f"/tmp/{filename}_{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
 
