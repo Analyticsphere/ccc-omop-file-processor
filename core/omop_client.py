@@ -278,14 +278,12 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
         # Add table locations
         select_statement = placeholder_to_table_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
 
-        # if create_statement != "":
         try:
             conn, local_db_file = utils.create_duckdb_connection()
 
             with conn:
                 # Generate the derived table parquet file
                 parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
-
                 sql_statement = f"""
                     {create_statement}
 
@@ -293,7 +291,6 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
                         {select_statement}
                     ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
-
                 conn.execute(sql_statement)
 
                 # Load the Parquet to BigQuery
