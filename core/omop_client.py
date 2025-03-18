@@ -278,56 +278,56 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
         # Add table locations
         select_statement = placeholder_to_table_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
 
-        if create_statement != "":
-            try:
-                conn, local_db_file = utils.create_duckdb_connection()
+        # if create_statement != "":
+        try:
+            conn, local_db_file = utils.create_duckdb_connection()
 
-                with conn:
-                    # Generate the derived table parquet file
-                    parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
+            with conn:
+                # Generate the derived table parquet file
+                parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
 
-                    sql_statement = f"""
-                        {create_statement}
+                sql_statement = f"""
+                    {create_statement}
 
-                        COPY (
-                            {select_statement}
-                        ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
-                    """
+                    COPY (
+                        {select_statement}
+                    ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
+                """
 
-                    conn.execute(sql_statement)
+                conn.execute(sql_statement)
 
-                    # Load the Parquet to BigQuery
-                    # Because the task that executes this function occurs after load_bq(), 
-                    #   this will overwrite the derived data delievered by the site
-                    bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, False)
-            except Exception as e:
-                raise Exception(f"Unable to execute SQL to generate {table_name}: {str(e)}") from e
-            finally:
-                utils.close_duckdb_connection(conn, local_db_file)
-        else:
-            try:
-                conn, local_db_file = utils.create_duckdb_connection()
+                # Load the Parquet to BigQuery
+                # Because the task that executes this function occurs after load_bq(), 
+                #   this will overwrite the derived data delievered by the site
+                bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, False)
+        except Exception as e:
+            raise Exception(f"Unable to execute SQL to generate {table_name}: {str(e)}") from e
+        finally:
+            utils.close_duckdb_connection(conn, local_db_file)
+        # else:
+        #     try:
+        #         conn, local_db_file = utils.create_duckdb_connection()
 
-                with conn:
-                    # Generate the derived table parquet file
-                    parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
+        #         with conn:
+        #             # Generate the derived table parquet file
+        #             parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
 
-                    sql_statement = f"""
-                        COPY (
-                            {select_statement}
-                        ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
-                    """
+        #             sql_statement = f"""
+        #                 COPY (
+        #                     {select_statement}
+        #                 ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
+        #             """
 
-                    conn.execute(sql_statement)
+        #             conn.execute(sql_statement)
 
-                    # Load the Parquet to BigQuery
-                    # Because the task that executes this function occurs after load_bq(), 
-                    #   this will overwrite the derived data delievered by the site
-                    bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, False)
-            except Exception as e:
-                raise Exception(f"Unable to execute SQL to generate {table_name}: {str(e)}") from e
-            finally:
-                utils.close_duckdb_connection(conn, local_db_file)
+        #             # Load the Parquet to BigQuery
+        #             # Because the task that executes this function occurs after load_bq(), 
+        #             #   this will overwrite the derived data delievered by the site
+        #             bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, False)
+            # except Exception as e:
+            #     raise Exception(f"Unable to execute SQL to generate {table_name}: {str(e)}") from e
+            # finally:
+            #     utils.close_duckdb_connection(conn, local_db_file)
 
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
