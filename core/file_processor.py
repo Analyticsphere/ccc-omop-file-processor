@@ -1,8 +1,8 @@
 import codecs
 import csv
-from io import StringIO
-import re
 import os
+from io import StringIO
+
 import chardet  # type: ignore
 import duckdb  # type: ignore
 from google.cloud import storage  # type: ignore
@@ -10,7 +10,7 @@ from google.cloud import storage  # type: ignore
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
 import core.utils as utils
-from pathlib import Path
+
 
 class StreamingCSVWriter:
     """Helper class to stream CSV data directly to and from GCS"""
@@ -451,7 +451,7 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
     Each CSV row is evaulated as a single string, and regex replacements are made to escape problematic characters
     
     File gets downloaded from GCS to VM executing Cloud Function.
-    Streaming CSV file  directly from GCS to VM resulted in unexpected behaviors, so the logic executes against a local file
+    Streaming CSV file directly from GCS to VM resulted in unexpected behaviors, so the logic executes against a local file
     Ideally, we would read/write directly to/from GCS...
     """
     encoding: str = 'utf-8'
@@ -590,16 +590,15 @@ def clean_csv_row(row: str) -> str:
         if "'" in field and not (field.startswith('"') and field.endswith('"')):
             field = f'"{field}"'
         
-        # Single quote fields aren't get read properly
+        # Fields with single quotes aren't get read properly...
         if field == "\"'\"":
             field = "''"
-        
         
         cleaned_fields.append(field)
     
     return ','.join(cleaned_fields)
 
-def format_list(items):
+def format_list(items: list) -> str:
     if not items:  # Check if list is empty
         return ''
     else:

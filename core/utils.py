@@ -8,8 +8,8 @@ from typing import Optional, Tuple
 
 import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
-from google.cloud import storage  # type: ignore
 from google.cloud import bigquery  # type: ignore
+from google.cloud import storage  # type: ignore
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
@@ -144,7 +144,7 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
-def parse_duckdb_csv_error(error: duckdb.InvalidInputException) -> Optional[str]:
+def parse_duckdb_csv_error(error: Exception) -> Optional[str]:
     """
     Parse DuckDB CSV error messages to identify specific error types.
     Returns error type as string or None if unrecognized.
