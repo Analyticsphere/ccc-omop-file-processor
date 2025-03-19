@@ -115,7 +115,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         utils.logger.error(f"Invalid Parquet file")
         raise Exception(f"Invalid Parquet file")
 
-def csv_to_parquet(gcs_file_path: str) -> None:
+def csv_to_parquet(gcs_file_path: str, retry: bool = False) -> None:
     conn, local_db_file = utils.create_duckdb_connection()
 
     try:
@@ -145,20 +145,24 @@ def csv_to_parquet(gcs_file_path: str) -> None:
             """
             conn.execute(convert_statement)
     except Exception as e:
-        # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
-        error_type = utils.parse_duckdb_csv_error(e)
-        if error_type == "INVALID_UNICODE":
-            utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
-            convert_csv_file_encoding(gcs_file_path)
-        elif error_type == "UNTERMINATED_QUOTE":
-            utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
-            fix_csv_quoting(gcs_file_path)
-        elif error_type == "CSV_FORMAT_ERROR":
-            utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
-            raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
+        if not retry:
+            # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
+            error_type = utils.parse_duckdb_csv_error(e)
+            if error_type == "INVALID_UNICODE":
+                utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
+                convert_csv_file_encoding(gcs_file_path)
+            elif error_type == "UNTERMINATED_QUOTE":
+                utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
+                fix_csv_quoting(gcs_file_path)
+            elif error_type == "CSV_FORMAT_ERROR":
+                utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
+                raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
+            else:
+                utils.logger.error(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}")
+                raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e
         else:
             utils.logger.error(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}")
-            raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e        
+            raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e    
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
     
@@ -241,7 +245,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
 
             # After creating new file with UTF8 encoding, try converting it to Parquet
-            csv_to_parquet(f"{bucket_name}/{new_file_path}")
+            csv_to_parquet(f"{bucket_name}/{new_file_path}", True)
 
         except UnicodeDecodeError as e:
             utils.logger.error(f"Failed to decode content with detected encoding {detected_encoding}: {str(e)}")
@@ -504,53 +508,92 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
         raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
     
 
-# def clean_csv_row(row: str) -> str:
-#     """
-#     Clean a CSV row by properly escaping unquoted quotes within quoted fields.
-#     """
-
-#     # Regular expression to match quoted fields
-#     pattern = r'(?<!^)(?<!,)"(?!,|$)'
-    
-#     # Replace unquoted quotes with escaped quotes
-#     cleaned_row = re.sub(pattern, "'", row)
-    
-#     # Ensure the row is properly quoted
-#     fields = cleaned_row.split(',')
-#     cleaned_fields = []
-    
-#     for field in fields:
-#         field = field.strip()
-#         # If the field contains an escaped quote or comma, ensure it's quoted
-#         if '\\"' in field or ',' in field:
-#             if not (field.startswith('"') and field.endswith('"')):
-#                 field = f'"{field}"'
-#         cleaned_fields.append(field)
-    
-#     return ','.join(cleaned_fields)
-
 def clean_csv_row(row: str) -> str:
     """
-    Enhanced cleaning for CSV rows to correctly handle problematic quoting.
+    Clean a CSV row by properly handling various quoting issues:
+    1. Quotes within quoted fields need to be properly escaped (doubled)
+    2. Fields containing single quotes need to be properly quoted
+    3. Fields with consecutive single quotes need to be properly quoted
     """
-    # First, handle edge cases with double quotes at the end
-    row = re.sub(r'(\"[^\"]*?)\"([^,])', r'\1""\2', row)
-
-    # Escape single quotes surrounded by commas by quoting them properly
-    row = re.sub(r",'", ",\"'\"", row)
-    row = re.sub(r",''", ",\"''\"", row)
-
-    # Correctly escape quotes inside already quoted fields
-    def escape_inner_quotes(match):
-        content = match.group(1)
-        # Replace unescaped quotes inside a quoted field with double-quotes
-        content = content.replace('"', '""')
-        return f'"{content}"'
-
-    row = re.sub(r'"([^"]+)"', escape_inner_quotes, row)
-
-    # Fix any remaining problematic unescaped quotes at end-of-line
-    if row.count('"') % 2 != 0:
-        row = row.rstrip() + '"'
-
-    return row
+    # First pass: Fix quotes within quoted fields
+    result = []
+    i = 0
+    in_quotes = False
+    
+    while i < len(row):
+        char = row[i]
+        
+        if char == '"':
+            if not in_quotes:
+                # Start of quoted field
+                in_quotes = True
+                result.append(char)
+            else:
+                # Could be end of quoted field or internal quote
+                if i + 1 < len(row):
+                    next_char = row[i + 1]
+                    if next_char == '"':
+                        # Already escaped quote
+                        result.append('""')
+                        i += 1
+                    elif next_char != ',' and next_char != '\r' and next_char != '\n':
+                        # Internal quote that needs escaping (Example 1)
+                        result.append('""')
+                    else:
+                        # End of quoted field
+                        in_quotes = False
+                        result.append(char)
+                else:
+                    # End of quoted field at end of string
+                    in_quotes = False
+                    result.append(char)
+        else:
+            result.append(char)
+        
+        i += 1
+    
+    # Second pass: Split into fields and handle single quotes
+    row_with_fixed_quotes = ''.join(result)
+    fields = []
+    current = []
+    in_quotes = False
+    i = 0
+    
+    while i < len(row_with_fixed_quotes):
+        char = row_with_fixed_quotes[i]
+        
+        if char == '"':
+            current.append(char)
+            if not in_quotes:
+                in_quotes = True
+            else:
+                # Check if it's an escaped quote
+                if i + 1 < len(row_with_fixed_quotes) and row_with_fixed_quotes[i + 1] == '"':
+                    current.append(row_with_fixed_quotes[i + 1])
+                    i += 1
+                else:
+                    in_quotes = False
+        elif char == ',' and not in_quotes:
+            # End of field
+            fields.append(''.join(current))
+            current = []
+        else:
+            current.append(char)
+        
+        i += 1
+    
+    # Add the last field
+    if current or not fields:
+        fields.append(''.join(current))
+    
+    # Process fields with single quotes
+    cleaned_fields = []
+    for field in fields:
+        # Handle single quotes (Examples 2 & 3)
+        # If field contains single quotes and isn't already quoted
+        if "'" in field and not (field.startswith('"') and field.endswith('"')):
+            field = f'"{field}"'
+        
+        cleaned_fields.append(field)
+    
+    return ','.join(cleaned_fields)
