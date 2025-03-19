@@ -126,14 +126,14 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
 
             select_list = []
             for column in csv_column_names:
-                select_list.append(f"{column} AS {column.lower()}")
+                # get rid of " characters in column names to prevent double double quoting in offset handling
+                select_list.append(f"{column} AS {column.lower().replace('"', '')}")
             select_clause = ", ".join(select_list)
 
             # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
             # Special handling required to prevent parsing error
-            # First get rid of " characters in column names to prevent double double quoting
-            select_clause = select_clause.replace('"', '')
-            # Then re-add double quotes to prevent DuckDB from returning parsing error
+
+            # Re-add double quotes to offset field prevent DuckDB from returning parsing error
             select_clause = select_clause.replace('offset', '"offset"')
 
             # Convert CSV to Parquet with lowercase column names
