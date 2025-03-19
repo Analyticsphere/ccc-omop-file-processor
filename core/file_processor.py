@@ -115,7 +115,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         utils.logger.error(f"Invalid Parquet file")
         raise Exception(f"Invalid Parquet file")
 
-def csv_to_parquet(gcs_file_path: str, retry: bool = False) -> None:
+def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: list = []) -> None:
     conn, local_db_file = utils.create_duckdb_connection()
 
     try:
@@ -140,7 +140,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False) -> None:
             convert_statement = f"""
                 COPY (
                     SELECT {select_clause}
-                    FROM read_csv('gs://{gcs_file_path}', null_padding=true, ALL_VARCHAR=True, strict_mode=False)
+                    FROM read_csv('gs://{gcs_file_path}', ALL_VARCHAR=True, strict_mode=False)
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
             conn.execute(convert_statement)
@@ -498,11 +498,8 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             os.remove(output_csv_path)
             utils.logger.warning(f"DID delete")
             
-            try:
-                # After creating new file with fixed quoting, try converting it to Parquet
-                csv_to_parquet(f"{bucket}/{destination_blob}")
-            except Exception as e:
-                raise Exception(f"Unable to convert CSV to Parquet: {str(e)}")
+            # After creating new file with fixed quoting, try converting it to Parquet
+            csv_to_parquet(f"{bucket}/{destination_blob}", True)
                 
     except UnicodeDecodeError:
         raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
