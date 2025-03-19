@@ -144,6 +144,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
                         null_padding=True, ALL_VARCHAR=True, strict_mode=False {format_list(conversion_options)})
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
+
             conn.execute(convert_statement)
     except Exception as e:
         if not retry:
@@ -153,7 +154,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
                 utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
                 convert_csv_file_encoding(gcs_file_path)
             elif error_type == "UNTERMINATED_QUOTE":
-                utils.logger.warning(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
+                utils.logger.warning(f"Attempting to correct unescaped quote characters in file gs://{gcs_file_path}: {e}")
                 fix_csv_quoting(gcs_file_path)
             elif error_type == "CSV_FORMAT_ERROR":
                 utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
@@ -246,6 +247,8 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
 
             # After creating new file with UTF8 encoding, try converting it to Parquet
+            # store_rejects = True leads to more malformed rows getting included, but may add unexpected columns
+            # Unexpected columns will be reported in data delivery report, and normalization step will remove them
             csv_to_parquet(f"{bucket_name}/{new_file_path}", True, ['store_rejects=True'])
 
         except UnicodeDecodeError as e:
@@ -432,7 +435,7 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
 
         ra = report_artifact.ReportArtifact(
             delivery_date=delivery_date,
-            gcs_path=bucket,
+            artifact_bucket=bucket,
             concept_id=table_concept_id,
             name=f"{count_type}: {table_name}",
             value_as_string=None,
@@ -442,27 +445,23 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
         ra.save_artifact()
 
 def fix_csv_quoting(gcs_file_path: str) -> None:
-    # Properly handles unquoted quotes in CSV files 
-    # Each CSV row is evaulated as a single string, 
-    # and regex replacements are made to escape problematic characters
+    """
+    Handles some unquoted quote patterns in CSV files 
+    Each CSV row is evaulated as a single string, and regex replacements are made to escape problematic characters
     
-    # File gets downloaded from GCS to VM executing Cloud Function
-    # When streaming CSV file directly from GCS to VM, there seems to be some kind of 
-    # automated parsing that breaks this logic, so the logic must execute against a local file
-    # Ideally, we would read/write directly to/from GCS...
+    File gets downloaded from GCS to VM executing Cloud Function.
+    Streaming CSV file  directly from GCS to VM resulted in unexpected behaviors, so the logic executes against a local file
+    Ideally, we would read/write directly to/from GCS...
+    """
     encoding: str = 'utf-8'
     batch_size: int = 1000
 
-    utils.logger.warning(f"*-*-*-*-*-*-* GOING TO DOWNLOAD FILE -*-*-*-*-*-")
-
     # Download and get path to local CSV file
     broken_csv_path = utils.download_from_gcs(gcs_file_path)
-    utils.logger.warning(f"broken_csv_path is {broken_csv_path}")
 
     # Create output path, renaming original file
     filename = utils.get_table_name_from_gcs_path(gcs_file_path)
     output_csv_path = broken_csv_path.replace(filename, f"{filename}{constants.FIXED_FILE_TAG_STRING}")
-    utils.logger.warning(f"output_csv_path is {output_csv_path}")
 
     try:
         with open(broken_csv_path, 'r', encoding=encoding) as infile, \
@@ -490,21 +489,19 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
             destination_blob = f"{delivery_date}/{constants.ArtifactPaths.FIXED_FILES.value}{filename}{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
             # Upload fixed file to GCS
-            utils.logger.warning(f"going to upload to GCS")
             utils.upload_to_gcs(output_csv_path, bucket, destination_blob)
-            utils.logger.warning(f"DID upload to GCS")
+
             # Delete local files
-            utils.logger.warning(f"going to delete")
             os.remove(broken_csv_path)
             os.remove(output_csv_path)
-            utils.logger.warning(f"DID delete")
             
             # After creating new file with fixed quoting, try converting it to Parquet
+            # store_rejects = True leads to more malformed rows getting included, but may add unexpected columns
+            # Unexpected columns will be reported in data delivery report, and normalization step will remove them
             csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True'])
                 
     except UnicodeDecodeError:
         raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
-    
 
 def clean_csv_row(row: str) -> str:
     """

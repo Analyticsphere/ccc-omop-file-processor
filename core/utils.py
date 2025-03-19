@@ -453,7 +453,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
 
         ra = report_artifact.ReportArtifact(
             delivery_date=delivery_date,
-            gcs_path=gcs_bucket,
+            artifact_bucket=gcs_bucket,
             concept_id=0,
             name=f"{reporting_item}",
             value_as_string=value,
