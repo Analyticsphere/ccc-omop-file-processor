@@ -588,8 +588,11 @@ def clean_csv_row(row: str) -> str:
         # Handle single quotes (Examples 2 & 3)
         # If field contains single quotes and isn't already quoted
         if "'" in field and not (field.startswith('"') and field.endswith('"')):
-            #field = f'"{field}"'
-            field = field
+            field = f'"{field}"'
+        
+        # Single quote fields aren't get read properly
+        if field == "\"'\"":
+            field = "''"
         
         
         cleaned_fields.append(field)
