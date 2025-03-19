@@ -140,7 +140,8 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             convert_statement = f"""
                 COPY (
                     SELECT {select_clause}
-                    FROM read_csv('gs://{gcs_file_path}', null_padding=True, ALL_VARCHAR=True)
+                    FROM read_csv('gs://{gcs_file_path}', 
+                        null_padding=True, ALL_VARCHAR=True, strict_mode=False {format_list(conversion_options)})
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
             conn.execute(convert_statement)
@@ -245,7 +246,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
 
             # After creating new file with UTF8 encoding, try converting it to Parquet
-            csv_to_parquet(f"{bucket_name}/{new_file_path}", True)
+            csv_to_parquet(f"{bucket_name}/{new_file_path}", True, ['store_rejects=True'])
 
         except UnicodeDecodeError as e:
             utils.logger.error(f"Failed to decode content with detected encoding {detected_encoding}: {str(e)}")
@@ -499,7 +500,7 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             utils.logger.warning(f"DID delete")
             
             # After creating new file with fixed quoting, try converting it to Parquet
-            csv_to_parquet(f"{bucket}/{destination_blob}", True)
+            csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True'])
                 
     except UnicodeDecodeError:
         raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
@@ -594,3 +595,9 @@ def clean_csv_row(row: str) -> str:
         cleaned_fields.append(field)
     
     return ','.join(cleaned_fields)
+
+def format_list(items):
+    if not items:  # Check if list is empty
+        return ''
+    else:
+        return ',' + ', '.join(items)
