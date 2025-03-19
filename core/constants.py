@@ -80,6 +80,7 @@ class ArtifactPaths(str, Enum):
     REPORT = f"{ARTIFACTS}delivery_report/"
     REPORT_TMP = f"{ARTIFACTS}delivery_report/tmp/"
     DQD = f"{ARTIFACTS}dqd/"
+    ACHILLES = f"{ARTIFACTS}achilles/"
     INVALID_ROWS = f"{ARTIFACTS}invalid_rows/"
 
 # Using -1 as place/holder default value for numeric fields 
