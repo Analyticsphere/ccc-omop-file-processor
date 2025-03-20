@@ -190,7 +190,7 @@ def target_vocab_to_bq() -> tuple[str, int]:
         return "Missing required parameters: vocab_version, vocab_gcs_bucket, project_id, dataset_id, table_file_name", 400
     
     try:
-        print()
+        omop_client.load_vocabulary_table(vocab_version, vocab_gcs_bucket, table_file_name,project_id,dataset_id)
 
         return f"Successfully load vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}", 200
     except Exception as e:
