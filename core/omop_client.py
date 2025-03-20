@@ -1,9 +1,11 @@
+from datetime import datetime
+
 from google.cloud import bigquery  # type: ignore
 
+import core.bq_client as bq_client
 import core.constants as constants
 import core.utils as utils
-import core.bq_client as bq_client
-from datetime import datetime
+
 
 def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str) -> None:
     """

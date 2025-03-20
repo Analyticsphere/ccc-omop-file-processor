@@ -1,7 +1,9 @@
+import uuid
 import warnings
 from typing import Optional
-import uuid
+
 import duckdb  # type: ignore
+
 
 class UDFManager:
 

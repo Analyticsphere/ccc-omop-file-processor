@@ -23,7 +23,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['concept_id'],
                 delivery_date=delivery_date,
-                gcs_path=gcs_path,
+                artifact_bucket=gcs_path,
                 name=f"Valid table name: {table_name}",
                 value_as_concept_id=None,
                 value_as_number=None,
@@ -33,7 +33,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
             ra = report_artifact.ReportArtifact(
                 concept_id=None,
                 delivery_date=delivery_date,
-                gcs_path=gcs_path,
+                artifact_bucket=gcs_path,
                 name=f"Invalid table name: {table_name}",
                 value_as_concept_id=None,
                 value_as_number=None,
@@ -75,7 +75,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['fields'][column]['concept_id'],
                 delivery_date=delivery_date,
-                gcs_path=bucket_name,
+                artifact_bucket=bucket_name,
                 name=f"Valid column name: {table_name}.{column}",
                 value_as_concept_id=None,
                 value_as_number=None,
@@ -89,7 +89,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
             ra = report_artifact.ReportArtifact(
                 concept_id=None,
                 delivery_date=delivery_date,
-                gcs_path=bucket_name,
+                artifact_bucket=bucket_name,
                 name=f"Invalid column name: {table_name}.{column}",
                 value_as_concept_id=None,
                 value_as_number=None,
@@ -102,7 +102,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['fields'][column]['concept_id'],
                 delivery_date=delivery_date,
-                gcs_path=bucket_name,
+                artifact_bucket=bucket_name,
                 name=f"Missing column: {table_name}.{column}",
                 value_as_concept_id=None,
                 value_as_number=None,
