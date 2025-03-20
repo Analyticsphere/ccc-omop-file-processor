@@ -177,6 +177,27 @@ def cdm_upgrade() -> tuple[str, int]:
         utils.logger.error(f"Unable to upgrade file: {str(e)}")
         return f"Unable to upgrade file: {str(e)}", 500
 
+@app.route('/load_target_vocab', methods=['POST'])
+def target_vocab_to_bq() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
+    table_file_name: Optional[str] = data.get('table_file_name')
+    vocab_version: Optional[str] = data.get('vocab_version')
+    vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
+    project_id: Optional[str] = data.get('project_id')
+    dataset_id: Optional[str] = data.get('dataset_id')
+
+    if not vocab_version or not vocab_gcs_bucket or not project_id or not dataset_id or not table_file_name:
+        return "Missing required parameters: vocab_version, vocab_gcs_bucket, project_id, dataset_id, table_file_name", 400
+    
+    try:
+        print()
+
+        return f"Successfully load vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to load vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}: {str(e)}")
+        return f"Unable to load vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}: {str(e)}", 500        
+
+
 @app.route('/harmonize_vocab', methods=['POST'])
 def vocab_harmonization() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
