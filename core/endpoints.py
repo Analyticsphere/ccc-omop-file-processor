@@ -192,7 +192,7 @@ def target_vocab_to_bq() -> tuple[str, int]:
     try:
         omop_client.load_vocabulary_table(vocab_version, vocab_gcs_bucket, table_file_name,project_id,dataset_id)
 
-        return f"Successfully load vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}", 200
+        return f"Successfully loaded vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}", 200
     except Exception as e:
         utils.logger.error(f"Unable to load vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}: {str(e)}")
         return f"Unable to load vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}: {str(e)}", 500        

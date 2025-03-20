@@ -329,7 +329,11 @@ def placeholder_to_table_path(site: str, site_bucket: str, delivery_date: str, s
     return replacement_result
 
 def load_vocabulary_table(vocab_version: str, vocab_gcs_bucket: str, table_file_name: str, project_id: str, dataset_id: str) -> None:
-    # Loads a target vocabulary table to BigQuery table
+    # Loads an optimized vocabulary file to BigQuery as a table
+    
     vocab_parquet_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{table_file_name}{constants.PARQUET}"
-    utils.logger.warning(f"*-*-*-*-*-*-*-*-* Going to load vocab file {vocab_parquet_path}")
-    bq_client.load_parquet_to_bigquery(vocab_parquet_path, project_id, dataset_id, False)
+
+    if utils.parquet_file_exists(vocab_parquet_path) and utils.valid_parquet_file(vocab_parquet_path):
+        bq_client.load_parquet_to_bigquery(vocab_parquet_path, project_id, dataset_id, False)
+    else:
+        raise Exception(f"Vocabulary table {table_file_name} not found at {vocab_parquet_path}")
