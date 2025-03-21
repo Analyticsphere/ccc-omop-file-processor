@@ -150,8 +150,6 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
 
     except Exception as e:
         raise Exception(f"DDL file error: {e}")
-    
-    
 
 def populate_cdm_source(cdm_source_data: dict) -> None:
     # Add a record to the cdm_source table, if it doesn't have any rows
@@ -329,3 +327,13 @@ def placeholder_to_table_path(site: str, site_bucket: str, delivery_date: str, s
     replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
 
     return replacement_result
+
+def load_vocabulary_table(vocab_version: str, vocab_gcs_bucket: str, table_file_name: str, project_id: str, dataset_id: str) -> None:
+    # Loads an optimized vocabulary file to BigQuery as a table
+    
+    vocab_parquet_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{table_file_name}{constants.PARQUET}"
+
+    if utils.parquet_file_exists(vocab_parquet_path) and utils.valid_parquet_file(vocab_parquet_path):
+        bq_client.load_parquet_to_bigquery(vocab_parquet_path, project_id, dataset_id, False)
+    else:
+        raise Exception(f"Vocabulary table {table_file_name} not found at {vocab_parquet_path}")
