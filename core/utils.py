@@ -574,7 +574,7 @@ def get_primary_key_field(table_name: str, cdm_version: str) -> str:
 
     # Iterate over each field and return primary key
     for field in columns:
-        if field.get("primary_key") is not None and field.get("primary_key") == "true":
+        if "primary_key" in field and field["primary_key"] == "true":
             return field
     
     # For tables with no primary key, return ""
