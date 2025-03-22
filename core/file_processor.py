@@ -396,7 +396,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         COPY (
             SELECT *
             FROM read_parquet('gs://{gcs_file_path}')
-            WHERE md5(CONCAT({row_hash_statement})) IN (
+            WHERE generate_id(CONCAT({row_hash_statement})) IN (
                 SELECT row_hash FROM row_check WHERE row_hash IS NOT NULL
             )
         ) TO 'gs://{utils.get_invalid_rows_path_from_gcs_path(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
