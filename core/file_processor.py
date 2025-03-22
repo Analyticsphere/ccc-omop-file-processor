@@ -282,6 +282,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         - Creates a new Parquet file with the invalid rows from the original data file
         - Converts all column names to lower case
         - Ensures consistent field order within Parquet
+        - Set (possibly non-unique) deterministric composite key for tables with surrogate primary keys
 
     This SQL has many functions, but it is far more efficient to do this all in one step,
     as compared to reading and writing the Parquet each time, for each piece of functionality.
@@ -355,8 +356,6 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         row_validity.append("''")
     row_validity_sql = ", ".join(row_validity)
 
-    # Build concat statement that will eventually be hashed to identify valid/invalid rows
-    row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
     
     # Create deterministic composite key for tables with surrogate primary keys
         # At this stage, uniqueness is *not* an expected, nor desired, property of the primary keys
@@ -370,12 +369,16 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         # Don't include the original primary key in the hash
         primary_key_sql = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in ordered_omop_columns if field_name != primary_key])
         final_select = f"""
-            SELECT * REPLACE({primary_key} AS generate_id({primary_key_sql})) EXCLUDE (row_hash)
+            SELECT * EXCLUDE (row_hash) REPLACE(generate_id({primary_key_sql}) AS {primary_key}) 
         """
     else:
         final_select = f"""
             SELECT * EXCLUDE (row_hash)
         """
+
+    # Build concat statement that will eventually be hashed to identify valid/invalid rows
+    # The primary key SQL only involves columns included in OMOP OMOP, the row_hash involves ALL columns from incoming Parquet
+    row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
 
     # Final normalization SQL statement
     # Step 1 - Identify invalid rows using output of COALESCE({row_validity_sql}) (NULL COALESCE result = invalid)
