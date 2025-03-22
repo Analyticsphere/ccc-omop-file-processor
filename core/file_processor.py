@@ -325,10 +325,6 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         # Determine default value if a required field is NULL
         default_value = get_placeholder_value(field_name, field_type) if is_required or field_name.endswith("_concept_id") else "NULL"
 
-        # # Build concat statement that will eventually be hashed to identify rows
-        # row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
-        # utils.logger.warning(f"the row hash statement is {row_hash_statement}")
-
         # If the site delivered table contains an expected column...
         if field_name in actual_columns:
             # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
@@ -350,8 +346,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
             # Still need to cast to ensure consist column types
             coalesce_exprs.append(f"CAST({default_value} AS {field_type}) AS {field_name}")
 
-            # If the column IS NOT PROVIDED but it's still required - this is not a failed row; just use a default value
-            # No need to add missing, required columns to row_validity check
+            # If a column is required but not provided, all rows should not fail validity check; just use a default value
 
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
 
@@ -360,16 +355,15 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         row_validity.append("''")
     row_validity_sql = ", ".join(row_validity)
 
-    # Build concat statement that will eventually be hashed to identify rows
+    # Build concat statement that will eventually be hashed to identify valid/invalid rows
     row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
-    utils.logger.warning(f"OUTSIDE OF FOR LOOP the row hash statement is {row_hash_statement}")
     
     # Create deterministic composite key for tables with surrogate primary keys
-    # At this stage, uniqueness is *not* an expected, nor desired, property of the primary keys
-    # Primary keys uniqueness will be enforced in later tasks, after vocabulary harmonization
+        # At this stage, uniqueness is *not* an expected, nor desired, property of the primary keys
+        # Primary keys uniqueness will be enforced in later tasks, after vocabulary harmonization
     if table_name in constants.SURROGATE_KEY:
         utils.logger.warning(f"table {table_name} has surrogate key")
-        primary_key = utils.get_primary_key_field(table_name)
+        primary_key = utils.get_primary_key_field(table_name, cdm_version)
         utils.logger.warning(f"primary key is {primary_key}")
 
         # Create composite key by concatenting each column into a single value and taking its hash
