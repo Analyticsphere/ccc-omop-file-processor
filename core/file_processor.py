@@ -360,6 +360,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # Create deterministic composite key for tables with surrogate primary keys
         # At this stage, uniqueness is *not* an expected, nor desired, property of the primary keys
         # Primary keys uniqueness will be enforced in later tasks, after vocabulary harmonization
+    replace_clause = ""
     if table_name in constants.SURROGATE_KEY:
         utils.logger.warning(f"table {table_name} has surrogate key")
         primary_key = utils.get_primary_key_field(table_name, cdm_version)
@@ -368,12 +369,8 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         # Create composite key by concatenting each column into a single value and taking its hash
         # Don't include the original primary key in the hash
         primary_key_sql = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in ordered_omop_columns if field_name != primary_key])
-        final_select = f"""
+        replace_clause = f"""
             SELECT * EXCLUDE (row_hash) REPLACE(generate_id({primary_key_sql}) AS {primary_key}) 
-        """
-    else:
-        final_select = f"""
-            SELECT * EXCLUDE (row_hash)
         """
 
     # Build concat statement that will eventually be hashed to identify valid/invalid rows
@@ -406,7 +403,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         ;
 
         COPY (
-            {final_select}
+            SELECT * EXCLUDE (row_hash) {replace_clause}
             FROM row_check
             WHERE row_hash IS NULL
         ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
