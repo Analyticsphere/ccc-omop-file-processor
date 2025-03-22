@@ -572,10 +572,10 @@ def get_primary_key_field(table_name: str, cdm_version: str) -> str:
     schema = get_table_schema(table_name, cdm_version)
     columns = schema[table_name]["columns"]
 
-    # Iterate over each field and return primary key
-    for field in columns:
-        if "primary_key" in field and field["primary_key"] == "true":
-            return field
+    # Iterate over each field name and its properties
+    for column_name, column_properties in columns.items():
+        if "primary_key" in column_properties and column_properties["primary_key"] == "true":
+            return column_name
     
     # For tables with no primary key, return ""
     return ""
