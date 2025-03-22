@@ -275,7 +275,7 @@ def get_placeholder_value(field_name: str, field_type: str) -> str:
     
     return default_value
 
-def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
+def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str) -> str:
     """
     Generates a SQL statement that, when run:
         - Converts data types of columns within Parquet file to OMOP CDM standard
@@ -291,7 +291,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # --------------------------------------------------------------------------
     # Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
-    table_name = utils.get_table_name_from_gcs_path(gcs_file_path).lower()
+    table_name = utils.get_table_name_from_gcs_path(parquet_gcs_file_path).lower()
 
     # --------------------------------------------------------------------------
     # Retrieve the table schema. If not found, return empty string
@@ -307,7 +307,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # --------------------------------------------------------------------------
     # Identify which columns actually exist in the Parquet file 
     # --------------------------------------------------------------------------
-    actual_columns = utils.get_columns_from_file(gcs_file_path)
+    actual_columns = utils.get_columns_from_file(parquet_gcs_file_path)
 
     # --------------------------------------------------------------------------
     # Initialize lists to build SQL expressions
@@ -319,7 +319,6 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # Coalesce required columns if they're NULL, or generate a placeholder column if that field doesn't exist at all.
     # --------------------------------------------------------------------------
     for field_name in ordered_omop_columns:
-        utils.logger.warning(f"looking at field {field_name} from omop columns")
         field_type = columns[field_name]["type"]
         is_required = columns[field_name]["required"].lower() == "true"
 
@@ -356,15 +355,12 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         row_validity.append("''")
     row_validity_sql = ", ".join(row_validity)
 
-    
     # Create deterministic composite key for tables with surrogate primary keys
         # At this stage, uniqueness is *not* an expected, nor desired, property of the primary keys
         # Primary keys uniqueness will be enforced in later tasks, after vocabulary harmonization
     replace_clause = ""
     if table_name in constants.SURROGATE_KEY:
-        utils.logger.warning(f"table {table_name} has surrogate key")
         primary_key = utils.get_primary_key_field(table_name, cdm_version)
-        utils.logger.warning(f"primary key is {primary_key}")
 
         # Create composite key by concatenting each column into a single value and taking its hash
         # Don't include the original primary key in the hash
@@ -374,7 +370,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         """
 
     # Build concat statement that will eventually be hashed to identify valid/invalid rows
-    # The primary key SQL only involves columns included in OMOP OMOP, the row_hash involves ALL columns from incoming Parquet
+    # The row_hash involves ALL columns from incoming Parquet (whereas the primary key includes only columns in OMOP)
     row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
 
     # Final normalization SQL statement
@@ -390,23 +386,23 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
                 CASE 
                     WHEN COALESCE({row_validity_sql}) IS NULL THEN generate_id(CONCAT({row_hash_statement}))
                     ELSE NULL END AS row_hash
-            FROM read_parquet('gs://{gcs_file_path}')
+            FROM read_parquet('gs://{parquet_gcs_file_path}')
         ;
 
         COPY (
             SELECT *
-            FROM read_parquet('gs://{gcs_file_path}')
+            FROM read_parquet('gs://{parquet_gcs_file_path}')
             WHERE generate_id(CONCAT({row_hash_statement})) IN (
                 SELECT row_hash FROM row_check WHERE row_hash IS NOT NULL
             )
-        ) TO 'gs://{utils.get_invalid_rows_path_from_gcs_path(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+        ) TO 'gs://{utils.get_invalid_rows_path_from_gcs_path(parquet_gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
         COPY (
             SELECT * EXCLUDE (row_hash) {replace_clause}
             FROM row_check
             WHERE row_hash IS NULL
-        ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
+        ) TO 'gs://{parquet_gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
     """.strip()
@@ -415,13 +411,10 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # Need to add "" around offset column name to prevent parsing error
     sql_script = sql_script.replace('offset', '"offset"')
 
-    final_sql_no_returns = sql_script.replace('\n','')
-    utils.logger.warning(f"*_*_*_*_*_*_ final SQL: {final_sql_no_returns}")
-
     return sql_script
 
-def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
-    fix_sql = get_normalization_sql_statement(gcs_file_path, cdm_version)
+def normalize_file(parquet_gcs_file_path: str, cdm_version: str) -> None:
+    fix_sql = get_normalization_sql_statement(parquet_gcs_file_path, cdm_version)
     
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM
@@ -432,7 +425,7 @@ def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
             with conn:
                 conn.execute(fix_sql)
                 # Get counts of valid/invalid rows for OMOP files
-                create_row_count_artifacts(gcs_file_path, cdm_version, conn)
+                create_row_count_artifacts(parquet_gcs_file_path, cdm_version, conn)
         except Exception as e:
             utils.logger.error(f"Unable to normalize Parquet file: {e}")
             raise Exception(f"Unable to normalize Parquet file: {e}") from e
@@ -607,17 +600,17 @@ def clean_csv_row(row: str) -> str:
     
     # Process columns with single quotes
     cleaned_columns = []
-    for field in columns:
+    for column in columns:
         # Handle single quotes (Examples 2 & 3)
         # If field contains single quotes and isn't already quoted
-        if "'" in field and not (field.startswith('"') and field.endswith('"')):
-            field = f'"{field}"'
+        if "'" in column and not (column.startswith('"') and column.endswith('"')):
+            column = f'"{column}"'
         
         # Columns with single quotes aren't get read properly...
-        if field == "\"'\"":
-            field = "''"
+        if column == "\"'\"":
+            column = "''"
         
-        cleaned_columns.append(field)
+        cleaned_columns.append(column)
     
     return ','.join(cleaned_columns)
 
