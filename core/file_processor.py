@@ -301,7 +301,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         return ""
 
     fields = schema[table_name]["fields"]
-    ordered_columns = list(fields.keys())  # preserve column order
+    ordered_omop_columns = list(fields.keys())  # preserve column order
 
     # --------------------------------------------------------------------------
     # Identify which columns actually exist in the Parquet file 
@@ -317,17 +317,22 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # --------------------------------------------------------------------------
     # Coalesce required fields if they're NULL, or generate a placeholder column if that field doesn't exist at all.
     # --------------------------------------------------------------------------
-    for field_name in ordered_columns:
+    for field_name in ordered_omop_columns:
+        utils.logger.warning(f"looking at field {field_name} from omop columns")
         field_type = fields[field_name]["type"]
         is_required = fields[field_name]["required"].lower() == "true"
+        primary_key = "primary_key" in fields[field_name] and fields[field_name]["primary_key"].lower() == "true"
+        utils.logger.warning(f"primary key property: {primary_key}")
 
         # Determine default value if a required field is NULL
         default_value = get_placeholder_value(field_name, field_type) if is_required or field_name.endswith("_concept_id") else "NULL"
 
         # Build concat statement that will eventually be hashed to identify rows
         row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
+        utils.logger.warning(f"the row hash statement is {row_hash_statement}")
 
-        if field_name in actual_columns:           
+        # If the site delivered table contains an expected column...
+        if field_name in actual_columns:
             # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
             if default_value != "NULL":
                 coalesce_exprs.append(f"TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS {field_name}")
@@ -344,18 +349,37 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
                 row_validity.append(f"CAST(TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS VARCHAR)")
         else:
             # If the column doesn't exist, just produce a placeholder (NULL or a special default)
-            # Still need to cast to ensure consist field types
+            # Still need to cast to ensure consist column types
             coalesce_exprs.append(f"CAST({default_value} AS {field_type}) AS {field_name}")
 
-            # If the field IS NOT PROVIDED but it's still required - this is not a failed row; just use a default value
-            # No need to add missing, required rows to row_validity check
+            # If the column IS NOT PROVIDED but it's still required - this is not a failed row; just use a default value
+            # No need to add missing, required columns to row_validity check
 
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
 
     # If row_validity list has no statements, add a string so SQL statement stays valid
     if not row_validity:
-        row_validity.append("'faketext'")
+        row_validity.append("''")
     row_validity_sql = ", ".join(row_validity)
+
+    # Build concat statement that will eventually be hashed to identify rows
+    row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
+    utils.logger.warning(f"OUTSIDE OF FOR LOOP the row hash statement is {row_hash_statement}")
+    
+    # Create composite key by concatenting each column into a single value and taking its hash
+    primary_key_sql = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in ordered_omop_columns])
+
+    # TODO: Or just add this property to the JSON?
+    def get_primary_key_sql(table_name: str) -> str:
+        primary_key_dict = {
+            "condition_occurrence": "condition_occurrence_id"
+        }
+
+        if table_name in primary_key_dict.keys():
+            primary_key_sql = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in ordered_omop_columns])
+        else:
+            primary_key_sql = "Just select the column with the primary key"
+        print()
 
     # Build row_check table with row_hash column
     # Uniquely identify invalid rows using hash generated from concatenting each column
@@ -363,6 +387,9 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # Use the hash values to identify invalid rows from original Parquet, and save those rows to a seperate file
         # Need to save from original file because row_check will have TRY_CAST result, and will obscure original, invalid values
     # Resave over original parquet file, saving only the rows which are valid
+
+    # When row_validity_sql evaulates to NULL, that means the row is NOT valid
+    # The invalid row is currently "tagged" with a row hash value
     sql_script = f"""
         CREATE OR REPLACE TABLE row_check AS
             SELECT
