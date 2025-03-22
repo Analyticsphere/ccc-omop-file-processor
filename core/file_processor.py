@@ -370,7 +370,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         # Don't include the original primary key in the hash
         primary_key_sql = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in ordered_omop_columns if field_name != primary_key])
         replace_clause = f"""
-            SELECT * EXCLUDE (row_hash) REPLACE(generate_id({primary_key_sql}) AS {primary_key}) 
+            REPLACE(generate_id({primary_key_sql}) AS {primary_key}) 
         """
 
     # Build concat statement that will eventually be hashed to identify valid/invalid rows
