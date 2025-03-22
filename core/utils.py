@@ -567,3 +567,15 @@ def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name:
     # Create a blob object and upload the file
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(local_file_path)
+
+def get_primary_key_field(table_name: str, cdm_version: str) -> str:
+    schema = get_table_schema(table_name, cdm_version)
+    columns = schema[table_name]["columns"]
+
+    # Iterate over each field and return primary key
+    for field in columns:
+        if field.get("primary_key") is not None and field.get("primary_key") == "true":
+            return field
+    
+    # For tables with no primary key, return ""
+    return ""

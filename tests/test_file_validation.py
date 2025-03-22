@@ -12,7 +12,7 @@ from core.file_validation import (validate_cdm_table_name,
 def mock_schema_file(tmp_path):
     schema_content = {
         "person": {
-            "fields": {
+            "columns": {
                 "person_id": {"type": "INTEGER"},
                 "gender_concept_id": {"type": "INTEGER"}
             }

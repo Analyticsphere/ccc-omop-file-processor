@@ -61,7 +61,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
         parquet_columns = set(utils.get_columns_from_file(parquet_artifact_location))
 
         # Get schema columns from the table schema and convert to set (for O(1) lookups)
-        schema_columns = set(schema[table_name]['fields'].keys())
+        schema_columns = set(schema[table_name]['columns'].keys())
 
         # Identify valid and invalid columns from the parquet file
         valid_columns = parquet_columns & schema_columns  # Intersection of sets
@@ -73,7 +73,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
         # Process valid columns
         for column in valid_columns:
             ra = report_artifact.ReportArtifact(
-                concept_id=schema[table_name]['fields'][column]['concept_id'],
+                concept_id=schema[table_name]['columns'][column]['concept_id'],
                 delivery_date=delivery_date,
                 artifact_bucket=bucket_name,
                 name=f"Valid column name: {table_name}.{column}",
@@ -100,7 +100,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
 
         for column in missing_columns:
             ra = report_artifact.ReportArtifact(
-                concept_id=schema[table_name]['fields'][column]['concept_id'],
+                concept_id=schema[table_name]['columns'][column]['concept_id'],
                 delivery_date=delivery_date,
                 artifact_bucket=bucket_name,
                 name=f"Missing column: {table_name}.{column}",

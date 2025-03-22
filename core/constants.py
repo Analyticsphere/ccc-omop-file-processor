@@ -83,7 +83,7 @@ class ArtifactPaths(str, Enum):
     ACHILLES = f"{ARTIFACTS}achilles/"
     INVALID_ROWS = f"{ARTIFACTS}invalid_rows/"
 
-# Using -1 as place/holder default value for numeric fields 
+# Using -1 as place/holder default value for numeric columns 
 #   as these are uncommon values in real data
 # Using date 1970-01-01 because it's the Unix epoch, and it's
 #   unlikely that this date will appear in real data
@@ -169,3 +169,53 @@ TARGET_VOCABULARY_VERSION_REPORT_NAME = "Standardized to vocabulary version"
 TARGET_CDM_VERSION_REPORT_NAME = "Standardized to CDM version"
 FILE_PROCESSOR_VERSION_REPORT_NAME = "Pipeline file processor version"
 PROCESSED_DATE_REPORT_NAME = "Delivery processing date"
+
+# Primary key column can be found in schema.json file
+NATURAL_KEY = {
+    "person",
+    "location",
+    "care_site",
+    "provider",
+    "episode",
+    "concept",
+    "vocabulary",
+    "domain",
+    "concept_class",
+    "relationship"
+}
+
+SURROGATE_KEY = {
+    "observation_period",
+    "visit_occurrence",
+    "visit_detail",
+    "condition_occurrence",
+    "drug_exposure",
+    "procedure_occurrence",
+    "device_exposure",
+    "measurement",
+    "observation",
+    "note",
+    "note_nlp",
+    "specimen",
+    "payer_plan_period",
+    "cost",
+    "drug_era",
+    "dose_era",
+    "condition_era",
+    "metadata"
+}
+
+NO_PRIMARY_KEY = {
+    "death",
+    "fact_relationship",
+    "episode_event",
+    "cdm_source",
+    "concept_relationship",
+    "concept_synonym",
+    "concept_ancestor",
+    "source_to_concept_map",
+    "drug_strength",
+    "cohort",
+    "cohort_definition",
+    "attribute_definition"
+}
