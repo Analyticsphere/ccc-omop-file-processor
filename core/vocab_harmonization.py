@@ -216,7 +216,7 @@ class VocabHarmonizer:
         partition_statement = f"""
             COPY (
                 SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
-            ) TO 'gs://{self.target_parquet_path}' (FORMAT PARQUET, PARTITION_BY (target_table), COMPRESSION ZSTD);
+            ) TO 'gs://{self.target_parquet_path}' (FORMAT PARQUET, PARTITION_BY (condition_occurrence_id), COMPRESSION ZSTD);
         """
         part_no_return = partition_statement.replace('\n','')
         utils.logger.warning(f"partition SQL is {part_no_return}")
