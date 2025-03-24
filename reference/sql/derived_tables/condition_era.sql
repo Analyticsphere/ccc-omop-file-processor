@@ -12,7 +12,7 @@ WITH
           TRY_CAST(co.CONDITION_END_DATE AS DATE),
           CAST(CONDITION_START_DATE AS DATE) + INTERVAL 1 DAY
         ) AS CONDITION_END_DATE
-      FROM read_parquet('@CONDITION_OCCURRENCE_PATH') co
+      FROM read_parquet('@CONDITION_OCCURRENCE') co
       WHERE
         TRY_CAST(CONDITION_START_DATE AS DATE) IS NOT NULL
         AND condition_concept_id != 0
