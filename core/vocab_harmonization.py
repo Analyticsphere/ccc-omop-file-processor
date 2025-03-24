@@ -34,7 +34,9 @@ def get_source_target_mapping_sql(table_name: str, cdm_version: str) -> str:
 
         # Replace new target concept_id in target_concept_id_column
         if column_name == target_concept_id_column:
-            column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
+            column_name = f"vocab_trg.target_concept_id AS {target_concept_id_column}"
+            initial_select_exprs.append(column_name)
+
         initial_select_exprs.append(f"tbl.{column_name}")
     
     # Add columns to store metadata related to vocab harmonization for later reporting
@@ -61,7 +63,7 @@ def get_source_target_mapping_sql(table_name: str, cdm_version: str) -> str:
         INNER JOIN @OPTIMIZED_VOCABULARY AS vocab_trg
             ON tbl.{target_concept_id_column} = vocab_trg.concept_id
         WHERE tbl.{source_concept_id_column} != 0
-        AND tbl.{target_concept_id_column} != vocab_trg.concept_id
+        AND tbl.{target_concept_id_column} != vocab_trg.target_concept_id
         AND vocab.relationship_id IN ('Maps to', 'Maps to value', 'Maps to unit')
         AND vocab.target_concept_id_standard = 'S'
     """
