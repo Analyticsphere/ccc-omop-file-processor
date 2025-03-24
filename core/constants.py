@@ -28,7 +28,8 @@ CDM_UPGRADE_SCRIPT_PATH = f"{SQL_PATH}cdm_upgrade/"
 DERIVED_TABLE_PATH = f"{SQL_PATH}derived_tables/"
 
 OPTIMIZED_VOCAB_FOLDER = "optimized"
-OPTIMIZED_VOCAB_FILE_NAME = f"optimized_vocab_file{PARQUET}"
+OPTIMIZED_VOCAB_FILE = "optimized_vocab_file"
+OPTIMIZED_VOCAB_FILE_NAME = f"{OPTIMIZED_VOCAB_FILE}{PARQUET}"
 MAPPING_RELATIONSHIPS = "'Maps to','Maps to value','Maps to unit'"
 REPLACEMENT_RELATIONSHIPS = "'Concept replaced by','Concept was_a to','Concept poss_eq to','Concept same_as to','Concept alt_to to'"
 
@@ -71,7 +72,7 @@ CLINICAL_DATA_PATH_PLACEHOLDERS = {
 VOCAB_PATH_PLACEHOLDERS = {
     CONCEPT_ANCESTOR_PLACEHOLDER_STRING: "concept_ancestor",
     CONCEPT_PLACEHOLDER_STRING: "concept",
-    OPTIMIZED_VOCAB_PLACEHOLDER_STRING: "optimized_vocabulary"
+    OPTIMIZED_VOCAB_PLACEHOLDER_STRING: "optimized_vocab_file"
 }
 
 class ArtifactPaths(str, Enum):
