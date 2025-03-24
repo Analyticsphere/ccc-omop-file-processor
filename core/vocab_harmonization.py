@@ -57,6 +57,8 @@ class VocabHarmonizer:
                         {testing_sql}
                     ) TO 'gs://{self.parquet_path}{self.table_name}_{str(uuid.uuid4())}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
                 """
+                resave_no_return  =resave_statement.replace('\n','')
+                utils.logger.warning(f"*/*/*/*/*/*/ resave is {resave_no_return}")
                 conn.execute(resave_statement)
         except Exception as e:
             raise Exception(f"Unable to execute SQL to generate {self.table_name}: {str(e)}") from e
