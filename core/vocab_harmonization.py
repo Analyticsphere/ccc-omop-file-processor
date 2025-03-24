@@ -20,7 +20,8 @@ class VocabHarmonizer:
         self.table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
         self.bucket = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)[0]
         self.delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)[1]
-        self.parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
+        self.source_parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
+        self.target_parquet_path = utils.get_parquet_harmonized_path(gcs_file_path)
         self.case_when_target_table = f"""
             CASE 
                 WHEN tbl.target_domain = 'Visit' THEN 'visit_occurrence'
@@ -55,7 +56,7 @@ class VocabHarmonizer:
                 resave_statement = f"""
                     COPY (
                         {testing_sql}
-                    ) TO 'gs://{self.parquet_path}{self.table_name}_{str(uuid.uuid4())}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+                    ) TO 'gs://{self.target_parquet_path}{self.table_name}_{str(uuid.uuid4())}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
                 """
                 resave_no_return  =resave_statement.replace('\n','')
                 utils.logger.warning(f"*/*/*/*/*/*/ resave is {resave_no_return}")
