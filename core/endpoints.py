@@ -215,13 +215,10 @@ def vocab_harmonization() -> tuple[str, int]:
     try:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}")
 
-        vh.harominze_parquet_file(
-            file_path,
-            omop_version,
-            site,
-            vocab_version,
-            vocab_gcs_bucket
-        )
+        vocab_harmonizer = vh.VocabHarmonizer(file_path, omop_version, site, vocab_version, vocab_gcs_bucket)
+        vocab_harmonizer.harmonize_parquet_file()
+
+
 
         return f"Vocabulary harmonized to {vocab_version}", 200
     except Exception as e:
