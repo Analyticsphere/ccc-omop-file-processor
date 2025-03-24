@@ -82,7 +82,10 @@ class VocabHarmonizer:
             conn, local_db_file = utils.create_duckdb_connection()
 
             with conn:
+                sql_no_return = sql.replace('\n',' ')
+                utils.logger.warning(f"partition SQL is {sql_no_return}")
                 conn.execute(sql)
+                utils.logger.warning(f"DID EXECUTE THE SQL!")
         except Exception as e:
             raise Exception(f"{error_msg}: {str(e)}") from e
         finally:
@@ -218,7 +221,5 @@ class VocabHarmonizer:
                 SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
             ) TO 'gs://{self.target_parquet_path}' (FORMAT PARQUET, PARTITION_BY (condition_occurrence_id), COMPRESSION ZSTD);
         """
-        part_no_return = partition_statement.replace('\n','')
-        utils.logger.warning(f"partition SQL is {part_no_return}")
-
+        
         self.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.table_name}")
