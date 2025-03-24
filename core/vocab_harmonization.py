@@ -4,6 +4,7 @@ import core.utils as utils
 def harominze_parquet_file(file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
     table_name = utils.get_table_name_from_gcs_path(file_path)
     bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
+    parquet_path = utils.get_parquet_artifact_location(file_path)
 
     testing_sql = get_source_target_mapping_sql(
         table_name,
@@ -22,7 +23,7 @@ def harominze_parquet_file(file_path: str, cdm_version: str, site: str, vocab_ve
             resave_statement = f"""
                 COPY (
                     {testing_sql}
-                ) TO 'gs://{file_path}' {constants.DUCKDB_FORMAT_STRING}
+                ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
             resave_no_return = resave_statement.replace('\n', ' ')
             utils.logger.warning(f"///////////**** resave statement is {resave_no_return}")
@@ -65,7 +66,9 @@ def get_source_target_mapping_sql(table_name: str, cdm_version: str, site: str, 
 
         # Replace new target concept_id in target_concept_id_column
         if column_name == target_concept_id_column:
+            utils.logger.warning(f"REPLACED {column_name} ...")
             column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
+            utils.logger.warning(f"... with {column_name}")
             #initial_select_exprs.append(column_name)
 
         initial_select_exprs.append(column_name)
@@ -103,7 +106,7 @@ def get_source_target_mapping_sql(table_name: str, cdm_version: str, site: str, 
             tbl.{primary_key},
             MAX(vocab.target_concept_id) AS value_as_concept_id
         FROM read_parquet('@{table_name.upper()}') AS tbl
-        INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY)' AS vocab 
+        INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab 
             ON tbl.{source_concept_id_column} = vocab.concept_id
         WHERE vocab.target_concept_id_domain = 'Meas Value'
         GROUP BY tbl.{primary_key}
