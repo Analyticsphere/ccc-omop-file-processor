@@ -77,7 +77,7 @@ class VocabHarmonizer:
     def get_already_processed_primary_keys() -> str:
         print()
 
-    def execute_duckdq_sql(sql: str, error_msg: str) -> None:
+    def execute_duckdq_sql(self, sql: str, error_msg: str) -> None:
         try:
             conn, local_db_file = utils.create_duckdb_connection()
 
