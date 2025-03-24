@@ -79,6 +79,7 @@ class ArtifactPaths(str, Enum):
     ARTIFACTS = "artifacts/"
     FIXED_FILES = f"{ARTIFACTS}fixed_files/"
     CONVERTED_FILES = f"{ARTIFACTS}converted_files/"
+    HARMONIZED_FILES = f"{ARTIFACTS}harmonized_files/"
     CREATED_FILES = f"{ARTIFACTS}created_files/"
     REPORT = f"{ARTIFACTS}delivery_report/"
     REPORT_TMP = f"{ARTIFACTS}delivery_report/tmp/"

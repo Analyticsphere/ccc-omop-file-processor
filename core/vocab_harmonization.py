@@ -1,10 +1,11 @@
 import core.constants as constants
 import core.utils as utils
+import uuid
 
 def harominze_parquet_file(file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
     table_name = utils.get_table_name_from_gcs_path(file_path)
     bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
-    parquet_path = utils.get_parquet_artifact_location(file_path)
+    parquet_path = utils.get_parquet_harmonized_path(file_path)
 
     testing_sql = get_source_target_mapping_sql(
         table_name,
@@ -23,7 +24,7 @@ def harominze_parquet_file(file_path: str, cdm_version: str, site: str, vocab_ve
             resave_statement = f"""
                 COPY (
                     {testing_sql}
-                ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
+                ) TO 'gs://{parquet_path}{table_name}_{str(uuid.uuid4())}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
             """
             resave_no_return = resave_statement.replace('\n', ' ')
             utils.logger.warning(f"///////////**** resave statement is {resave_no_return}")

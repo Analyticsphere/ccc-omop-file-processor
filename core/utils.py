@@ -303,6 +303,19 @@ def get_parquet_artifact_location(gcs_file_path: str) -> str:
 
     return parquet_path
 
+def get_parquet_harmonized_path(gcs_file_path: str) -> str:
+    file_name = get_table_name_from_gcs_path(gcs_file_path)
+    base_directory, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+    
+    # Remove trailing slash if present
+    base_directory = base_directory.rstrip('/')
+        
+    # Construct the final parquet path
+    parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{file_name}/"
+
+    return parquet_path
+
+
 def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
     table_name = get_table_name_from_gcs_path(gcs_file_path).lower()
     bucket, subfolder = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
