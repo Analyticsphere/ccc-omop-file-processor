@@ -153,4 +153,5 @@ def get_source_target_mapping_sql(table_name: str, cdm_version: str, site: str, 
 
     final_sql_no_return = final_sql.replace('\n',' ')
     utils.logger.warning(f"*/*/*/ final_cte is {final_sql_no_return}")
+    return final_sql
 
