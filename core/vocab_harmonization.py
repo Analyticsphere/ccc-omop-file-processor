@@ -83,7 +83,7 @@ class VocabHarmonizer:
 
             with conn:
                 sql_no_return = sql.replace('\n',' ')
-                utils.logger.warning(f"partition SQL is {sql_no_return}")
+                utils.logger.warning(f"SQL is {sql_no_return}")
                 conn.execute(sql)
                 utils.logger.warning(f"DID EXECUTE THE SQL!")
         except Exception as e:
@@ -219,7 +219,7 @@ class VocabHarmonizer:
         partition_statement = f"""
             COPY (
                 SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
-            ) TO 'gs://{self.target_parquet_path}' (FORMAT PARQUET, PARTITION_BY (condition_occurrence_id), COMPRESSION ZSTD);
+            ) TO 'gs://{self.target_parquet_path}partitioned/' (FORMAT PARQUET, PARTITION_BY (target_table), COMPRESSION ZSTD);
         """
         
         self.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.table_name}")
