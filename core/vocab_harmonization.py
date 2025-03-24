@@ -208,13 +208,17 @@ class VocabHarmonizer:
     
     def partition_by_target_table(self) -> None:
         utils.logger.warning(f"going to partition tables")
+        # partition_statement = f"""
+        #     COPY (
+        #         SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+        #     ) TO 'gs://{self.target_parquet_path}' (FORMAT PARQUET, PARTITION_BY (target_table), COMPRESSION ZSTD);
+        # """
         partition_statement = f"""
             COPY (
                 SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
-            ) TO 'gs://{self.target_parquet_path}' (FORMAT PARQUET, PARTITION_BY (target_table), COMPRESSION ZSTD);
+            ) TO 'gs://{self.target_parquet_path}' (FORMAT PARQUET, COMPRESSION ZSTD);
         """
-
         part_no_return = partition_statement.replace('\n','')
         utils.logger.warning(f"partition SQL is {part_no_return}")
 
-        self.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.gcs_file_path}")
+        self.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.table_name}")
