@@ -214,15 +214,11 @@ def vocab_harmonization() -> tuple[str, int]:
 
     try:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}")
-        table_name = utils.get_table_name_from_gcs_path(file_path)
-        bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
 
         vh.harominze_parquet_file(
-            table_name,
+            file_path,
             omop_version,
             site,
-            bucket,
-            delivery_date,
             vocab_version,
             vocab_gcs_bucket
         )

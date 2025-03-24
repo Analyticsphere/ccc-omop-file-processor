@@ -1,16 +1,36 @@
 import core.constants as constants
 import core.utils as utils
 
-def harominze_parquet_file(table_name: str, cdm_version: str, site: str, site_bucket: str, delivery_date: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
-    get_source_target_mapping_sql(
+def harominze_parquet_file(file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
+    table_name = utils.get_table_name_from_gcs_path(file_path)
+    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
+
+    testing_sql = get_source_target_mapping_sql(
         table_name,
         cdm_version,
         site,
-        site_bucket,
+        bucket,
         delivery_date,
         vocab_version,
         vocab_gcs_bucket
     )
+
+    try:
+        conn, local_db_file = utils.create_duckdb_connection()
+
+        with conn:
+            resave_statement = f"""
+                COPY (
+                    {testing_sql}
+                ) TO 'gs://{file_path}' {constants.DUCKDB_FORMAT_STRING}
+            """
+            resave_no_return = resave_statement.replace('\n', ' ')
+            utils.logger.warning(f"///////////**** resave statement is {resave_no_return}")
+            conn.execute(resave_statement)
+    except Exception as e:
+        raise Exception(f"Unable to execute SQL to generate {table_name}: {str(e)}") from e
+    finally:
+        utils.close_duckdb_connection(conn, local_db_file)
 
 def get_vocab_harmization_sql(type: str, table_name: str) -> str:
     # Works only on 'normalized' v5.4
