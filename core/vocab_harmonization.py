@@ -88,8 +88,8 @@ def get_source_target_mapping_sql(table_name: str, cdm_version: str, site: str, 
     initial_select_sql = ",\n                ".join(initial_select_exprs)
 
     initial_from_sql = f"""
-        FROM @{table_name.upper()} AS tbl
-        INNER JOIN @OPTIMIZED_VOCABULARY AS vocab
+        FROM read_parquet('@{table_name.upper()}') AS tbl
+        INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
             ON tbl.{source_concept_id_column} = vocab.concept_id
         WHERE tbl.{source_concept_id_column} != 0
         AND tbl.{target_concept_id_column} != vocab.target_concept_id
@@ -102,8 +102,8 @@ def get_source_target_mapping_sql(table_name: str, cdm_version: str, site: str, 
         SELECT 
             tbl.{primary_key},
             MAX(vocab.target_concept_id) AS value_as_concept_id
-        FROM @{table_name.upper()} AS tbl
-        INNER JOIN @OPTIMIZED_VOCABULARY AS vocab 
+        FROM read_parquet('@{table_name.upper()}') AS tbl
+        INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY)' AS vocab 
             ON tbl.{source_concept_id_column} = vocab.concept_id
         WHERE vocab.target_concept_id_domain = 'Meas Value'
         GROUP BY tbl.{primary_key}
