@@ -59,6 +59,8 @@ class VocabHarmonizer:
         
         self.execute_duckdq_sql(resave_statement, f"Unable to execute SQL to generate {self.table_name}")
 
+        self.partition_by_target_table()
+
 
     def perform_harmonization(self, step: str) -> None:
         """
@@ -203,3 +205,16 @@ class VocabHarmonizer:
         final_sql_no_return = final_sql.replace('\n',' ')
         utils.logger.warning(f"*/*/*/ final_cte is {final_sql_no_return}")
         return final_sql
+    
+    def partition_by_target_table(self) -> None:
+        utils.logger.warning(f"going to partition tables")
+        partition_statement = f"""
+            COPY (
+                SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+            ) TO 'gs://{self.target_parquet_path}' (FORMAT PARQUET, PARTITION_BY (target_table), OVERWRITE, COMPRESSION ZSTD);
+        """
+
+        part_no_return = partition_statement.replace('\n','')
+        utils.logger.warning(f"partition SQL is {part_no_return}")
+
+        self.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.gcs_file_path}")
