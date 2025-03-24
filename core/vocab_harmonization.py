@@ -49,22 +49,16 @@ class VocabHarmonizer:
 
         testing_sql = self.get_source_target_mapping_sql()
 
-        try:
-            conn, local_db_file = utils.create_duckdb_connection()
+        resave_statement = f"""
+            COPY (
+                {testing_sql}
+            ) TO 'gs://{self.target_parquet_path}{self.table_name}_{str(uuid.uuid4())}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+        """
+        resave_no_return  =resave_statement.replace('\n','')
+        utils.logger.warning(f"*/*/*/*/*/*/ resave is {resave_no_return}")
+        
+        self.execute_duckdq_sql(resave_statement, f"Unable to execute SQL to generate {self.table_name}")
 
-            with conn:
-                resave_statement = f"""
-                    COPY (
-                        {testing_sql}
-                    ) TO 'gs://{self.target_parquet_path}{self.table_name}_{str(uuid.uuid4())}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
-                """
-                resave_no_return  =resave_statement.replace('\n','')
-                utils.logger.warning(f"*/*/*/*/*/*/ resave is {resave_no_return}")
-                conn.execute(resave_statement)
-        except Exception as e:
-            raise Exception(f"Unable to execute SQL to generate {self.table_name}: {str(e)}") from e
-        finally:
-            utils.close_duckdb_connection(conn, local_db_file)
 
     def perform_harmonization(self, step: str) -> None:
         """
@@ -77,6 +71,21 @@ class VocabHarmonizer:
             sql = self.get_source_target_mapping_sql()
             # The SQL will be used in the harmonize_parquet_file method
     
+    # Keys which have already been reprocessed
+    def get_already_processed_primary_keys() -> str:
+        print()
+
+    def execute_duckdq_sql(sql: str, error_msg: str) -> None:
+        try:
+            conn, local_db_file = utils.create_duckdb_connection()
+
+            with conn:
+                conn.execute(sql)
+        except Exception as e:
+            raise Exception(f"{error_msg}: {str(e)}") from e
+        finally:
+            utils.close_duckdb_connection(conn, local_db_file)        
+
     def get_source_target_mapping_sql(self) -> str:
         """
         Generate SQL for mapping source targets based on vocabulary relationships.

@@ -121,14 +121,11 @@ CDM_53_TO_54 = {
 
 TABLES_WITHOUT_SOURCE_ID = ["note", "specimen"]
 
+# TODO: Confirm vocab haromization table is in here
 SOURCE_TARGET_COLUMNS = {
     "visit_occurrence": {
         "source_concept_id": "visit_source_concept_id",
         "target_concept_id": "visit_concept_id"
-    },
-    "visit_detail": {
-        "source_concept_id": "visit_detail_source_concept_id",
-        "target_concept_id": "visit_detail_concept_id"
     },
     "condition_occurrence": {
         "source_concept_id": "condition_source_concept_id",
