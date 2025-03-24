@@ -11,6 +11,7 @@ import core.file_validation as file_validation
 import core.helpers.pipeline_log as pipeline_log
 import core.omop_client as omop_client
 import core.utils as utils
+import core.vocab_harmonization as vh
 
 app = Flask(__name__)
 
@@ -150,13 +151,13 @@ def normalize_parquet_file() -> tuple[str, int]:
     parquet_file_path: str = utils.get_parquet_artifact_location(file_path)
 
     try:
-        utils.logger.info(f"Attempting to fix Parquet file {parquet_file_path}")
+        utils.logger.info(f"Attempting to normalize Parquet file {parquet_file_path}")
         file_processor.normalize_file(parquet_file_path, omop_version)
 
-        return "Fixed Parquet file", 200
+        return "Normalized Parquet file", 200
     except Exception as e:
-        utils.logger.error(f"Unable to fix Parquet file: {str(e)}")
-        return f"Unable to fix Parquet file: {str(e)}", 500
+        utils.logger.error(f"Unable to normalize Parquet file: {str(e)}")
+        return f"Unable to normalize Parquet file: {str(e)}", 500
 
 @app.route('/upgrade_cdm', methods=['POST'])
 def cdm_upgrade() -> tuple[str, int]:
@@ -204,13 +205,15 @@ def vocab_harmonization() -> tuple[str, int]:
     file_path: Optional[str] = data.get('file_path')
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
+    omop_version: Optional[str] = data.get('omop_version')
 
-    if not file_path or not vocab_version or not vocab_gcs_bucket:
-        return "Missing required parameters: file_path, vocab_version, and vocab_gcs_bucket", 400
+    if not file_path or not vocab_version or not vocab_gcs_bucket or not omop_version:
+        return "Missing required parameters: file_path, vocab_version, vocab_gcs_bucket, omop_version", 400
 
     try:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}")
-        # TODO: Function implementation missing; add implementation here
+        table_name = utils.get_table_name_from_gcs_path(file_path)
+        vh.get_source_target_mapping_sql(table_name, omop_version)
 
         return f"Vocabulary harmonized to {vocab_version}", 200
     except Exception as e:

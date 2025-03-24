@@ -117,7 +117,7 @@ CDM_53_TO_54 = {
 
 TABLES_WITHOUT_SOURCE_ID = ["note", "specimen"]
 
-SOURCE_TARGET_FIELDS = {
+SOURCE_TARGET_COLUMNS = {
     "visit_occurrence": {
         "source_concept_id": "visit_source_concept_id",
         "target_concept_id": "visit_concept_id"
@@ -170,8 +170,10 @@ TARGET_CDM_VERSION_REPORT_NAME = "Standardized to CDM version"
 FILE_PROCESSOR_VERSION_REPORT_NAME = "Pipeline file processor version"
 PROCESSED_DATE_REPORT_NAME = "Delivery processing date"
 
+SOURCE_TARGET = "Source concept available, target mapping available and not current"
+
 # Primary key column can be found in schema.json file
-NATURAL_KEY = {
+NATURAL_KEY_TABLES = {
     "person",
     "location",
     "care_site",
@@ -184,7 +186,7 @@ NATURAL_KEY = {
     "relationship"
 }
 
-SURROGATE_KEY = {
+SURROGATE_KEY_TABLES = {
     "observation_period",
     "visit_occurrence",
     "visit_detail",
@@ -205,7 +207,7 @@ SURROGATE_KEY = {
     "metadata"
 }
 
-NO_PRIMARY_KEY = {
+NO_PRIMARY_KEY_TABLES = {
     "death",
     "fact_relationship",
     "episode_event",

@@ -556,7 +556,8 @@ def download_from_gcs(gcs_file_path: str) -> str:
         raise Exception(f"Error downloading file: {e}")
     
 def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name: str) -> None:
-    """Uploads a file to the specified GCS bucket.
+    """
+    Uploads a file to the specified GCS bucket.
     """
     # Initialize the GCS client
     storage_client = storage.Client()

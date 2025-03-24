@@ -359,7 +359,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
         # At this stage, uniqueness is *not* an expected, nor desired, property of the primary keys
         # Primary keys uniqueness will be enforced in later tasks, after vocabulary harmonization
     replace_clause = ""
-    if table_name in constants.SURROGATE_KEY:
+    if table_name in constants.SURROGATE_KEY_TABLES:
         primary_key = utils.get_primary_key_field(table_name, cdm_version)
 
         # Create composite key by concatenting each column into a single value and taking its hash
@@ -378,7 +378,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
         # If invalid, set new column "row_hash" to unique hash that uniquely identifies the invalid row(s)
         # If valid, set new column "row_hash" to a NULL value
     # Step 2 - Create new, seperate invalid rows Parquet file containing all invalid rows
-    # Step 3 - Resave over original Parquet file, saving only the valid rows
+    # Step 3 - Resave over original Parquet file, saving only the valid rows; and setting deterministric primary key for surrogate key tables
     sql_script = f"""
         CREATE OR REPLACE TABLE row_check AS
             SELECT
@@ -464,10 +464,10 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
 def fix_csv_quoting(gcs_file_path: str) -> None:
     """
     Handles some unquoted quote patterns in CSV files 
-    Each CSV row is evaulated as a single string, and regex replacements are made to escape problematic characters
+    Each CSV row is evaulated as a single string, and text replacements are made to escape problematic characters
     
     File gets downloaded from GCS to VM executing Cloud Function.
-    Streaming CSV file directly from GCS to VM resulted in unexpected behaviors, so the logic executes against a local file
+    Streaming CSV file directly from GCS to VM resulted in unexpected behaviors, so this logic executes against a local file
     Ideally, we would read/write directly to/from GCS...
     """
     encoding: str = 'utf-8'
@@ -513,7 +513,7 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             os.remove(output_csv_path)
             
             # After creating new file with fixed quoting, try converting it to Parquet
-            # store_rejects = True leads to more malformed rows getting included, but may add unexpected columns
+            # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
             # Unexpected columns will be reported in data delivery report, and normalization step will remove them
             csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True'])
                 
