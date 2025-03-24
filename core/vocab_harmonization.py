@@ -1,14 +1,24 @@
 import core.constants as constants
 import core.utils as utils
 
+def harominze_parquet_file(table_name: str, cdm_version: str, site: str, site_bucket: str, delivery_date: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
+    get_source_target_mapping_sql(
+        table_name,
+        cdm_version,
+        site,
+        site_bucket,
+        delivery_date,
+        vocab_version,
+        vocab_gcs_bucket
+    )
+
 def get_vocab_harmization_sql(type: str, table_name: str) -> str:
     # Works only on 'normalized' v5.4
     if type == constants.SOURCE_TARGET:
         sql = get_source_target_mapping_sql(table_name)
 
 
-
-def get_source_target_mapping_sql(table_name: str, cdm_version: str) -> str:
+def get_source_target_mapping_sql(table_name: str, cdm_version: str, site: str, site_bucket: str, delivery_date: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
     utils.logger.warning(f"IN get_source_target_mapping_sql()")
 
     schema = utils.get_table_schema(table_name, cdm_version)
@@ -30,14 +40,15 @@ def get_source_target_mapping_sql(table_name: str, cdm_version: str) -> str:
     final_select_exprs: list = []
 
     for column_name in ordered_omop_columns:
-        final_select_exprs.append(f"tbl.{column_name}")
+        column_name = f"tbl.{column_name}"
+        final_select_exprs.append(column_name)
 
         # Replace new target concept_id in target_concept_id_column
         if column_name == target_concept_id_column:
-            column_name = f"vocab_trg.target_concept_id AS {target_concept_id_column}"
-            initial_select_exprs.append(column_name)
+            column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
+            #initial_select_exprs.append(column_name)
 
-        initial_select_exprs.append(f"tbl.{column_name}")
+        initial_select_exprs.append(column_name)
     
     # Add columns to store metadata related to vocab harmonization for later reporting
     metadata_columns = [
@@ -57,13 +68,11 @@ def get_source_target_mapping_sql(table_name: str, cdm_version: str) -> str:
     initial_select_sql = ",\n                ".join(initial_select_exprs)
 
     initial_from_sql = f"""
-        FROM @{table_name} AS tbl
+        FROM @{table_name.upper()} AS tbl
         INNER JOIN @OPTIMIZED_VOCABULARY AS vocab
             ON tbl.{source_concept_id_column} = vocab.concept_id
-        INNER JOIN @OPTIMIZED_VOCABULARY AS vocab_trg
-            ON tbl.{target_concept_id_column} = vocab_trg.concept_id
         WHERE tbl.{source_concept_id_column} != 0
-        AND tbl.{target_concept_id_column} != vocab_trg.target_concept_id
+        AND tbl.{target_concept_id_column} != vocab.target_concept_id
         AND vocab.relationship_id IN ('Maps to', 'Maps to value', 'Maps to unit')
         AND vocab.target_concept_id_standard = 'S'
     """
@@ -73,7 +82,7 @@ def get_source_target_mapping_sql(table_name: str, cdm_version: str) -> str:
         SELECT 
             tbl.{primary_key},
             MAX(vocab.target_concept_id) AS value_as_concept_id
-        FROM @{table_name} AS tbl
+        FROM @{table_name.upper()} AS tbl
         INNER JOIN @OPTIMIZED_VOCABULARY AS vocab 
             ON tbl.{source_concept_id_column} = vocab.concept_id
         WHERE vocab.target_concept_id_domain = 'Meas Value'
@@ -120,6 +129,8 @@ def get_source_target_mapping_sql(table_name: str, cdm_version: str) -> str:
         {final_from_sql}
     """
 
-    final_cte_no_return = final_cte.replace('\n',' ')
-    utils.logger.warning(f"*/*/*/ final_cte is {final_cte_no_return}")
+    final_sql = utils.placeholder_to_table_path(site, site_bucket, delivery_date, final_cte, vocab_version, vocab_gcs_bucket)
+
+    final_sql_no_return = final_sql.replace('\n',' ')
+    utils.logger.warning(f"*/*/*/ final_cte is {final_sql_no_return}")
 

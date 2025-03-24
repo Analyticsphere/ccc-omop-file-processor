@@ -1,4 +1,3 @@
-from datetime import datetime
 
 from google.cloud import bigquery  # type: ignore
 
@@ -269,14 +268,14 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
             create_statement_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}_create.sql"
             with open(create_statement_path, 'r') as f:
                 create_statement_raw = f.read()
-            create_statement = placeholder_to_table_path(site, site_bucket, delivery_date, create_statement_raw, vocab_version, vocab_gcs_bucket)
+            create_statement = utils.placeholder_to_table_path(site, site_bucket, delivery_date, create_statement_raw, vocab_version, vocab_gcs_bucket)
 
         sql_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}.sql"
         with open(sql_path, 'r') as f:
             select_statement_raw = f.read()
 
         # Add table locations
-        select_statement = placeholder_to_table_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
+        select_statement = utils.placeholder_to_table_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
 
         try:
             conn, local_db_file = utils.create_duckdb_connection()
@@ -304,29 +303,6 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
 
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
-
-def placeholder_to_table_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
-    """
-    Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
-    """
-    replacement_result = sql_script
-
-    for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-        clinical_data_table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
-        replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
-
-    # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
-    for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
-        vocab_table_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
-        replacement_result = replacement_result.replace(placeholder, vocab_table_path)
-    
-    # Add site name 
-    replacement_result = replacement_result.replace(constants.SITE_PLACEHOLDER_STRING, site)
-
-    # Add current date
-    replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
-
-    return replacement_result
 
 def load_vocabulary_table(vocab_version: str, vocab_gcs_bucket: str, table_file_name: str, project_id: str, dataset_id: str) -> None:
     # Loads an optimized vocabulary file to BigQuery as a table

@@ -580,3 +580,27 @@ def get_primary_key_field(table_name: str, cdm_version: str) -> str:
     
     # For tables with no primary key, return ""
     return ""
+
+
+def placeholder_to_table_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
+    """
+    Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
+    """
+    replacement_result = sql_script
+
+    for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
+        clinical_data_table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
+        replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
+
+    # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
+    for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
+        vocab_table_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
+        replacement_result = replacement_result.replace(placeholder, vocab_table_path)
+
+    # Add site name 
+    replacement_result = replacement_result.replace(constants.SITE_PLACEHOLDER_STRING, site)
+
+    # Add current date
+    replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
+
+    return replacement_result

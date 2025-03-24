@@ -206,14 +206,26 @@ def vocab_harmonization() -> tuple[str, int]:
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
     omop_version: Optional[str] = data.get('omop_version')
+    site: Optional[str] = data.get('site')
 
+    
     if not file_path or not vocab_version or not vocab_gcs_bucket or not omop_version:
         return "Missing required parameters: file_path, vocab_version, vocab_gcs_bucket, omop_version", 400
 
     try:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}")
         table_name = utils.get_table_name_from_gcs_path(file_path)
-        vh.get_source_target_mapping_sql(table_name, omop_version)
+        bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
+
+        vh.harominze_parquet_file(
+            table_name,
+            omop_version,
+            site,
+            bucket,
+            delivery_date,
+            vocab_version,
+            vocab_gcs_bucket
+        )
 
         return f"Vocabulary harmonized to {vocab_version}", 200
     except Exception as e:
