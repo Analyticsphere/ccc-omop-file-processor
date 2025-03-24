@@ -109,7 +109,7 @@ class VocabHarmonizer:
             final_select_exprs.append(column_name)
 
             # Replace new target concept_id in target_concept_id_column
-            if column_name == target_concept_id_column:
+            if column_name == f"tbl.target_concept_id_column":
                 utils.logger.warning(f"REPLACED {column_name} ...")
                 column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
                 utils.logger.warning(f"... with {column_name}")
