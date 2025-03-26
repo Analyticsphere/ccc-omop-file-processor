@@ -47,31 +47,19 @@ class VocabHarmonizer:
         for step in harmonization_steps:
             self.perform_harmonization(step)
 
-        testing_sql = self.get_source_target_mapping_sql()
-
-        resave_statement = f"""
-            COPY (
-                {testing_sql}
-            ) TO 'gs://{self.target_parquet_path}{self.table_name}_{str(uuid.uuid4())}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
-        """
-        resave_no_return  =resave_statement.replace('\n','')
-        utils.logger.warning(f"*/*/*/*/*/*/ resave is {resave_no_return}")
-        
-        self.execute_duckdq_sql(resave_statement, f"Unable to execute SQL to generate {self.table_name}")
-
+        # After finding new targets and domain, partition files based on target OMOP table
         self.partition_by_target_table()
+
+        # Transform source table structure to target table structure
+        # self.omop_to_omop_etl()
 
 
     def perform_harmonization(self, step: str) -> None:
         """
         Perform a specific harmonization step.
-        
-        Args:
-            step: The harmonization step to perform (e.g., SOURCE_TARGET)
         """
         if step == constants.SOURCE_TARGET:
-            sql = self.get_source_target_mapping_sql()
-            # The SQL will be used in the harmonize_parquet_file method
+            self.source_target_remapping()
     
     # Keys which have already been reprocessed
     def get_already_processed_primary_keys() -> str:
@@ -91,14 +79,10 @@ class VocabHarmonizer:
         finally:
             utils.close_duckdb_connection(conn, local_db_file)        
 
-    def get_source_target_mapping_sql(self) -> str:
+    def source_target_remapping(self) -> None:
         """
-        Generate SQL for mapping source targets based on vocabulary relationships.
-        
-        Returns:
-            str: The generated SQL or an empty string if not applicable
+        Generate and execute SQL to check for and update non-standard source-to-target mappings to standard        
         """
-        utils.logger.warning(f"IN get_source_target_mapping_sql()")
 
         schema = utils.get_table_schema(self.table_name, self.cdm_version)
 
@@ -109,11 +93,10 @@ class VocabHarmonizer:
         target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.table_name]['target_concept_id']
         source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.table_name]['source_concept_id']
         primary_key = utils.get_primary_key_field(self.table_name, self.cdm_version)
-        utils.logger.warning(f"target_concept_id_column is {target_concept_id_column} and source_concept_id_column is {source_concept_id_column} and primary_key is {primary_key}")
 
         # specimen and note tables don't have _source_concept_id columns so can't be evaluated with this method
         if not source_concept_id_column or source_concept_id_column == "":
-            return ""
+            return
 
         initial_select_exprs: list = []
         final_select_exprs: list = []
@@ -124,9 +107,7 @@ class VocabHarmonizer:
 
             # Replace new target concept_id in target_concept_id_column
             if column_name == f"tbl.{target_concept_id_column}":
-                utils.logger.warning(f"REPLACED {column_name} ...")
                 column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
-                utils.logger.warning(f"... with {column_name}")
 
             initial_select_exprs.append(column_name)
         
@@ -183,7 +164,7 @@ class VocabHarmonizer:
             WHERE tbl.target_domain != 'Meas Value'
         """
 
-        final_cte = f"""
+        cte_with_placeholders = f"""
             WITH base AS (
                 SELECT
                     {initial_select_sql}
@@ -196,26 +177,24 @@ class VocabHarmonizer:
             {final_from_sql}
         """
 
-        final_sql = utils.placeholder_to_table_path(
+        final_cte = utils.placeholder_to_table_path(
             self.site, 
             self.bucket, 
             self.delivery_date, 
-            final_cte, 
+            cte_with_placeholders, 
             self.vocab_version, 
             self.vocab_gcs_bucket
         )
 
-        final_sql_no_return = final_sql.replace('\n',' ')
-        utils.logger.warning(f"*/*/*/ final_cte is {final_sql_no_return}")
-        return final_sql
+        final_sql = f"""
+            COPY (
+                {final_cte}
+            ) TO 'gs://{self.target_parquet_path}{self.table_name}_{str(uuid.uuid4())}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+        self.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.table_name}")
     
     def partition_by_target_table(self) -> None:
-        utils.logger.warning(f"going to partition tables")
-        # partition_statement = f"""
-        #     COPY (
-        #         SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
-        #     ) TO 'gs://{self.target_parquet_path}' (FORMAT PARQUET, PARTITION_BY (target_table), COMPRESSION ZSTD);
-        # """
         partition_statement = f"""
             COPY (
                 SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
