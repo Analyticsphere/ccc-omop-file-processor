@@ -154,7 +154,7 @@ class VocabHarmonizer:
         transform_sql = f"""
             COPY (
                 {final_sql}
-            ) TO '{self.get_partitioned_path()}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO '{self.get_partitioned_path()}transformed/{self.target_table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         self.execute_duckdq_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
@@ -167,7 +167,7 @@ class VocabHarmonizer:
         replacement_result = sql
 
         for placeholder, _ in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-            clinical_data_table_path = self.get_partitioned_path()
+            clinical_data_table_path = f"{self.get_partitioned_path()}*{constants.PARQUET}"
             replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
         return replacement_result
@@ -180,7 +180,7 @@ class VocabHarmonizer:
             self.source_target_remapping()
     
     def get_partitioned_path(self) -> str:
-        return f"gs://{self.target_parquet_path}partitioned/target_table={self.target_table_name}/*{constants.PARQUET}"
+        return f"gs://{self.target_parquet_path}partitioned/target_table={self.target_table_name}/"
 
     # Keys which have already been reprocessed
     def get_already_processed_primary_keys() -> str:
