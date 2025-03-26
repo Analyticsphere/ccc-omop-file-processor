@@ -55,6 +55,7 @@ class VocabHarmonizer:
         self.partition_by_target_table()
 
         # Transform source table structure to target table structure
+        # TODO: Call this on each partitioned part indepdenently
         self.omop_to_omop_etl()
 
 
@@ -118,14 +119,14 @@ class VocabHarmonizer:
             target_column = target_column.strip()
             
             # Get target column schema info
-            column_info = target_columns.get(target_column)
+            column_info = target_columns[target_column]
             if not column_info:
                 # If column not in schema, keep as is
                 modified_lines.append(line)
                 continue
             
-            column_type = column_info.get('type')
-            is_required = column_info.get('required') == 'true'
+            column_type = column_info['type']
+            is_required = column_info['required'].lower() == 'true'
             
             # Add CAST
             cast_expr = f"CAST({source_expr} AS {column_type})"
@@ -286,7 +287,7 @@ class VocabHarmonizer:
         final_sql = f"""
             COPY (
                 {final_cte}
-            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_{str(uuid.uuid4())}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         self.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
