@@ -333,9 +333,11 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
 
         if field_name in actual_columns:
-            # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
+            # If the site provided a Connect_ID field and person_id, use Connect_ID in place of person_id
             if field_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
+                utils.logger.warning(f"USING CUSTOM CONNECT_ID LOGIC! in actual_columns and field_name is {field_name}")
                 coalesce_exprs.append(f"CAST({connect_id_column_name} AS {field_type}) AS {field_name}")
+            # If the column exists in the Parquet file, coalesce it with the default value, then try casting to expected type
             elif default_value != "NULL":
                 coalesce_exprs.append(f"TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS {field_name}")
             # If default value is NULL, don't coalesce
@@ -352,10 +354,11 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         else:
             # If the site provided a Connect_ID field and person_id, use Connect_ID in place of person_id
             if field_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
+                utils.logger.warning(f"USING CUSTOM CONNECT_ID LOGIC! *not* in actual_columns and field_name is {field_name}")
                 coalesce_exprs.append(f"CAST({connect_id_column_name} AS {field_type}) AS {field_name}")
 
             # If the column doesn't exist, just produce a placeholder (NULL or a special default)
-            # Still need to cast to ensure consist field types
+            # Still need to cast to ensure consistent field types
             else:
                 coalesce_exprs.append(f"CAST({default_value} AS {field_type}) AS {field_name}")
 
@@ -406,6 +409,9 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
     # Need to add "" around offset column name to prevent parsing error
     sql_script = sql_script.replace('offset', '"offset"')
+
+    final_sql = sql_script.replace('\n', ' ')
+    utils.logger.warning(f"!!!!! finalsql is {final_sql}")
 
     return sql_script
 
