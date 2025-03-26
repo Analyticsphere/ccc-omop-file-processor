@@ -87,6 +87,8 @@ def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
         for prefix in blobs.prefixes:
             # Extract just the folder name from the full prefix path
             folder_name = prefix[len(folder_prefix):-1] if prefix.endswith('/') else prefix[len(folder_prefix):]
+            logger.warning(f"in list_gcs and prefix is {prefix}")
+            logger.warning(f"in list_gcs and folder_name is {folder_name}")
             directories.append(folder_name)
             
         return directories
