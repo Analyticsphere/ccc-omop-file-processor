@@ -152,8 +152,16 @@ class VocabHarmonizer:
         final_sql = self.placeholder_to_file_path(select_sql)
         
         # Log the SQL without newlines for easier viewing
-        final_sql_no_return = final_sql.replace('\n', ' ')
-        utils.logger.warning(f"TRANSFORM SQL IS {final_sql_no_return}")
+        #final_sql_no_return = final_sql.replace('\n', ' ')
+        #utils.logger.warning(f"TRANSFORM SQL IS {final_sql_no_return}")
+
+        transform_sql = f"""
+            COPY (
+                {final_sql}
+            ) TO '{self.get_partitioned_path()}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+        self.execute_duckdq_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
 
 
     def placeholder_to_file_path(self, sql: str) -> str:
@@ -163,7 +171,7 @@ class VocabHarmonizer:
         replacement_result = sql
 
         for placeholder, _ in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-            clinical_data_table_path = f"gs://{self.target_parquet_path}partitioned/target_table={self.target_table_name}/*{constants.PARQUET}"
+            clinical_data_table_path = self.get_partitioned_path()
             replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
         return replacement_result
@@ -174,7 +182,10 @@ class VocabHarmonizer:
         """
         if step == constants.SOURCE_TARGET:
             self.source_target_remapping()
- 
+    
+    def get_partitioned_path(self) -> str:
+        return f"gs://{self.target_parquet_path}partitioned/target_table={self.target_table_name}/*{constants.PARQUET}"
+
     # Keys which have already been reprocessed
     def get_already_processed_primary_keys() -> str:
         print()
