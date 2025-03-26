@@ -163,7 +163,7 @@ class VocabHarmonizer:
         replacement_result = sql
 
         for placeholder, _ in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-            clinical_data_table_path = f"read_parquet('gs://{self.target_parquet_path}partitioned/target_table={self.target_table_name}/*.parquet')"
+            clinical_data_table_path = f"read_parquet('gs://{self.target_parquet_path}partitioned/target_table={self.target_table_name}/*{constants.PARQUET}')"
             replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
         return replacement_result
