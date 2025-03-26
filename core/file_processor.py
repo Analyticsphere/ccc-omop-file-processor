@@ -301,12 +301,17 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         return ""
 
     fields = schema[table_name]["fields"]
-    ordered_columns = list(fields.keys())  # preserve column order
+    ordered_omop_columns = list(fields.keys())  # preserve column order
 
     # --------------------------------------------------------------------------
     # Identify which columns actually exist in the Parquet file 
     # --------------------------------------------------------------------------
     actual_columns = utils.get_columns_from_file(gcs_file_path)
+
+    connect_id_column_name = ""
+    for column in actual_columns:
+        if 'connectid' or 'connect_id' in column.lower():
+            connect_id_column_name = column
 
     # --------------------------------------------------------------------------
     # Initialize lists to build SQL expressions
@@ -317,7 +322,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # --------------------------------------------------------------------------
     # Coalesce required fields if they're NULL, or generate a placeholder column if that field doesn't exist at all.
     # --------------------------------------------------------------------------
-    for field_name in ordered_columns:
+    for field_name in ordered_omop_columns:
         field_type = fields[field_name]["type"]
         is_required = fields[field_name]["required"].lower() == "true"
 
@@ -327,9 +332,11 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         # Build concat statement that will eventually be hashed to identify rows
         row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
 
-        if field_name in actual_columns:           
+        if field_name in actual_columns:
             # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
-            if default_value != "NULL":
+            if field_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
+                coalesce_exprs.append(f"CAST({connect_id_column_name} AS {field_type}) AS {field_name}")
+            elif default_value != "NULL":
                 coalesce_exprs.append(f"TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS {field_name}")
             # If default value is NULL, don't coalesce
             else:
@@ -343,9 +350,14 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
                 # ALL fields in a COALESCE must be of the same type, so casting everything to VARCHAR *after* trying to cast it to its correct type
                 row_validity.append(f"CAST(TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS VARCHAR)")
         else:
+            # If the site provided a Connect_ID field and person_id, use Connect_ID in place of person_id
+            if field_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
+                coalesce_exprs.append(f"CAST({connect_id_column_name} AS {field_type}) AS {field_name}")
+
             # If the column doesn't exist, just produce a placeholder (NULL or a special default)
             # Still need to cast to ensure consist field types
-            coalesce_exprs.append(f"CAST({default_value} AS {field_type}) AS {field_name}")
+            else:
+                coalesce_exprs.append(f"CAST({default_value} AS {field_type}) AS {field_name}")
 
             # If the field IS NOT PROVIDED but it's still required - this is not a failed row; just use a default value
             # No need to add missing, required rows to row_validity check
