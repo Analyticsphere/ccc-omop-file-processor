@@ -1,6 +1,9 @@
 import core.constants as constants
 import core.utils as utils
+import core.file_processor as fp
 import uuid
+from typing import Optional
+import re
 
 class VocabHarmonizer:
     """
@@ -8,7 +11,7 @@ class VocabHarmonizer:
     Handles the entire process from reading parquet files to generating SQL and saving the harmonized output.
     """
     
-    def __init__(self, gcs_file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str):
+    def __init__(self, gcs_file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str, target_table: Optional[str] = 'measurement'):
         """
         Initialize a VocabHarmonizer with common parameters needed across all operations.
         """
@@ -17,7 +20,8 @@ class VocabHarmonizer:
         self.site = site
         self.vocab_version = vocab_version
         self.vocab_gcs_bucket = vocab_gcs_bucket
-        self.table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
+        self.source_table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
+        self.target_table_name = target_table
         self.bucket = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)[0]
         self.delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)[1]
         self.source_parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
@@ -33,7 +37,7 @@ class VocabHarmonizer:
                 WHEN tbl.target_domain = 'Observation' THEN 'observation'
                 WHEN tbl.target_domain = 'Note' THEN 'note'
                 WHEN tbl.target_domain = 'Specimen' THEN 'specimen'
-            ELSE '{self.table_name}' END AS target_table
+            ELSE '{self.source_table_name}' END AS target_table
         """
     
     def harmonize_parquet_file(self) -> None:
@@ -51,7 +55,100 @@ class VocabHarmonizer:
         self.partition_by_target_table()
 
         # Transform source table structure to target table structure
-        # self.omop_to_omop_etl()
+        self.omop_to_omop_etl()
+
+
+    def omop_to_omop_etl(self) -> None:
+        """
+        Generate a SQL statement that transforms data from one OMOP table to another,
+        ensuring proper field types and adding placeholder values to NULL required fields
+        """
+        
+        # Find the transform SQL file
+        transform_file = f"{constants.OMOP_ETL_PATH}{self.source_table_name}_to_{self.target_table_name}.sql"
+        
+        # Read the transform SQL
+        with open(transform_file, 'r') as f:
+            sql = f.read()
+        
+        # Load the target table schema
+        schema = utils.get_table_schema(self.target_table_name, constants.CDM_v54)
+        target_columns = list(schema[self.target_table_name]["columns"].keys())
+        
+        # Parse the SQL and modify each column
+        lines = sql.split('\n')
+        modified_lines = []
+        
+        in_select = False
+        for line in lines:
+            line_stripped = line.strip()
+            
+            # Handle SELECT line
+            if line_stripped.upper().startswith('SELECT'):
+                in_select = True
+                modified_lines.append(line)
+                continue
+            
+            # Handle FROM line
+            if line_stripped.upper().startswith('FROM'):
+                in_select = False
+                # # Replace the placeholder with the actual table name
+                # modified_line = line.replace('@CONDITION_OCCURRENCE', source_table_name)
+                # modified_lines.append(modified_line)
+                continue
+            
+            # Skip non-mapping lines
+            if not in_select or not line_stripped:
+                modified_lines.append(line)
+                continue
+            
+            # Handle column mapping
+            has_comma = line_stripped.endswith(',')
+            if has_comma:
+                line_stripped = line_stripped[:-1]
+            
+            # Split into source expression and target column
+            parts = re.split(r'\s+AS\s+', line_stripped, flags=re.IGNORECASE)
+            if len(parts) != 2:
+                modified_lines.append(line)
+                continue
+            
+            source_expr, target_column = parts
+            source_expr = source_expr.strip()
+            target_column = target_column.strip()
+            
+            # Get target column schema info
+            column_info = target_columns.get(target_column)
+            if not column_info:
+                # If column not in schema, keep as is
+                modified_lines.append(line)
+                continue
+            
+            column_type = column_info.get('type')
+            is_required = column_info.get('required') == 'true'
+            
+            # Add CAST
+            cast_expr = f"CAST({source_expr} AS {column_type})"
+            
+            # Add COALESCE for required columns
+            if is_required:
+                placeholder = fp.get_placeholder_value(target_column, column_type)
+                final_expr = f"COALESCE({cast_expr}, {placeholder})"
+            else:
+                final_expr = cast_expr
+            
+            # Recreate the line with proper indentation
+            indent = len(line) - len(line.lstrip())
+            modified_line = ' ' * indent + final_expr + ' AS ' + target_column
+            if has_comma:
+                modified_line += ','
+            
+            modified_lines.append(modified_line)
+        
+        final_sql = ",\n                ".join(modified_lines)
+        
+        final_sql_no_return = final_sql.replace('\n', ' ')
+        utils.logger.warning(f"TRANSFORM SQL IS {final_sql_no_return}")
 
 
     def perform_harmonization(self, step: str) -> None:
@@ -60,7 +157,7 @@ class VocabHarmonizer:
         """
         if step == constants.SOURCE_TARGET:
             self.source_target_remapping()
-    
+ 
     # Keys which have already been reprocessed
     def get_already_processed_primary_keys() -> str:
         print()
@@ -84,15 +181,15 @@ class VocabHarmonizer:
         Generate and execute SQL to check for and update non-standard source-to-target mappings to standard        
         """
 
-        schema = utils.get_table_schema(self.table_name, self.cdm_version)
+        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
 
-        columns = schema[self.table_name]["columns"]
+        columns = schema[self.source_table_name]["columns"]
         ordered_omop_columns = list(columns.keys())  # preserve column order
 
         # Get _concept_id and _source_concept_id columns for table
-        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.table_name]['target_concept_id']
-        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.table_name]['source_concept_id']
-        primary_key = utils.get_primary_key_field(self.table_name, self.cdm_version)
+        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
+        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
+        primary_key = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
 
         # specimen and note tables don't have _source_concept_id columns so can't be evaluated with this method
         if not source_concept_id_column or source_concept_id_column == "":
@@ -129,7 +226,7 @@ class VocabHarmonizer:
         initial_select_sql = ",\n                ".join(initial_select_exprs)
 
         initial_from_sql = f"""
-            FROM read_parquet('@{self.table_name.upper()}') AS tbl
+            FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
             INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
                 ON tbl.{source_concept_id_column} = vocab.concept_id
             WHERE tbl.{source_concept_id_column} != 0
@@ -139,11 +236,11 @@ class VocabHarmonizer:
         """
 
         pivot_cte = f"""
-            -- Pivot so that Meas Value mappings get associated with target_concept_id_field
+            -- Pivot so that Meas Value mappings get associated with target_concept_id_column
             SELECT 
                 tbl.{primary_key},
                 MAX(vocab.target_concept_id) AS value_as_concept_id
-            FROM read_parquet('@{self.table_name.upper()}') AS tbl
+            FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
             INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab 
                 ON tbl.{source_concept_id_column} = vocab.concept_id
             WHERE vocab.target_concept_id_domain = 'Meas Value'
@@ -189,10 +286,10 @@ class VocabHarmonizer:
         final_sql = f"""
             COPY (
                 {final_cte}
-            ) TO 'gs://{self.target_parquet_path}{self.table_name}_{str(uuid.uuid4())}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_{str(uuid.uuid4())}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
-        self.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.table_name}")
+        self.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
     
     def partition_by_target_table(self) -> None:
         partition_statement = f"""
@@ -201,4 +298,6 @@ class VocabHarmonizer:
             ) TO 'gs://{self.target_parquet_path}partitioned/' (FORMAT PARQUET, PARTITION_BY (target_table), COMPRESSION ZSTD);
         """
         
-        self.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.table_name}")
+        self.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
+
+    
