@@ -134,7 +134,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
             # Special handling required to prevent parsing error
 
-            # Re-add double quotes to offset field prevent DuckDB from returning parsing error
+            # Re-add double quotes to offset column prevent DuckDB from returning parsing error
             select_clause = select_clause.replace('offset', '"offset"')
 
             # Convert CSV to Parquet with lowercase column names
@@ -263,15 +263,15 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         utils.logger.error(f"Unable to convert CSV to UTF8: {e}")
         raise Exception(f"Unable to convert CSV to UTF8: {e}") from e
 
-def get_placeholder_value(field_name: str, field_type: str) -> str:
-    # Return string representation of default value, based on field type
+def get_placeholder_value(column_name: str, column_type: str) -> str:
+    # Return string representation of default value, based on column type
 
     # *All* columns that end in _concept_id must be populated
-    # If a concept is unknown, OHDSI convention is to explicity populate field with concept_id 0
-    if field_name.endswith("_concept_id"):
+    # If a concept is unknown, OHDSI convention is to explicity populate column with concept_id 0
+    if column_name.endswith("_concept_id"):
         return "'0'"
 
-    default_value = constants.DEFAULT_FIELD_VALUES[field_type]
+    default_value = constants.DEFAULT_COLUMN_VALUES[column_type]
     
     return default_value
 
@@ -281,7 +281,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
         - Converts data types of columns within Parquet file to OMOP CDM standard
         - Creates a new Parquet file with the invalid rows from the original data file
         - Converts all column names to lower case
-        - Ensures consistent field order within Parquet
+        - Ensures consistent column order within Parquet
         - Set (possibly non-unique) deterministric composite key for tables with surrogate primary keys
 
     This SQL has many functions, but it is far more efficient to do this all in one step,
@@ -316,23 +316,23 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
     row_validity = []    # e.g. "cc.some_col IS NOT NULL AND ..."
 
     # --------------------------------------------------------------------------
-    # Coalesce required columns if they're NULL, or generate a placeholder column if that field doesn't exist at all.
+    # Coalesce required columns if they're NULL, or generate a placeholder column if that column doesn't exist at all.
     # --------------------------------------------------------------------------
-    for field_name in ordered_omop_columns:
-        field_type = columns[field_name]["type"]
-        is_required = columns[field_name]["required"].lower() == "true"
+    for column_name in ordered_omop_columns:
+        column_type = columns[column_name]["type"]
+        is_required = columns[column_name]["required"].lower() == "true"
 
-        # Determine default value if a required field is NULL
-        default_value = get_placeholder_value(field_name, field_type) if is_required or field_name.endswith("_concept_id") else "NULL"
+        # Determine default value if a required column is NULL
+        default_value = get_placeholder_value(column_name, column_type) if is_required or column_name.endswith("_concept_id") else "NULL"
 
         # If the site delivered table contains an expected column...
-        if field_name in actual_columns:
+        if column_name in actual_columns:
             # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
             if default_value != "NULL":
-                coalesce_exprs.append(f"TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS {field_name}")
+                coalesce_exprs.append(f"TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS {column_name}")
             # If default value is NULL, don't coalesce
             else:
-                coalesce_exprs.append(f"TRY_CAST({field_name} AS {field_type}) AS {field_name}")
+                coalesce_exprs.append(f"TRY_CAST({column_name} AS {column_type}) AS {column_name}")
             
             # If the colum is provided, and it's required, add it to list of columns which must be of correct type
             if is_required:
@@ -340,11 +340,11 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
                 # If any one of the columns cannot be cast to the correct type, the entire row fails
                 # To do this check in one shot, perform a single COALESCE within the SQL statement
                 # ALL columns in a COALESCE must be of the same type, so casting everything to VARCHAR *after* trying to cast it to its correct type
-                row_validity.append(f"CAST(TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS VARCHAR)")
+                row_validity.append(f"CAST(TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS VARCHAR)")
         else:
             # If the column doesn't exist, just produce a placeholder (NULL or a special default)
             # Still need to cast to ensure consist column types
-            coalesce_exprs.append(f"CAST({default_value} AS {field_type}) AS {field_name}")
+            coalesce_exprs.append(f"CAST({default_value} AS {column_type}) AS {column_name}")
 
             # If a column is required but not provided, all rows should not fail validity check; just use a default value
 
@@ -360,18 +360,18 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
         # Primary keys uniqueness will be enforced in later tasks, after vocabulary harmonization
     replace_clause = ""
     if table_name in constants.SURROGATE_KEY_TABLES:
-        primary_key = utils.get_primary_key_field(table_name, cdm_version)
+        primary_key = utils.get_primary_key_column(table_name, cdm_version)
 
         # Create composite key by concatenting each column into a single value and taking its hash
         # Don't include the original primary key in the hash
-        primary_key_sql = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in ordered_omop_columns if field_name != primary_key])
+        primary_key_sql = ", ".join([f"COALESCE(CAST({column_name} AS VARCHAR), '')" for column_name in ordered_omop_columns if column_name != primary_key])
         replace_clause = f"""
             REPLACE(generate_id(CONCAT({primary_key_sql})) AS {primary_key}) 
         """
 
     # Build concat statement that will eventually be hashed to identify valid/invalid rows
     # The row_hash involves ALL columns from incoming Parquet (whereas the primary key includes only columns in OMOP)
-    row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
+    row_hash_statement = ", ".join([f"COALESCE(CAST({column_name} AS VARCHAR), '')" for column_name in actual_columns])
 
     # Final normalization SQL statement
     # Step 1 - Identify invalid rows using output of COALESCE({row_validity_sql}) (NULL COALESCE result = invalid)
@@ -537,11 +537,11 @@ def clean_csv_row(row: str) -> str:
         
         if char == '"':
             if not in_quotes:
-                # Start of quoted field
+                # Start of quoted column
                 in_quotes = True
                 result.append(char)
             else:
-                # Could be end of quoted field or internal quote
+                # Could be end of quoted column or internal quote
                 if i + 1 < len(row):
                     next_char = row[i + 1]
                     if next_char == '"':
@@ -552,11 +552,11 @@ def clean_csv_row(row: str) -> str:
                         # Internal quote that needs escaping (Example 1)
                         result.append('""')
                     else:
-                        # End of quoted field
+                        # End of quoted column
                         in_quotes = False
                         result.append(char)
                 else:
-                    # End of quoted field at end of string
+                    # End of quoted column at end of string
                     in_quotes = False
                     result.append(char)
         else:
@@ -586,7 +586,7 @@ def clean_csv_row(row: str) -> str:
                 else:
                     in_quotes = False
         elif char == ',' and not in_quotes:
-            # End of field
+            # End of column
             columns.append(''.join(current))
             current = []
         else:
@@ -594,7 +594,7 @@ def clean_csv_row(row: str) -> str:
         
         i += 1
     
-    # Add the last field
+    # Add the last column
     if current or not columns:
         columns.append(''.join(current))
     
@@ -602,7 +602,7 @@ def clean_csv_row(row: str) -> str:
     cleaned_columns = []
     for column in columns:
         # Handle single quotes (Examples 2 & 3)
-        # If field contains single quotes and isn't already quoted
+        # If column contains single quotes and isn't already quoted
         if "'" in column and not (column.startswith('"') and column.endswith('"')):
             column = f'"{column}"'
         

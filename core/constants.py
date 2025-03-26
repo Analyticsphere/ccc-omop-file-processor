@@ -93,7 +93,7 @@ class ArtifactPaths(str, Enum):
 #   as these are uncommon values in real data
 # Using date 1970-01-01 because it's the Unix epoch, and it's
 #   unlikely that this date will appear in real data
-DEFAULT_FIELD_VALUES = {
+DEFAULT_COLUMN_VALUES = {
         "VARCHAR": "''",
         "DATE": "'1970-01-01'",
         "BIGINT": "'-1'",

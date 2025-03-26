@@ -266,7 +266,7 @@ def clear_bq_tables() -> tuple[str, int]:
 def generate_final_delivery_report() -> tuple[str, int]:
     report_data: dict[str, Any] = request.get_json() or {}
     
-    # Validate required fields for report
+    # Validate required columns for report
     if not report_data.get('delivery_date') or not report_data.get('site'):
         return "Missing required parameters in report data: delivery_date and site", 400
 
@@ -302,7 +302,7 @@ def create_missing_omop_tables() -> tuple[str, int]:
 def add_cdm_source_record() -> tuple[str, int]:
     cdm_source_data: dict[str, Any] = request.get_json() or {}
     
-    # Validate required fields
+    # Validate required columns
     if not cdm_source_data.get('source_release_date') or not cdm_source_data.get('cdm_source_abbreviation'):
         return "Missing required parameters in cdm_source_data: source_release_date and cdm_source_abbreviation", 400
 
@@ -328,9 +328,9 @@ def log_pipeline_state() -> tuple:
     run_id: Optional[str] = data.get('run_id')
 
     try:
-        # Check if required fields are present
+        # Check if required columns are present
         if not all([logging_table, site_name, delivery_date, status, run_id]):
-            return "Missing required fields for BigQuery logging", 400
+            return "Missing required columns for BigQuery logging", 400
 
         pipeline_logger = pipeline_log.PipelineLog(
             cast(str, logging_table),

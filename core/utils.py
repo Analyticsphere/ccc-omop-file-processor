@@ -582,11 +582,11 @@ def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name:
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(local_file_path)
 
-def get_primary_key_field(table_name: str, cdm_version: str) -> str:
+def get_primary_key_column(table_name: str, cdm_version: str) -> str:
     schema = get_table_schema(table_name, cdm_version)
     columns = schema[table_name]["columns"]
 
-    # Iterate over each field name and its properties
+    # Iterate over each column name and its properties
     for column_name, column_properties in columns.items():
         if "primary_key" in column_properties and column_properties["primary_key"] == "true":
             return column_name

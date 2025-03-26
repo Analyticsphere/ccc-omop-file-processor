@@ -61,7 +61,7 @@ class VocabHarmonizer:
     def omop_to_omop_etl(self) -> None:
         """
         Generate a SQL statement that transforms data from one OMOP table to another,
-        ensuring proper field types and adding placeholder values to NULL required fields
+        ensuring proper column types and adding placeholder values to NULL required columns
         """
         
         # Find the transform SQL file
