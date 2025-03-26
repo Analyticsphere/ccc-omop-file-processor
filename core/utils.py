@@ -64,12 +64,14 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
 
 def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
     # Return "folder" names within a given GCS path
+    logger.warning(f"IN list_gcs_directories()")
     try:
         # Initialize the GCS client
         storage_client = storage.Client()
         
         # Get the bucket
         bucket = storage_client.bucket(bucket_name)
+        logger.warning(f"bucket is {bucket}")
         
         # Verify bucket exists
         if not bucket.exists():
@@ -81,6 +83,7 @@ def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
         
         # List all blobs with the prefix
         blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
+        logger.warning(f"blobs is {blobs}")
 
         # Get all 'folder' names within the level of bucket_name/folder_prefix
         directories = []
