@@ -56,7 +56,7 @@ class VocabHarmonizer:
 
         # Transform source table structure to target table structure
         # TODO: Call this on each partitioned part indepdenently
-        self.omop_to_omop_etl()
+        #self.omop_to_omop_etl()
 
 
     def omop_to_omop_etl(self) -> None:
