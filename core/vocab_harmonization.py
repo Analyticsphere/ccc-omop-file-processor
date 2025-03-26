@@ -74,7 +74,7 @@ class VocabHarmonizer:
         
         # Load the target table schema
         schema = utils.get_table_schema(self.target_table_name, constants.CDM_v54)
-        target_columns = list(schema[self.target_table_name]["columns"].keys())
+        target_columns = schema[self.target_table_name]["columns"]#list(schema[self.target_table_name]["columns"].keys())
         
         # Parse the SQL and modify each column
         lines = sql.split('\n')
@@ -93,9 +93,8 @@ class VocabHarmonizer:
             # Handle FROM line
             if line_stripped.upper().startswith('FROM'):
                 in_select = False
-                # # Replace the placeholder with the actual table name
-                # modified_line = line.replace('@CONDITION_OCCURRENCE', source_table_name)
-                # modified_lines.append(modified_line)
+                # Keep the FROM line as is
+                modified_lines.append(line)
                 continue
             
             # Skip non-mapping lines
@@ -118,33 +117,33 @@ class VocabHarmonizer:
             source_expr = source_expr.strip()
             target_column = target_column.strip()
             
-            # Get target column schema info
-            column_info = target_columns[target_column]
-            if not column_info:
+            # Get target column schema info - check if the column exists in the schema
+            if target_column in target_columns:
+                column_info = target_columns[target_column]
+                
+                column_type = column_info['type']
+                is_required = column_info['required'].lower() == 'true'
+                
+                # Add CAST
+                cast_expr = f"CAST({source_expr} AS {column_type})"
+                
+                # Add COALESCE for required columns
+                if is_required:
+                    placeholder = fp.get_placeholder_value(target_column, column_type)
+                    final_expr = f"COALESCE({cast_expr}, {placeholder})"
+                else:
+                    final_expr = cast_expr
+                
+                # Recreate the line with proper indentation
+                indent = len(line) - len(line.lstrip())
+                modified_line = ' ' * indent + final_expr + ' AS ' + target_column
+                if has_comma:
+                    modified_line += ','
+                
+                modified_lines.append(modified_line)
+            else:
                 # If column not in schema, keep as is
                 modified_lines.append(line)
-                continue
-            
-            column_type = column_info['type']
-            is_required = column_info['required'].lower() == 'true'
-            
-            # Add CAST
-            cast_expr = f"CAST({source_expr} AS {column_type})"
-            
-            # Add COALESCE for required columns
-            if is_required:
-                placeholder = fp.get_placeholder_value(target_column, column_type)
-                final_expr = f"COALESCE({cast_expr}, {placeholder})"
-            else:
-                final_expr = cast_expr
-            
-            # Recreate the line with proper indentation
-            indent = len(line) - len(line.lstrip())
-            modified_line = ' ' * indent + final_expr + ' AS ' + target_column
-            if has_comma:
-                modified_line += ','
-            
-            modified_lines.append(modified_line)
         
         final_sql = ",\n                ".join(modified_lines)
         
