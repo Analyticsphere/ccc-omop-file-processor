@@ -199,8 +199,8 @@ def target_vocab_to_bq() -> tuple[str, int]:
         return f"Unable to load vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}: {str(e)}", 500        
 
 
-@app.route('/harmonize_vocab', methods=['POST'])
-def vocab_harmonization() -> tuple[str, int]:
+@app.route('/update_mappings', methods=['POST'])
+def update_mappings() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     vocab_version: Optional[str] = data.get('vocab_version')
@@ -216,7 +216,7 @@ def vocab_harmonization() -> tuple[str, int]:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}")
 
         vocab_harmonizer = vh.VocabHarmonizer(file_path, omop_version, site, vocab_version, vocab_gcs_bucket)
-        vocab_harmonizer.harmonize_parquet_file()
+        vocab_harmonizer.update_mappings_for_file()
 
 
 
@@ -224,6 +224,36 @@ def vocab_harmonization() -> tuple[str, int]:
     except Exception as e:
         utils.logger.error(f"Unable to harmonize vocabulary: {str(e)}")
         return f"Unable to harmonize vocabulary: {str(e)}", 500
+
+
+@app.route('/get_required_transforms', methods=['GET'])
+def get_files() -> tuple[Any, int]:
+    data: dict[str, Any] = request.get_json() or {}
+    file_path: Optional[str] = data.get('file_path')
+   
+    # Validate required parameters
+    if not file_path:
+        return "Missing required parameters: bucket, folder", 400
+
+    try:
+        bucket, _ = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
+        partitioned_parquet_dir = utils.get_parquet_harmonized_path(file_path)
+
+        directories: list[str] = utils.list_gcs_directories(bucket, partitioned_parquet_dir)
+
+        for directory in directories:
+            directory = f"{partitioned_parquet_dir}/{directory}"
+            utils.logger.warning(f"directory is {directory}")
+
+        return jsonify({
+            'status': 'healthy',
+            'directory_list': directories,
+            'service': constants.SERVICE_NAME
+        }), 200
+    except Exception as e:
+        utils.logger.error(f"Unable to get list of transformations to perform: {str(e)}")
+        return f"Unable to get list of transformations to perform: {str(e)}", 500
+
 
 @app.route('/parquet_to_bq', methods=['POST'])
 def parquet_gcs_to_bq() -> tuple[str, int]:
