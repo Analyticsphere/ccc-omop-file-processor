@@ -226,8 +226,8 @@ def update_mappings() -> tuple[str, int]:
         return f"Unable to harmonize vocabulary: {str(e)}", 500
 
 
-@app.route('/get_required_transforms', methods=['GET'])
-def get_files() -> tuple[Any, int]:
+@app.route('/get_required_transforms', methods=['POST'])
+def get_transforms() -> tuple[Any, int]:
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
    
