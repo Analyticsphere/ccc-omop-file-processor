@@ -86,7 +86,7 @@ def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
         logger.warning(f"blobs is {blobs}")
 
         for blob in blobs:
-            logger.warning(f"the single blob is {blob}")
+            logger.warning(f"the single blob is {blob.name}")
 
         # Get all 'folder' names within the level of bucket_name/folder_prefix
         directories = []
