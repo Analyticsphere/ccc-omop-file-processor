@@ -229,6 +229,7 @@ def update_mappings() -> tuple[str, int]:
 @app.route('/get_required_transforms', methods=['GET'])
 def get_transforms() -> tuple[Any, int]:
     file_path: Optional[str] = request.args.get('file_path')
+    utils.logger.warning(f"i*/*/*/ in get_transforms() API function")
    
     # Validate required parameters
     if not file_path:
@@ -237,9 +238,11 @@ def get_transforms() -> tuple[Any, int]:
     try:
         bucket, _ = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
         partitioned_parquet_dir = utils.get_parquet_harmonized_path(file_path)
+        utils.logger.warningf(f"partitioned dir is {partitioned_parquet_dir}")
 
         directories: list[str] = utils.list_gcs_directories(bucket, partitioned_parquet_dir)
-
+        utils.logger.warning(f"directories is {directories}")
+        
         for directory in directories:
             directory = f"{partitioned_parquet_dir}/{directory}"
             utils.logger.warning(f"directory is {directory}")
