@@ -237,12 +237,12 @@ def get_transforms() -> tuple[Any, int]:
 
     try:
         bucket, _ = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
-        partitioned_parquet_gcs_path = utils.get_parquet_harmonized_path(file_path)
+        partitioned_parquet_gcs_path = f"{utils.get_parquet_harmonized_path(file_path)}partitioned/".replace(f'{bucket}/','')
         utils.logger.warning(f"partitioned dir is {partitioned_parquet_gcs_path}")
         utils.logger.warning(f"bucket is {bucket}")
         utils.logger.warning(f"folder prefix is {partitioned_parquet_gcs_path.replace(f'{bucket}/','')}")
 
-        directories: list[str] = utils.list_gcs_directories(bucket, partitioned_parquet_gcs_path.replace(f'{bucket}/',''))
+        directories: list[str] = utils.list_gcs_directories(bucket, partitioned_parquet_gcs_path)
         utils.logger.warning(f"directories is {directories}")
 
         for directory in directories:
