@@ -80,6 +80,8 @@ def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
         # Ensure folder_prefix ends with '/' for consistent path handling
         if folder_prefix and not folder_prefix.endswith('/'):
             folder_prefix += '/'
+
+        logger.warning(f"folder_prefix is {folder_prefix} and bucket is {bucket}")
         
         # List all blobs with the prefix
         blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
