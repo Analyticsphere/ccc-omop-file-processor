@@ -39,7 +39,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
                 value_as_number=None,
                 value_as_string="invalid table name"
             )
-        utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
+        #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
         ra.save_artifact()
             
         return is_valid_table_name
@@ -81,7 +81,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
                 value_as_number=None,
                 value_as_string="valid column name"
             )
-            utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
+            #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
             ra.save_artifact()
 
         # Process invalid columns (present in parquet but not in schema)
@@ -95,7 +95,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
                 value_as_number=None,
                 value_as_string="invalid column name"
             )
-            utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
+            #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
             ra.save_artifact()
 
         for column in missing_columns:
@@ -108,7 +108,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
                 value_as_number=None,
                 value_as_string="missing column"
             )
-            utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
+            #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
             ra.save_artifact()
 
     except Exception as e:

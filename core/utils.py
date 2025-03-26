@@ -35,7 +35,6 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
         storage_client = storage.Client()
         
         # Get the bucket
-        logger.info(f"Attempting to access bucket to list files: {bucket_name}")
         bucket = storage_client.bucket(bucket_name)
         
         # Verify bucket exists
@@ -61,6 +60,39 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
     
     except Exception as e:
         raise Exception(f"Error listing files in GCS: {str(e)}")
+
+
+def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
+    # Return "folder" names within a given GCS path
+    try:
+        # Initialize the GCS client
+        storage_client = storage.Client()
+        
+        # Get the bucket
+        bucket = storage_client.bucket(bucket_name)
+        
+        # Verify bucket exists
+        if not bucket.exists():
+            raise Exception(f"Bucket {bucket_name} does not exist")
+        
+        # Ensure folder_prefix ends with '/' for consistent path handling
+        if folder_prefix and not folder_prefix.endswith('/'):
+            folder_prefix += '/'
+        
+        # List all blobs with the prefix
+        blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
+
+        # Get all 'folder' names within the level of bucket_name/folder_prefix
+        directories = []
+        for prefix in blobs.prefixes:
+            # Extract just the folder name from the full prefix path
+            folder_name = prefix[len(folder_prefix):-1] if prefix.endswith('/') else prefix[len(folder_prefix):]
+            directories.append(folder_name)
+            
+        return directories
+    
+    except Exception as e:
+        raise Exception(f"Error listing directories in GCS: {str(e)}")
 
 def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.

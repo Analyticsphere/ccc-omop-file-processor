@@ -54,6 +54,10 @@ class VocabHarmonizer:
         # After finding new targets and domain, partition files based on target OMOP table
         self.partition_by_target_table()
 
+        # TODO: Return a list of directories to process, along with source/target table
+        list_of_targets = utils.list_gcs_directories(self.bucket, self.target_parquet_path)
+        utils.logger.warning(f"*/*/*/*/*/*/*/ would return list_of_targets {list_of_targets}")
+
         # Transform source table structure to target table structure
         # TODO: Call this on each partitioned part indepdenently
         self.omop_to_omop_etl()
