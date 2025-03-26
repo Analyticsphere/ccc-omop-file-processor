@@ -104,11 +104,9 @@ class VocabHarmonizer:
                 continue
             
             # Handle column mapping
-            has_leading_comma = line_stripped.startswith(',')
-            
-            if has_leading_comma:
-                # Remove first character/the comma
-                line_stripped = line_stripped[1:]
+            has_comma = line_stripped.endswith(',')
+            if has_comma:
+                line_stripped = line_stripped[:-1]
             
             # Split into source expression and target column
             parts = re.split(r'\s+AS\s+', line_stripped, flags=re.IGNORECASE)
@@ -139,10 +137,8 @@ class VocabHarmonizer:
                 # Recreate the line with proper indentation
                 indent = len(line) - len(line.lstrip())
                 modified_line = ' ' * indent + final_expr + ' AS ' + target_column
-                if has_leading_comma:
-                    modified_line = ' ' * indent + ',' + final_expr + ' AS ' + target_column
-                else:
-                    modified_line = ' ' * indent + final_expr + ' AS ' + target_column
+                if has_comma:
+                    modified_line += ','
                 
                 modified_lines.append(modified_line)
             else:
