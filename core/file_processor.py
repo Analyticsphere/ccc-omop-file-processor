@@ -310,8 +310,9 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
 
     connect_id_column_name = ""
     for column in actual_columns:
-        if 'connectid' or 'connect_id' in column.lower():
+        if 'connectid' in column.lower() or 'connect_id' in column.lower():
             connect_id_column_name = column
+            break
 
     # --------------------------------------------------------------------------
     # Initialize lists to build SQL expressions
