@@ -595,7 +595,7 @@ def get_primary_key_column(table_name: str, cdm_version: str) -> str:
     return ""
 
 
-def placeholder_to_table_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
+def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
     """
     Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
     """

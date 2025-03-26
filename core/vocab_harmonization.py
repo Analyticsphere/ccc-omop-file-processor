@@ -146,12 +146,27 @@ class VocabHarmonizer:
                 modified_lines.append(line)
         
         # Join the lines together to form the final SQL
-        final_sql = '\n'.join(modified_lines)
+        select_sql = '\n'.join(modified_lines)
+
+        # Replace placeholder table strings with paths to Parquet files
+        final_sql = self.placeholder_to_file_path(select_sql)
         
         # Log the SQL without newlines for easier viewing
         final_sql_no_return = final_sql.replace('\n', ' ')
         utils.logger.warning(f"TRANSFORM SQL IS {final_sql_no_return}")
 
+
+    def placeholder_to_file_path(self, sql: str) -> str:
+        """
+        Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
+        """
+        replacement_result = sql
+
+        for placeholder, _ in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
+            clinical_data_table_path = f"read_parquet('gs://{self.target_parquet_path}partitioned/target_table={self.target_table_name}/*.parquet')"
+            replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
+
+        return replacement_result
 
     def perform_harmonization(self, step: str) -> None:
         """
@@ -276,7 +291,7 @@ class VocabHarmonizer:
             {final_from_sql}
         """
 
-        final_cte = utils.placeholder_to_table_path(
+        final_cte = utils.placeholder_to_file_path(
             self.site, 
             self.bucket, 
             self.delivery_date, 

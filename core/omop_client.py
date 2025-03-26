@@ -268,14 +268,14 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
             create_statement_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}_create.sql"
             with open(create_statement_path, 'r') as f:
                 create_statement_raw = f.read()
-            create_statement = utils.placeholder_to_table_path(site, site_bucket, delivery_date, create_statement_raw, vocab_version, vocab_gcs_bucket)
+            create_statement = utils.placeholder_to_file_path(site, site_bucket, delivery_date, create_statement_raw, vocab_version, vocab_gcs_bucket)
 
         sql_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}.sql"
         with open(sql_path, 'r') as f:
             select_statement_raw = f.read()
 
         # Add table locations
-        select_statement = utils.placeholder_to_table_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
+        select_statement = utils.placeholder_to_file_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
 
         try:
             conn, local_db_file = utils.create_duckdb_connection()
