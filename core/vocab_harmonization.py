@@ -67,15 +67,20 @@ class VocabHarmonizer:
         
         # Find the transform SQL file
         transform_file = f"{constants.OMOP_ETL_PATH}{self.source_table_name}_to_{self.target_table_name}.sql"
+        utils.logger.warning(f"transform_file is {transform_file}")
+
+
         
         # Read the transform SQL
         with open(transform_file, 'r') as f:
             sql = f.read()
-        
+        utils.logger.warning(f"sql is {sql}")
+
         # Load the target table schema
         schema = utils.get_table_schema(self.target_table_name, constants.CDM_v54)
+        utils.logger.warning(f"!!!Got the schema")
         target_columns = schema[self.target_table_name]["columns"]#list(schema[self.target_table_name]["columns"].keys())
-        
+        utils.logger.warning(f"!!! got target columns")
         # Parse the SQL and modify each column
         lines = sql.split('\n')
         modified_lines = []
