@@ -20,4 +20,4 @@ SELECT
 	,NULL AS value_source_value
 	,NULL AS observation_event_id
 	,NULL AS obs_event_field_concept_id
-FROM @CONDITION_OCCURRENCE
+FROM read_parquet('@CONDITION_OCCURRENCE')

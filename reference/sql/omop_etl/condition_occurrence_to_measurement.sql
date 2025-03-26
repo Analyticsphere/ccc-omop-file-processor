@@ -22,4 +22,4 @@ SELECT
 	,NULL AS value_source_value
 	,NULL AS measurement_event_id
 	,NULL AS meas_event_field_concept_id
-FROM @CONDITION_OCCURRENCE
+FROM read_parquet('@CONDITION_OCCURRENCE')
