@@ -104,9 +104,11 @@ class VocabHarmonizer:
                 continue
             
             # Handle column mapping
-            has_comma = line_stripped.endswith(',')
-            if has_comma:
-                line_stripped = line_stripped[:-1]
+            has_leading_comma = line_stripped.startswith(',')
+            
+            if has_leading_comma:
+                # Remove first character/the comma
+                line_stripped = line_stripped[1:]
             
             # Split into source expression and target column
             parts = re.split(r'\s+AS\s+', line_stripped, flags=re.IGNORECASE)
@@ -137,8 +139,10 @@ class VocabHarmonizer:
                 # Recreate the line with proper indentation
                 indent = len(line) - len(line.lstrip())
                 modified_line = ' ' * indent + final_expr + ' AS ' + target_column
-                if has_comma:
-                    modified_line += ','
+                if has_leading_comma:
+                    modified_line = ' ' * indent + ',' + final_expr + ' AS ' + target_column
+                else:
+                    modified_line = ' ' * indent + final_expr + ' AS ' + target_column
                 
                 modified_lines.append(modified_line)
             else:
@@ -150,10 +154,6 @@ class VocabHarmonizer:
 
         # Replace placeholder table strings with paths to Parquet files
         final_sql = self.placeholder_to_file_path(select_sql)
-        
-        # Log the SQL without newlines for easier viewing
-        #final_sql_no_return = final_sql.replace('\n', ' ')
-        #utils.logger.warning(f"TRANSFORM SQL IS {final_sql_no_return}")
 
         transform_sql = f"""
             COPY (
