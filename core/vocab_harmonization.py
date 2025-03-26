@@ -67,20 +67,17 @@ class VocabHarmonizer:
         
         # Find the transform SQL file
         transform_file = f"{constants.OMOP_ETL_PATH}{self.source_table_name}_to_{self.target_table_name}.sql"
-        utils.logger.warning(f"transform_file is {transform_file}")
-
-
         
         # Read the transform SQL
         with open(transform_file, 'r') as f:
             sql = f.read()
-        utils.logger.warning(f"sql is {sql}")
-
+        
         # Load the target table schema
         schema = utils.get_table_schema(self.target_table_name, constants.CDM_v54)
-        utils.logger.warning(f"!!!Got the schema")
-        target_columns = schema[self.target_table_name]["columns"]#list(schema[self.target_table_name]["columns"].keys())
-        utils.logger.warning(f"!!! got target columns")
+        
+        # Keep the full columns dictionary
+        target_columns_dict = schema[self.target_table_name]["columns"]
+        
         # Parse the SQL and modify each column
         lines = sql.split('\n')
         modified_lines = []
@@ -98,7 +95,6 @@ class VocabHarmonizer:
             # Handle FROM line
             if line_stripped.upper().startswith('FROM'):
                 in_select = False
-                # Keep the FROM line as is
                 modified_lines.append(line)
                 continue
             
@@ -123,21 +119,20 @@ class VocabHarmonizer:
             target_column = target_column.strip()
             
             # Get target column schema info - check if the column exists in the schema
-            if target_column in target_columns:
-                column_info = target_columns[target_column]
+            if target_column in target_columns_dict:
+                column_info = target_columns_dict[target_column]
                 
                 column_type = column_info['type']
                 is_required = column_info['required'].lower() == 'true'
                 
-                # Add CAST
-                cast_expr = f"CAST({source_expr} AS {column_type})"
-                
-                # Add COALESCE for required columns
+                # Process differently based on whether field is required or not
                 if is_required:
+                    # For required fields: COALESCE first, then CAST
                     placeholder = fp.get_placeholder_value(target_column, column_type)
-                    final_expr = f"COALESCE({cast_expr}, {placeholder})"
+                    final_expr = f"CAST(COALESCE({source_expr}, {placeholder}) AS {column_type})"
                 else:
-                    final_expr = cast_expr
+                    # For non-required fields: TRY_CAST only
+                    final_expr = f"TRY_CAST({source_expr} AS {column_type})"
                 
                 # Recreate the line with proper indentation
                 indent = len(line) - len(line.lstrip())
@@ -150,8 +145,10 @@ class VocabHarmonizer:
                 # If column not in schema, keep as is
                 modified_lines.append(line)
         
-        final_sql = ",\n                ".join(modified_lines)
+        # Join the lines together to form the final SQL
+        final_sql = '\n'.join(modified_lines)
         
+        # Log the SQL without newlines for easier viewing
         final_sql_no_return = final_sql.replace('\n', ' ')
         utils.logger.warning(f"TRANSFORM SQL IS {final_sql_no_return}")
 
