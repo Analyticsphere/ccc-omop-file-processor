@@ -63,7 +63,16 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
 
 
 def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
-    # Return "folder" names within a given GCS path
+    """
+    List all "directories" (folder-like prefixes) within a given GCS path.
+    
+    Args:
+        bucket_name (str): The name of the GCS bucket (e.g., "bucket_name_here")
+        folder_prefix (str): The path prefix within the bucket (e.g., "some/path/to/fs/")
+    
+    Returns:
+        list[str]: A list of directory names within the given path.
+    """
     try:
         # Initialize the GCS client
         storage_client = storage.Client()
@@ -79,19 +88,42 @@ def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
         if folder_prefix and not folder_prefix.endswith('/'):
             folder_prefix += '/'
         
-        logger.warning(f"folder_prefix is {folder_prefix}")
-
-        # List all blobs with the prefix
+        logger.info(f"Listing directories in {bucket_name}/{folder_prefix}")
+        
+        # List all blobs with the prefix and delimiter
         blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
-
-        # Get all 'folder' names within the level of bucket_name/folder_prefix
+        
+        # Get all 'folder' names (prefixes) within the current level
         directories = []
+        
+        # Process directory-like prefixes
         for prefix in blobs.prefixes:
-            logger.warning(f"blob prefix is {prefix}")
             # Extract just the folder name from the full prefix path
-            folder_name = prefix[len(folder_prefix):-1] if prefix.endswith('/') else prefix[len(folder_prefix):]
-            directories.append(folder_name)
+            # If prefix is "some/path/to/fs/fobr/" and folder_prefix is "some/path/to/fs/"
+            # We want to extract just "fobr"
+            folder_name = prefix[len(folder_prefix):-1]  # Remove prefix and trailing '/'
+            if folder_name:  # Only add non-empty folder names
+                directories.append(folder_name)
+        
+        # If we didn't find any directories from prefixes, let's look for objects
+        # that might indicate subdirectories
+        if not directories:
+            # List all blobs in the bucket
+            all_blobs = list(bucket.list_blobs())
             
+            # Look for any blobs with a path that extends beyond our prefix
+            for blob in all_blobs:
+                if blob.name.startswith(folder_prefix) and blob.name != folder_prefix:
+                    # Get relative path from the prefix
+                    rel_path = blob.name[len(folder_prefix):]
+                    # Split by '/' and get the first component (immediate subfolder)
+                    components = rel_path.split('/')
+                    if components and components[0]:
+                        directories.append(components[0])
+        
+        # Remove duplicates and sort
+        directories = sorted(list(set(directories)))
+        
         return directories
     
     except Exception as e:
