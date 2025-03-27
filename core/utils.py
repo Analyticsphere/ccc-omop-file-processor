@@ -696,3 +696,34 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
     replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
 
     return replacement_result
+
+def extract_source_target_tables(gcs_path: str) -> tuple[str,str]:
+    """
+    Extracts source table and target table from a GCS Path.
+    
+    Args:
+        gcs_path (str): A GCS URI string like 
+                    'synthea_testing/2025-02-03/artifacts/harmonized_files/condition_occurrence/target_table=measurement/'
+        
+    Returns:
+        tuple: (source_table, target_table)
+    """
+    # Split the URI by '/'
+    parts = gcs_path.strip('/').split('/')
+    
+    # Find the index of 'harmonized_files'
+    try:
+        harmonized_index = parts.index('harmonized_files')
+        # Source table is right after 'harmonized_files'
+        source_table = parts[harmonized_index + 1]
+    except (ValueError, IndexError):
+        source_table = None
+    
+    # Find target_table parameter
+    target_table = None
+    for part in parts:
+        if part.startswith('target_table='):
+            target_table = part.split('=')[1]
+            break
+    
+    return (source_table, target_table)

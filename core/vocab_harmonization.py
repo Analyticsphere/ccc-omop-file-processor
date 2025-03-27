@@ -160,6 +160,7 @@ class VocabHarmonizer:
         self.execute_duckdq_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
 
 
+
     def placeholder_to_file_path(self, sql: str) -> str:
         """
         Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files

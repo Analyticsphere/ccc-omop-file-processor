@@ -230,40 +230,33 @@ def update_mappings() -> tuple[str, int]:
 def get_transforms() -> tuple[Any, int]:
     site_bucket: Optional[str] = request.args.get('site')
     delivery_date: Optional[str] = request.args.get('delivery_date')
-    utils.logger.warning(f"i*/*/*/ in get_transforms() API function")
    
     # Validate required parameters
     if not site_bucket or not delivery_date:
         return "Missing required parameters: site, delivery_date", 400
 
     try:
-        full_paths: list[str] = []
+        omop_etls: list[dict] = []
 
         # Build a list of all source -> target table mappings for the site's delivery
-        utils.logger.warning(f"site bucket is {site_bucket}")
-
-        utils.logger.warning(f"source_tables input value: {delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
         source_tables = utils.list_gcs_directories(site_bucket, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
-        utils.logger.warning(f"source_tables is {source_tables}")
-
-        source_tables_1 = utils.list_gcs_directories(site_bucket, f"/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
-        utils.logger.warning(f"source_tables_1 is {source_tables_1}")
-
-        source_tables_2 = utils.list_gcs_directories(site_bucket, f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
-        utils.logger.warning(f"source_tables_2 is {source_tables_2}")
-
         for source_table in source_tables:
-            utils.logger.warning(f"target_tables input value: {delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/partitioned/")
             target_tables = utils.list_gcs_directories(site_bucket, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/partitioned/")
-            utils.logger.warning(f"target_tables is {target_tables}")
             for target_table in target_tables:
-                utils.logger.warning(f"full_paths input value: {site_bucket}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/{target_table}/")
-                full_paths.append(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/{target_table}/")
-                utils.logger.warning(f"full_paths is {full_paths}")
+                file_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/{target_table}/"
+                source_table, target_table = utils.extract_source_target_tables(file_path)
+
+                omop_etl = {
+                    "source_table": source_table,
+                    "target_table": target_table,
+                    "file_path": file_path
+                }
+
+                omop_etls.append(omop_etl)
 
         return jsonify({
             'status': 'healthy',
-            'directory_list': full_paths,
+            'etl_list': omop_etls,
             'service': constants.SERVICE_NAME
         }), 200
     except Exception as e:
