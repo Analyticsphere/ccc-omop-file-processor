@@ -238,20 +238,17 @@ def get_transforms() -> tuple[Any, int]:
     try:
         bucket, _ = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
         partitioned_parquet_gcs_path = f"{utils.get_parquet_harmonized_path(file_path)}partitioned/".replace(f'{bucket}/','')
-        utils.logger.warning(f"partitioned dir is {partitioned_parquet_gcs_path}")
-        utils.logger.warning(f"bucket is {bucket}")
-        utils.logger.warning(f"folder prefix is {partitioned_parquet_gcs_path.replace(f'{bucket}/','')}")
 
         directories: list[str] = utils.list_gcs_directories(bucket, partitioned_parquet_gcs_path)
-        utils.logger.warning(f"directories is {directories}")
+        full_paths: list[str] = []
 
         for directory in directories:
-            directory = f"{partitioned_parquet_gcs_path}/{directory}"
-            utils.logger.warning(f"directory is {directory}")
+            full_paths.append(f"{bucket}/{partitioned_parquet_gcs_path}{directory}")
 
         return jsonify({
             'status': 'healthy',
-            'directory_list': directories,
+            'directory_list': full_paths,
+            'source_file_path': file_path,
             'service': constants.SERVICE_NAME
         }), 200
     except Exception as e:

@@ -51,9 +51,8 @@ class VocabHarmonizer:
         for step in harmonization_steps:
             self.perform_harmonization(step)
 
-        # After finding new targets and domain, partition files based on target OMOP table
+        # After finding new targets and domain, partition file based on target OMOP table
         self.partition_by_target_table()
-
 
         # Transform source table structure to target table structure
         # TODO: Call this on each partitioned part indepdenently
@@ -173,19 +172,22 @@ class VocabHarmonizer:
 
         return replacement_result
 
+
     def perform_harmonization(self, step: str) -> None:
         """
         Perform a specific harmonization step.
         """
         if step == constants.SOURCE_TARGET:
             self.source_target_remapping()
-    
+
+
     def get_partitioned_path(self) -> str:
         return f"gs://{self.target_parquet_path}partitioned/target_table={self.target_table_name}/"
 
-    # Keys which have already been reprocessed
+
     def get_already_processed_primary_keys() -> str:
         print()
+
 
     def execute_duckdq_sql(self, sql: str, error_msg: str) -> None:
         try:
@@ -200,6 +202,7 @@ class VocabHarmonizer:
             raise Exception(f"{error_msg}: {str(e)}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)        
+
 
     def source_target_remapping(self) -> None:
         """
@@ -315,7 +318,8 @@ class VocabHarmonizer:
         """
 
         self.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
-    
+
+
     def partition_by_target_table(self) -> None:
         partition_statement = f"""
             COPY (
@@ -325,4 +329,3 @@ class VocabHarmonizer:
         
         self.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
 
-    
