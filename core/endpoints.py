@@ -233,13 +233,15 @@ def get_transforms() -> tuple[Any, int]:
     utils.logger.warning(f"i*/*/*/ in get_transforms() API function")
    
     # Validate required parameters
-    if not site or not delivery_date:
+    if not site_bucket or not delivery_date:
         return "Missing required parameters: site, delivery_date", 400
 
     try:
         full_paths: list[str] = []
 
         # Build a list of all source -> target table mappings for the site's delivery
+        utils.logger.warning(f"site bucket is {site_bucket}")
+        
         utils.logger.warning(f"source_tables input value: {delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
         source_tables = utils.list_gcs_directories(site_bucket, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
         utils.logger.warning(f"source_tables is {source_tables}")
