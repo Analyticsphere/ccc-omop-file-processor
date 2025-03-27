@@ -78,6 +78,8 @@ def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
         # Ensure folder_prefix ends with '/' for consistent path handling
         if folder_prefix and not folder_prefix.endswith('/'):
             folder_prefix += '/'
+        
+        logger.warning(f"folder_prefix is {folder_prefix}")
 
         # List all blobs with the prefix
         blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
@@ -85,6 +87,7 @@ def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
         # Get all 'folder' names within the level of bucket_name/folder_prefix
         directories = []
         for prefix in blobs.prefixes:
+            logger.warning(f"blob prefix is {prefix}")
             # Extract just the folder name from the full prefix path
             folder_name = prefix[len(folder_prefix):-1] if prefix.endswith('/') else prefix[len(folder_prefix):]
             directories.append(folder_name)

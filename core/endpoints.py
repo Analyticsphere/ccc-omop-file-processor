@@ -241,10 +241,17 @@ def get_transforms() -> tuple[Any, int]:
 
         # Build a list of all source -> target table mappings for the site's delivery
         utils.logger.warning(f"site bucket is {site_bucket}")
-        
+
         utils.logger.warning(f"source_tables input value: {delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
         source_tables = utils.list_gcs_directories(site_bucket, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
         utils.logger.warning(f"source_tables is {source_tables}")
+
+        source_tables_1 = utils.list_gcs_directories(site_bucket, f"/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
+        utils.logger.warning(f"source_tables_1 is {source_tables_1}")
+
+        source_tables_2 = utils.list_gcs_directories(site_bucket, f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
+        utils.logger.warning(f"source_tables_2 is {source_tables_2}")
+
         for source_table in source_tables:
             utils.logger.warning(f"target_tables input value: {delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/")
             target_tables = utils.list_gcs_directories(site_bucket, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/")
