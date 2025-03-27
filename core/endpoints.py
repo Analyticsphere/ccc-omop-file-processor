@@ -248,7 +248,6 @@ def get_transforms() -> tuple[Any, int]:
         return jsonify({
             'status': 'healthy',
             'directory_list': full_paths,
-            'source_file_path': file_path,
             'service': constants.SERVICE_NAME
         }), 200
     except Exception as e:
