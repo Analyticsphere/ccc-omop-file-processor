@@ -228,22 +228,26 @@ def update_mappings() -> tuple[str, int]:
 
 @app.route('/get_required_transforms', methods=['GET'])
 def get_transforms() -> tuple[Any, int]:
-    file_path: Optional[str] = request.args.get('file_path')
+    site: Optional[str] = request.args.get('site')
+    delivery_date: Optional[str] = request.args.get('delivery_date')
     utils.logger.warning(f"i*/*/*/ in get_transforms() API function")
    
     # Validate required parameters
-    if not file_path:
-        return "Missing required parameters: bucket, folder", 400
+    if not site or not delivery_date:
+        return "Missing required parameters: site, delivery_date", 400
 
     try:
-        bucket, _ = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
-        partitioned_parquet_gcs_path = f"{utils.get_parquet_harmonized_path(file_path)}partitioned/".replace(f'{bucket}/','')
-
-        directories: list[str] = utils.list_gcs_directories(bucket, partitioned_parquet_gcs_path)
         full_paths: list[str] = []
 
-        for directory in directories:
-            full_paths.append(f"{bucket}/{partitioned_parquet_gcs_path}{directory}")
+        # Build a list of all source -> target table mappings for the site's delivery
+        utils.logger.warning(f"source_tables input value: {delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
+        source_tables = utils.list_gcs_directories(site, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
+        for source_table in source_tables:
+            utils.logger.warning(f"target_tables input value: {delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/")
+            target_tables = utils.list_gcs_directories(site, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/")
+            for target_table in target_tables:
+                utils.logger.warning(f"full_paths input value: {site}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/{target_table}/")
+                full_paths.append(f"{site}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/{target_table}/")
 
         return jsonify({
             'status': 'healthy',
