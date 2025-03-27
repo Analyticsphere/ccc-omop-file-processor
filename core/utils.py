@@ -65,13 +65,14 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
 def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
     """
     List all "directories" (folder-like prefixes) within a given GCS path.
+    Only returns folder names, not files.
     
     Args:
-        bucket_name (str): The name of the GCS bucket (e.g., "bucket_name_here")
-        folder_prefix (str): The path prefix within the bucket (e.g., "some/path/to/fs/")
+        bucket_name (str): The name of the GCS bucket
+        folder_prefix (str): The path prefix within the bucket
     
     Returns:
-        list[str]: A list of directory names within the given path.
+        list[str]: A list of directory names (not files) within the given path.
     """
     try:
         # Initialize the GCS client
@@ -90,39 +91,50 @@ def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
         
         logger.info(f"Listing directories in {bucket_name}/{folder_prefix}")
         
-        # List all blobs with the prefix and delimiter
+        # Use delimiter to get directory-like prefixes
         blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
         
-        # Get all 'folder' names (prefixes) within the current level
+        # Get all 'folder' names within the current level
         directories = []
         
-        # Process directory-like prefixes
+        # Process directory-like prefixes - these are guaranteed to be folders
         for prefix in blobs.prefixes:
             # Extract just the folder name from the full prefix path
-            # If prefix is "some/path/to/fs/fobr/" and folder_prefix is "some/path/to/fs/"
-            # We want to extract just "fobr"
             folder_name = prefix[len(folder_prefix):-1]  # Remove prefix and trailing '/'
             if folder_name:  # Only add non-empty folder names
                 directories.append(folder_name)
         
-        # If we didn't find any directories from prefixes, let's look for objects
-        # that might indicate subdirectories
+        # If we didn't find any directories via the delimiter approach,
+        # we need a different strategy to find implicit folders
         if not directories:
-            # List all blobs in the bucket
-            all_blobs = list(bucket.list_blobs())
+            # List all blobs in the bucket (this is potentially expensive)
+            all_blobs = list(bucket.list_blobs(prefix=folder_prefix))
             
-            # Look for any blobs with a path that extends beyond our prefix
+            # Keep track of potential folders
+            potential_folders = set()
+            
             for blob in all_blobs:
-                if blob.name.startswith(folder_prefix) and blob.name != folder_prefix:
-                    # Get relative path from the prefix
-                    rel_path = blob.name[len(folder_prefix):]
-                    # Split by '/' and get the first component (immediate subfolder)
-                    components = rel_path.split('/')
-                    if components and components[0]:
-                        directories.append(components[0])
-        
-        # Remove duplicates and sort
-        directories = sorted(list(set(directories)))
+                # Skip the prefix itself or blobs that don't extend beyond the prefix
+                if blob.name == folder_prefix or not blob.name.startswith(folder_prefix):
+                    continue
+                
+                # Get the relative path from the prefix
+                rel_path = blob.name[len(folder_prefix):]
+                
+                # Skip if it's an empty string
+                if not rel_path:
+                    continue
+                
+                # Split by '/' and get the first component (immediate subfolder)
+                components = rel_path.split('/')
+                
+                # If there are multiple components, the first one is a folder
+                # Or if the blob name ends with '/', it's a folder marker
+                if len(components) > 1 or blob.name.endswith('/'):
+                    if components[0]:
+                        potential_folders.add(components[0])
+            
+            directories = sorted(list(potential_folders))
         
         return directories
     
