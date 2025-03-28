@@ -117,7 +117,7 @@ class Transformer:
         utils.execute_duckdq_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
 
     def get_partitioned_path(self) -> str:
-        return f"gs://{self.target_parquet_path}partitioned/target_table={self.target_table}/"
+        return f"gs://{self.target_parquet_path}{self.source_table}/partitioned/target_table={self.target_table}/"
 
     def placeholder_to_file_path(self, sql: str) -> str:
         """
