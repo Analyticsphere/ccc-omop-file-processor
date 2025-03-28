@@ -247,7 +247,7 @@ def get_transforms() -> tuple[Any, int]:
         for source_table in source_tables:
             target_tables = utils.list_gcs_directories(site_bucket, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/partitioned/")
             for target_table in target_tables:
-                file_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/{target_table}/"
+                file_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/{target_table}"
                 source_table, target_table = utils.extract_source_target_tables_from_gcs_path(file_path)
 
                 omop_etl = {
@@ -280,7 +280,7 @@ def omop_transform() -> tuple[str, int]:
         return "Missing required parameters: file_path, cdm_version, source_table, target_table", 400
 
     try:
-        utils.logger.info(f"Perform ETL to transform {source_table} to {target_table} structure")
+        utils.logger.info(f"Performing ETL to transform {file_path} from {source_table} to {target_table} structure")
 
         transform = transformer.Transformer(
             file_path=file_path,
