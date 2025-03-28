@@ -14,7 +14,7 @@ class Transformer:
         self.cdm_version = cdm_version
         self.source_table = source_table
         self.target_table = target_table
-        self.target_parquet_path = utils.get_parquet_harmonized_path(file_path)
+        #self.target_parquet_path = utils.get_parquet_harmonized_path(file_path)
 
     def omop_to_omop_etl(self) -> None:
         """
@@ -111,13 +111,15 @@ class Transformer:
         transform_sql = f"""
             COPY (
                 {final_sql}
-            ) TO '{self.get_partitioned_path()}transformed/{self.target_table}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO '{self.file_path}transformed/{self.target_table}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         utils.execute_duckdq_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
 
-    def get_partitioned_path(self) -> str:
-        return f"gs://{self.target_parquet_path}{self.source_table}/partitioned/target_table={self.target_table}/"
+    # def get_partitioned_path(self) -> str:
+        
+    #     #return f"gs://{self.target_parquet_path}{self.source_table}/partitioned/target_table={self.target_table}/"
+    #     return f"gs://{self.target_parquet_path}{self.source_table}/partitioned/target_table={self.target_table}/"
 
     def placeholder_to_file_path(self, sql: str) -> str:
         """
@@ -126,7 +128,7 @@ class Transformer:
         replacement_result = sql
 
         for placeholder, _ in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-            clinical_data_table_path = f"{self.get_partitioned_path()}*{constants.PARQUET}"
+            clinical_data_table_path = f"{self.file_path()}*{constants.PARQUET}"
             replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
         return replacement_result
