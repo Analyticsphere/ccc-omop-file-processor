@@ -128,7 +128,7 @@ class Transformer:
         replacement_result = sql
 
         for placeholder, _ in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-            clinical_data_table_path = f"{self.file_path()}*{constants.PARQUET}"
+            clinical_data_table_path = f"{self.file_path}*{constants.PARQUET}"
             replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
         return replacement_result
