@@ -1,7 +1,5 @@
 import core.constants as constants
 import core.utils as utils
-import core.file_processor as fp
-import uuid
 from typing import Optional
 import re
 
@@ -11,7 +9,7 @@ class VocabHarmonizer:
     Handles the entire process from reading parquet files to generating SQL and saving the harmonized output.
     """
     
-    def __init__(self, gcs_file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str, target_table: Optional[str] = 'measurement'):
+    def __init__(self, gcs_file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str):
         """
         Initialize a VocabHarmonizer with common parameters needed across all operations.
         """
@@ -21,7 +19,6 @@ class VocabHarmonizer:
         self.vocab_version = vocab_version
         self.vocab_gcs_bucket = vocab_gcs_bucket
         self.source_table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
-        self.target_table_name = target_table
         self.bucket = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)[0]
         self.delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)[1]
         self.source_parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
@@ -39,7 +36,8 @@ class VocabHarmonizer:
                 WHEN tbl.target_domain = 'Specimen' THEN 'specimen'
             ELSE '{self.source_table_name}' END AS target_table
         """
-    
+
+
     def update_mappings_for_file(self) -> None:
         """
         Harmonize a parquet file by applying defined harmonization steps and saving the result.
@@ -53,156 +51,6 @@ class VocabHarmonizer:
 
         # After finding new targets and domain, partition file based on target OMOP table
         self.partition_by_target_table()
-
-        # Transform source table structure to target table structure
-        # TODO: Call this on each partitioned part indepdenently
-        self.omop_to_omop_etl()
-
-
-    def omop_to_omop_etl(self) -> None:
-        """
-        Generate a SQL statement that transforms data from one OMOP table to another,
-        ensuring proper column types and adding placeholder values to NULL required columns
-        """
-        
-        # Find the transform SQL file
-        transform_file = f"{constants.OMOP_ETL_PATH}{self.source_table_name}_to_{self.target_table_name}.sql"
-        
-        # Read the transform SQL
-        with open(transform_file, 'r') as f:
-            sql = f.read()
-        
-        # Load the target table schema
-        schema = utils.get_table_schema(self.target_table_name, constants.CDM_v54)
-        
-        # Keep the full columns dictionary
-        target_columns_dict = schema[self.target_table_name]["columns"]
-        
-        # Parse the SQL and modify each column
-        lines = sql.split('\n')
-        modified_lines = []
-        
-        in_select = False
-        for line in lines:
-            line_stripped = line.strip()
-            
-            # Handle SELECT line
-            if line_stripped.upper().startswith('SELECT'):
-                in_select = True
-                modified_lines.append(line)
-                continue
-            
-            # Handle FROM line
-            if line_stripped.upper().startswith('FROM'):
-                in_select = False
-                modified_lines.append(line)
-                continue
-            
-            # Skip non-mapping lines
-            if not in_select or not line_stripped:
-                modified_lines.append(line)
-                continue
-            
-            # Handle column mapping
-            has_comma = line_stripped.endswith(',')
-            if has_comma:
-                line_stripped = line_stripped[:-1]
-            
-            # Split into source expression and target column
-            parts = re.split(r'\s+AS\s+', line_stripped, flags=re.IGNORECASE)
-            if len(parts) != 2:
-                modified_lines.append(line)
-                continue
-            
-            source_expr, target_column = parts
-            source_expr = source_expr.strip()
-            target_column = target_column.strip()
-            
-            # Get target column schema info - check if the column exists in the schema
-            if target_column in target_columns_dict:
-                column_info = target_columns_dict[target_column]
-                
-                column_type = column_info['type']
-                is_required = column_info['required'].lower() == 'true'
-                
-                # Process differently based on whether field is required or not
-                if is_required:
-                    # For required fields: COALESCE first, then CAST
-                    placeholder = fp.get_placeholder_value(target_column, column_type)
-                    final_expr = f"CAST(COALESCE({source_expr}, {placeholder}) AS {column_type})"
-                else:
-                    # For non-required fields: TRY_CAST only
-                    final_expr = f"TRY_CAST({source_expr} AS {column_type})"
-                
-                # Recreate the line with proper indentation
-                indent = len(line) - len(line.lstrip())
-                modified_line = ' ' * indent + final_expr + ' AS ' + target_column
-                if has_comma:
-                    modified_line += ','
-                
-                modified_lines.append(modified_line)
-            else:
-                # If column not in schema, keep as is
-                modified_lines.append(line)
-        
-        # Join the lines together to form the final SQL
-        select_sql = '\n'.join(modified_lines)
-
-        # Replace placeholder table strings with paths to Parquet files
-        final_sql = self.placeholder_to_file_path(select_sql)
-
-        transform_sql = f"""
-            COPY (
-                {final_sql}
-            ) TO '{self.get_partitioned_path()}transformed/{self.target_table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
-        """
-
-        self.execute_duckdq_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
-
-
-
-    def placeholder_to_file_path(self, sql: str) -> str:
-        """
-        Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
-        """
-        replacement_result = sql
-
-        for placeholder, _ in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-            clinical_data_table_path = f"{self.get_partitioned_path()}*{constants.PARQUET}"
-            replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
-
-        return replacement_result
-
-
-    def perform_harmonization(self, step: str) -> None:
-        """
-        Perform a specific harmonization step.
-        """
-        if step == constants.SOURCE_TARGET:
-            self.source_target_remapping()
-
-
-    def get_partitioned_path(self) -> str:
-        return f"gs://{self.target_parquet_path}partitioned/target_table={self.target_table_name}/"
-
-
-    def get_already_processed_primary_keys() -> str:
-        print()
-
-
-    def execute_duckdq_sql(self, sql: str, error_msg: str) -> None:
-        try:
-            conn, local_db_file = utils.create_duckdb_connection()
-
-            with conn:
-                sql_no_return = sql.replace('\n',' ')
-                utils.logger.warning(f"SQL is {sql_no_return}")
-                conn.execute(sql)
-                utils.logger.warning(f"DID EXECUTE THE SQL!")
-        except Exception as e:
-            raise Exception(f"{error_msg}: {str(e)}") from e
-        finally:
-            utils.close_duckdb_connection(conn, local_db_file)        
 
 
     def source_target_remapping(self) -> None:
@@ -318,7 +166,7 @@ class VocabHarmonizer:
             ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
-        self.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
+        utils.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
 
 
     def partition_by_target_table(self) -> None:
@@ -328,5 +176,12 @@ class VocabHarmonizer:
             ) TO 'gs://{self.target_parquet_path}partitioned/' (FORMAT PARQUET, PARTITION_BY (target_table), COMPRESSION ZSTD);
         """
         
-        self.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
+        utils.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
 
+
+    def perform_harmonization(self, step: str) -> None:
+        """
+        Perform a specific harmonization step.
+        """
+        if step == constants.SOURCE_TARGET:
+            self.source_target_remapping()

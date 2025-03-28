@@ -12,6 +12,7 @@ import core.helpers.pipeline_log as pipeline_log
 import core.omop_client as omop_client
 import core.utils as utils
 import core.vocab_harmonization as vh
+import core.transformer as transformer
 
 app = Flask(__name__)
 
@@ -208,17 +209,20 @@ def update_mappings() -> tuple[str, int]:
     omop_version: Optional[str] = data.get('omop_version')
     site: Optional[str] = data.get('site')
 
-    
-    if not file_path or not vocab_version or not vocab_gcs_bucket or not omop_version:
-        return "Missing required parameters: file_path, vocab_version, vocab_gcs_bucket, omop_version", 400
+    if not file_path or not vocab_version or not vocab_gcs_bucket or not omop_version or not site:
+        return "Missing required parameters: file_path, vocab_version, vocab_gcs_bucket, omop_version, site", 400
 
     try:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}")
 
-        vocab_harmonizer = vh.VocabHarmonizer(file_path, omop_version, site, vocab_version, vocab_gcs_bucket)
+        vocab_harmonizer = vh.VocabHarmonizer(
+            gcs_file_path=file_path,
+            cdm_version=omop_version,
+            site=site,
+            vocab_version=vocab_version,
+            vocab_gcs_bucket=vocab_gcs_bucket
+        )
         vocab_harmonizer.update_mappings_for_file()
-
-
 
         return f"Vocabulary harmonized to {vocab_version}", 200
     except Exception as e:
@@ -244,12 +248,12 @@ def get_transforms() -> tuple[Any, int]:
             target_tables = utils.list_gcs_directories(site_bucket, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/partitioned/")
             for target_table in target_tables:
                 file_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/{target_table}/"
-                source_table, target_table = utils.extract_source_target_tables(file_path)
+                source_table, target_table = utils.extract_source_target_tables_from_gcs_path(file_path)
 
                 omop_etl = {
                     "source_table": source_table,
                     "target_table": target_table,
-                    "file_path": file_path
+                    "partitioned_parquet_path": file_path
                 }
 
                 omop_etls.append(omop_etl)
@@ -263,6 +267,34 @@ def get_transforms() -> tuple[Any, int]:
         utils.logger.error(f"Unable to get list of transformations to perform: {str(e)}")
         return f"Unable to get list of transformations to perform: {str(e)}", 500
 
+
+@app.route('/omop_etl', methods=['POST'])
+def omop_transform() -> tuple[str, int]:
+    data: dict[str, Any] = request.get_json() or {}
+    file_path: Optional[str] = data.get('file_path')
+    cdm_version: Optional[str] = data.get('cdm_version')
+    source_table: Optional[str] = data.get('source_table')
+    target_table: Optional[str] = data.get('target_table')
+
+    if not file_path or not cdm_version or not source_table or not target_table:
+        return "Missing required parameters: file_path, cdm_version, source_table, target_table", 400
+
+    try:
+        utils.logger.info(f"Perform ETL to transform {source_table} to {target_table} structure")
+
+        transform = transformer.Transformer(
+            file_path=file_path,
+            cdm_version=cdm_version,
+            source_table=source_table,
+            target_table=target_table
+        )
+
+        transform.omop_to_omop_etl()
+
+        return f"Completed {source_table} to {target_table} ETL", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to transform {source_table} to {target_table}: {str(e)}")
+        return f"Unable to transform {source_table} to {target_table}: {str(e)}", 500
 
 @app.route('/parquet_to_bq', methods=['POST'])
 def parquet_gcs_to_bq() -> tuple[str, int]:

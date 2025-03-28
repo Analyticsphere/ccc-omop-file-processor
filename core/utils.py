@@ -223,6 +223,21 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
+
+def execute_duckdq_sql(sql: str, error_msg: str) -> None:
+    try:
+        conn, local_db_file = create_duckdb_connection()
+
+        with conn:
+            sql_no_return = sql.replace('\n',' ')
+            logger.warning(f"SQL is {sql_no_return}")
+            conn.execute(sql)
+            logger.warning(f"DID EXECUTE THE SQL!")
+    except Exception as e:
+        raise Exception(f"{error_msg}: {str(e)}") from e
+    finally:
+        close_duckdb_connection(conn, local_db_file) 
+
 def parse_duckdb_csv_error(error: Exception) -> Optional[str]:
     """
     Parse DuckDB CSV error messages to identify specific error types.
@@ -697,7 +712,7 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
 
     return replacement_result
 
-def extract_source_target_tables(gcs_path: str) -> tuple[str,str]:
+def extract_source_target_tables_from_gcs_path(gcs_path: str) -> tuple[str,str]:
     """
     Extracts source table and target table from a GCS Path.
     
@@ -725,5 +740,13 @@ def extract_source_target_tables(gcs_path: str) -> tuple[str,str]:
         if part.startswith('target_table='):
             target_table = part.split('=')[1]
             break
-    
+
+    # Return blank values if source or traget can't be found, and log error
+    if not source_table:
+        source_table = ""
+        logger.error(f"Unable to find source table in path {gcs_path}")
+    if not target_table:
+        target_table = ""
+        logger.error(f"Unable to find target table in path {gcs_path}")
+
     return (source_table, target_table)
