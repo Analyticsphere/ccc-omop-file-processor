@@ -253,7 +253,7 @@ def get_transforms() -> tuple[Any, int]:
                 omop_etl = {
                     "source_table": source_table,
                     "target_table": target_table,
-                    "partitioned_parquet_path": file_path
+                    "file_path": file_path
                 }
 
                 omop_etls.append(omop_etl)
