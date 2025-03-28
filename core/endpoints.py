@@ -243,16 +243,16 @@ def get_transforms() -> tuple[Any, int]:
         omop_etls: list[dict] = []
 
         # Build a list of all source -> target table mappings for the site's delivery
-        source_tables = utils.list_gcs_directories(site_bucket, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
-        for source_table in source_tables:
-            target_tables = utils.list_gcs_directories(site_bucket, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/partitioned/")
-            for target_table in target_tables:
-                file_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_table}/partitioned/{target_table}/"
-                source_table, target_table = utils.extract_source_target_tables_from_gcs_path(file_path)
+        source_files = utils.list_gcs_directories(site_bucket, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}")
+        for source_file in source_files:
+            target_files = utils.list_gcs_directories(site_bucket, f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_file}/partitioned/")
+            for target_file in target_files:
+                file_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{source_file}/partitioned/{target_file}/"
+                source_file, target_file = utils.extract_source_target_tables_from_gcs_path(file_path)
 
                 omop_etl = {
-                    "source_table": source_table,
-                    "target_table": target_table,
+                    "source_file": source_file,
+                    "target_file": target_file,
                     "file_path": file_path
                 }
 
