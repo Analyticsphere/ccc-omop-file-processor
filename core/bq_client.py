@@ -23,7 +23,7 @@ def remove_all_tables(project_id: str, dataset_id: str) -> None:
         utils.logger.error(f"Unable to delete BigQuery table: {e}")
         raise Exception(f"Unable to delete BigQuery table: {e}") from e
 
-def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str, derive_path: bool = True) -> None:
+def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str, write_disposition: str = bigquery.WriteDisposition.WRITE_TRUNCATE, derive_path: bool = True) -> None:
     """
     Load Parquet artifact file from GCS directly into BigQuery.
     """
@@ -45,7 +45,7 @@ def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str, de
         
         job_config = bigquery.LoadJobConfig(
             source_format=bigquery.SourceFormat.PARQUET,
-            write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+            write_disposition=write_disposition,
             # autodetect=True  # Schema is explicity defined in Parquet file
         )
         

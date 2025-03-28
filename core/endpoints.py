@@ -302,13 +302,14 @@ def parquet_gcs_to_bq() -> tuple[str, int]:
     file_path: Optional[str] = data.get('file_path')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
+    write_disposition: Optional[str] = data.get('write_disposition')
 
-    if not file_path or not project_id or not dataset_id:
-        return "Missing required parameters: file_path, project_id, and dataset_id", 400
+    if not file_path or not project_id or not dataset_id or not write_disposition:
+        return "Missing required parameters: file_path, project_id, dataset_id, write_disposition", 400
 
     try:
         utils.logger.info(f"Attempting to load file {file_path} to {project_id}.{dataset_id}")
-        bq_client.load_parquet_to_bigquery(file_path, project_id, dataset_id)
+        bq_client.load_parquet_to_bigquery(file_path, project_id, dataset_id, write_disposition)
 
         return "Loaded Parquet file to BigQuery", 200
     except Exception as e:
