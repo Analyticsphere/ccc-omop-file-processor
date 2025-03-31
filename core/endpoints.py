@@ -271,18 +271,20 @@ def get_transforms() -> tuple[Any, int]:
 @app.route('/omop_etl', methods=['POST'])
 def omop_transform() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
+    site: Optional[str] = data.get('site')
     file_path: Optional[str] = data.get('file_path')
     cdm_version: Optional[str] = data.get('cdm_version')
     source_table: Optional[str] = data.get('source_table')
     target_table: Optional[str] = data.get('target_table')
 
-    if not file_path or not cdm_version or not source_table or not target_table:
-        return "Missing required parameters: file_path, cdm_version, source_table, target_table", 400
+    if not site or not file_path or not cdm_version or not source_table or not target_table:
+        return "Missing required parameters: site, file_path, cdm_version, source_table, target_table", 400
 
     try:
-        utils.logger.info(f"Performing ETL to transform {file_path} from {source_table} to {target_table} structure")
+        utils.logger.info(f"Performing ETL to transform {file_path} from {source_table} to {target_table} structure for {site}")
 
         transform = transformer.Transformer(
+            site=site,
             file_path=file_path,
             cdm_version=cdm_version,
             source_table=source_table,

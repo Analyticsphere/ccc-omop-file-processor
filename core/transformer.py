@@ -9,7 +9,8 @@ class Transformer:
     The domain_id of a concept may change between different vocabulary versions, and data 
     must be moved to the table appropriate for their new domain.
     """
-    def __init__(self, file_path: str, cdm_version: str, source_table: str, target_table: str):
+    def __init__(self, site: str, file_path: str, cdm_version: str, source_table: str, target_table: str):
+        self.site = site
         self.file_path = file_path
         self.cdm_version = cdm_version
         self.source_table = source_table
@@ -120,6 +121,9 @@ class Transformer:
                 concat_parts = []
                 for src_expr, _ in column_mappings:
                     concat_parts.append(f"CAST({src_expr} AS VARCHAR)")
+                
+                # Add site name to make primary key unique to values and site
+                concat_parts.append(f"CAST({self.site} AS VARCHAR)")
                 
                 # Create the concatenation expression
                 concat_expr = "CONCAT(" + ",".join(concat_parts) + ")"
