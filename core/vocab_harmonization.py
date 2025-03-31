@@ -13,6 +13,7 @@ class VocabHarmonizer:
         """
         Initialize a VocabHarmonizer with common parameters needed across all operations.
         """
+        self.logger = utils.logger
         self.gcs_file_path = gcs_file_path
         self.cdm_version = cdm_version
         self.site = site
@@ -44,10 +45,11 @@ class VocabHarmonizer:
         """
 
         # List order is very important here!
-        harmonization_steps: list = [constants.SOURCE_TARGET]
+        harmonization_steps: list = [constants.SOURCE_TARGET, constants.DOMAIN_CHECK]
 
         for step in harmonization_steps:
             self.perform_harmonization(step)
+
 
         # After finding new targets and domain, partition file based on target OMOP table
         self.partition_by_target_table()
@@ -91,7 +93,7 @@ class VocabHarmonizer:
             "'source concept available, target mapping available and not current; UPDATED' AS vocab_harmonization_status",
             f"tbl.{source_concept_id_column} AS source_concept_id",
             f"tbl.{target_concept_id_column} AS previous_target_concept_id",
-            "vocab.target_concept_id AS updated_target_concept_id"
+            "vocab.target_concept_id AS target_concept_id"
         ]
         for metadata_column in metadata_columns:
             initial_select_exprs.append(metadata_column)
@@ -169,6 +171,72 @@ class VocabHarmonizer:
         utils.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
 
 
+    def domain_table_check(self) -> None:
+
+        self.logger.warning(f"!!! GOING TO PERFORM DOMAIN TABLE CHECK")
+        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
+
+        columns = schema[self.source_table_name]["columns"]
+        ordered_omop_columns = list(columns.keys())  # preserve column order
+        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
+        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
+
+        select_exprs: list = []
+
+        for column_name in ordered_omop_columns:
+            column_name = f"tbl.{column_name}"
+            select_exprs.append(column_name)
+
+        # Add columns to store metadata related to vocab harmonization for later reporting
+        metadata_columns = [
+            "vocab.target_concept_id_domain AS target_domain",
+            "'domain check' AS vocab_harmonization_status",
+            f"tbl.{source_concept_id_column} AS source_concept_id",
+            f"tbl.{target_concept_id_column} AS previous_target_concept_id",
+            "vocab.target_concept_id AS target_concept_id"
+        ]
+        for metadata_column in metadata_columns:
+            select_exprs.append(metadata_column)
+        
+        # Add value_as_concept_id field to keep structure consistent with remapped tables
+        select_exprs.append("CAST(NULL AS BIGINT) AS value_as_concept_id")
+        select_exprs.append(self.case_when_target_table)
+
+        select_sql = ",\n                ".join(select_exprs)
+
+        from_sql = f"""
+            FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
+            INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
+                ON tbl.{source_concept_id_column} = vocab.concept_id
+            WHERE {target_concept_id_column} NOT IN (
+                SELECT {target_concept_id_column} FROM read_parquet('{self.target_parquet_path}')
+            )
+        """
+
+        sql_statement = f"""
+            COPY (
+                {select_sql}
+                {from_sql}
+            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+        final_sql_statement = utils.placeholder_to_file_path(
+            self.site,
+            self.bucket,
+            self.delivery_date,
+            sql_statement,
+            self.vocab_version,
+            self.vocab_gcs_bucket
+        )
+
+        utils.execute_duckdq_sql(final_sql_statement, f"Unable to perform domain check against {self.source_table_name}")
+
+
+
+
+
+
+
     def partition_by_target_table(self) -> None:
         partition_statement = f"""
             COPY (
@@ -185,3 +253,5 @@ class VocabHarmonizer:
         """
         if step == constants.SOURCE_TARGET:
             self.source_target_remapping()
+        if setp == constants.DOMAIN_CHECK:
+            self.domain_table_check()

@@ -193,6 +193,7 @@ FILE_PROCESSOR_VERSION_REPORT_NAME = "Pipeline file processor version"
 PROCESSED_DATE_REPORT_NAME = "Delivery processing date"
 
 SOURCE_TARGET = "Source concept available, target mapping available and not current"
+DOMAIN_CHECK = "Check for latest domain and update if needed"
 
 # Primary key column can be found in schema.json file
 NATURAL_KEY_TABLES = {
