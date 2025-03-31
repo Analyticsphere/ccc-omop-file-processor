@@ -253,5 +253,5 @@ class VocabHarmonizer:
         """
         if step == constants.SOURCE_TARGET:
             self.source_target_remapping()
-        if setp == constants.DOMAIN_CHECK:
+        if step == constants.DOMAIN_CHECK:
             self.domain_table_check()
