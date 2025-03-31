@@ -35,10 +35,49 @@ class Transformer:
         # Keep the full columns dictionary
         target_columns_dict = schema[self.target_table]["columns"]
         
-        # Parse the SQL and modify each column
-        lines = sql.split('\n')
-        modified_lines = []
+        # Identify primary key column of the target table
+        primary_key_column = utils.get_primary_key_column(self.target_table, self.cdm_version)
         
+        # Parse the SQL and collect all column mappings
+        lines = sql.split('\n')
+        column_mappings = []  # Will store (source_expr, target_column) tuples
+        
+        in_select = False
+        for line in lines:
+            line_stripped = line.strip()
+            
+            # Handle SELECT line
+            if line_stripped.upper().startswith('SELECT'):
+                in_select = True
+                continue
+            
+            # Handle FROM line
+            if line_stripped.upper().startswith('FROM'):
+                in_select = False
+                continue
+            
+            # Skip non-mapping lines
+            if not in_select or not line_stripped:
+                continue
+            
+            # Handle column mapping
+            has_comma = line_stripped.endswith(',')
+            if has_comma:
+                line_stripped = line_stripped[:-1]
+            
+            # Split into source expression and target column
+            parts = re.split(r'\s+AS\s+', line_stripped, flags=re.IGNORECASE)
+            if len(parts) != 2:
+                continue
+            
+            source_expr, target_column = parts
+            source_expr = source_expr.strip()
+            target_column = target_column.strip()
+            
+            column_mappings.append((source_expr, target_column))
+        
+        # Now process the SQL again, applying transformations and the primary key replacement
+        modified_lines = []
         in_select = False
         for line in lines:
             line_stripped = line.strip()
@@ -74,6 +113,17 @@ class Transformer:
             source_expr, target_column = parts
             source_expr = source_expr.strip()
             target_column = target_column.strip()
+            
+            # Apply primary key replacement if this is the primary key column
+            if primary_key_column and target_column == primary_key_column:
+                # Generate a composite key using all source expressions
+                concat_parts = []
+                for src_expr, _ in column_mappings:
+                    concat_parts.append(f"CAST({src_expr} AS VARCHAR)")
+                
+                # Create the concatenation expression
+                concat_expr = "CONCAT(" + ",".join(concat_parts) + ")"
+                source_expr = f"generate_id({concat_expr})"
             
             # Get target column schema info - check if the column exists in the schema
             if target_column in target_columns_dict:
@@ -128,4 +178,3 @@ class Transformer:
             replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
         return replacement_result
-
