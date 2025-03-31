@@ -28,7 +28,7 @@
         "concept_id": "1147030"
       },
       "birth_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147480"
       },
@@ -148,7 +148,7 @@
         "concept_id": "1147073"
       },
       "visit_start_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147492"
       },
@@ -158,7 +158,7 @@
         "concept_id": "1147075"
       },
       "visit_end_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147491"
       },
@@ -238,7 +238,7 @@
         "concept_id": "1147646"
       },
       "visit_detail_start_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147647"
       },
@@ -248,7 +248,7 @@
         "concept_id": "1147642"
       },
       "visit_detail_end_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147643"
       },
@@ -338,7 +338,7 @@
         "concept_id": "1147130"
       },
       "condition_start_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147549"
       },
@@ -348,7 +348,7 @@
         "concept_id": "1147426"
       },
       "condition_end_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147427"
       },
@@ -423,7 +423,7 @@
         "concept_id": "1147097"
       },
       "drug_exposure_start_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147558"
       },
@@ -433,7 +433,7 @@
         "concept_id": "1147501"
       },
       "drug_exposure_end_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147454"
       },
@@ -543,7 +543,7 @@
         "concept_id": "1147085"
       },
       "procedure_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147611"
       },
@@ -618,7 +618,7 @@
         "concept_id": "1147118"
       },
       "device_exposure_start_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147553"
       },
@@ -628,7 +628,7 @@
         "concept_id": "1147440"
       },
       "device_exposure_end_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147441"
       },
@@ -698,7 +698,7 @@
         "concept_id": "1147141"
       },
       "measurement_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147639"
       },
@@ -803,7 +803,7 @@
         "concept_id": "1147168"
       },
       "observation_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147475"
       },
@@ -888,7 +888,7 @@
         "concept_id": "1147065"
       },
       "death_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147438"
       },
@@ -933,7 +933,7 @@
         "concept_id": "1147158"
       },
       "note_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147474"
       },
@@ -1038,7 +1038,7 @@
         "concept_id": "1147524"
       },
       "nlp_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147525"
       },
@@ -1088,7 +1088,7 @@
         "concept_id": "1147053"
       },
       "specimen_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147490"
       },
@@ -1673,7 +1673,7 @@
         "concept_id": "1147580"
       },
       "metadata_datetime": {
-        "type": "TIMESTAMP",
+        "type": "DATETIME",
         "required": "false",
         "concept_id": "1147581"
       }
