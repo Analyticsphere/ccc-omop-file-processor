@@ -123,8 +123,8 @@ class Transformer:
                     concat_parts.append(f"CAST({src_expr} AS VARCHAR)")
                 
                 # Add site name to make primary key unique to values and site
-                concat_parts.append(f"CAST({self.site} AS VARCHAR)")
-                
+                concat_parts.append(f"'{self.site}'")
+
                 # Create the concatenation expression
                 concat_expr = "CONCAT(" + ",".join(concat_parts) + ")"
                 source_expr = f"generate_id({concat_expr})"
