@@ -302,14 +302,19 @@ def parquet_gcs_to_bq() -> tuple[str, int]:
     file_path: Optional[str] = data.get('file_path')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
-    write_disposition: Optional[str] = data.get('write_disposition')
+    write_type: Optional[str] = data.get('write_type')
 
-    if not file_path or not project_id or not dataset_id or not write_disposition:
-        return "Missing required parameters: file_path, project_id, dataset_id, write_disposition", 400
+    if not file_path or not project_id or not dataset_id or not write_type:
+        return "Missing required parameters: file_path, project_id, dataset_id, write_type", 400
+    
+    try:
+        write_type = constants.BQWriteTypes(write_type)
+    except ValueError:
+        return f"Invalid write_disposwrite_typeition: {write_type}. Valid values are: {[e.value for e in constants.BQWriteTypes]}", 400
 
     try:
-        utils.logger.info(f"Attempting to load file {file_path} to {project_id}.{dataset_id}")
-        bq_client.load_parquet_to_bigquery(file_path, project_id, dataset_id, write_disposition)
+        utils.logger.info(f"Attempting to load file {file_path} to {project_id}.{dataset_id} using {write_type.value} method")
+        bq_client.load_parquet_to_bigquery(file_path, project_id, dataset_id, write_type)
 
         return "Loaded Parquet file to BigQuery", 200
     except Exception as e:

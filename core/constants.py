@@ -43,6 +43,13 @@ PIPELINE_DAG_FAIL_MESSAGE = "DAG failed"
 
 FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
 
+class BQWriteTypes(str, Enum):
+    SPECIFIC_FILE = "specific_file"
+    ETLed_FILE = "ETLed_file"
+    PROCESSED_FILE = "processed_file"
+
+
+
 CONDITION_ERA = "condition_era"
 DRUG_ERA = "drug_era"
 OBSERVATION_PERIOD = "observation_period"

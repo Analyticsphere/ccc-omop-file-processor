@@ -295,7 +295,7 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
                 # Load the Parquet to BigQuery
                 # Because the task that executes this function occurs after load_bq(), 
                 #   this will overwrite the derived data delievered by the site
-                bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, False)
+                bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, constants.BQWriteTypes.SPECIFIC_FILE)
         except Exception as e:
             raise Exception(f"Unable to execute SQL to generate {table_name}: {str(e)}") from e
         finally:
@@ -310,6 +310,6 @@ def load_vocabulary_table(vocab_version: str, vocab_gcs_bucket: str, table_file_
     vocab_parquet_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{table_file_name}{constants.PARQUET}"
 
     if utils.parquet_file_exists(vocab_parquet_path) and utils.valid_parquet_file(vocab_parquet_path):
-        bq_client.load_parquet_to_bigquery(vocab_parquet_path, project_id, dataset_id, False)
+        bq_client.load_parquet_to_bigquery(vocab_parquet_path, project_id, dataset_id, constants.BQWriteTypes.SPECIFIC_FILE)
     else:
         raise Exception(f"Vocabulary table {table_file_name} not found at {vocab_parquet_path}")
