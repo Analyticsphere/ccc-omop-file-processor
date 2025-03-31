@@ -1012,6 +1012,11 @@
         "required": "false",
         "concept_id": "1147533"
       },
+      "offset": {
+        "type": "VARCHAR",
+        "required": "false",
+        "concept_id": "902396"
+      },
       "lexical_variant": {
         "type": "VARCHAR",
         "required": "true",

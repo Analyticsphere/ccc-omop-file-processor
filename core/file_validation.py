@@ -23,7 +23,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['concept_id'],
                 delivery_date=delivery_date,
-                gcs_path=gcs_path,
+                artifact_bucket=gcs_path,
                 name=f"Valid table name: {table_name}",
                 value_as_concept_id=None,
                 value_as_number=None,
@@ -33,7 +33,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
             ra = report_artifact.ReportArtifact(
                 concept_id=None,
                 delivery_date=delivery_date,
-                gcs_path=gcs_path,
+                artifact_bucket=gcs_path,
                 name=f"Invalid table name: {table_name}",
                 value_as_concept_id=None,
                 value_as_number=None,
@@ -58,8 +58,8 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
         schema = utils.get_table_schema(table_name=table_name, cdm_version=omop_version)
         
         parquet_artifact_location = utils.get_parquet_artifact_location(file_path)
-        parquet_columns = set(utils.get_columns_from_parquet(parquet_artifact_location))
-        
+        parquet_columns = set(utils.get_columns_from_file(parquet_artifact_location))
+
         # Get schema columns from the table schema and convert to set (for O(1) lookups)
         schema_columns = set(schema[table_name]['fields'].keys())
 
@@ -75,7 +75,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['fields'][column]['concept_id'],
                 delivery_date=delivery_date,
-                gcs_path=bucket_name,
+                artifact_bucket=bucket_name,
                 name=f"Valid column name: {table_name}.{column}",
                 value_as_concept_id=None,
                 value_as_number=None,
@@ -86,11 +86,10 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
 
         # Process invalid columns (present in parquet but not in schema)
         for column in invalid_columns:
-            utils.logger.warning(f"'{column}' is NOT a valid column in schema for {table_name}.")
             ra = report_artifact.ReportArtifact(
                 concept_id=None,
                 delivery_date=delivery_date,
-                gcs_path=bucket_name,
+                artifact_bucket=bucket_name,
                 name=f"Invalid column name: {table_name}.{column}",
                 value_as_concept_id=None,
                 value_as_number=None,
@@ -103,7 +102,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['fields'][column]['concept_id'],
                 delivery_date=delivery_date,
-                gcs_path=bucket_name,
+                artifact_bucket=bucket_name,
                 name=f"Missing column: {table_name}.{column}",
                 value_as_concept_id=None,
                 value_as_number=None,

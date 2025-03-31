@@ -8,10 +8,12 @@ from typing import Optional, Tuple
 
 import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
+from google.cloud import bigquery  # type: ignore
 from google.cloud import storage  # type: ignore
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
+import core.helpers.udf as udf
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -50,7 +52,7 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
         # Get only the files in this directory level (not in subdirectories)
         # Files must be of specific type
         files = [
-            blob.name 
+            os.path.basename(blob.name) 
             for blob in blobs 
             if blob.name != folder_prefix and blob.name.lower().endswith(file_format)
         ]
@@ -137,10 +139,13 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
 
         # Set max size to allow on disk
         # Unneeded when writing to GCS
-        # conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
+        conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
 
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
+
+        # Register UDFs
+        udf.UDFManager(conn).register_udfs()
 
         return conn, local_db_file
     except Exception as e:
@@ -160,7 +165,7 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
-def parse_duckdb_csv_error(error: duckdb.InvalidInputException) -> Optional[str]:
+def parse_duckdb_csv_error(error: Exception) -> Optional[str]:
     """
     Parse DuckDB CSV error messages to identify specific error types.
     Returns error type as string or None if unrecognized.
@@ -170,7 +175,7 @@ def parse_duckdb_csv_error(error: duckdb.InvalidInputException) -> Optional[str]
     
     if "invalid unicode" in error_msg or "byte sequence mismatch" in error_msg:
         return "INVALID_UNICODE"
-    elif "unterminated quote" in error_msg:
+    elif "unterminated quote" in error_msg or "parallel scanner does not support null_padding in conjunction with quoted new lines" in error_msg:
         return "UNTERMINATED_QUOTE"
     elif "csv error on line" in error_msg:  # Generic CSV error fallback
         return "CSV_FORMAT_ERROR"
@@ -224,51 +229,64 @@ def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str,
     bucket_name, delivery_date = gcs_file_path.split('/')[:2]
     return bucket_name, delivery_date
 
-def get_columns_from_parquet(gcs_file_path: str) -> list:
+def get_columns_from_file(gcs_file_path: str) -> list:
     """
-    Reads Parquet file schema from the specified 'gs://{gcs_file_path}' 
-    using DuckDB to introspect its columns. Returns a list of columns found 
-    in the Parquet file.
+    Reads file schema from the specified 'gs://{gcs_file_path}' using DuckDB
+    to introspect its columns. Supports both Parquet and CSV files.
+    Returns a list of columns found in the file.
 
     This function:
-        1. Creates a temporary DuckDB table from the Parquet file, limited to 0 rows.
-        2. Uses PRAGMA table_info(...) to retrieve column metadata.
-        3. Drops the temporary table.
-        4. Returns a list of the actual column names present in the file.
+        1. Determines file type based on extension (.parquet or .csv)
+        2. Creates a temporary DuckDB table from the file, limited to 0 rows.
+        3. Uses PRAGMA table_info(...) to retrieve column metadata.
+        4. Drops the temporary table.
+        5. Returns a list of the actual column names present in the file.
     """
     
     gcs_file_path = gcs_file_path.replace("gs://", "")
-
-    # Create a unique or table-specific name for introspection
+    
+    # Determine file type by extension
+    is_csv = gcs_file_path.lower().endswith('.csv')
+    
+    # Create a unique table name for introspection
     table_name_for_introspection = "temp_introspect_table"
 
     conn, local_db_file = create_duckdb_connection()
     try:
         with conn:
-            
-            # Drop any existing temp table with the same name, just to be safe
+            # Drop any existing temp table with the same name
             conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
 
-            # Create a temp table from the Parquet file with zero rows
-            conn.execute(f"""
-                CREATE TEMP TABLE {table_name_for_introspection} AS
-                SELECT * FROM 'gs://{gcs_file_path}' LIMIT 0
-            """)
+            # Create a temp table based on file type with zero rows
+            if is_csv:
+                conn.execute(f"""
+                    CREATE TEMP TABLE {table_name_for_introspection} AS
+                    SELECT * FROM read_csv('gs://{gcs_file_path}', 
+                                          null_padding=true, 
+                                          ALL_VARCHAR=True,
+                                          strict_mode=False) 
+                    LIMIT 0
+                """)
+            else:  # Parquet file
+                conn.execute(f"""
+                    CREATE TEMP TABLE {table_name_for_introspection} AS
+                    SELECT * FROM 'gs://{gcs_file_path}' 
+                    LIMIT 0
+                """)
 
             # Retrieve column metadata from DuckDB
             pragma_info = conn.execute(
                 f"PRAGMA table_info({table_name_for_introspection})"
-            ).fetchall() # Okay to use fetchall() because we are certain list will fit in memory
+            ).fetchall()
 
             # The second element of each row in PRAGMA table_info is the column name
-            # https://duckdb.org/docs/configuration/pragmas#storage-information
             actual_columns = [row[1] for row in pragma_info]
 
             # Drop the temp table
             conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
     except Exception as e:
-        logger.error(f"Unable to get Parquet column list: {e}")
-        raise Exception(f"Unable to get Parquet column list: {e}") from e
+        logger.error(f"Unable to get column list from {'CSV' if is_csv else 'Parquet'} file: {e}")
+        raise Exception(f"Unable to get column list from {'CSV' if is_csv else 'Parquet'} file: {e}") from e
     finally:
         close_duckdb_connection(conn, local_db_file)
         
@@ -456,7 +474,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
 
         ra = report_artifact.ReportArtifact(
             delivery_date=delivery_date,
-            gcs_path=gcs_bucket,
+            artifact_bucket=gcs_bucket,
             concept_id=0,
             name=f"{reporting_item}",
             value_as_string=value,
@@ -481,7 +499,7 @@ def generate_report(report_data: dict) -> None:
         conn.execute("SET max_expression_depth TO 1000000")
 
         # Build UNION ALL SELECT statement to join together files
-        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{gcs_bucket}/{file}')" for file in tmp_files])
+        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{gcs_bucket}/{report_tmp_dir}{file}')" for file in tmp_files])
 
         try:
             with conn:
@@ -502,3 +520,71 @@ def generate_report(report_data: dict) -> None:
 def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
     report_tmp_dir = f"gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
     return report_tmp_dir
+
+def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig]) -> bigquery.table.RowIterator:
+    # Initialize the BigQuery client
+    client = bigquery.Client()
+
+    # Run the query
+    if job_config:
+        query_job = client.query(sql_script, job_config=job_config)
+    else:
+        query_job = client.query(sql_script)
+
+    # Wait for the job to complete
+    result = query_job.result()
+
+    return result
+
+def download_from_gcs(gcs_file_path: str) -> str:
+    """
+    Downloads a CSV file from Google Cloud Storage to a local directory.
+    """
+    try:
+        # Define paths
+        bucket, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+        filename = f"{get_table_name_from_gcs_path(gcs_file_path)}"
+        source_blob = f"{delivery_date}/{filename}{constants.CSV}"
+        destination_file_path = f"/tmp/{filename}{constants.CSV}"
+
+        # Create directory to store file
+        os.makedirs('/tmp', exist_ok=True)
+
+        # Initialize a storage client
+        storage_client = storage.Client()
+        
+        # Get the bucket
+        bucket = storage_client.bucket(bucket)
+        
+        # Get the blob (file)
+        blob = bucket.blob(source_blob)
+
+        # Get the remote file size before downloading
+        blob.reload()  # Ensure we have the latest metadata
+        remote_size_bytes = blob.size
+        remote_size_gb = float(float(remote_size_bytes) / float((1024 * 1024 * 1024)))
+
+        # If the size of the file is greater than half of what is allocated to DuckDB, return exception
+        if remote_size_gb > float(constants.DUCKDB_MEMORY_LIMIT.replace('GB', '')) * 0.5:
+            raise Exception(f"CSV file {gcs_file_path} has invalid quoting, but cannot be fixed due to size constraints. Allocate at least {remote_size_gb * 2}GB of memory to the Cloud Run function")
+        
+        # Download the file
+        blob.download_to_filename(destination_file_path)
+        
+        return destination_file_path
+    
+    except Exception as e:
+        raise Exception(f"Error downloading file: {e}")
+    
+def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name: str) -> None:
+    """Uploads a file to the specified GCS bucket.
+    """
+    # Initialize the GCS client
+    storage_client = storage.Client()
+    
+    # Get the bucket
+    bucket = storage_client.bucket(bucket_name)
+    
+    # Create a blob object and upload the file
+    blob = bucket.blob(destination_blob_name)
+    blob.upload_from_filename(local_file_path)

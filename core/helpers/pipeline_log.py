@@ -37,9 +37,6 @@ class PipelineLog:
         """
 
         try:
-            # Construct a BigQuery client object
-            client = bigquery.Client()
-
             # Build the MERGE statement to only insert new records
             query = f"""
                 CREATE TABLE IF NOT EXISTS `{self.logging_table}`
@@ -114,8 +111,8 @@ class PipelineLog:
             )
 
             # Run the query as a job and wait for it to complete.
-            query_job = client.query(query, job_config=job_config)
-            query_job.result()  # Wait for the job to complete.
+            utils.execute_bq_sql(query, job_config)
+
         except Exception as e:
             error_details = {
                 'error_type': type(e).__name__,
@@ -136,8 +133,6 @@ class PipelineLog:
         If found, updates the record with the completed status and pipeline_end_datetime.
         """
         try:
-            client = bigquery.Client()
-
             # First, check if a record exists for this site and delivery date.
             select_query = f"""
                 SELECT 1
@@ -152,8 +147,7 @@ class PipelineLog:
                 ]
             )
 
-            select_job = client.query(select_query, job_config=select_config)
-            exists = list(select_job.result())
+            exists = list(utils.execute_bq_sql(select_query, select_config))
 
             if exists:
                 # If the record exists, update it.
@@ -177,9 +171,7 @@ class PipelineLog:
                     ]
                 )
 
-                update_job = client.query(update_query, job_config=update_config)
-                update_job.result()  # Wait for the update to complete.
-                utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
+                utils.execute_bq_sql(update_query, update_config)
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
@@ -202,8 +194,6 @@ class PipelineLog:
         If found, updates the record with the running status and removes end date
         """
         try:
-            client = bigquery.Client()
-
             # First, check if a record exists for this site and delivery date.
             select_query = f"""
                 SELECT 1
@@ -218,8 +208,7 @@ class PipelineLog:
                 ]
             )
 
-            select_job = client.query(select_query, job_config=select_config)
-            exists = list(select_job.result())
+            exists = list(utils.execute_bq_sql(select_query, select_config))
 
             if exists:
                 # If the record exists and isn't already set to running, update it.
@@ -238,9 +227,7 @@ class PipelineLog:
                     ]
                 )
 
-                update_job = client.query(update_query, job_config=update_config)
-                update_job.result()  # Wait for the update to complete.
-                utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
+                utils.execute_bq_sql(update_query, update_config)
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
@@ -263,8 +250,6 @@ class PipelineLog:
         If found, updates the record with the error status, message, and pipeline_end_datetime.
         """
         try:
-            client = bigquery.Client()
-
             # First, check if a record exists for this site and delivery date.
             select_query = f"""
                 SELECT 1
@@ -278,8 +263,7 @@ class PipelineLog:
                 ]
             )
 
-            select_job = client.query(select_query, job_config=select_config)
-            exists = list(select_job.result())
+            exists = list(utils.execute_bq_sql(select_query, select_config))
 
             if exists:
                 # If the record exists, update it.
@@ -308,10 +292,8 @@ class PipelineLog:
                         bigquery.ScalarQueryParameter("run_id", "STRING", self.run_id)
                     ]
                 )
-
-                update_job = client.query(update_query, job_config=update_config)
-                update_job.result()  # Wait for the update to complete.
-                utils.logger.info(f"Updated record for site {self.site_name} on {self.delivery_date}")
+                
+                utils.execute_bq_sql(update_query, update_config)
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
