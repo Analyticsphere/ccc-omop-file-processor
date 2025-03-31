@@ -196,7 +196,7 @@ class VocabHarmonizer:
             "'domain check' AS vocab_harmonization_status",
             f"{source_concept_id_column} AS source_concept_id",
             f"{target_concept_id_column} AS previous_target_concept_id",
-            "vocab.target_concept_id AS target_concept_id"
+            f"{target_concept_id_column} AS target_concept_id"
         ]
         for metadata_column in metadata_columns:
             select_exprs.append(metadata_column)
@@ -224,7 +224,7 @@ class VocabHarmonizer:
         from_sql = f"""
             FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
             INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
-                ON tbl.{target_concept_id_column} = vocab.concept_id
+                ON {target_concept_id_column} = vocab.concept_id
             WHERE tbl.{primary_key_column} NOT IN (
                 SELECT {primary_key_column} FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
             )
