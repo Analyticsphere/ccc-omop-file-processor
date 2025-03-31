@@ -230,10 +230,21 @@ class VocabHarmonizer:
             )
         """
 
+        # Don't perform domain check on rows which have already been harominzed
+        exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
+        where_sql = ""
+        if exisiting_files:
+            where_sql = f"""
+                WHERE tbl.{primary_key_column} NOT IN (
+                    SELECT {primary_key_column} FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+                )
+            """
+
         sql_statement = f"""
             COPY (
                 SELECT {select_sql}
                 {from_sql}
+                {where_sql}
             ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
