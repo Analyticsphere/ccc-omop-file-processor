@@ -9,10 +9,10 @@ import core.utils as utils
 
 
 class ReportArtifact:
-    def __init__(self, delivery_date: str, gcs_path: str, concept_id: Optional[int], name: str, value_as_string: Optional[str], value_as_concept_id: Optional[int], value_as_number: Optional[float]):
+    def __init__(self, delivery_date: str, artifact_bucket: str, concept_id: Optional[int], name: str, value_as_string: Optional[str], value_as_concept_id: Optional[int], value_as_number: Optional[float]):
         self.delivery_date = delivery_date
-        self.gcs_path = gcs_path
-        self.report_artifact_path = utils.get_report_tmp_artifacts_gcs_path(gcs_path, delivery_date)
+        self.artifact_bucket = artifact_bucket
+        self.report_artifact_path = utils.get_report_tmp_artifacts_gcs_path(artifact_bucket, delivery_date)
         self.concept_id = concept_id if concept_id is not None else 0
         self.name = name
         self.value_as_string = value_as_string

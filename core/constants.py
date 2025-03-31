@@ -1,8 +1,8 @@
 from enum import Enum
 
 DUCKDB_FORMAT_STRING = "(FORMAT 'parquet', COMPRESSION 'zstd')"
-DUCKDB_MEMORY_LIMIT = "8GB"
-DUCKDB_MAX_SIZE = "500GB"
+DUCKDB_MEMORY_LIMIT = "10GB"
+DUCKDB_MAX_SIZE = "5000GB"
 DUCKDB_THREADS = "4"
 
 SERVICE_NAME = "omop-file-processor"
@@ -22,7 +22,10 @@ DDL_SQL_PATH = "reference/sql/ddl/"
 DDL_FILE_NAME = "ddl.sql"
 DDL_PLACEHOLDER_STRING = "@cdmDatabaseSchema"
 
-CDM_UPGRADE_SCRIPT_PATH = "reference/sql/cdm_upgrade/"
+SQL_PATH = "reference/sql/"
+CDM_UPGRADE_SCRIPT_PATH = f"{SQL_PATH}cdm_upgrade/"
+
+DERIVED_TABLE_PATH = f"{SQL_PATH}derived_tables/"
 
 OPTIMIZED_VOCAB_FOLDER = "optimized"
 OPTIMIZED_VOCAB_FILE_NAME = f"optimized_vocab_file{PARQUET}"
@@ -37,13 +40,47 @@ PIPELINE_DAG_FAIL_MESSAGE = "DAG failed"
 
 FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
 
+CONDITION_ERA = "condition_era"
+DRUG_ERA = "drug_era"
+OBSERVATION_PERIOD = "observation_period"
+DERIVED_DATA_TABLES_REQUIREMENTS = {
+    CONDITION_ERA: ["condition_occurrence"],
+    DRUG_ERA: ["drug_exposure"],
+    OBSERVATION_PERIOD: ["person"]
+}
+
+SITE_PLACEHOLDER_STRING = "@SITE"
+CURRENT_DATE_PLACEHOLDER_STRING = "@CURRENT_DATE"
+CONDITION_OCCURRENCE_PLACEHOLDER_STRING = "@CONDITION_OCCURRENCE_PATH"
+DRUG_EXPOSURE_PLACEHOLDER_STRING = "@DRUG_EXPOSURE"
+VISIT_OCCURRENCE_PLACEHOLDER_STRING = "@VISIT_OCCURRENCE"
+DEATH_PLACEHOLDER_STRING = "@DEATH"
+PERSON_PLACEHOLDER_STRING = "@PERSON"
+CONCEPT_ANCESTOR_PLACEHOLDER_STRING = "@CONCEPT_ANCESTOR"
+CONCEPT_PLACEHOLDER_STRING = "@CONCEPT"
+
+CLINICAL_DATA_PATH_PLACEHOLDERS = {
+    CONDITION_OCCURRENCE_PLACEHOLDER_STRING: "condition_occurrence",
+    DRUG_EXPOSURE_PLACEHOLDER_STRING: "drug_exposure",
+    VISIT_OCCURRENCE_PLACEHOLDER_STRING: "visit_occurrence",
+    DEATH_PLACEHOLDER_STRING: "death",
+    PERSON_PLACEHOLDER_STRING: "person"
+}
+
+VOCAB_PATH_PLACEHOLDERS = {
+    CONCEPT_ANCESTOR_PLACEHOLDER_STRING: "concept_ancestor",
+    CONCEPT_PLACEHOLDER_STRING: "concept"
+}
+
 class ArtifactPaths(str, Enum):
     ARTIFACTS = "artifacts/"
     FIXED_FILES = f"{ARTIFACTS}fixed_files/"
     CONVERTED_FILES = f"{ARTIFACTS}converted_files/"
+    CREATED_FILES = f"{ARTIFACTS}created_files/"
     REPORT = f"{ARTIFACTS}delivery_report/"
     REPORT_TMP = f"{ARTIFACTS}delivery_report/tmp/"
     DQD = f"{ARTIFACTS}dqd/"
+    ACHILLES = f"{ARTIFACTS}achilles/"
     INVALID_ROWS = f"{ARTIFACTS}invalid_rows/"
 
 # Using -1 as place/holder default value for numeric fields 

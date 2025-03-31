@@ -1,5 +1,6 @@
 import codecs
 import csv
+import os
 from io import StringIO
 
 import chardet  # type: ignore
@@ -77,20 +78,25 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
        - All column names within the Parquet file are all lowercase.
     """
     if utils.valid_parquet_file(gcs_file_path):
-        # Built a SELECT statement which will copy original Parquet
-        # to a new Parquet file, converting column names to lower case
-        parquet_columns = utils.get_columns_from_parquet(gcs_file_path)
-
+        # Get columns from parquet file
+        parquet_columns = utils.get_columns_from_file(gcs_file_path)
         select_list = []
+
+        # Handle offset column in note_nlp
+        # May come in as offset or "offset" and need different handling for each scenario
         for column in parquet_columns:
-            select_list.append(f"{column} AS {column.lower()}")
+            if column == '"offset"':
+                select_list.append(f'""{column}"" AS {column.lower()}')
+            elif column == 'offset':
+                select_list.append(f'"{column}" AS "{column.lower()}"')
+            else:
+                select_list.append(f"{column} AS {column.lower()}")
         select_clause = ", ".join(select_list)
 
         conn, local_db_file = utils.create_duckdb_connection()
-
         try:
             with conn:
-                # Execute the SELECT statement to copy Parquet file
+
                 copy_sql = f"""
                     COPY (
                         SELECT {select_clause}
@@ -98,51 +104,68 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
                     )
                     TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
                 """
+
                 conn.execute(copy_sql)
         except Exception as e:
-            utils.logger.error(f"Unable to processing incoming Parquet file: {e}")
-            raise Exception(f"Unable to processing incoming Parquet file: {e}") from e
+            utils.logger.error(f"Unable to process incoming Parquet file: {e}")
+            raise Exception(f"Unable to process incoming Parquet file: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
     else:
         utils.logger.error(f"Invalid Parquet file")
         raise Exception(f"Invalid Parquet file")
 
-def csv_to_parquet(gcs_file_path: str) -> None:
+def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: list = []) -> None:
     conn, local_db_file = utils.create_duckdb_connection()
 
     try:
         with conn:
             parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
 
+            csv_column_names = utils.get_columns_from_file(gcs_file_path)
+
+            select_list = []
+            for column in csv_column_names:
+                # get rid of " characters in column names to prevent double double quoting in offset handling
+                column_alias = column.lower().replace('"', '')
+                select_list.append(f"{column} AS {column_alias}")
+            select_clause = ", ".join(select_list)
+
+            # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
+            # Special handling required to prevent parsing error
+
+            # Re-add double quotes to offset field prevent DuckDB from returning parsing error
+            select_clause = select_clause.replace('offset', '"offset"')
+
+            # Convert CSV to Parquet with lowercase column names
             convert_statement = f"""
-                COPY  (
-                    SELECT
-                        *
-                    FROM read_csv('gs://{gcs_file_path}', null_padding=true,ALL_VARCHAR=True,strict_mode=False)
+                COPY (
+                    SELECT {select_clause}
+                    FROM read_csv('gs://{gcs_file_path}', 
+                        null_padding=True, ALL_VARCHAR=True, strict_mode=False {format_list(conversion_options)})
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
+
             conn.execute(convert_statement)
-    
-    
-    except duckdb.InvalidInputException as e:
-        # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
-        error_type = utils.parse_duckdb_csv_error(e)
-        if error_type == "INVALID_UNICODE":
-            utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
-            convert_csv_file_encoding(gcs_file_path)
-        elif error_type == "UNTERMINATED_QUOTE":
-            utils.logger.error(f"Unescaped quote found in file gs://{gcs_file_path}: {e}")
-            raise Exception(f"Unescaped quote found in file gs://{gcs_file_path}: {e}") from e
-        elif error_type == "CSV_FORMAT_ERROR":
-            utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
-            raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
-        else:
-            utils.logger.error(f"Unknown CSV error in file gs://{gcs_file_path}: {e}")
-            raise Exception(f"Unknown CSV error in file gs://{gcs_file_path}: {e}") from e
     except Exception as e:
-        utils.logger.error(f"Unable to convert CSV file to Parquet: {e}")
-        raise Exception(f"Unable to convert CSV file to Parquet: {e}") from e
+        if not retry:
+            # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
+            error_type = utils.parse_duckdb_csv_error(e)
+            if error_type == "INVALID_UNICODE":
+                utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
+                convert_csv_file_encoding(gcs_file_path)
+            elif error_type == "UNTERMINATED_QUOTE":
+                utils.logger.warning(f"Attempting to correct unescaped quote characters in file gs://{gcs_file_path}: {e}")
+                fix_csv_quoting(gcs_file_path)
+            elif error_type == "CSV_FORMAT_ERROR":
+                utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
+                raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
+            else:
+                utils.logger.error(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}")
+                raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e
+        else:
+            utils.logger.error(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}")
+            raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e    
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
     
@@ -210,7 +233,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
                 
                 # Create a text wrapper that handles the encoding
                 # If there's an issue with converting any of the non-UTF8 characters, replace them with a question mark symbol
-                 #mypy doesn't recognize that the stream reader constructor accepts the errors parameter; skip checking in mypy
+                    # mypy doesn't recognize that the stream reader constructor accepts the errors parameter; skip checking in mypy
                 text_stream = codecs.getreader(codec_name)(source_file, errors='replace') # type: ignore[call-arg]
 
                 csv_reader = csv.reader(text_stream)
@@ -225,7 +248,9 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
 
             # After creating new file with UTF8 encoding, try converting it to Parquet
-            csv_to_parquet(f"{bucket_name}/{new_file_path}")
+            # store_rejects = True leads to more malformed rows getting included, but may add unexpected columns
+            # Unexpected columns will be reported in data delivery report, and normalization step will remove them
+            csv_to_parquet(f"{bucket_name}/{new_file_path}", True, ['store_rejects=True'])
 
         except UnicodeDecodeError as e:
             utils.logger.error(f"Failed to decode content with detected encoding {detected_encoding}: {str(e)}")
@@ -276,12 +301,19 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         return ""
 
     fields = schema[table_name]["fields"]
-    ordered_columns = list(fields.keys())  # preserve column order
+    ordered_omop_columns = list(fields.keys())  # preserve column order
 
     # --------------------------------------------------------------------------
     # Identify which columns actually exist in the Parquet file 
     # --------------------------------------------------------------------------
-    actual_columns = utils.get_columns_from_parquet(gcs_file_path)
+    actual_columns = utils.get_columns_from_file(gcs_file_path)
+
+    # Get Connect_ID column name, if it exists
+    connect_id_column_name = ""
+    for column in actual_columns:
+        if 'connectid' in column.lower() or 'connect_id' in column.lower():
+            connect_id_column_name = column
+            break
 
     # --------------------------------------------------------------------------
     # Initialize lists to build SQL expressions
@@ -292,7 +324,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # --------------------------------------------------------------------------
     # Coalesce required fields if they're NULL, or generate a placeholder column if that field doesn't exist at all.
     # --------------------------------------------------------------------------
-    for field_name in ordered_columns:
+    for field_name in ordered_omop_columns:
         field_type = fields[field_name]["type"]
         is_required = fields[field_name]["required"].lower() == "true"
 
@@ -302,9 +334,12 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         # Build concat statement that will eventually be hashed to identify rows
         row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
 
-        if field_name in actual_columns:           
-            # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
-            if default_value != "NULL":
+        if field_name in actual_columns:
+            # If the site provided a Connect_ID field and/or person_id, use Connect_ID in place of person_id
+            if field_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
+                coalesce_exprs.append(f"CAST({connect_id_column_name} AS {field_type}) AS {field_name}")
+            # If the column exists in the Parquet file, coalesce it with the default value, then try casting to expected type
+            elif default_value != "NULL":
                 coalesce_exprs.append(f"TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS {field_name}")
             # If default value is NULL, don't coalesce
             else:
@@ -318,14 +353,23 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
                 # ALL fields in a COALESCE must be of the same type, so casting everything to VARCHAR *after* trying to cast it to its correct type
                 row_validity.append(f"CAST(TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS VARCHAR)")
         else:
+            # If the site provided a Connect_ID field and/or person_id, use Connect_ID in place of person_id
+            if field_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
+                coalesce_exprs.append(f"CAST({connect_id_column_name} AS {field_type}) AS {field_name}")
+
             # If the column doesn't exist, just produce a placeholder (NULL or a special default)
-            # Still need to cast to ensure consist field types
-            coalesce_exprs.append(f"CAST({default_value} AS {field_type}) AS {field_name}")
+            # Still need to cast to ensure consistent field types
+            else:
+                coalesce_exprs.append(f"CAST({default_value} AS {field_type}) AS {field_name}")
 
             # If the field IS NOT PROVIDED but it's still required - this is not a failed row; just use a default value
             # No need to add missing, required rows to row_validity check
 
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
+
+    # If row_validity list has no statements, add a string so SQL statement stays valid
+    if not row_validity:
+        row_validity.append("'faketext'")
     row_validity_sql = ", ".join(row_validity)
 
     # Build row_check table with row_hash column
@@ -362,6 +406,10 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
 
     """.strip()
 
+    # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
+    # Need to add "" around offset column name to prevent parsing error
+    sql_script = sql_script.replace('offset', '"offset"')
+
     return sql_script
 
 def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
@@ -375,7 +423,6 @@ def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
         try:
             with conn:
                 conn.execute(fix_sql)
-
                 # Get counts of valid/invalid rows for OMOP files
                 create_row_count_artifacts(gcs_file_path, cdm_version, conn)
         except Exception as e:
@@ -404,7 +451,7 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
 
         ra = report_artifact.ReportArtifact(
             delivery_date=delivery_date,
-            gcs_path=bucket,
+            artifact_bucket=bucket,
             concept_id=table_concept_id,
             name=f"{count_type}: {table_name}",
             value_as_string=None,
@@ -413,3 +460,161 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
         )
         ra.save_artifact()
 
+def fix_csv_quoting(gcs_file_path: str) -> None:
+    """
+    Handles some unquoted quote patterns in CSV files 
+    Each CSV row is evaulated as a single string, and regex replacements are made to escape problematic characters
+    
+    File gets downloaded from GCS to VM executing Cloud Function.
+    Streaming CSV file directly from GCS to VM resulted in unexpected behaviors, so the logic executes against a local file
+    Ideally, we would read/write directly to/from GCS...
+    """
+    encoding: str = 'utf-8'
+    batch_size: int = 1000
+
+    # Download and get path to local CSV file
+    broken_csv_path = utils.download_from_gcs(gcs_file_path)
+
+    # Create output path, renaming original file
+    filename = utils.get_table_name_from_gcs_path(gcs_file_path)
+    output_csv_path = broken_csv_path.replace(filename, f"{filename}{constants.FIXED_FILE_TAG_STRING}")
+
+    try:
+        with open(broken_csv_path, 'r', encoding=encoding) as infile, \
+             open(output_csv_path, 'w', encoding=encoding, newline='') as outfile:
+            
+            # Process header separately to preserve it exactly as is
+            header = next(infile, None)
+            if header is not None:
+                outfile.write(header)
+            
+            # Process the rest of the file in batches
+            batch = []
+            for line in infile:
+                batch.append(clean_csv_row(line.strip()))
+                
+                if len(batch) >= batch_size:
+                    outfile.write('\n'.join(batch) + '\n')
+                    batch = []
+            
+            # Write any remaining rows
+            if batch:
+                outfile.write('\n'.join(batch) + '\n')
+
+            # Build GCS location for locally fixed file
+            bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+            destination_blob = f"{delivery_date}/{constants.ArtifactPaths.FIXED_FILES.value}{filename}{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
+            # Upload fixed file to GCS
+            utils.upload_to_gcs(output_csv_path, bucket, destination_blob)
+
+            # Delete local files
+            os.remove(broken_csv_path)
+            os.remove(output_csv_path)
+            
+            # After creating new file with fixed quoting, try converting it to Parquet
+            # store_rejects = True leads to more malformed rows getting included, but may add unexpected columns
+            # Unexpected columns will be reported in data delivery report, and normalization step will remove them
+            csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True'])
+                
+    except UnicodeDecodeError:
+        raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
+
+def clean_csv_row(row: str) -> str:
+    """
+    Clean a CSV row by properly handling various quoting issues:
+    1. Quotes within quoted fields need to be properly escaped (doubled)
+    2. Fields containing single quotes need to be properly quoted
+    3. Fields with consecutive single quotes need to be properly quoted
+    """
+    # First pass: Fix quotes within quoted fields
+    result = []
+    i = 0
+    in_quotes = False
+    
+    while i < len(row):
+        char = row[i]
+        
+        if char == '"':
+            if not in_quotes:
+                # Start of quoted field
+                in_quotes = True
+                result.append(char)
+            else:
+                # Could be end of quoted field or internal quote
+                if i + 1 < len(row):
+                    next_char = row[i + 1]
+                    if next_char == '"':
+                        # Already escaped quote
+                        result.append('""')
+                        i += 1
+                    elif next_char != ',' and next_char != '\r' and next_char != '\n':
+                        # Internal quote that needs escaping (Example 1)
+                        result.append('""')
+                    else:
+                        # End of quoted field
+                        in_quotes = False
+                        result.append(char)
+                else:
+                    # End of quoted field at end of string
+                    in_quotes = False
+                    result.append(char)
+        else:
+            result.append(char)
+        
+        i += 1
+    
+    # Second pass: Split into fields and handle single quotes
+    row_with_fixed_quotes = ''.join(result)
+    fields = []
+    current = []
+    in_quotes = False
+    i = 0
+    
+    while i < len(row_with_fixed_quotes):
+        char = row_with_fixed_quotes[i]
+        
+        if char == '"':
+            current.append(char)
+            if not in_quotes:
+                in_quotes = True
+            else:
+                # Check if it's an escaped quote
+                if i + 1 < len(row_with_fixed_quotes) and row_with_fixed_quotes[i + 1] == '"':
+                    current.append(row_with_fixed_quotes[i + 1])
+                    i += 1
+                else:
+                    in_quotes = False
+        elif char == ',' and not in_quotes:
+            # End of field
+            fields.append(''.join(current))
+            current = []
+        else:
+            current.append(char)
+        
+        i += 1
+    
+    # Add the last field
+    if current or not fields:
+        fields.append(''.join(current))
+    
+    # Process fields with single quotes
+    cleaned_fields = []
+    for field in fields:
+        # Handle single quotes (Examples 2 & 3)
+        # If field contains single quotes and isn't already quoted
+        if "'" in field and not (field.startswith('"') and field.endswith('"')):
+            field = f'"{field}"'
+        
+        # Fields with single quotes aren't get read properly...
+        if field == "\"'\"":
+            field = "''"
+        
+        cleaned_fields.append(field)
+    
+    return ','.join(cleaned_fields)
+
+def format_list(items: list) -> str:
+    if not items:  # Check if list is empty
+        return ''
+    else:
+        return ',' + ', '.join(items)

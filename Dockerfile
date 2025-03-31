@@ -1,4 +1,5 @@
 FROM python:3.11-slim-bookworm
+ENV PYTHONHASHSEED=0
 
 WORKDIR /app
 
