@@ -24,19 +24,7 @@ class VocabHarmonizer:
         self.delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)[1]
         self.source_parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
         self.target_parquet_path = utils.get_parquet_harmonized_path(gcs_file_path)
-        self.case_when_target_table = f"""
-            CASE 
-                WHEN tbl.target_domain = 'Visit' THEN 'visit_occurrence'
-                WHEN tbl.target_domain = 'Condition' THEN 'condition_occurrence'
-                WHEN tbl.target_domain = 'Drug' THEN 'drug_exposure'
-                WHEN tbl.target_domain = 'Procedure' THEN 'procedure_occurrence'
-                WHEN tbl.target_domain = 'Device' THEN 'device_exposure'
-                WHEN tbl.target_domain = 'Measurement' THEN 'measurement'
-                WHEN tbl.target_domain = 'Observation' THEN 'observation'
-                WHEN tbl.target_domain = 'Note' THEN 'note'
-                WHEN tbl.target_domain = 'Specimen' THEN 'specimen'
-            ELSE '{self.source_table_name}' END AS target_table
-        """
+        
 
 
     def update_mappings_for_file(self) -> None:
@@ -130,7 +118,20 @@ class VocabHarmonizer:
         final_select_exprs.append("mv_cte.value_as_concept_id")
 
         # Add target table to final output
-        final_select_exprs.append(self.case_when_target_table)
+        case_when_target_table = f"""
+            CASE 
+                WHEN tbl.target_domain = 'Visit' THEN 'visit_occurrence'
+                WHEN tbl.target_domain = 'Condition' THEN 'condition_occurrence'
+                WHEN tbl.target_domain = 'Drug' THEN 'drug_exposure'
+                WHEN tbl.target_domain = 'Procedure' THEN 'procedure_occurrence'
+                WHEN tbl.target_domain = 'Device' THEN 'device_exposure'
+                WHEN tbl.target_domain = 'Measurement' THEN 'measurement'
+                WHEN tbl.target_domain = 'Observation' THEN 'observation'
+                WHEN tbl.target_domain = 'Note' THEN 'note'
+                WHEN tbl.target_domain = 'Specimen' THEN 'specimen'
+            ELSE '{self.source_table_name}' END AS target_table
+        """
+        final_select_exprs.append(case_when_target_table)
         final_select_sql = ",\n                ".join(final_select_exprs)
 
         final_from_sql = f"""
@@ -180,6 +181,7 @@ class VocabHarmonizer:
         ordered_omop_columns = list(columns.keys())  # preserve column order
         target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
         source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
+        primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
 
         select_exprs: list = []
 
@@ -189,7 +191,7 @@ class VocabHarmonizer:
 
         # Add columns to store metadata related to vocab harmonization for later reporting
         metadata_columns = [
-            "vocab.target_concept_id_domain AS target_domain",
+            "vocab.concept_id_domain AS target_domain",
             "'domain check' AS vocab_harmonization_status",
             f"tbl.{source_concept_id_column} AS source_concept_id",
             f"tbl.{target_concept_id_column} AS previous_target_concept_id",
@@ -200,7 +202,21 @@ class VocabHarmonizer:
         
         # Add value_as_concept_id field to keep structure consistent with remapped tables
         select_exprs.append("CAST(NULL AS BIGINT) AS value_as_concept_id")
-        select_exprs.append(self.case_when_target_table)
+        # Add target table statement
+        case_when_target_table = f"""
+            CASE 
+                WHEN vocab.concept_id_domain = 'Visit' THEN 'visit_occurrence'
+                WHEN vocab.concept_id_domain = 'Condition' THEN 'condition_occurrence'
+                WHEN vocab.concept_id_domain = 'Drug' THEN 'drug_exposure'
+                WHEN vocab.concept_id_domain = 'Procedure' THEN 'procedure_occurrence'
+                WHEN vocab.concept_id_domain = 'Device' THEN 'device_exposure'
+                WHEN vocab.concept_id_domain = 'Measurement' THEN 'measurement'
+                WHEN vocab.concept_id_domain = 'Observation' THEN 'observation'
+                WHEN vocab.concept_id_domain = 'Note' THEN 'note'
+                WHEN vocab.concept_id_domain = 'Specimen' THEN 'specimen'
+            ELSE '{self.source_table_name}' END AS target_table
+        """
+        select_exprs.append(case_when_target_table)
 
         select_sql = ",\n                ".join(select_exprs)
 
@@ -208,8 +224,8 @@ class VocabHarmonizer:
             FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
             INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
                 ON tbl.{source_concept_id_column} = vocab.concept_id
-            WHERE tbl.{target_concept_id_column} NOT IN (
-                SELECT {target_concept_id_column} FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+            WHERE tbl.{primary_key_column} NOT IN (
+                SELECT {primary_key_column} FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
             )
         """
 
