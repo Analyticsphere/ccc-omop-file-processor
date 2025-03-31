@@ -217,8 +217,7 @@ SURROGATE_KEY_TABLES = {
     "cost",
     "drug_era",
     "dose_era",
-    "condition_era",
-    "metadata"
+    "condition_era"
 }
 
 NO_PRIMARY_KEY_TABLES = {
