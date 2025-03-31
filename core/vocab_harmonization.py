@@ -225,9 +225,6 @@ class VocabHarmonizer:
             FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
             INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
                 ON {target_concept_id_column} = vocab.concept_id
-            WHERE tbl.{primary_key_column} NOT IN (
-                SELECT {primary_key_column} FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
-            )
         """
 
         # Don't perform domain check on rows which have already been harominzed
