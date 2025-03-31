@@ -25,18 +25,18 @@ def remove_all_tables(project_id: str, dataset_id: str) -> None:
         raise Exception(f"Unable to delete BigQuery table: {e}") from e
 
 #def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str, write_disposition: str = bigquery.WriteDisposition.WRITE_TRUNCATE, derive_path: bool = True) -> None:
-def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, table_name: str, type: str) -> None:
+def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, table_name: str, write_type: constants.BQWriteTypes) -> None:
     """
     Load Parquet artifact file from GCS directly into BigQuery.
     """
-    if type == constants.BQWriteTypes.SPECIFIC_FILE:
+    if write_type == constants.BQWriteTypes.SPECIFIC_FILE:
         write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
         parquet_path = file_path
-    elif type == constants.BQWriteTypes.PROCESSED_FILE:
+    elif write_type == constants.BQWriteTypes.PROCESSED_FILE:
         write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
         parquet_path = f"gs://{utils.get_parquet_artifact_location(file_path)}"
         
-    elif type == constants.BQWriteTypes.ETLed_FILE:
+    elif write_type == constants.BQWriteTypes.ETLed_FILE:
         write_disposition = bigquery.WriteDisposition.WRITE_APPEND
 
         
