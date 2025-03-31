@@ -208,14 +208,14 @@ class VocabHarmonizer:
             FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
             INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
                 ON tbl.{source_concept_id_column} = vocab.concept_id
-            WHERE {target_concept_id_column} NOT IN (
-                SELECT {target_concept_id_column} FROM read_parquet('{self.target_parquet_path}')
+            WHERE tbl.{target_concept_id_column} NOT IN (
+                SELECT {target_concept_id_column} FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
             )
         """
 
         sql_statement = f"""
             COPY (
-                {select_sql}
+                SELECT {select_sql}
                 {from_sql}
             ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
