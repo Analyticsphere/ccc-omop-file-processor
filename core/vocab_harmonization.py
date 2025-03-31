@@ -179,8 +179,9 @@ class VocabHarmonizer:
 
         columns = schema[self.source_table_name]["columns"]
         ordered_omop_columns = list(columns.keys())  # preserve column order
-        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
-        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
+        target_concept_id_column = f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']}"
+        source_concept_id_column = '0' if constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id'] != "" \
+            else f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']}"
         primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
 
         select_exprs: list = []
@@ -193,8 +194,8 @@ class VocabHarmonizer:
         metadata_columns = [
             "vocab.concept_id_domain AS target_domain",
             "'domain check' AS vocab_harmonization_status",
-            f"tbl.{source_concept_id_column} AS source_concept_id",
-            f"tbl.{target_concept_id_column} AS previous_target_concept_id",
+            f"{source_concept_id_column} AS source_concept_id",
+            f"{target_concept_id_column} AS previous_target_concept_id",
             "vocab.target_concept_id AS target_concept_id"
         ]
         for metadata_column in metadata_columns:
@@ -223,7 +224,7 @@ class VocabHarmonizer:
         from_sql = f"""
             FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
             INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
-                ON tbl.{source_concept_id_column} = vocab.concept_id
+                ON tbl.{target_concept_id_column} = vocab.concept_id
             WHERE tbl.{primary_key_column} NOT IN (
                 SELECT {primary_key_column} FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
             )
