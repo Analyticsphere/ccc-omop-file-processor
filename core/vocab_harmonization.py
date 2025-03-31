@@ -180,7 +180,7 @@ class VocabHarmonizer:
         columns = schema[self.source_table_name]["columns"]
         ordered_omop_columns = list(columns.keys())  # preserve column order
         target_concept_id_column = f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']}"
-        source_concept_id_column = '0' if constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id'] != "" \
+        source_concept_id_column = '0' if constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id'] == "" \
             else f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']}"
         primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
 
