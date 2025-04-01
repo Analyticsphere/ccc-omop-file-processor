@@ -277,7 +277,7 @@ def get_placeholder_value(column_name: str, column_type: str) -> str:
 
 def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str) -> str:
     """
-    Generates a SQL statement that, when run:
+    Generates a SQL statement that, when executed:
         - Converts data types of columns within Parquet file to OMOP CDM standard
         - Creates a new Parquet file with the invalid rows from the original data file
         - Converts all column names to lower case
