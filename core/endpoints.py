@@ -100,19 +100,19 @@ def validate_file() -> tuple[str, int]:
 @app.route('/create_artifact_buckets', methods=['POST'])
 def create_artifact_buckets() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
-    parent_bucket: Optional[str] = data.get('parent_bucket')
+    delivery_bucket: Optional[str] = data.get('delivery_bucket')
 
-    if not parent_bucket:
-        return "Missing required parameter: parent_bucket", 400
+    if not delivery_bucket:
+        return "Missing required parameter: delivery_bucket", 400
 
-    utils.logger.info(f"Creating artifact buckets in gs://{parent_bucket}")
+    utils.logger.info(f"Creating artifact buckets in gs://{delivery_bucket}")
 
     directories: list[str] = []
 
     try:
         # Create fully qualified paths for each artifact directory
         for path in constants.ArtifactPaths:
-            full_path = f"{parent_bucket}/{path.value}"
+            full_path = f"{delivery_bucket}/{path.value}"
             directories.append(full_path)
         
         # Create the actual GCS directories
