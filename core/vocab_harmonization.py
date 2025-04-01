@@ -38,7 +38,9 @@ class VocabHarmonizer:
             self.perform_harmonization(step)
 
         # After finding new targets and domain, partition file based on target OMOP table
+        self.logger.warning(f"!! About to call partition_by_target_table() function")
         self.partition_by_target_table()
+        self.logger.warning(f"DID complete partition_by_target_table() function")
 
 
     def source_target_remapping(self) -> None:
@@ -286,14 +288,16 @@ class VocabHarmonizer:
         
         # Create a new Parquet file for each target table, using data_0 as file name (like DuckDB would)
         for target_table in target_tables_list:
+            self.logger.warning(f"Going to partition table {target_table}")
             file_path = f"{self.target_parquet_path}partitioned/target_table={target_table}/data_0{constants.PARQUET}"
             partition_statement = f"""
                 COPY (
                     SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
                     WHERE target_table = '{target_table}'
-                ) TO 'gs://{file_path}' {constants.DUCKDB_FORMAT_STRING};
+                ) TO 'gs://{file_path}' {constants.DUCKDB_FORMAT_STRING}
             """
             utils.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
+            self.logger.warning(f"Completed partitioning of {target_table}")
 
 
     def perform_harmonization(self, step: str) -> None:
