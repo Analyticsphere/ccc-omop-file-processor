@@ -26,7 +26,6 @@ class VocabHarmonizer:
         self.target_parquet_path = utils.get_parquet_harmonized_path(gcs_file_path)
         
 
-
     def update_mappings_for_file(self) -> None:
         """
         Harmonize a parquet file by applying defined harmonization steps and saving the result.
@@ -37,7 +36,6 @@ class VocabHarmonizer:
 
         for step in harmonization_steps:
             self.perform_harmonization(step)
-
 
         # After finding new targets and domain, partition file based on target OMOP table
         self.partition_by_target_table()
@@ -173,8 +171,9 @@ class VocabHarmonizer:
 
 
     def domain_table_check(self) -> None:
-
-        self.logger.warning(f"!!! GOING TO PERFORM DOMAIN TABLE CHECK")
+        # The domain of a concept_id may change between different vocabulary versions
+        # Sites may also ETL data into an OMOP table that doesn't align with its domain
+        # Add current domain_id and appropriate target table for all concepts which weren't remapped 
         schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
 
         columns = schema[self.source_table_name]["columns"]
@@ -259,13 +258,7 @@ class VocabHarmonizer:
         utils.execute_duckdq_sql(final_sql_statement, f"Unable to perform domain check against {self.source_table_name}")
 
 
-
-
-
-
-
     def partition_by_target_table(self) -> None:
-        
         self.logger.info(f"Partitioning table {self.source_table_name} for {self.site}")
         # There's a bug in DuckDB/fsspec that causes Hive partitioning to hang or OOM when working with remote file systems
         # As a workaround, manually partitioning the files in the same way DuckDB would
@@ -279,7 +272,7 @@ class VocabHarmonizer:
 
         # Find all target tables in the source file
         target_tables = f"""
-            SELECT DISTINCT table_table FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+            SELECT DISTINCT target_table FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
         """
         conn, local_db_file = utils.create_duckdb_connection()
 
