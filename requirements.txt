@@ -8,4 +8,4 @@ fsspec==2025.3.0
 gcsfs==2025.3.0
 pytest==8.3.4
 chardet==5.2.0
-
+pandas==2.2.3
