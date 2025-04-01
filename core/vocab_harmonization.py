@@ -278,7 +278,7 @@ class VocabHarmonizer:
 
         try:
             with conn:
-                target_tables_list = conn.execute(target_tables).fetch_df()['table_table'].tolist()
+                target_tables_list = conn.execute(target_tables).fetch_df()['target_table'].tolist()
         except Exception as e:
             raise Exception(f"Unable to get target tables from Parquet file: {e}") from e
         finally:
