@@ -92,8 +92,8 @@ groupedby AS (
 SELECT DISTINCT
     generate_id(CONCAT('@SITE', person_id, island_start_date, island_end_date)) AS observation_period_id,
     person_id,
-    island_start_date AS observation_period_start_date,
-    island_end_date AS observation_period_end_date,
+    CAST(island_start_date AS DATE) AS observation_period_start_date,
+    CAST(island_end_date AS DATE) AS observation_period_end_date,
     32882 AS period_type_concept_id
 FROM groupedby
 UNION
