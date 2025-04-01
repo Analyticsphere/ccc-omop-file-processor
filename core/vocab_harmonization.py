@@ -265,14 +265,42 @@ class VocabHarmonizer:
 
 
     def partition_by_target_table(self) -> None:
-        self.logger.info(f"Partitioning table {self.source_table_name} for {self.site}")
-        partition_statement = f"""
-            COPY (
-                SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
-            ) TO 'gs://{self.target_parquet_path}partitioned/' (FORMAT PARQUET, PARTITION_BY (target_table), COMPRESSION ZSTD);
-        """
         
-        utils.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
+        self.logger.info(f"Partitioning table {self.source_table_name} for {self.site}")
+        # There's a bug in DuckDB/fsspec that causes Hive partitioning to hang or OOM when working with remote file systems
+        # As a workaround, manually partitioning the files in the same way DuckDB would
+        # https://github.com/duckdb/duckdb/issues/11817
+        # https://github.com/duckdb/duckdb/issues/8981
+        # partition_statement = f"""
+        #     COPY (
+        #         SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+        #     ) TO 'gs://{self.target_parquet_path}partitioned/' (FORMAT PARQUET, PARTITION_BY (target_table), COMPRESSION ZSTD);
+        # """
+
+        # Find all target tables in the source file
+        target_tables = f"""
+            SELECT DISTINCT table_table FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+        """
+        conn, local_db_file = utils.create_duckdb_connection()
+
+        try:
+            with conn:
+                target_tables_list = conn.execute(target_tables).fetch_df()['table_table'].tolist()
+        except Exception as e:
+            raise Exception(f"Unable to get target tables from Parquet file: {e}") from e
+        finally:
+            utils.close_duckdb_connection(conn, local_db_file)
+        
+        # Create a new Parquet file for each target table, using data_0 as file name (like DuckDB would)
+        for target_table in target_tables_list:
+            file_path = f"{self.target_parquet_path}partitioned/target_table={target_table}/data_0{constants.PARQUET}"
+            partition_statement = f"""
+                COPY (
+                    SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+                    WHERE target_table = '{target_table}'
+                ) TO 'gs://{file_path}' {constants.DUCKDB_FORMAT_STRING};
+            """
+            utils.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
 
 
     def perform_harmonization(self, step: str) -> None:
