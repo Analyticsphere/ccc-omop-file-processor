@@ -228,6 +228,8 @@ class VocabHarmonizer:
         """
 
         # Don't perform domain check on rows which have already been harominzed
+        # primary_key_column values were made unique per row values in normalization step, 
+        #   so they can be used for identification here
         exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
         where_sql = ""
         if exisiting_files:

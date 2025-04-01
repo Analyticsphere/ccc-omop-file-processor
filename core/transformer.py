@@ -127,7 +127,7 @@ class Transformer:
 
                 # Create the concatenation expression
                 concat_expr = "CONCAT(" + ",".join(concat_parts) + ")"
-                source_expr = f"generate_id({concat_expr})"
+                source_expr = f"hash({concat_expr})"
             
             # Get target column schema info - check if the column exists in the schema
             if target_column in target_columns_dict:
