@@ -189,7 +189,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         conn.execute(f"SET max_memory='{constants.DUCKDB_MEMORY_LIMIT}'")
 
         # Improves performance for large queries
-        conn.execute("SET preserve_insertion_order='false'")
+        conn.execute("SET preserve_insertion_order = false")
 
         # Set to number of CPU cores
         # https://duckdb.org/docs/configuration/overview.html#global-configuration-options

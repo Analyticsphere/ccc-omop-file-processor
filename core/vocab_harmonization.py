@@ -265,6 +265,7 @@ class VocabHarmonizer:
 
 
     def partition_by_target_table(self) -> None:
+        self.logger.info(f"Partitioning table {self.source_table_name} for {self.site}")
         partition_statement = f"""
             COPY (
                 SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
@@ -280,5 +281,7 @@ class VocabHarmonizer:
         """
         if step == constants.SOURCE_TARGET:
             self.source_target_remapping()
-        if step == constants.DOMAIN_CHECK:
+        elif step == constants.DOMAIN_CHECK:
             self.domain_table_check()
+        else:
+            return
