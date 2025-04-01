@@ -1,11 +1,14 @@
--- DDL script for OMOP CDM v5.4 with DATETIME casting
--- For each table, checks if it exists and casts DATETIME fields if needed
+-- DDL script for OMOP CDM v5.4 
+-- + If a table exists, cast "_datetime" fields as DATETIME
+--   + In upstream processes, DuckDB sees TIMESTAMP and DATETIME as equivalent
+--   + BigQuery operations occurring in the DQD expect DATETIME, not TIMESTAMP
+-- + If the table doesn't exist, create it
 
--- Person table
+-- Person table (requires timestamp conversion)
 BEGIN
   -- Check if the table exists
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'person') THEN
-    -- Replace the table, only casting DATETIME fields
+    -- Replace the table, only casting TIMESTAMP fields to DATETIME
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.person` AS
     SELECT
       person_id,
@@ -52,22 +55,16 @@ BEGIN
   END IF;
 END;
 
--- Observation period table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'observation_period') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.observation_period` (
-      observation_period_id INT64,
-      person_id INT64,
-      observation_period_start_date DATE,
-      observation_period_end_date DATE,
-      period_type_concept_id INT64
-    );
-  END IF;
-END;
+-- Observation Period table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.observation_period` (
+  observation_period_id INT64,
+  person_id INT64,
+  observation_period_start_date DATE,
+  observation_period_end_date DATE,
+  period_type_concept_id INT64
+);
 
--- Visit occurrence table
+-- Visit Occurrence table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'visit_occurrence') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.visit_occurrence` AS
@@ -113,7 +110,7 @@ BEGIN
   END IF;
 END;
 
--- Visit detail table
+-- Visit Detail table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'visit_detail') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.visit_detail` AS
@@ -163,7 +160,7 @@ BEGIN
   END IF;
 END;
 
--- Condition occurrence table
+-- Condition Occurrence table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'condition_occurrence') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.condition_occurrence` AS
@@ -207,7 +204,7 @@ BEGIN
   END IF;
 END;
 
--- Drug exposure table
+-- Drug Exposure table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'drug_exposure') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.drug_exposure` AS
@@ -265,7 +262,7 @@ BEGIN
   END IF;
 END;
 
--- Procedure occurrence table
+-- Procedure Occurrence table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'procedure_occurrence') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.procedure_occurrence` AS
@@ -309,7 +306,7 @@ BEGIN
   END IF;
 END;
 
--- Device exposure table
+-- Device Exposure table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'device_exposure') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.device_exposure` AS
@@ -359,7 +356,7 @@ BEGIN
   END IF;
 END;
 
--- Measurement table
+-- Measurement table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'measurement') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.measurement` AS
@@ -417,7 +414,7 @@ BEGIN
   END IF;
 END;
 
--- Observation table
+-- Observation table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'observation') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.observation` AS
@@ -471,7 +468,7 @@ BEGIN
   END IF;
 END;
 
--- Death table
+-- Death table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'death') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.death` AS
@@ -497,7 +494,7 @@ BEGIN
   END IF;
 END;
 
--- Note table
+-- Note table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'note') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.note` AS
@@ -541,7 +538,7 @@ BEGIN
   END IF;
 END;
 
--- Note NLP table
+-- Note NLP table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'note_nlp') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.note_nlp` AS
@@ -581,7 +578,7 @@ BEGIN
   END IF;
 END;
 
--- Specimen table
+-- Specimen table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'specimen') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.specimen` AS
@@ -623,192 +620,138 @@ BEGIN
   END IF;
 END;
 
--- Fact relationship table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'fact_relationship') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.fact_relationship` (
-      domain_concept_id_1 INT64,
-      fact_id_1 INT64,
-      domain_concept_id_2 INT64,
-      fact_id_2 INT64,
-      relationship_concept_id INT64
-    );
-  END IF;
-END;
+-- Fact Relationship table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.fact_relationship` (
+  domain_concept_id_1 INT64,
+  fact_id_1 INT64,
+  domain_concept_id_2 INT64,
+  fact_id_2 INT64,
+  relationship_concept_id INT64
+);
 
--- Location table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'location') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.location` (
-      location_id INT64,
-      address_1 STRING,
-      address_2 STRING,
-      city STRING,
-      state STRING,
-      zip STRING,
-      county STRING,
-      location_source_value STRING,
-      country_concept_id INT64,
-      country_source_value STRING,
-      latitude FLOAT64,
-      longitude FLOAT64
-    );
-  END IF;
-END;
+-- Location table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.location` (
+  location_id INT64,
+  address_1 STRING,
+  address_2 STRING,
+  city STRING,
+  state STRING,
+  zip STRING,
+  county STRING,
+  location_source_value STRING,
+  country_concept_id INT64,
+  country_source_value STRING,
+  latitude FLOAT64,
+  longitude FLOAT64
+);
 
--- Care site table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'care_site') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.care_site` (
-      care_site_id INT64,
-      care_site_name STRING,
-      place_of_service_concept_id INT64,
-      location_id INT64,
-      care_site_source_value STRING,
-      place_of_service_source_value STRING
-    );
-  END IF;
-END;
+-- Care Site table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.care_site` (
+  care_site_id INT64,
+  care_site_name STRING,
+  place_of_service_concept_id INT64,
+  location_id INT64,
+  care_site_source_value STRING,
+  place_of_service_source_value STRING
+);
 
--- Provider table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'provider') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.provider` (
-      provider_id INT64,
-      provider_name STRING,
-      npi STRING,
-      dea STRING,
-      specialty_concept_id INT64,
-      care_site_id INT64,
-      year_of_birth INT64,
-      gender_concept_id INT64,
-      provider_source_value STRING,
-      specialty_source_value STRING,
-      specialty_source_concept_id INT64,
-      gender_source_value STRING,
-      gender_source_concept_id INT64
-    );
-  END IF;
-END;
+-- Provider table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.provider` (
+  provider_id INT64,
+  provider_name STRING,
+  npi STRING,
+  dea STRING,
+  specialty_concept_id INT64,
+  care_site_id INT64,
+  year_of_birth INT64,
+  gender_concept_id INT64,
+  provider_source_value STRING,
+  specialty_source_value STRING,
+  specialty_source_concept_id INT64,
+  gender_source_value STRING,
+  gender_source_concept_id INT64
+);
 
--- Payer plan period table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'payer_plan_period') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.payer_plan_period` (
-      payer_plan_period_id INT64,
-      person_id INT64,
-      payer_plan_period_start_date DATE,
-      payer_plan_period_end_date DATE,
-      payer_concept_id INT64,
-      payer_source_value STRING,
-      payer_source_concept_id INT64,
-      plan_concept_id INT64,
-      plan_source_value STRING,
-      plan_source_concept_id INT64,
-      sponsor_concept_id INT64,
-      sponsor_source_value STRING,
-      sponsor_source_concept_id INT64,
-      family_source_value STRING,
-      stop_reason_concept_id INT64,
-      stop_reason_source_value STRING,
-      stop_reason_source_concept_id INT64
-    );
-  END IF;
-END;
+-- Payer Plan Period table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.payer_plan_period` (
+  payer_plan_period_id INT64,
+  person_id INT64,
+  payer_plan_period_start_date DATE,
+  payer_plan_period_end_date DATE,
+  payer_concept_id INT64,
+  payer_source_value STRING,
+  payer_source_concept_id INT64,
+  plan_concept_id INT64,
+  plan_source_value STRING,
+  plan_source_concept_id INT64,
+  sponsor_concept_id INT64,
+  sponsor_source_value STRING,
+  sponsor_source_concept_id INT64,
+  family_source_value STRING,
+  stop_reason_concept_id INT64,
+  stop_reason_source_value STRING,
+  stop_reason_source_concept_id INT64
+);
 
--- Cost table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'cost') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cost` (
-      cost_id INT64,
-      cost_event_id INT64,
-      cost_domain_id STRING,
-      cost_type_concept_id INT64,
-      currency_concept_id INT64,
-      total_charge FLOAT64,
-      total_cost FLOAT64,
-      total_paid FLOAT64,
-      paid_by_payer FLOAT64,
-      paid_by_patient FLOAT64,
-      paid_patient_copay FLOAT64,
-      paid_patient_coinsurance FLOAT64,
-      paid_patient_deductible FLOAT64,
-      paid_by_primary FLOAT64,
-      paid_ingredient_cost FLOAT64,
-      paid_dispensing_fee FLOAT64,
-      payer_plan_period_id INT64,
-      amount_allowed FLOAT64,
-      revenue_code_concept_id INT64,
-      revenue_code_source_value STRING,
-      drg_concept_id INT64,
-      drg_source_value STRING
-    );
-  END IF;
-END;
+-- Cost table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cost` (
+  cost_id INT64,
+  cost_event_id INT64,
+  cost_domain_id STRING,
+  cost_type_concept_id INT64,
+  currency_concept_id INT64,
+  total_charge FLOAT64,
+  total_cost FLOAT64,
+  total_paid FLOAT64,
+  paid_by_payer FLOAT64,
+  paid_by_patient FLOAT64,
+  paid_patient_copay FLOAT64,
+  paid_patient_coinsurance FLOAT64,
+  paid_patient_deductible FLOAT64,
+  paid_by_primary FLOAT64,
+  paid_ingredient_cost FLOAT64,
+  paid_dispensing_fee FLOAT64,
+  payer_plan_period_id INT64,
+  amount_allowed FLOAT64,
+  revenue_code_concept_id INT64,
+  revenue_code_source_value STRING,
+  drg_concept_id INT64,
+  drg_source_value STRING
+);
 
--- Drug era table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'drug_era') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.drug_era` (
-      drug_era_id INT64,
-      person_id INT64,
-      drug_concept_id INT64,
-      drug_era_start_date DATE,
-      drug_era_end_date DATE,
-      drug_exposure_count INT64,
-      gap_days INT64
-    );
-  END IF;
-END;
+-- Drug Era table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.drug_era` (
+  drug_era_id INT64,
+  person_id INT64,
+  drug_concept_id INT64,
+  drug_era_start_date DATE,
+  drug_era_end_date DATE,
+  drug_exposure_count INT64,
+  gap_days INT64
+);
 
--- Dose era table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'dose_era') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.dose_era` (
-      dose_era_id INT64,
-      person_id INT64,
-      drug_concept_id INT64,
-      unit_concept_id INT64,
-      dose_value FLOAT64,
-      dose_era_start_date DATE,
-      dose_era_end_date DATE
-    );
-  END IF;
-END;
+-- Dose Era table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.dose_era` (
+  dose_era_id INT64,
+  person_id INT64,
+  drug_concept_id INT64,
+  unit_concept_id INT64,
+  dose_value FLOAT64,
+  dose_era_start_date DATE,
+  dose_era_end_date DATE
+);
 
--- Condition era table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'condition_era') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.condition_era` (
-      condition_era_id INT64,
-      person_id INT64,
-      condition_concept_id INT64,
-      condition_era_start_date DATE,
-      condition_era_end_date DATE,
-      condition_occurrence_count INT64
-    );
-  END IF;
-END;
+-- Condition Era table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.condition_era` (
+  condition_era_id INT64,
+  person_id INT64,
+  condition_concept_id INT64,
+  condition_era_start_date DATE,
+  condition_era_end_date DATE,
+  condition_occurrence_count INT64
+);
 
--- Episode table
+-- Episode table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'episode') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.episode` AS
@@ -826,24 +769,34 @@ BEGIN
       episode_type_concept_id,
       episode_source_value,
       episode_source_concept_id
-    );
-  END IF;
-END;
-
--- Episode event table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'episode_event') THEN
-    -- No action needed, as there are no DATETIME fields to cast
+    FROM `@cdmDatabaseSchema.episode`;
   ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.episode_event` (
+    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.episode` (
       episode_id INT64,
-      event_id INT64,
-      episode_event_field_concept_id INT64
+      person_id INT64,
+      episode_concept_id INT64,
+      episode_start_date DATE,
+      episode_start_datetime DATETIME,
+      episode_end_date DATE,
+      episode_end_datetime DATETIME,
+      episode_parent_id INT64,
+      episode_number INT64,
+      episode_object_concept_id INT64,
+      episode_type_concept_id INT64,
+      episode_source_value STRING,
+      episode_source_concept_id INT64
     );
   END IF;
 END;
 
--- Metadata table
+-- Episode Event table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.episode_event` (
+  episode_id INT64,
+  event_id INT64,
+  episode_event_field_concept_id INT64
+);
+
+-- Metadata table (requires timestamp conversion)
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'metadata') THEN
     CREATE OR REPLACE TABLE `@cdmDatabaseSchema.metadata` AS
@@ -873,231 +826,137 @@ BEGIN
   END IF;
 END;
 
--- CDM source table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'cdm_source') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cdm_source` (
-      cdm_source_name STRING,
-      cdm_source_abbreviation STRING,
-      cdm_holder STRING,
-      source_description STRING,
-      source_documentation_reference STRING,
-      cdm_etl_reference STRING,
-      source_release_date DATE,
-      cdm_release_date DATE,
-      cdm_version STRING,
-      cdm_version_concept_id INT64,
-      vocabulary_version STRING
-    );
-  END IF;
-END;
+-- CDM Source table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cdm_source` (
+  cdm_source_name STRING,
+  cdm_source_abbreviation STRING,
+  cdm_holder STRING,
+  source_description STRING,
+  source_documentation_reference STRING,
+  cdm_etl_reference STRING,
+  source_release_date DATE,
+  cdm_release_date DATE,
+  cdm_version STRING,
+  cdm_version_concept_id INT64,
+  vocabulary_version STRING
+);
 
--- Concept table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'concept') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept` (
-      concept_id INT64,
-      concept_name STRING,
-      domain_id STRING,
-      vocabulary_id STRING,
-      concept_class_id STRING,
-      standard_concept STRING,
-      concept_code STRING,
-      valid_start_date DATE,
-      valid_end_date DATE,
-      invalid_reason STRING
-    );
-  END IF;
-END;
+-- Concept table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept` (
+  concept_id INT64,
+  concept_name STRING,
+  domain_id STRING,
+  vocabulary_id STRING,
+  concept_class_id STRING,
+  standard_concept STRING,
+  concept_code STRING,
+  valid_start_date DATE,
+  valid_end_date DATE,
+  invalid_reason STRING
+);
 
--- Vocabulary table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'vocabulary') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.vocabulary` (
-      vocabulary_id STRING,
-      vocabulary_name STRING,
-      vocabulary_reference STRING,
-      vocabulary_version STRING,
-      vocabulary_concept_id INT64
-    );
-  END IF;
-END;
+-- Vocabulary table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.vocabulary` (
+  vocabulary_id STRING,
+  vocabulary_name STRING,
+  vocabulary_reference STRING,
+  vocabulary_version STRING,
+  vocabulary_concept_id INT64
+);
 
--- Domain table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'domain') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.domain` (
-      domain_id STRING,
-      domain_name STRING,
-      domain_concept_id INT64
-    );
-  END IF;
-END;
+-- Domain table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.domain` (
+  domain_id STRING,
+  domain_name STRING,
+  domain_concept_id INT64
+);
 
--- Concept class table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'concept_class') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_class` (
-      concept_class_id STRING,
-      concept_class_name STRING,
-      concept_class_concept_id INT64
-    );
-  END IF;
-END;
+-- Concept Class table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_class` (
+  concept_class_id STRING,
+  concept_class_name STRING,
+  concept_class_concept_id INT64
+);
 
--- Concept relationship table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'concept_relationship') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_relationship` (
-      concept_id_1 INT64,
-      concept_id_2 INT64,
-      relationship_id STRING,
-      valid_start_date DATE,
-      valid_end_date DATE,
-      invalid_reason STRING
-    );
-  END IF;
-END;
+-- Concept Relationship table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_relationship` (
+  concept_id_1 INT64,
+  concept_id_2 INT64,
+  relationship_id STRING,
+  valid_start_date DATE,
+  valid_end_date DATE,
+  invalid_reason STRING
+);
 
--- Relationship table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'relationship') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.relationship` (
-      relationship_id STRING,
-      relationship_name STRING,
-      is_hierarchical STRING,
-      defines_ancestry STRING,
-      reverse_relationship_id STRING,
-      relationship_concept_id INT64
-    );
-  END IF;
-END;
+-- Relationship table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.relationship` (
+  relationship_id STRING,
+  relationship_name STRING,
+  is_hierarchical STRING,
+  defines_ancestry STRING,
+  reverse_relationship_id STRING,
+  relationship_concept_id INT64
+);
 
--- Concept synonym table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'concept_synonym') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_synonym` (
-      concept_id INT64,
-      concept_synonym_name STRING,
-      language_concept_id INT64
-    );
-  END IF;
-END;
+-- Concept Synonym table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_synonym` (
+  concept_id INT64,
+  concept_synonym_name STRING,
+  language_concept_id INT64
+);
 
--- Concept ancestor table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'concept_ancestor') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_ancestor` (
-      ancestor_concept_id INT64,
-      descendant_concept_id INT64,
-      min_levels_of_separation INT64,
-      max_levels_of_separation INT64
-    );
-  END IF;
-END;
+-- Concept Ancestor table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.concept_ancestor` (
+  ancestor_concept_id INT64,
+  descendant_concept_id INT64,
+  min_levels_of_separation INT64,
+  max_levels_of_separation INT64
+);
 
--- Source to concept map table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'source_to_concept_map') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.source_to_concept_map` (
-      source_code STRING,
-      source_concept_id INT64,
-      source_vocabulary_id STRING,
-      source_code_description STRING,
-      target_concept_id INT64,
-      target_vocabulary_id STRING,
-      valid_start_date DATE,
-      valid_end_date DATE,
-      invalid_reason STRING
-    );
-  END IF;
-END;
+-- Source to Concept Map table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.source_to_concept_map` (
+  source_code STRING,
+  source_concept_id INT64,
+  source_vocabulary_id STRING,
+  source_code_description STRING,
+  target_concept_id INT64,
+  target_vocabulary_id STRING,
+  valid_start_date DATE,
+  valid_end_date DATE,
+  invalid_reason STRING
+);
 
--- Drug strength table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'drug_strength') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.drug_strength` (
-      drug_concept_id INT64,
-      ingredient_concept_id INT64,
-      amount_value FLOAT64,
-      amount_unit_concept_id INT64,
-      numerator_value FLOAT64,
-      numerator_unit_concept_id INT64,
-      denominator_value FLOAT64,
-      denominator_unit_concept_id INT64,
-      box_size INT64,
-      valid_start_date DATE,
-      valid_end_date DATE,
-      invalid_reason STRING
-    );
-  END IF;
-END;
+-- Drug Strength table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.drug_strength` (
+  drug_concept_id INT64,
+  ingredient_concept_id INT64,
+  amount_value FLOAT64,
+  amount_unit_concept_id INT64,
+  numerator_value FLOAT64,
+  numerator_unit_concept_id INT64,
+  denominator_value FLOAT64,
+  denominator_unit_concept_id INT64,
+  box_size INT64,
+  valid_start_date DATE,
+  valid_end_date DATE,
+  invalid_reason STRING
+);
 
--- Cohort table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'cohort') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cohort` (
-      cohort_definition_id INT64,
-      subject_id INT64,
-      cohort_start_date DATE,
-      cohort_end_date DATE
-    );
-  END IF;
-END;
+-- Cohort table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cohort` (
+  cohort_definition_id INT64,
+  subject_id INT64,
+  cohort_start_date DATE,
+  cohort_end_date DATE
+);
 
--- Cohort definition table (no DATETIME fields)
-BEGIN
-  IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'cohort_definition') THEN
-    -- No action needed, as there are no DATETIME fields to cast
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cohort_definition` (
-      cohort_definition_id INT64,
-      cohort_definition_name STRING,
-      cohort_definition_description STRING,
-      definition_type_concept_id INT64,
-      cohort_definition_syntax STRING,
-      subject_concept_id INT64,
-      cohort_initiation_date DATE
-    );
-  END IF;
-END;_id
-    FROM `@cdmDatabaseSchema.episode`;
-  ELSE
-    CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.episode` (
-      episode_id INT64,
-      person_id INT64,
-      episode_concept_id INT64,
-      episode_start_date DATE,
-      episode_start_datetime DATETIME,
-      episode_end_date DATE,
-      episode_end_datetime DATETIME,
-      episode_parent_id INT64,
-      episode_number INT64,
-      episode_object_concept_id INT64,
-      episode_type_concept_id INT64,
-      episode_source_value STRING,
-      episode_source_concept
+-- Cohort Definition table (no timestamp fields)
+CREATE TABLE IF NOT EXISTS `@cdmDatabaseSchema.cohort_definition` (
+  cohort_definition_id INT64,
+  cohort_definition_name STRING,
+  cohort_definition_description STRING,
+  definition_type_concept_id INT64,
+  cohort_definition_syntax STRING,
+  subject_concept_id INT64,
+  cohort_initiation_date DATE
+);
