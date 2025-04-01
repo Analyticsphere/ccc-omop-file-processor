@@ -224,6 +224,7 @@ def update_mappings() -> tuple[str, int]:
         )
         vocab_harmonizer.update_mappings_for_file()
 
+        utils.logger.warning(f"All done with vocab harmonzation for {file_path}, going to return 200")
         return f"Vocabulary harmonized to {vocab_version}", 200
     except Exception as e:
         utils.logger.error(f"Unable to harmonize vocabulary: {str(e)}")
