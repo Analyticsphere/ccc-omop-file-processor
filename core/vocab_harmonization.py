@@ -289,7 +289,8 @@ class VocabHarmonizer:
         # Create a new Parquet file for each target table, using data_0 as file name (like DuckDB would)
         for target_table in target_tables_list:
             self.logger.warning(f"Going to partition table {target_table}")
-            file_path = f"{self.target_parquet_path}partitioned/target_table={target_table}/data_0{constants.PARQUET}"
+            #file_path = f"{self.target_parquet_path}partitioned/target_table={target_table}/data_0{constants.PARQUET}"
+            file_path = f"{self.target_parquet_path}partitioned/target_table={target_table}/*{constants.PARQUET}"
             partition_statement = f"""
                 COPY (
                     SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
