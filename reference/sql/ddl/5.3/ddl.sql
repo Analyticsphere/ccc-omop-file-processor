@@ -6,7 +6,7 @@ BEGIN
   -- Check if the table exists
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'person') THEN
     -- Replace the table, only casting DATETIME fields
-    CREATE TABLE `@cdmDatabaseSchema.person` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.person` AS
     SELECT
       person_id,
       gender_concept_id,
@@ -55,7 +55,7 @@ END;
 -- Observation period table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'observation_period') THEN
-    CREATE TABLE `@cdmDatabaseSchema.observation_period` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.observation_period` AS
     SELECT
       observation_period_id,
       person_id,
@@ -77,7 +77,7 @@ END;
 -- Visit occurrence table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'visit_occurrence') THEN
-    CREATE TABLE `@cdmDatabaseSchema.visit_occurrence` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.visit_occurrence` AS
     SELECT
       visit_occurrence_id,
       person_id,
@@ -123,7 +123,7 @@ END;
 -- Visit detail table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'visit_detail') THEN
-    CREATE TABLE `@cdmDatabaseSchema.visit_detail` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.visit_detail` AS
     SELECT
       visit_detail_id,
       person_id,
@@ -173,7 +173,7 @@ END;
 -- Condition occurrence table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'condition_occurrence') THEN
-    CREATE TABLE `@cdmDatabaseSchema.condition_occurrence` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.condition_occurrence` AS
     SELECT
       condition_occurrence_id,
       person_id,
@@ -217,7 +217,7 @@ END;
 -- Drug exposure table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'drug_exposure') THEN
-    CREATE TABLE `@cdmDatabaseSchema.drug_exposure` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.drug_exposure` AS
     SELECT
       drug_exposure_id,
       person_id,
@@ -275,7 +275,7 @@ END;
 -- Procedure occurrence table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'procedure_occurrence') THEN
-    CREATE TABLE `@cdmDatabaseSchema.procedure_occurrence` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.procedure_occurrence` AS
     SELECT
       procedure_occurrence_id,
       person_id,
@@ -315,7 +315,7 @@ END;
 -- Device exposure table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'device_exposure') THEN
-    CREATE TABLE `@cdmDatabaseSchema.device_exposure` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.device_exposure` AS
     SELECT
       device_exposure_id,
       person_id,
@@ -357,7 +357,7 @@ END;
 -- Measurement table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'measurement') THEN
-    CREATE TABLE `@cdmDatabaseSchema.measurement` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.measurement` AS
     SELECT
       measurement_id,
       person_id,
@@ -409,7 +409,7 @@ END;
 -- Observation table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'observation') THEN
-    CREATE TABLE `@cdmDatabaseSchema.observation` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.observation` AS
     SELECT
       observation_id,
       person_id,
@@ -457,7 +457,7 @@ END;
 -- Death table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'death') THEN
-    CREATE TABLE `@cdmDatabaseSchema.death` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.death` AS
     SELECT
       person_id,
       CAST(death_date AS DATETIME) AS death_date,
@@ -483,7 +483,7 @@ END;
 -- Note table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'note') THEN
-    CREATE TABLE `@cdmDatabaseSchema.note` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.note` AS
     SELECT
       note_id,
       person_id,
@@ -523,7 +523,7 @@ END;
 -- Note NLP table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'note_nlp') THEN
-    CREATE TABLE `@cdmDatabaseSchema.note_nlp` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.note_nlp` AS
     SELECT
       note_nlp_id,
       note_id,
@@ -563,7 +563,7 @@ END;
 -- Specimen table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'specimen') THEN
-    CREATE TABLE `@cdmDatabaseSchema.specimen` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.specimen` AS
     SELECT
       specimen_id,
       person_id,
@@ -677,7 +677,7 @@ END;
 -- Payer plan period table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'payer_plan_period') THEN
-    CREATE TABLE `@cdmDatabaseSchema.payer_plan_period` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.payer_plan_period` AS
     SELECT
       payer_plan_period_id,
       person_id,
@@ -755,7 +755,7 @@ END;
 -- Drug era table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'drug_era') THEN
-    CREATE TABLE `@cdmDatabaseSchema.drug_era` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.drug_era` AS
     SELECT
       drug_era_id,
       person_id,
@@ -781,7 +781,7 @@ END;
 -- Dose era table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'dose_era') THEN
-    CREATE TABLE `@cdmDatabaseSchema.dose_era` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.dose_era` AS
     SELECT
       dose_era_id,
       person_id,
@@ -807,7 +807,7 @@ END;
 -- Condition era table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'condition_era') THEN
-    CREATE TABLE `@cdmDatabaseSchema.condition_era` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.condition_era` AS
     SELECT
       condition_era_id,
       person_id,
@@ -831,7 +831,7 @@ END;
 -- Metadata table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'metadata') THEN
-    CREATE TABLE `@cdmDatabaseSchema.metadata` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.metadata` AS
     SELECT
       metadata_concept_id,
       metadata_type_concept_id,
@@ -857,7 +857,7 @@ END;
 -- CDM source table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'cdm_source') THEN
-    CREATE TABLE `@cdmDatabaseSchema.cdm_source` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.cdm_source` AS
     SELECT
       cdm_source_name,
       cdm_source_abbreviation,
@@ -889,7 +889,7 @@ END;
 -- Concept table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'concept') THEN
-    CREATE TABLE `@cdmDatabaseSchema.concept` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.concept` AS
     SELECT
       concept_id,
       concept_name,
@@ -962,7 +962,7 @@ END;
 -- Concept relationship table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'concept_relationship') THEN
-    CREATE TABLE `@cdmDatabaseSchema.concept_relationship` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.concept_relationship` AS
     SELECT
       concept_id_1,
       concept_id_2,
@@ -1029,7 +1029,7 @@ END;
 -- Source to concept map table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'source_to_concept_map') THEN
-    CREATE TABLE `@cdmDatabaseSchema.source_to_concept_map` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.source_to_concept_map` AS
     SELECT
       source_code,
       source_concept_id,
@@ -1059,7 +1059,7 @@ END;
 -- Drug strength table
 BEGIN
   IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'drug_strength') THEN
-    CREATE TABLE `@cdmDatabaseSchema.drug_strength` AS
+    CREATE OR REPLACE TABLE `@cdmDatabaseSchema.drug_strength` AS
     SELECT
       drug_concept_id,
       ingredient_concept_id,
