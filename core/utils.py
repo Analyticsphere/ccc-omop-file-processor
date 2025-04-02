@@ -500,20 +500,102 @@ def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
     report_tmp_dir = f"gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
     return report_tmp_dir
 
+def handle_bigquery_error(exception: Exception, sql_script: str = None) -> Exception:
+    """
+    Process BigQuery exceptions to extract detailed error information.
+    
+    Args:
+        exception: The original exception from BigQuery
+        sql_script: Optional SQL script that caused the error
+        
+    Returns:
+        A new exception with detailed error information
+    """
+    error_message = str(exception)
+    error_type = type(exception).__name__
+    
+    # Initialize detailed error message
+    detailed_message = f"BigQuery error: {error_message}"
+    
+    # Check for BigQuery specific error details
+    if hasattr(exception, 'errors') and exception.errors:
+        detailed_errors = []
+        for error in exception.errors:
+            error_info = {
+                'reason': error.get('reason', 'Unknown'),
+                'location': error.get('location', 'Unknown'),
+                'message': error.get('message', error_message)
+            }
+            detailed_errors.append(error_info)
+        
+        # Log the detailed errors
+        logging.error(f"BigQuery execution failed: {error_message}")
+        logging.error(f"Detailed errors: {detailed_errors}")
+        
+        # Extract SQL around error location if available
+        if sql_script:
+            for error in detailed_errors:
+                if error['location'] != 'Unknown':
+                    try:
+                        # Try to get specific line/position info
+                        loc = error['location']
+                        if isinstance(loc, dict) and 'line' in loc:
+                            lines = sql_script.split('\n')
+                            line_num = loc['line']
+                            # Show 3 lines before and after for context
+                            start = max(0, line_num - 3)
+                            end = min(len(lines), line_num + 3)
+                            context = '\n'.join([f"{i+start}: {lines[i+start]}" for i in range(end-start)])
+                            logging.error(f"SQL context around error:\n{context}")
+                    except:
+                        pass
+                    
+        # Create a detailed error message
+        if detailed_errors:
+            reason = detailed_errors[0].get('reason', '')
+            detailed_message = f"BigQuery error: {error_message}. "
+            detailed_message += f"Reason: {reason}. "
+            specific_message = detailed_errors[0].get('message', '')
+            if specific_message != error_message:
+                detailed_message += f"Details: {specific_message}"
+    
+    # Try to get info from the job if available
+    job_id = getattr(exception, 'job_id', None)
+    if job_id:
+        try:
+            # Try to get info from the failed job
+            client = bigquery.Client()
+            job = client.get_job(job_id)
+            if job.errors:
+                logging.error(f"Errors from job {job_id}: {job.errors}")
+                detailed_message += f" Job {job_id} failed: {job.errors}"
+        except:
+            pass
+    
+    # Create a new exception with the detailed message
+    new_exception = Exception(detailed_message)
+    # Preserve the original exception's traceback
+    new_exception.__cause__ = exception
+    return new_exception
+
 def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig]) -> bigquery.table.RowIterator:
     # Initialize the BigQuery client
     client = bigquery.Client()
 
-    # Run the query
-    if job_config:
-        query_job = client.query(sql_script, job_config=job_config)
-    else:
-        query_job = client.query(sql_script)
+    try:
+        # Run the query
+        if job_config:
+            query_job = client.query(sql_script, job_config=job_config)
+        else:
+            query_job = client.query(sql_script)
 
-    # Wait for the job to complete
-    result = query_job.result()
+        # Wait for the job to complete
+        result = query_job.result()
+        return result
 
-    return result
+    except Exception as e:
+        # Use the utility function to handle the error and raise it
+        raise handle_bigquery_error(e, sql_script)
 
 def download_from_gcs(gcs_file_path: str) -> str:
     """

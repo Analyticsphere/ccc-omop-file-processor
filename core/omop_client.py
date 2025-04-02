@@ -95,7 +95,7 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                     for col in predefined_columns:
                         if col in csv_columns:
                             if col in ('valid_start_date', 'valid_end_date'):
-                                # Handle date fields; need special handling or they're interpred as numeric values
+                                # Handle date fields; need special handling or they're interpreted as numeric values
                                 select_columns.append(
                                     f'CAST(STRPTIME(CAST("{col}" AS VARCHAR), \'%Y%m%d\') AS DATE) AS "{col}"'
                                 )
@@ -175,21 +175,20 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
 
 def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
     ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
-
-    # Get DDL with CREATE OR REPLACE TABLE statements
     try:
         with open(ddl_file, 'r') as f:
             ddl_sql = f.read()
-        
         # Add project_id and data_set to SQL statement
         create_sql = ddl_sql.replace(constants.DDL_PLACEHOLDER_STRING, f"{project_id}.{dataset_id}")
-
         # Execute the CREATE OR REPLACE TABLE statements in BigQuery
         utils.execute_bq_sql(create_sql, None)
-
     except Exception as e:
-        utils.logger.error(f"This DDL failed: \n{create_sql}")
-        raise Exception(f"DDL file error: {e}")
+        if isinstance(e, IOError):
+            # Handle file-related errors specifically
+            raise Exception(f"DDL file error: {e}")
+        else:
+            # For BigQuery errors, they've already been processed by the utility function
+            raise
 
 def populate_cdm_source(cdm_source_data: dict) -> None:
     # Add a record to the cdm_source table, if it doesn't have any rows
