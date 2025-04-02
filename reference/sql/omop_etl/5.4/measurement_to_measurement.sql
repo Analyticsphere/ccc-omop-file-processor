@@ -8,7 +8,7 @@ SELECT
 	measurement_type_concept_id AS measurement_type_concept_id,
 	operator_concept_id AS operator_concept_id,
 	value_as_number AS value_as_number,
-	value_as_concept_id AS value_as_concept_id,
+	COALESCE(vh_value_as_concept_id, value_as_concept_id) AS value_as_concept_id,
 	unit_concept_id AS unit_concept_id,
 	range_low AS range_low,
 	range_high AS range_high,

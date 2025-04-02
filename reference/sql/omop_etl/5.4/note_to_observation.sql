@@ -1,0 +1,23 @@
+SELECT
+	note_id AS observation_id,
+	person_id AS person_id,
+	note_class_concept_id AS observation_concept_id,
+	note_date AS observation_date,
+	note_datetime AS observation_datetime,
+	note_type_concept_id AS observation_type_concept_id,
+	NULL AS value_as_number,
+	NULL AS value_as_string,
+	vh_value_as_concept_id AS value_as_concept_id,
+	0 AS qualifier_concept_id,
+	0 AS unit_concept_id,
+	provider_id AS provider_id,
+	visit_occurrence_id AS visit_occurrence_id,
+	visit_detail_id AS visit_detail_id,
+	note_source_value AS observation_source_value,
+	0 AS observation_source_concept_id,
+	NULL AS unit_source_value,
+	NULL AS qualifier_source_value,
+	NULL AS value_source_value,
+	note_event_id AS observation_event_id,
+	note_event_field_concept_id AS obs_event_field_concept_id
+FROM read_parquet('@NOTE')

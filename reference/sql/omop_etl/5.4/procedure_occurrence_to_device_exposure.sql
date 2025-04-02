@@ -1,0 +1,21 @@
+SELECT
+	procedure_occurrence_id AS device_exposure_id,
+	person_id AS person_id,
+	procedure_concept_id AS device_concept_id,
+	procedure_date AS device_exposure_start_date,
+	procedure_datetime AS device_exposure_start_datetime,
+	procedure_end_date AS device_exposure_end_date,
+	procedure_end_datetime AS device_exposure_end_datetime,
+	procedure_type_concept_id AS device_type_concept_id,
+	NULL AS unique_device_id,
+	NULL AS production_id,
+	quantity AS quantity,
+	provider_id AS provider_id,
+	visit_occurrence_id AS visit_occurrence_id,
+	visit_detail_id AS visit_detail_id,
+	procedure_source_value AS device_source_value,
+	procedure_source_concept_id AS device_source_concept_id,
+	0 AS unit_concept_id,
+	NULL AS unit_source_value,
+	0 AS unit_source_concept_id
+FROM read_parquet('@PROCEDURE_OCCURRENCE')

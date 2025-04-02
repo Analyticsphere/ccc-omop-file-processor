@@ -7,7 +7,7 @@ SELECT
 	condition_type_concept_id AS observation_type_concept_id,
 	NULL AS value_as_number,
 	NULL AS value_as_string,
-	value_as_concept_id AS value_as_concept_id,
+	vh_value_as_concept_id AS value_as_concept_id,
 	NULL AS qualifier_concept_id,
 	NULL AS unit_concept_id,
 	provider_id AS provider_id,
