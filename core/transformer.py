@@ -168,10 +168,13 @@ class Transformer:
             COPY (
                 {final_sql}
                 WHERE target_table = '{self.target_table}'
-            ) TO 'gs://{self.file_path}transformed/{self.target_table}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO 'gs://{self.get_transformed_path()}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         return transform_sql
+
+    def get_transformed_path(self) -> str:
+        return f"{self.file_path}transformed/{self.target_table}{constants.PARQUET}"
 
     def omop_to_omop_etl(self) -> None:
         # Execute the OMOP to OMOP ETL SQL script

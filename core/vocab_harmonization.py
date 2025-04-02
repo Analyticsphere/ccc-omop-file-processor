@@ -1,8 +1,7 @@
 import core.constants as constants
 import core.utils as utils
+import core.bq_client as bq_client
 import core.transformer as transformer
-from typing import Optional
-import re
 import logging
 import sys
 
@@ -12,21 +11,23 @@ class VocabHarmonizer:
     Handles the entire process from reading parquet files to generating SQL and saving the harmonized output.
     """
     
-    def __init__(self, gcs_file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str):
+    def __init__(self, file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str, project_id: str, dataset_id):
         """
         Initialize a VocabHarmonizer with common parameters needed across all operations.
         """
         self.logger = utils.logger
-        self.gcs_file_path = gcs_file_path
+        self.file_path = file_path
         self.cdm_version = cdm_version
         self.site = site
         self.vocab_version = vocab_version
         self.vocab_gcs_bucket = vocab_gcs_bucket
-        self.source_table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
-        self.bucket = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)[0]
-        self.delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)[1]
-        self.source_parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
-        self.target_parquet_path = utils.get_parquet_harmonized_path(gcs_file_path)
+        self.source_table_name = utils.get_table_name_from_gcs_path(file_path)
+        self.bucket = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)[0]
+        self.delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)[1]
+        self.source_parquet_path = utils.get_parquet_artifact_location(file_path)
+        self.target_parquet_path = utils.get_parquet_harmonized_path(file_path)
+        self.project_id = project_id
+        self.dataset_id = dataset_id
 
         logging.basicConfig(
             level=logging.INFO,
@@ -36,7 +37,7 @@ class VocabHarmonizer:
         # Create the logger at module level so its settings are applied throughout class
         self.logger = logging.getLogger(__name__)
 
-    def update_mappings_for_file(self) -> None:
+    def harmonize(self) -> None:
         """
         Harmonize a parquet file by applying defined harmonization steps and saving the result.
         """
@@ -52,7 +53,7 @@ class VocabHarmonizer:
 
         # After finding new targets and domain, partition file based on target OMOP table
         self.logger.warning(f"!! About to call partition_by_target_table() function")
-        self.partition_by_target_table()
+        self.omop_etl()
         self.logger.warning(f"DID complete partition_by_target_table() function")
 
 
@@ -273,54 +274,41 @@ class VocabHarmonizer:
         utils.execute_duckdq_sql(final_sql_statement, f"Unable to perform domain check against {self.source_table_name}")
 
 
-    def partition_by_target_table(self) -> None:
+    def omop_etl(self) -> list[dict]:
         self.logger.info(f"Partitioning table {self.source_table_name} for {self.site}")
-        # There's a bug in DuckDB/fsspec that causes Hive partitioning to hang or OOM when working with remote file systems
-        # As a workaround, manually partitioning the files in the same way DuckDB would
-        # https://github.com/duckdb/duckdb/issues/11817
-        # https://github.com/duckdb/duckdb/issues/8981
-        # partition_statement = f"""
-        #     COPY (
-        #         SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
-        #     ) TO 'gs://{self.target_parquet_path}partitioned/' (FORMAT PARQUET, PARTITION_BY (target_table), COMPRESSION ZSTD);
-        # """
 
         # Find all target tables in the source file
-        target_tables = f"""
-            SELECT DISTINCT target_table FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
-        """
         conn, local_db_file = utils.create_duckdb_connection()
 
         try:
             with conn:
+                target_tables = f"""
+                    SELECT DISTINCT target_table FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+                """
+                        
                 target_tables_list = conn.execute(target_tables).fetch_df()['target_table'].tolist()
         except Exception as e:
             raise Exception(f"Unable to get target tables from Parquet file: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
 
-        
-        
-        # Create a new Parquet file for each target table, using data_0 as file name (like DuckDB would)
+        # Create a new Parquet file for each target table with the appropriate structure
         for target_table in target_tables_list:
             omop_transformer = transformer.Transformer(self.site, self.target_parquet_path, self.cdm_version, self.source_table_name, target_table)
-
-            self.logger.warning(f"Going to partition table {target_table}")
-            #file_path = f"{self.target_parquet_path}partitioned/target_table={target_table}/data_0{constants.PARQUET}"
-            # partition_statement = f"""
-            #     COPY (
-            #         SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
-            #         WHERE target_table = '{target_table}'
-            #     ) TO 'gs://{file_path}' (FORMAT 'parquet', COMPRESSION 'zstd', ROW_GROUP_SIZE 50_000)
-            # """
             partition_statement = omop_transformer.generate_omop_to_omop_sql()
 
-            try:
-                utils.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
-            except Exception as e:
-                raise Exception(f"Unable to partition file {self.source_table_name}: {e}") from e
-            
-            self.logger.warning(f"Completed partitioning of {target_table}")
+            # Generate the transformed file
+            utils.execute_duckdq_sql(partition_statement, f"Unable to transform file {self.source_table_name}")
+
+            # Load the file to BQ; ETLed_FILE write type ensures append only
+            bq_client.load_parquet_to_bigquery(
+                file_path=f"gs://{omop_transformer.get_transformed_path()}",
+                project_id=self.project_id,
+                dataset_id=self.dataset_id,
+                table_name=target_table,
+                write_type=constants.BQWriteTypes.ETLed_FILE
+            )
+
 
 
     def perform_harmonization(self, step: str) -> None:
