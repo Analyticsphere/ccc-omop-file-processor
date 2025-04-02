@@ -294,7 +294,7 @@ class VocabHarmonizer:
         
         # Create a new Parquet file for each target table, using data_0 as file name (like DuckDB would)
         for target_table in target_tables_list:
-            omop_transformer = transformer.Transformer(self.site, self.gcs_file_path, self.cdm_version, self.source_table_name, target_table)
+            omop_transformer = transformer.Transformer(self.site, self.target_parquet_path, self.cdm_version, self.source_table_name, target_table)
 
             self.logger.warning(f"Going to partition table {target_table}")
             #file_path = f"{self.target_parquet_path}partitioned/target_table={target_table}/data_0{constants.PARQUET}"
@@ -305,8 +305,12 @@ class VocabHarmonizer:
             #     ) TO 'gs://{file_path}' (FORMAT 'parquet', COMPRESSION 'zstd', ROW_GROUP_SIZE 50_000)
             # """
             partition_statement = omop_transformer.generate_omop_to_omop_sql()
+
+            try:
+                utils.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
+            except Exception as e:
+                raise Exception(f"Unable to partition file {self.source_table_name}") from e
             
-            utils.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
             self.logger.warning(f"Completed partitioning of {target_table}")
 
 
