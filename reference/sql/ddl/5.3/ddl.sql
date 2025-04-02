@@ -718,7 +718,7 @@ IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'dose_
             drug_concept_id,
             unit_concept_id,
             dose_value,
-            CAST(dose_era_start_date AS DATETIME) AS dose_era_start_date,
+            CAST(dose_era_start_date AS DATE) AS dose_era_start_date,
             CAST(dose_era_end_date AS DATE) AS dose_era_end_date
         FROM `@cdmDatabaseSchema.dose_era`
     );
@@ -729,7 +729,7 @@ ELSE
         drug_concept_id INT64,
         unit_concept_id INT64,
         dose_value FLOAT64,
-        dose_era_start_date DATETIME,
+        dose_era_start_date DATE,
         dose_era_end_date DATE
     );
 END IF;

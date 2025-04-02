@@ -798,7 +798,7 @@ IF EXISTS (SELECT 1 FROM `@cdmDatabaseSchema.__TABLES__` WHERE table_id = 'episo
       person_id,
       episode_concept_id,
       CAST(episode_start_date AS DATE) AS episode_start_date,
-      CAST(episode_start_datetime AS DATETIME) episode_start_datetime,
+      CAST(episode_start_datetime AS DATETIME) AS episode_start_datetime,
       CAST(episode_end_date AS DATE) AS episode_end_date,
       CAST(episode_end_datetime AS DATETIME) AS episode_end_datetime,
       episode_parent_id,
