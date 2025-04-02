@@ -106,8 +106,7 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                         utils.logger.info(f"Executing vocab conversion query: {no_returns}")
                         conn.execute(convert_query)
                 except Exception as e:
-                    # Use the simplified error handling utility
-                    raise utils.handle_duckdb_error(e, conn, convert_query)
+                    raise Exception(f"Error executing query: {e}")
                 finally:
                     utils.close_duckdb_connection(conn, local_db_file)
         return None

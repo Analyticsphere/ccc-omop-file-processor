@@ -500,88 +500,6 @@ def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
     report_tmp_dir = f"gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
     return report_tmp_dir
 
-def handle_duckdb_error(exception: Exception, conn=None, query: str = None) -> Exception:
-    """
-    Process DuckDB exceptions to extract detailed error information.
-    
-    Args:
-        exception: The original exception from DuckDB
-        conn: Optional DuckDB connection for additional diagnostic queries
-        query: Optional query string that caused the error
-        
-    Returns:
-        A new exception with detailed error information
-    """
-    error_message = str(exception)
-    
-    # Initialize detailed error message
-    detailed_message = f"DuckDB error: {error_message}"
-    
-    # Log the query that failed if available
-    if query:
-        logging.error(f"Query that failed: {query}")
-    
-    # Try to get diagnostic information if connection is provided
-    if conn:
-        try:
-            diagnostic_info = conn.execute("SELECT error_message, stack_trace FROM duckdb_errors() ORDER BY timestamp DESC LIMIT 1").fetchall()
-            if diagnostic_info and len(diagnostic_info) > 0:
-                error_details = diagnostic_info[0][0] if diagnostic_info[0][0] else "No additional details"
-                logging.error(f"DuckDB diagnostic info: {error_details}")
-                
-                # Add relevant diagnostics to the exception message
-                if error_details and error_details != error_message:
-                    detailed_message += f" Additional details: {error_details}"
-        except:
-            # If diagnostic query fails, continue with the basic error info
-            pass
-    
-    # Create a new exception with the detailed message
-    new_exception = Exception(detailed_message)
-    new_exception.__cause__ = exception
-    return new_exception
-
-def handle_bigquery_error(exception: Exception, sql_script: str = None) -> Exception:
-    """
-    Process DuckDB exceptions to extract detailed error information.
-    
-    Args:
-        exception: The original exception from DuckDB
-        conn: Optional DuckDB connection for additional diagnostic queries
-        query: Optional query string that caused the error
-        
-    Returns:
-        A new exception with detailed error information
-    """
-    error_message = str(exception)
-    
-    # Initialize detailed error message
-    detailed_message = f"DuckDB error: {error_message}"
-    
-    # Log the query that failed if available
-    if query:
-        logging.error(f"Query that failed: {query}")
-    
-    # Try to get diagnostic information if connection is provided
-    if conn:
-        try:
-            diagnostic_info = conn.execute("SELECT error_message, stack_trace FROM duckdb_errors() ORDER BY timestamp DESC LIMIT 1").fetchall()
-            if diagnostic_info and len(diagnostic_info) > 0:
-                error_details = diagnostic_info[0][0] if diagnostic_info[0][0] else "No additional details"
-                logging.error(f"DuckDB diagnostic info: {error_details}")
-                
-                # Add relevant diagnostics to the exception message
-                if error_details and error_details != error_message:
-                    detailed_message += f" Additional details: {error_details}"
-        except:
-            # If diagnostic query fails, continue with the basic error info
-            pass
-    
-    # Create a new exception with the detailed message
-    new_exception = Exception(detailed_message)
-    new_exception.__cause__ = exception
-    return new_exception
-
 def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig]) -> bigquery.table.RowIterator:
     # Initialize the BigQuery client
     client = bigquery.Client()
@@ -598,8 +516,9 @@ def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig
         return result
 
     except Exception as e:
-        # Use the utility function to handle the error and raise it
-        raise handle_bigquery_error(e, sql_script)
+        no_returns = sql_script.replace('\n', ' ')
+        logger.error(f"This query failed: {no_returns}")
+        raise Exception(f"Error executing query: {e}")
 
 def download_from_gcs(gcs_file_path: str) -> str:
     """
