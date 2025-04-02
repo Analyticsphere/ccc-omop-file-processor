@@ -197,7 +197,7 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
         utils.execute_bq_sql(create_sql, None)
 
     except Exception as e:
-        utils.logger.error("This DDL failed: \n{create_sql}")
+        utils.logger.error(f"This DDL failed: \n{create_sql}")
         raise Exception(f"DDL file error: {e}")
 
 def populate_cdm_source(cdm_source_data: dict) -> None:
