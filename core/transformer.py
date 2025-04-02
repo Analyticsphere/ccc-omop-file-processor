@@ -127,7 +127,9 @@ class Transformer:
 
                 # Create the concatenation expression
                 concat_expr = "CONCAT(" + ",".join(concat_parts) + ")"
-                source_expr = f"hash({concat_expr})"
+                # hash returns unsigned value that may exceed signed INT64 space
+                # Use % 9223372036854775807 to ensure value fits in signed INT64 space
+                source_expr = f"hash({concat_expr}) % 9223372036854775807"
             
             # Get target column schema info - check if the column exists in the schema
             if target_column in target_columns_dict:
