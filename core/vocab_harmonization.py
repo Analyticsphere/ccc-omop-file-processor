@@ -3,6 +3,8 @@ import core.utils as utils
 import core.transformer as transformer
 from typing import Optional
 import re
+import logging
+import sys
 
 class VocabHarmonizer:
     """
@@ -25,7 +27,14 @@ class VocabHarmonizer:
         self.delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)[1]
         self.source_parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
         self.target_parquet_path = utils.get_parquet_harmonized_path(gcs_file_path)
-        
+
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[logging.StreamHandler(sys.stdout)]
+        )
+        # Create the logger at module level so its settings are applied throughout class
+        self.logger = logging.getLogger(__name__)
 
     def update_mappings_for_file(self) -> None:
         """
@@ -110,7 +119,7 @@ class VocabHarmonizer:
             -- Pivot so that Meas Value mappings get associated with target_concept_id_column
             SELECT 
                 tbl.{primary_key},
-                MAX(vocab.target_concept_id) AS value_as_concept_id
+                MAX(vocab.target_concept_id) AS vh_value_as_concept_id
             FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
             INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab 
                 ON tbl.{source_concept_id_column} = vocab.concept_id
@@ -119,7 +128,7 @@ class VocabHarmonizer:
         """
 
         # Add column to final select that store Meas Value mapping
-        final_select_exprs.append("mv_cte.value_as_concept_id")
+        final_select_exprs.append("mv_cte.vh_value_as_concept_id")
 
         # Add target table to final output
         case_when_target_table = f"""
@@ -206,8 +215,8 @@ class VocabHarmonizer:
         for metadata_column in metadata_columns:
             select_exprs.append(metadata_column)
         
-        # Add value_as_concept_id field to keep structure consistent with remapped tables
-        select_exprs.append("CAST(NULL AS BIGINT) AS value_as_concept_id")
+        # Add vh_value_as_concept_id field to keep structure consistent with remapped tables
+        select_exprs.append("CAST(NULL AS BIGINT) AS vh_value_as_concept_id")
         # Add target table statement
         case_when_target_table = f"""
             CASE 
@@ -309,7 +318,7 @@ class VocabHarmonizer:
             try:
                 utils.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
             except Exception as e:
-                raise Exception(f"Unable to partition file {self.source_table_name}") from e
+                raise Exception(f"Unable to partition file {self.source_table_name}: {e}") from e
             
             self.logger.warning(f"Completed partitioning of {target_table}")
 
