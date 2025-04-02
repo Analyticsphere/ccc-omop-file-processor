@@ -294,7 +294,7 @@ class VocabHarmonizer:
                 COPY (
                     SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
                     WHERE target_table = '{target_table}'
-                ) TO 'gs://{file_path}' {constants.DUCKDB_FORMAT_STRING}
+                ) TO 'gs://{file_path}' (FORMAT 'parquet', COMPRESSION 'zstd', ROW_GROUP_SIZE 50_000)
             """
             utils.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
             self.logger.warning(f"Completed partitioning of {target_table}")

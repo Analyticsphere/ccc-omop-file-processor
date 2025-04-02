@@ -202,9 +202,6 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
 
-        # TODO: REmove?
-        conn.execute(f"SET row_group_size = 50000")
-
         # Register UDFs
         udf.UDFManager(conn).register_udfs()
 
