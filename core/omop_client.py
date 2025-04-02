@@ -81,6 +81,7 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                 # Get column names
                 csv_columns = utils.get_columns_from_file(csv_file_path)
                 
+                
                 if not predefined_columns:
                     # Proceed with CSV columns as they are
                     select_statement = ', '.join([f'"{col}"' for col in csv_columns])
@@ -101,8 +102,16 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                             select_columns.append(f'NULL AS "{col}"')
                     select_statement = ', '.join(select_columns)
                 
+                
                 # Execute the COPY command to convert CSV to Parquet with columns in the correct order
                 try:
+                    convert_query = f"""
+                    COPY (
+                        SELECT {select_statement}
+                        FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
+                    ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING};
+                    """
+                    with conn:
                     convert_query = f"""
                     COPY (
                         SELECT {select_statement}
