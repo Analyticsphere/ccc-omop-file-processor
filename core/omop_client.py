@@ -112,12 +112,12 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                     ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING};
                     """
                     with conn:
-                    convert_query = f"""
-                    COPY (
-                        SELECT {select_statement}
-                        FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
-                    ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING};
-                    """
+                        convert_query = f"""
+                        COPY (
+                            SELECT {select_statement}
+                            FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
+                        ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING};
+                        """
                     with conn:
                         conn.execute(convert_query)
                 except Exception as e:
