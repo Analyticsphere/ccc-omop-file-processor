@@ -17,7 +17,7 @@ class Transformer:
         self.target_table = target_table
         #self.target_parquet_path = utils.get_parquet_harmonized_path(file_path)
 
-    def omop_to_omop_etl(self) -> None:
+    def generate_omop_to_omop_sql(self) -> str:
         """
         Generate a SQL statement that transforms data from one OMOP table to another,
         ensuring proper column types and adding placeholder values to NULL required columns
@@ -168,8 +168,12 @@ class Transformer:
             ) TO 'gs://{self.file_path}transformed/{self.target_table}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
-        utils.execute_duckdq_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
+        return transform_sql
 
+    def omop_to_omop_etl(self) -> None:
+        # Execute the OMOP to OMOP ETL SQL script
+        transform_sql = self.generate_omop_to_omop_sql()
+        utils.execute_duckdq_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
 
     def placeholder_to_file_path(self, sql: str) -> str:
         """

@@ -1,5 +1,6 @@
 import core.constants as constants
 import core.utils as utils
+import core.transformer as transformer
 from typing import Optional
 import re
 
@@ -30,6 +31,9 @@ class VocabHarmonizer:
         """
         Harmonize a parquet file by applying defined harmonization steps and saving the result.
         """
+
+        # TODO: Delete all files within GCS folder, if they exist
+        # Necessary - if the task repeats needs to rerun, it'll get incorrect results on second and subsequent runs
 
         # List order is very important here!
         harmonization_steps: list = [constants.SOURCE_TARGET, constants.DOMAIN_CHECK]
@@ -285,17 +289,23 @@ class VocabHarmonizer:
             raise Exception(f"Unable to get target tables from Parquet file: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
+
+        
         
         # Create a new Parquet file for each target table, using data_0 as file name (like DuckDB would)
         for target_table in target_tables_list:
+            omop_transformer = transformer.Transformer(self.site, self.gcs_file_path, self.cdm_version, self.source_table_name, target_table)
+
             self.logger.warning(f"Going to partition table {target_table}")
-            file_path = f"{self.target_parquet_path}partitioned/target_table={target_table}/data_0{constants.PARQUET}"
-            partition_statement = f"""
-                COPY (
-                    SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
-                    WHERE target_table = '{target_table}'
-                ) TO 'gs://{file_path}' (FORMAT 'parquet', COMPRESSION 'zstd', ROW_GROUP_SIZE 50_000)
-            """
+            #file_path = f"{self.target_parquet_path}partitioned/target_table={target_table}/data_0{constants.PARQUET}"
+            # partition_statement = f"""
+            #     COPY (
+            #         SELECT * FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+            #         WHERE target_table = '{target_table}'
+            #     ) TO 'gs://{file_path}' (FORMAT 'parquet', COMPRESSION 'zstd', ROW_GROUP_SIZE 50_000)
+            # """
+            partition_statement = omop_transformer.generate_omop_to_omop_sql()
+            
             utils.execute_duckdq_sql(partition_statement, f"Unable to partition file {self.source_table_name}")
             self.logger.warning(f"Completed partitioning of {target_table}")
 
