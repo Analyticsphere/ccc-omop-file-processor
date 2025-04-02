@@ -203,7 +203,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         conn.register_filesystem(filesystem('gcs'))
 
         # TODO: REmove?
-        conn.execute(f"ROW_GROUP_SIZE = 50000")
+        conn.execute(f"SET row_group_size = 50000")
 
         # Register UDFs
         udf.UDFManager(conn).register_udfs()
