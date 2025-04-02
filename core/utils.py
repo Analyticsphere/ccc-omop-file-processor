@@ -500,81 +500,44 @@ def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
     report_tmp_dir = f"gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
     return report_tmp_dir
 
-def handle_bigquery_error(exception: Exception, sql_script: str = None) -> Exception:
+def handle_duckdb_error(exception: Exception, conn=None, query: str = None) -> Exception:
     """
-    Process BigQuery exceptions to extract detailed error information.
+    Process DuckDB exceptions to extract detailed error information.
     
     Args:
-        exception: The original exception from BigQuery
-        sql_script: Optional SQL script that caused the error
+        exception: The original exception from DuckDB
+        conn: Optional DuckDB connection for additional diagnostic queries
+        query: Optional query string that caused the error
         
     Returns:
         A new exception with detailed error information
     """
     error_message = str(exception)
-    error_type = type(exception).__name__
     
     # Initialize detailed error message
-    detailed_message = f"BigQuery error: {error_message}"
+    detailed_message = f"DuckDB error: {error_message}"
     
-    # Check for BigQuery specific error details
-    if hasattr(exception, 'errors') and exception.errors:
-        detailed_errors = []
-        for error in exception.errors:
-            error_info = {
-                'reason': error.get('reason', 'Unknown'),
-                'location': error.get('location', 'Unknown'),
-                'message': error.get('message', error_message)
-            }
-            detailed_errors.append(error_info)
-        
-        # Log the detailed errors
-        logging.error(f"BigQuery execution failed: {error_message}")
-        logging.error(f"Detailed errors: {detailed_errors}")
-        
-        # Extract SQL around error location if available
-        if sql_script:
-            for error in detailed_errors:
-                if error['location'] != 'Unknown':
-                    try:
-                        # Try to get specific line/position info
-                        loc = error['location']
-                        if isinstance(loc, dict) and 'line' in loc:
-                            lines = sql_script.split('\n')
-                            line_num = loc['line']
-                            # Show 3 lines before and after for context
-                            start = max(0, line_num - 3)
-                            end = min(len(lines), line_num + 3)
-                            context = '\n'.join([f"{i+start}: {lines[i+start]}" for i in range(end-start)])
-                            logging.error(f"SQL context around error:\n{context}")
-                    except:
-                        pass
-                    
-        # Create a detailed error message
-        if detailed_errors:
-            reason = detailed_errors[0].get('reason', '')
-            detailed_message = f"BigQuery error: {error_message}. "
-            detailed_message += f"Reason: {reason}. "
-            specific_message = detailed_errors[0].get('message', '')
-            if specific_message != error_message:
-                detailed_message += f"Details: {specific_message}"
+    # Log the query that failed if available
+    if query:
+        logging.error(f"Query that failed: {query}")
     
-    # Try to get info from the job if available
-    job_id = getattr(exception, 'job_id', None)
-    if job_id:
+    # Try to get diagnostic information if connection is provided
+    if conn:
         try:
-            # Try to get info from the failed job
-            client = bigquery.Client()
-            job = client.get_job(job_id)
-            if job.errors:
-                logging.error(f"Errors from job {job_id}: {job.errors}")
-                detailed_message += f" Job {job_id} failed: {job.errors}"
+            diagnostic_info = conn.execute("SELECT error_message, stack_trace FROM duckdb_errors() ORDER BY timestamp DESC LIMIT 1").fetchall()
+            if diagnostic_info and len(diagnostic_info) > 0:
+                error_details = diagnostic_info[0][0] if diagnostic_info[0][0] else "No additional details"
+                logging.error(f"DuckDB diagnostic info: {error_details}")
+                
+                # Add relevant diagnostics to the exception message
+                if error_details and error_details != error_message:
+                    detailed_message += f" Additional details: {error_details}"
         except:
+            # If diagnostic query fails, continue with the basic error info
             pass
     
     # Create a new exception with the detailed message
     new_exception = Exception(detailed_message)
-    # Preserve the original exception's traceback
     new_exception.__cause__ = exception
     return new_exception
 

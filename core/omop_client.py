@@ -64,7 +64,6 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
     Convert CSV vocabulary files from Athena to Parquet format
     """
     vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
-    
     # Confirm desired vocabulary version exists in GCS
     if utils.vocab_gcs_path_exists(vocab_root_path):
         vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
@@ -73,19 +72,15 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
             parquet_file_path = f"{vocab_root_path}{constants.OPTIMIZED_VOCAB_FOLDER}/{vocab_file_name}{constants.PARQUET}"
             csv_file_path = f"{vocab_root_path}{vocab_file}"
             table_name = utils.get_table_name_from_gcs_path(csv_file_path)
-
             # Continue only if the vocabulary file has not been created or is not valid
             if not utils.parquet_file_exists(parquet_file_path) or not utils.valid_parquet_file(parquet_file_path):
-                
                 conn, local_db_file = utils.create_duckdb_connection()
-
                 # Get expected columns from schema in correct order
                 schema = utils.get_cdm_schema(vocab_version)
                 predefined_columns = list(schema[table_name]['fields'].keys())
-
                 # Get column names
                 csv_columns = utils.get_columns_from_file(csv_file_path)
-
+                
                 if not predefined_columns:
                     # Proceed with CSV columns as they are
                     select_statement = ', '.join([f'"{col}"' for col in csv_columns])
@@ -105,28 +100,20 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                             # Column not in CSV, select NULL as that column
                             select_columns.append(f'NULL AS "{col}"')
                     select_statement = ', '.join(select_columns)
-
+                
                 # Execute the COPY command to convert CSV to Parquet with columns in the correct order
                 try:
+                    convert_query = f"""
+                    COPY (
+                        SELECT {select_statement}
+                        FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
+                    ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING};
+                    """
                     with conn:
-                        convert_query = f"""
-                            COPY (
-                                SELECT {select_statement}
-                                FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
-                            ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING};
-                        """
                         conn.execute(convert_query)
                 except Exception as e:
-                    # Optionally get more diagnostic information
-                    try:
-                        # Try to get more diagnostic information from DuckDB
-                        diagnostic_info = conn.execute("SELECT error_message, stack_trace FROM duckdb_errors() ORDER BY timestamp DESC LIMIT 1").fetchall()
-                        if diagnostic_info:
-                            utils.logger.error(f"DuckDB diagnostic info: {diagnostic_info}")
-                    except:
-                        # If this fails, continue with the basic error info
-                        pass
-                    raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
+                    # Use the simplified error handling utility
+                    raise handle_duckdb_error(e, conn, convert_query)
                 finally:
                     utils.close_duckdb_connection(conn, local_db_file)
                 
