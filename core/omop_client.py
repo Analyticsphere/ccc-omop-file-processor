@@ -117,27 +117,18 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                         """
                         conn.execute(convert_query)
                 except Exception as e:
-                    utils.logger.error(f"convert_query failed to execute: \n{convert_query}")
+                    # Optionally get more diagnostic information
+                    try:
+                        # Try to get more diagnostic information from DuckDB
+                        diagnostic_info = conn.execute("SELECT error_message, stack_trace FROM duckdb_errors() ORDER BY timestamp DESC LIMIT 1").fetchall()
+                        if diagnostic_info:
+                            utils.logger.error(f"DuckDB diagnostic info: {diagnostic_info}")
+                    except:
+                        # If this fails, continue with the basic error info
+                        pass
                     raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
                 finally:
                     utils.close_duckdb_connection(conn, local_db_file)
-
-                # Hard code exceptions to treet with custom sql
-                # something like: f'CAST(STRPTIME(CAST("{col}" AS VARCHAR), \'%Y%m%d\') AS DATE) AS "{col}"'
-                # May need temporary view, but try without and read directly from the CSV if possible
-                # try:
-                #     with conn:
-                #         #TODO Here where we select *, don't select *, select predefined list of columns (to ensure order) but 
-                #         convert_query = f"""
-                #             COPY (
-                #                 SELECT * FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
-                #             ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING}
-                #         """
-                #         conn.execute(convert_query)
-                # except Exception as e:
-                #     raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
-                # finally:
-                #     utils.close_duckdb_connection(conn, local_db_file)
                 
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
     vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
