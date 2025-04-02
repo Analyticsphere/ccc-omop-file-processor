@@ -71,36 +71,26 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
             vocab_file_name = vocab_file.replace(constants.CSV, '').lower()
             parquet_file_path = f"{vocab_root_path}{constants.OPTIMIZED_VOCAB_FOLDER}/{vocab_file_name}{constants.PARQUET}"
             csv_file_path = f"{vocab_root_path}{vocab_file}"
-            table_name = utils.get_table_name_from_gcs_path(csv_file_path)
+
             # Continue only if the vocabulary file has not been created or is not valid
             if not utils.parquet_file_exists(parquet_file_path) or not utils.valid_parquet_file(parquet_file_path):
                 conn, local_db_file = utils.create_duckdb_connection()
-                # Get expected columns from schema in correct order
-                schema = utils.get_cdm_schema(vocab_version)
-                predefined_columns = list(schema[table_name]['fields'].keys())
+                
                 # Get column names
                 csv_columns = utils.get_columns_from_file(csv_file_path)
-                
-                
-                if not predefined_columns:
-                    # Proceed with CSV columns as they are
-                    select_statement = ', '.join([f'"{col}"' for col in csv_columns])
-                else:
-                    # Build the SELECT statement with columns in the predefined order
-                    select_columns = []
-                    for col in predefined_columns:
-                        if col in csv_columns:
-                            if col in ('valid_start_date', 'valid_end_date'):
-                                # Handle date fields; need special handling or they're interpreted as numeric values
-                                select_columns.append(
-                                    f'CAST(STRPTIME(CAST("{col}" AS VARCHAR), \'%Y%m%d\') AS DATE) AS "{col}"'
-                                )
-                            else:
-                                select_columns.append(f'"{col}"')
-                        else:
-                            # Column not in CSV, select NULL as that column
-                            select_columns.append(f'NULL AS "{col}"')
-                    select_statement = ', '.join(select_columns)
+
+                # Build the SELECT statement with columns in the predefined order
+                select_columns = []
+                for col in csv_columns:
+                    if col in ('valid_start_date', 'valid_end_date'):
+                        # Handle date fields; need special handling or they're interpreted as numeric values
+                        select_columns.append(
+                            f'CAST(STRPTIME(CAST("{col}" AS VARCHAR), \'%Y%m%d\') AS DATE) AS "{col}"'
+                        )
+                    else:
+                        select_columns.append(f'"{col}"')
+
+                select_statement = ', '.join(select_columns)
                 
                 
                 # Execute the COPY command to convert CSV to Parquet with columns in the correct order
@@ -112,19 +102,18 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                     ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING};
                     """
                     with conn:
-                        convert_query = f"""
-                        COPY (
-                            SELECT {select_statement}
-                            FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
-                        ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING};
-                        """
-                    with conn:
+                        no_returns = convert_query.replace('\n', ' ')
+                        utils.logger.info(f"Executing vocab conversion query: {no_returns}")
                         conn.execute(convert_query)
                 except Exception as e:
                     # Use the simplified error handling utility
                     raise utils.handle_duckdb_error(e, conn, convert_query)
                 finally:
                     utils.close_duckdb_connection(conn, local_db_file)
+        return None
+    else:
+        utils.logger.info("Vocabulary file has already been created and is valid. No conversion required")
+        return None
                 
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
     vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
