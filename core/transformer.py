@@ -167,6 +167,7 @@ class Transformer:
         transform_sql = f"""
             COPY (
                 {final_sql}
+                WHERE target_table = '{self.target_table}'
             ) TO 'gs://{self.file_path}transformed/{self.target_table}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
