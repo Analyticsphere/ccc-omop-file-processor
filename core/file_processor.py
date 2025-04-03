@@ -301,6 +301,13 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
     # --------------------------------------------------------------------------
     actual_columns = utils.get_columns_from_file(parquet_gcs_file_path)
 
+    # Get Connect_ID column name, if it exists
+    connect_id_column_name = ""
+    for column in actual_columns:
+        if 'connectid' in column.lower() or 'connect_id' in column.lower():
+            connect_id_column_name = column
+            break
+
     # --------------------------------------------------------------------------
     # Initialize lists to build SQL expressions
     # --------------------------------------------------------------------------
@@ -334,6 +341,10 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
                 # ALL columns in a COALESCE must be of the same type, so casting everything to VARCHAR *after* trying to cast it to its correct type
                 row_validity.append(f"CAST(TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS VARCHAR)")
         else:
+            # If the site provided a Connect_ID field and/or person_id, use Connect_ID in place of person_id
+            if field_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
+                coalesce_exprs.append(f"CAST({connect_id_column_name} AS {field_type}) AS {field_name}")
+
             # If the column doesn't exist, just produce a placeholder (NULL or a special default)
             # Still need to cast to ensure consist column types
             coalesce_exprs.append(f"CAST({default_value} AS {column_type}) AS {column_name}")
