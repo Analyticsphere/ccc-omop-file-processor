@@ -186,6 +186,63 @@ class VocabHarmonizer:
 
         utils.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
 
+    ################################
+
+    def target_remapping(self) -> None:
+        """
+        Generate and execute SQL to check for cases in which there's no source_concept_id,
+        and the target_concept_id is non-standard but has a map to a standard concept
+        """
+
+        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
+
+        columns = schema[self.source_table_name]["columns"]
+        ordered_omop_columns = list(columns.keys())  # preserve column order
+
+        # Get _concept_id and _source_concept_id columns for table
+        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
+        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
+        primary_key = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+
+        initial_select_exprs: list = []
+        final_select_exprs: list = []
+
+        for column_name in ordered_omop_columns:
+            column_name = f"tbl.{column_name}"
+            final_select_exprs.append(column_name)
+
+            # Replace new target concept_id in target_concept_id_column
+            if column_name == f"tbl.{target_concept_id_column}":
+                column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
+
+            initial_select_exprs.append(column_name)
+        
+        # Add columns to store metadata related to vocab harmonization for later reporting
+        metadata_columns = [
+            "vocab.target_concept_id_domain AS target_domain",
+            "'source concept available, target mapping available and not current; UPDATED' AS vocab_harmonization_status",
+            f"tbl.{source_concept_id_column} AS source_concept_id",
+            f"tbl.{target_concept_id_column} AS previous_target_concept_id",
+            "vocab.target_concept_id AS target_concept_id"
+        ]
+        for metadata_column in metadata_columns:
+            initial_select_exprs.append(metadata_column)
+
+            # Only include the alias in the second select statement
+            alias = metadata_column.split(" AS ")[1]
+            final_select_exprs.append(alias)
+
+        initial_select_sql = ",\n                ".join(initial_select_exprs)
+
+
+     ################################
+
+
+    def target_replacement(self) -> None:
+        print()
+
+    
+
 
     def domain_table_check(self) -> None:
         # The domain of a concept_id may change between different vocabulary versions
@@ -239,7 +296,7 @@ class VocabHarmonizer:
 
         from_sql = f"""
             FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
-            INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
+            INNER JOIN vocab
                 ON {target_concept_id_column} = vocab.concept_id
         """
 
@@ -255,8 +312,16 @@ class VocabHarmonizer:
                 )
             """
 
+        # Create vocab CTE with distinct concept_id and domain_id values
+        # Without the CTE, duplicates will occur when 1 concept_id is mapped to more than 1 target
         sql_statement = f"""
             COPY (
+                WITH vocab AS (
+                    SELECT DISTINCT
+                        concept_id,
+                        concept_id_domain
+                    FROM read_parquet('@OPTIMIZED_VOCABULARY')
+                )
                 SELECT {select_sql}
                 {from_sql}
                 {where_sql}
