@@ -120,7 +120,7 @@ SELECT
             '@SITE', CAST(PERSON_ID AS STRING), CAST(CONDITION_CONCEPT_ID AS STRING), CAST(condition_era_start_date AS STRING), 
             CAST(condition_era_end_date AS STRING), CAST(condition_occurrence_count AS STRING)
         )
-    ) AS condition_era_id,
+    ) % 9223372036854775807 AS condition_era_id,
     PERSON_ID AS person_id,
     CONDITION_CONCEPT_ID AS condition_concept_id,
     condition_era_start_date,

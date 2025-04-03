@@ -7,8 +7,8 @@ import sys
 
 class VocabHarmonizer:
     """
-    A class for harmonizing parquet files according to specified vocabularies and mappings.
-    Handles the entire process from reading parquet files to generating SQL and saving the harmonized output.
+    A class for harmonizing OMOP parquet files according to specified vocabulary version.
+    Handles the entire process from reading parquet files to generating SQL and saving the harmonized output to BQ.
     """
     
     def __init__(self, file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str, project_id: str, dataset_id):
@@ -36,6 +36,7 @@ class VocabHarmonizer:
         )
         # Create the logger at module level so its settings are applied throughout class
         self.logger = logging.getLogger(__name__)
+
 
     def harmonize(self) -> None:
         """
@@ -310,7 +311,6 @@ class VocabHarmonizer:
             )
 
 
-
     def perform_harmonization(self, step: str) -> None:
         """
         Perform a specific harmonization step.
@@ -321,3 +321,4 @@ class VocabHarmonizer:
             self.domain_table_check()
         else:
             return
+
