@@ -183,7 +183,7 @@ class VocabHarmonizer:
         final_sql = f"""
             COPY (
                 {final_cte}
-            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_target_remap{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         utils.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
@@ -206,7 +206,7 @@ class VocabHarmonizer:
         # Get _concept_id and _source_concept_id columns for table
         target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
         source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
-        primary_key = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+        primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
 
         initial_select_exprs: list = []
         final_select_exprs: list = []
@@ -242,6 +242,8 @@ class VocabHarmonizer:
 
         initial_select_sql = ",\n                ".join(initial_select_exprs)
 
+
+
         initial_from_sql = f"""
             FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
             INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
@@ -249,19 +251,31 @@ class VocabHarmonizer:
             WHERE tbl.{source_concept_id_column} = 0
             AND tbl.{target_concept_id_column} != vocab.target_concept_id
             AND vocab.relationship_id IN ('Maps to', 'Maps to value')
-            AND vocab.target_concept_id_standard = 'S'
+            AND vocab.target_concept_id_standard = 'S' 
         """
+
+        # Don't perform target remapping on rows which have already been harominzed
+        # primary_key_column values were made unique per row values in normalization step, 
+        #   so they can be used for identification here
+        exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
+        if exisiting_files:
+            where_sql = f"""
+                AND tbl.{primary_key_column} NOT IN (
+                    SELECT {primary_key_column} FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+                )
+            """
+            initial_from_sql = initial_from_sql + where_sql
 
         pivot_cte = f"""
             -- Pivot so that Meas Value mappings get associated with target_concept_id_column
             SELECT 
-                tbl.{primary_key},
+                tbl.{primary_key_column},
                 MAX(vocab.target_concept_id) AS vh_value_as_concept_id
             FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
             INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab 
                 ON tbl.{source_concept_id_column} = vocab.concept_id
             WHERE vocab.target_concept_id_domain = 'Meas Value'
-            GROUP BY tbl.{primary_key}
+            GROUP BY tbl.{primary_key_column}
         """
 
         # Add column to final select that store Meas Value mapping
@@ -287,7 +301,7 @@ class VocabHarmonizer:
         final_from_sql = f"""
             FROM base AS tbl
             LEFT JOIN meas_value AS mv_cte
-                ON tbl.{primary_key} = mv_cte.{primary_key}
+                ON tbl.{primary_key_column} = mv_cte.{primary_key_column}
             WHERE tbl.target_domain != 'Meas Value'
         """
 
@@ -316,7 +330,7 @@ class VocabHarmonizer:
         final_sql = f"""
             COPY (
                 {final_cte}
-            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_target_remap{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         utils.execute_duckdq_sql(final_sql, f"Unable to execute SQL to remap targets without source_concept_id's {self.source_table_name}")
