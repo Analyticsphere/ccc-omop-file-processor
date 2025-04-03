@@ -60,86 +60,6 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
     except Exception as e:
         raise Exception(f"Error listing files in GCS: {str(e)}")
 
-
-def list_gcs_directories(bucket_name: str, folder_prefix: str) -> list[str]:
-    """
-    List all "directories" (folder-like prefixes) within a given GCS path.
-    Only returns folder names, not files.
-    
-    Args:
-        bucket_name (str): The name of the GCS bucket
-        folder_prefix (str): The path prefix within the bucket
-    
-    Returns:
-        list[str]: A list of directory names (not files) within the given path.
-    """
-    try:
-        # Initialize the GCS client
-        storage_client = storage.Client()
-        
-        # Get the bucket
-        bucket = storage_client.bucket(bucket_name)
-        
-        # Verify bucket exists
-        if not bucket.exists():
-            raise Exception(f"Bucket {bucket_name} does not exist")
-        
-        # Ensure folder_prefix ends with '/' for consistent path handling
-        if folder_prefix and not folder_prefix.endswith('/'):
-            folder_prefix += '/'
-        
-        logger.info(f"Listing directories in {bucket_name}/{folder_prefix}")
-        
-        # Use delimiter to get directory-like prefixes
-        blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
-        
-        # Get all 'folder' names within the current level
-        directories = []
-        
-        # Process directory-like prefixes - these are guaranteed to be folders
-        for prefix in blobs.prefixes:
-            # Extract just the folder name from the full prefix path
-            folder_name = prefix[len(folder_prefix):-1]  # Remove prefix and trailing '/'
-            if folder_name:  # Only add non-empty folder names
-                directories.append(folder_name)
-        
-        # If we didn't find any directories via the delimiter approach,
-        # we need a different strategy to find implicit folders
-        if not directories:
-            # List all blobs in the bucket (this is potentially expensive)
-            all_blobs = list(bucket.list_blobs(prefix=folder_prefix))
-            
-            # Keep track of potential folders
-            potential_folders = set()
-            
-            for blob in all_blobs:
-                # Skip the prefix itself or blobs that don't extend beyond the prefix
-                if blob.name == folder_prefix or not blob.name.startswith(folder_prefix):
-                    continue
-                
-                # Get the relative path from the prefix
-                rel_path = blob.name[len(folder_prefix):]
-                
-                # Skip if it's an empty string
-                if not rel_path:
-                    continue
-                
-                # Split by '/' and get the first component (immediate subfolder)
-                components = rel_path.split('/')
-                
-                # If there are multiple components, the first one is a folder
-                # Or if the blob name ends with '/', it's a folder marker
-                if len(components) > 1 or blob.name.endswith('/'):
-                    if components[0]:
-                        potential_folders.add(components[0])
-            
-            directories = sorted(list(potential_folders))
-        
-        return directories
-    
-    except Exception as e:
-        raise Exception(f"Error listing directories in GCS: {str(e)}")
-
 def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.
     If directory exists, deletes any existing files first.
@@ -218,7 +138,6 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str)
 
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
-
 
 def execute_duckdq_sql(sql: str, error_msg: str) -> None:
     try:
@@ -710,42 +629,3 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
     replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
 
     return replacement_result
-
-def extract_source_target_tables_from_gcs_path(gcs_path: str) -> tuple[str,str]:
-    """
-    Extracts source table and target table from a GCS Path.
-    
-    Args:
-        gcs_path (str): A GCS URI string like 
-                    'synthea_testing/2025-02-03/artifacts/harmonized_files/condition_occurrence/target_table=measurement/'
-        
-    Returns:
-        tuple: (source_table, target_table)
-    """
-    # Split the URI by '/'
-    parts = gcs_path.strip('/').split('/')
-    
-    # Find the index of 'harmonized_files'
-    try:
-        harmonized_index = parts.index('harmonized_files')
-        # Source table is right after 'harmonized_files'
-        source_table = parts[harmonized_index + 1]
-    except (ValueError, IndexError):
-        source_table = None
-    
-    # Find target_table parameter
-    target_table = None
-    for part in parts:
-        if part.startswith('target_table='):
-            target_table = part.split('=')[1]
-            break
-
-    # Return blank values if source or traget can't be found, and log error
-    if not source_table:
-        source_table = ""
-        logger.error(f"Unable to find source table in path {gcs_path}")
-    if not target_table:
-        target_table = ""
-        logger.error(f"Unable to find target table in path {gcs_path}")
-
-    return (source_table, target_table)
