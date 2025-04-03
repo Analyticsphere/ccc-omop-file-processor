@@ -142,7 +142,6 @@ CDM_53_TO_54 = {
 
 TABLES_WITHOUT_SOURCE_ID = ["note", "specimen"]
 
-# TODO: Confirm vocab haromization table is in here
 SOURCE_TARGET_COLUMNS = {
     "visit_occurrence": {
         "source_concept_id": "visit_source_concept_id",
@@ -192,7 +191,7 @@ TARGET_CDM_VERSION_REPORT_NAME = "Standardized to CDM version"
 FILE_PROCESSOR_VERSION_REPORT_NAME = "Pipeline file processor version"
 PROCESSED_DATE_REPORT_NAME = "Delivery processing date"
 
-SOURCE_TARGET = "Source concept available, target mapping available and not current"
+SOURCE_TARGET = "Map source concepts to a updated target codes"
 DOMAIN_CHECK = "Check for latest domain and update if needed"
 TARGET_REMAP = "Remap non-standard targets to new standard targets"
 TARGET_REPLACEMENT = "Replace non-standard targets with new standard targets"
