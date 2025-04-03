@@ -342,8 +342,8 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
                 row_validity.append(f"CAST(TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS VARCHAR)")
         else:
             # If the site provided a Connect_ID field and/or person_id, use Connect_ID in place of person_id
-            if field_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
-                coalesce_exprs.append(f"CAST({connect_id_column_name} AS {field_type}) AS {field_name}")
+            if column_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
+                coalesce_exprs.append(f"CAST({connect_id_column_name} AS {column_type}) AS {column_name}")
 
             # If the column doesn't exist, just produce a placeholder (NULL or a special default)
             # Still need to cast to ensure consist column types
