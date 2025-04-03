@@ -65,8 +65,8 @@ class VocabHarmonizer:
         """
         Perform a specific harmonization step.
         """
-        self.logger(f"Performing harmonization: {step}")
-        
+        self.logger.info(f"Performing harmonization: {step}")
+
         if step == constants.SOURCE_TARGET:
             self.source_target_remapping()
         elif step == constants.DOMAIN_CHECK:
@@ -455,8 +455,8 @@ class VocabHarmonizer:
         utils.execute_duckdq_sql(final_sql_statement, f"Unable to perform domain check against {self.source_table_name}")
 
 
-    def omop_etl(self) -> list[dict]:
-        self.logger.info(f"Partitioning table {self.source_table_name} for {self.site}")
+    def omop_etl(self) -> None:
+        self.logger.info(f"Partitioning table {self.source_table_name} for {self.site} to appropriate target table(s)")
 
         # Find all target tables in the source file
         conn, local_db_file = utils.create_duckdb_connection()
