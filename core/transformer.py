@@ -183,8 +183,10 @@ class Transformer:
 
         return transform_sql
 
+
     def get_transformed_path(self) -> str:
         return f"{self.file_path}transformed/{self.target_table}{constants.PARQUET}"
+
 
     def omop_to_omop_etl(self) -> None:
         # Execute the OMOP to OMOP ETL SQL script
@@ -194,6 +196,7 @@ class Transformer:
         # Resolve duplicate primary keys within a single 'table part' file
         # TODO: Make this global across ALL table parts
         self.handle_duplicate_primary_keys()
+
 
     def placeholder_to_file_path(self, sql: str) -> str:
         """
@@ -288,3 +291,4 @@ class Transformer:
         
         # Execute the SQL to handle duplicates
         utils.execute_duckdq_sql(fix_sql, f"Unable to handle duplicate primary keys in {self.target_table}")
+

@@ -32,22 +32,14 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
                     upgrade_file_path = f"{constants.CDM_UPGRADE_SCRIPT_PATH}{cdm_version}_to_{target_omop_version}/{table_name}.sql"
                     with open(upgrade_file_path, 'r') as f:
                         upgrade_script = f.read()
-                
-                    conn, local_db_file = utils.create_duckdb_connection()
-                    try:
-                        with conn:
-                            select_statement = f"""
-                                COPY (
-                                    {upgrade_script}
-                                    FROM read_parquet('gs://{normalized_file_path}')
-                                ) TO 'gs://{normalized_file_path}' {constants.DUCKDB_FORMAT_STRING}
-                            """
-                            conn.execute(select_statement)
-                    except Exception as e:
-                        utils.logger.error(f"Unable to upgrade file: {e}")
-                        raise Exception(f"Unable to upgrade file: {e}") from e
-                    finally:
-                        utils.close_duckdb_connection(conn, local_db_file)
+
+                    select_statement = f"""
+                        COPY (
+                            {upgrade_script}
+                            FROM read_parquet('gs://{normalized_file_path}')
+                        ) TO 'gs://{normalized_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                    """
+                    utils.execute_duckdq_sql(select_statement, f"Unable to upgrade file {gcs_file_path}:")
 
                 except Exception as e:
                     utils.logger.error(f"Unable to open SQL upgrade file: {e}")
@@ -74,21 +66,13 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
 
             # Continue only if the vocabulary file has not been created or is not valid
             if not utils.parquet_file_exists(parquet_file_path) or not utils.valid_parquet_file(parquet_file_path):
-                
-                conn, local_db_file = utils.create_duckdb_connection()
+                convert_query = f"""
+                    COPY (
+                        SELECT * FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
+                    ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                """
+                utils.execute_duckdq_sql(convert_query, f"Unable to convert vocabulary CSV {vocab_file} to Parquet" )
 
-                try:
-                    with conn:
-                        convert_query = f"""
-                            COPY (
-                                SELECT * FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
-                            ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING}
-                        """
-                        conn.execute(convert_query)
-                except Exception as e:
-                    raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
-                finally:
-                    utils.close_duckdb_connection(conn, local_db_file)
                 
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
     vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
@@ -100,33 +84,26 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
         if not utils.valid_parquet_file(optimized_file_path):
             # Ensure vocabulary version actually exists
             if utils.vocab_gcs_path_exists(vocab_path):
-                conn, local_db_file = utils.create_duckdb_connection()
 
-                try:
-                    with conn:
-                        transform_query = f"""
-                        COPY (
-                            SELECT DISTINCT
-                                c1.concept_id AS concept_id, -- Every concept_id from concept table
-                                c1.standard_concept AS concept_id_standard, 
-                                c1.domain_id AS concept_id_domain,
-                                cr.relationship_id, 
-                                cr.concept_id_2 AS target_concept_id, -- targets to concept_id's
-                                c2.standard_concept AS target_concept_id_standard, 
-                                c2.domain_id AS target_concept_id_domain
-                            FROM read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c1
-                            LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept_relationship{constants.PARQUET}') cr on c1.concept_id = cr.concept_id_1
-                            LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c2 on cr.concept_id_2 = c2.concept_id
-                            WHERE IFNULL(cr.relationship_id, '') 
-                                IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
-                        ) TO 'gs://{optimized_file_path}' {constants.DUCKDB_FORMAT_STRING}
-                        """
-                        conn.execute(transform_query)
-                except Exception as e:
-                    utils.logger.error(f"Unable to create optimized vocab file: {e}")
-                    raise Exception(f"Unable to create optimized vocab file: {e}") from e
-                finally:
-                    utils.close_duckdb_connection(conn, local_db_file)
+                transform_query = f"""
+                COPY (
+                    SELECT DISTINCT
+                        c1.concept_id AS concept_id, -- Every concept_id from concept table
+                        c1.standard_concept AS concept_id_standard, 
+                        c1.domain_id AS concept_id_domain,
+                        cr.relationship_id, 
+                        cr.concept_id_2 AS target_concept_id, -- targets to concept_id's
+                        c2.standard_concept AS target_concept_id_standard, 
+                        c2.domain_id AS target_concept_id_domain
+                    FROM read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c1
+                    LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept_relationship{constants.PARQUET}') cr on c1.concept_id = cr.concept_id_1
+                    LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c2 on cr.concept_id_2 = c2.concept_id
+                    WHERE IFNULL(cr.relationship_id, '') 
+                        IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
+                ) TO 'gs://{optimized_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                """
+                utils.execute_duckdq_sql(transform_query, "Unable to create optimized vocab file")
+
             else:
                 utils.logger.error(f"Vocabulary GCS bucket {vocab_path} not found")
                 raise Exception(f"Vocabulary GCS bucket {vocab_path} not found")
@@ -276,31 +253,22 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
 
         # Add table locations
         select_statement = utils.placeholder_to_file_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
+        parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
 
-        try:
-            conn, local_db_file = utils.create_duckdb_connection()
+        # Generate and execute final SQL
+        sql_statement = f"""
+            {create_statement}
 
-            with conn:
-                # Generate the derived table parquet file
-                parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
-                sql_statement = f"""
-                    {create_statement}
+            COPY (
+                {select_statement}
+            ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
+        """
+        utils.execute_duckdq_sql(sql_statement, f"Unable to execute SQL to generate {table_name}")
 
-                    COPY (
-                        {select_statement}
-                    ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
-                """
-                conn.execute(sql_statement)
-
-                # Load the Parquet to BigQuery
-                # Because the task that executes this function occurs after load_bq(), 
-                #   this will overwrite the derived data delievered by the site
-                #bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, constants.BQWriteTypes.SPECIFIC_FILE)
-                bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, table_name, constants.BQWriteTypes.SPECIFIC_FILE)
-        except Exception as e:
-            raise Exception(f"Unable to execute SQL to generate {table_name}: {str(e)}") from e
-        finally:
-            utils.close_duckdb_connection(conn, local_db_file)
+        # Load the Parquet to BigQuery
+        # Because the task that executes this function occurs after load_bq(), 
+        #   this will overwrite the derived data delievered by the site
+        bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, table_name, constants.BQWriteTypes.SPECIFIC_FILE)
 
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e

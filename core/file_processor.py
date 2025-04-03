@@ -93,24 +93,16 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
                 select_list.append(f"{column} AS {column.lower()}")
         select_clause = ", ".join(select_list)
 
-        conn, local_db_file = utils.create_duckdb_connection()
-        try:
-            with conn:
+        copy_sql = f"""
+            COPY (
+                SELECT {select_clause}
+                FROM read_parquet('gs://{gcs_file_path}')
+            )
+            TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+        """
 
-                copy_sql = f"""
-                    COPY (
-                        SELECT {select_clause}
-                        FROM read_parquet('gs://{gcs_file_path}')
-                    )
-                    TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
-                """
+        utils.execute_duckdq_sql(copy_sql, f"Unable to process incoming Parquet file {gcs_file_path}:")
 
-                conn.execute(copy_sql)
-        except Exception as e:
-            utils.logger.error(f"Unable to process incoming Parquet file: {e}")
-            raise Exception(f"Unable to process incoming Parquet file: {e}") from e
-        finally:
-            utils.close_duckdb_connection(conn, local_db_file)
     else:
         utils.logger.error(f"Invalid Parquet file")
         raise Exception(f"Invalid Parquet file")
