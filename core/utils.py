@@ -516,8 +516,6 @@ def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig
         return result
 
     except Exception as e:
-        no_returns = sql_script.replace('\n', ' ')
-        logger.error(f"This query failed: {no_returns}")
         raise Exception(f"Error executing query: {e}")
 
 def download_from_gcs(gcs_file_path: str) -> str:
