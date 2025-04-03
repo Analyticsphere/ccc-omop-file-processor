@@ -366,7 +366,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
         # Don't include the original primary key in the hash
         primary_key_sql = ", ".join([f"COALESCE(CAST({column_name} AS VARCHAR), '')" for column_name in ordered_omop_columns if column_name != primary_key])
         replace_clause = f"""
-            REPLACE(hash(CONCAT({primary_key_sql}) % 9223372036854775807) AS {primary_key}) 
+            REPLACE(CAST(hash(CONCAT({primary_key_sql}) % 9223372036854775807) AS BIGINT) AS {primary_key}) 
         """
 
     # Build concat statement that will eventually be hashed to identify valid/invalid rows
@@ -384,7 +384,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
             SELECT
                 {coalesce_definitions_sql},
                 CASE 
-                    WHEN COALESCE({row_validity_sql}) IS NULL THEN hash(CONCAT({row_hash_statement})) % 9223372036854775807
+                    WHEN COALESCE({row_validity_sql}) IS NULL THEN CAST(hash(CONCAT({row_hash_statement})) % 9223372036854775807 AS BIGINT)
                     ELSE NULL END AS row_hash
             FROM read_parquet('gs://{parquet_gcs_file_path}')
         ;
@@ -392,7 +392,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
         COPY (
             SELECT *
             FROM read_parquet('gs://{parquet_gcs_file_path}')
-            WHERE hash(CONCAT({row_hash_statement})) % 9223372036854775807 IN (
+            WHERE CAST(hash(CONCAT({row_hash_statement})) % 9223372036854775807 AS BIGINT) IN (
                 SELECT row_hash FROM row_check WHERE row_hash IS NOT NULL
             )
         ) TO 'gs://{utils.get_invalid_rows_path_from_gcs_path(parquet_gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
