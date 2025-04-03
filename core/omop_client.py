@@ -102,8 +102,6 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                     ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING};
                     """
                     with conn:
-                        no_returns = convert_query.replace('\n', ' ')
-                        utils.logger.info(f"Executing vocab conversion query: {no_returns}")
                         conn.execute(convert_query)
                 except Exception as e:
                     raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
@@ -160,7 +158,7 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
 def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
     ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
 
-    # Get DDL with CREATE OR REPLACE TABLE STATEMENTS
+    # Get DDL with CREATE OR REPLACE TABLE statements
     try:
         with open(ddl_file, 'r') as f:
             ddl_sql = f.read()
@@ -170,7 +168,7 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
 
         # Execute the CREATE OR REPLACE TABLE statements in BigQuery
         utils.execute_bq_sql(create_sql, None)
-        
+
     except Exception as e:
         raise Exception(f"DDL file error: {e}")
 
