@@ -476,10 +476,11 @@ class VocabHarmonizer:
         # Create a new Parquet file for each target table with the appropriate structure
         for target_table in target_tables_list:
             omop_transformer = transformer.Transformer(self.site, self.target_parquet_path, self.cdm_version, self.source_table_name, target_table)
-            partition_statement = omop_transformer.generate_omop_to_omop_sql()
+            #partition_statement = omop_transformer.generate_omop_to_omop_sql()
 
             # Generate the transformed file
-            utils.execute_duckdq_sql(partition_statement, f"Unable to transform file {self.source_table_name}")
+            #utils.execute_duckdq_sql(partition_statement, f"Unable to transform file {self.source_table_name}")
+            omop_transformer.omop_to_omop_etl()
 
             # Load the file to BQ; ETLed_FILE write type ensures append only
             bq_client.load_parquet_to_bigquery(
