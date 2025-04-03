@@ -55,7 +55,6 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
     Convert CSV vocabulary files from Athena to Parquet format
     """
     vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
-    
     # Confirm desired vocabulary version exists in GCS
     if utils.vocab_gcs_path_exists(vocab_root_path):
         vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
@@ -66,13 +65,43 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
 
             # Continue only if the vocabulary file has not been created or is not valid
             if not utils.parquet_file_exists(parquet_file_path) or not utils.valid_parquet_file(parquet_file_path):
-                convert_query = f"""
-                    COPY (
-                        SELECT * FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
-                    ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING}
-                """
-                utils.execute_duckdq_sql(convert_query, f"Unable to convert vocabulary CSV {vocab_file} to Parquet" )
+                conn, local_db_file = utils.create_duckdb_connection()
+                
+                # Get column names
+                csv_columns = utils.get_columns_from_file(csv_file_path)
 
+                # Build the SELECT statement with columns in the predefined order
+                select_columns = []
+                for col in csv_columns:
+                    if col in ('valid_start_date', 'valid_end_date'):
+                        # Handle date fields; need special handling or they're interpreted as numeric values
+                        select_columns.append(
+                            f'CAST(STRPTIME(CAST("{col}" AS VARCHAR), \'%Y%m%d\') AS DATE) AS "{col}"'
+                        )
+                    else:
+                        select_columns.append(f'"{col}"')
+
+                select_statement = ', '.join(select_columns)
+                
+                
+                # Execute the COPY command to convert CSV to Parquet with columns in the correct order
+                try:
+                    convert_query = f"""
+                    COPY (
+                        SELECT {select_statement}
+                        FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
+                    ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING};
+                    """
+                    with conn:
+                        conn.execute(convert_query)
+                except Exception as e:
+                    raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
+                finally:
+                    utils.close_duckdb_connection(conn, local_db_file)
+        return None
+    else:
+        utils.logger.info("Vocabulary file has already been created and is valid. No conversion required")
+        return None
                 
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
     vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
@@ -117,7 +146,7 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
     try:
         with open(ddl_file, 'r') as f:
             ddl_sql = f.read()
-        
+
         # Add project_id and data_set to SQL statement
         create_sql = ddl_sql.replace(constants.DDL_PLACEHOLDER_STRING, f"{project_id}.{dataset_id}")
 

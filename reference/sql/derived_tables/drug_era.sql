@@ -7,8 +7,8 @@ SELECT
     ) % 9223372036854775807 AS drug_era_id,
     person_id,
     drug_concept_id,
-    drug_era_start_date,
-    drug_era_end_date,
+    CAST(drug_era_start_date AS DATE) AS drug_era_start_date,
+    CAST(drug_era_end_date AS DATE) AS drug_era_end_date,
     drug_exposure_count,
     gap_days
 FROM final_select

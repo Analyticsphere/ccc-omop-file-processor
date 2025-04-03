@@ -123,7 +123,7 @@ SELECT
     ) % 9223372036854775807 AS condition_era_id,
     PERSON_ID AS person_id,
     CONDITION_CONCEPT_ID AS condition_concept_id,
-    condition_era_start_date,
-    condition_era_end_date,
+    CAST(condition_era_start_date AS DATE) AS condition_era_start_date,
+    CAST(condition_era_end_date AS DATE) AS condition_era_end_date,
     condition_occurrence_count
 FROM final_select

@@ -607,16 +607,19 @@ def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig
     # Initialize the BigQuery client
     client = bigquery.Client()
 
-    # Run the query
-    if job_config:
-        query_job = client.query(sql_script, job_config=job_config)
-    else:
-        query_job = client.query(sql_script)
+    try:
+        # Run the query
+        if job_config:
+            query_job = client.query(sql_script, job_config=job_config)
+        else:
+            query_job = client.query(sql_script)
 
-    # Wait for the job to complete
-    result = query_job.result()
+        # Wait for the job to complete
+        result = query_job.result()
+        return result
 
-    return result
+    except Exception as e:
+        raise Exception(f"Error executing query: {e}")
 
 def download_from_gcs(gcs_file_path: str) -> str:
     """
