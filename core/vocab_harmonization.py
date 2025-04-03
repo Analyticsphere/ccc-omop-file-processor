@@ -43,19 +43,21 @@ class VocabHarmonizer:
         Harmonize a parquet file by applying defined harmonization steps and saving the result.
         """
 
-        # TODO: Delete all files within GCS folder, if they exist
-        # Necessary - if the task repeats needs to rerun, it'll get incorrect results on second and subsequent runs
+        # Delete all harminzation files files within GCS folder, if they exist
+        # Necessary because the task may fail and retry in Airflow
+        current_files = utils.list_gcs_files(self.bucket, f"{self.delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{self.source_table_name}", constants.PARQUET)
+        self.logger.warning(f"in vocab harmization looking for files in bucket {self.bucket} and folder path {self.delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{self.source_table_name}")
+        for file in current_files:
+            utils.delete_gcs_file(file)
 
         # List order is very important here!
-        harmonization_steps: list = [constants.SOURCE_TARGET, constants.DOMAIN_CHECK]
+        harmonization_steps: list = [constants.SOURCE_TARGET, constants.TARGET_REMAP, constants.DOMAIN_CHECK]
 
         for step in harmonization_steps:
             self.perform_harmonization(step)
 
         # After finding new targets and domain, partition file based on target OMOP table
-        self.logger.warning(f"!! About to call partition_by_target_table() function")
         self.omop_etl()
-        self.logger.warning(f"DID complete partition_by_target_table() function")
 
 
     def source_target_remapping(self) -> None:
@@ -93,7 +95,7 @@ class VocabHarmonizer:
         # Add columns to store metadata related to vocab harmonization for later reporting
         metadata_columns = [
             "vocab.target_concept_id_domain AS target_domain",
-            "'source concept available, target mapping available and not current; UPDATED' AS vocab_harmonization_status",
+            "'source_concept_id mapped to new target' AS vocab_harmonization_status",
             f"tbl.{source_concept_id_column} AS source_concept_id",
             f"tbl.{target_concept_id_column} AS previous_target_concept_id",
             "vocab.target_concept_id AS target_concept_id"
@@ -113,7 +115,140 @@ class VocabHarmonizer:
                 ON tbl.{source_concept_id_column} = vocab.concept_id
             WHERE tbl.{source_concept_id_column} != 0
             AND tbl.{target_concept_id_column} != vocab.target_concept_id
-            AND vocab.relationship_id IN ('Maps to', 'Maps to value', 'Maps to unit')
+            AND vocab.relationship_id IN ('Maps to', 'Maps to value')
+            AND vocab.target_concept_id_standard = 'S'
+        """
+
+        pivot_cte = f"""
+            -- Pivot so that Meas Value mappings get associated with target_concept_id_column
+            SELECT 
+                tbl.{primary_key},
+                MAX(vocab.target_concept_id) AS vh_value_as_concept_id
+            FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
+            INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab 
+                ON tbl.{source_concept_id_column} = vocab.concept_id
+            WHERE vocab.target_concept_id_domain = 'Meas Value'
+            GROUP BY tbl.{primary_key}
+        """
+
+        # Add column to final select that store Meas Value mapping
+        final_select_exprs.append("mv_cte.vh_value_as_concept_id")
+
+        # Add target table to final output
+        case_when_target_table = f"""
+            CASE 
+                WHEN tbl.target_domain = 'Visit' THEN 'visit_occurrence'
+                WHEN tbl.target_domain = 'Condition' THEN 'condition_occurrence'
+                WHEN tbl.target_domain = 'Drug' THEN 'drug_exposure'
+                WHEN tbl.target_domain = 'Procedure' THEN 'procedure_occurrence'
+                WHEN tbl.target_domain = 'Device' THEN 'device_exposure'
+                WHEN tbl.target_domain = 'Measurement' THEN 'measurement'
+                WHEN tbl.target_domain = 'Observation' THEN 'observation'
+                WHEN tbl.target_domain = 'Note' THEN 'note'
+                WHEN tbl.target_domain = 'Specimen' THEN 'specimen'
+            ELSE '{self.source_table_name}' END AS target_table
+        """
+        final_select_exprs.append(case_when_target_table)
+        final_select_sql = ",\n                ".join(final_select_exprs)
+
+        final_from_sql = f"""
+            FROM base AS tbl
+            LEFT JOIN meas_value AS mv_cte
+                ON tbl.{primary_key} = mv_cte.{primary_key}
+            WHERE tbl.target_domain != 'Meas Value'
+        """
+
+        cte_with_placeholders = f"""
+            WITH base AS (
+                SELECT
+                    {initial_select_sql}
+                {initial_from_sql}
+            ), meas_value AS (
+                {pivot_cte}
+            )
+            SELECT
+                {final_select_sql}
+            {final_from_sql}
+        """
+
+        final_cte = utils.placeholder_to_file_path(
+            self.site, 
+            self.bucket, 
+            self.delivery_date, 
+            cte_with_placeholders, 
+            self.vocab_version, 
+            self.vocab_gcs_bucket
+        )
+
+        final_sql = f"""
+            COPY (
+                {final_cte}
+            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_target_remap{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+        utils.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
+
+
+
+
+
+    ################################
+    def target_remapping(self) -> None:
+        """
+        Generate and execute SQL to check for cases in which there's no source_concept_id,
+        and the target_concept_id is non-standard but has a map to a standard concept
+        """
+        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
+
+        columns = schema[self.source_table_name]["columns"]
+        ordered_omop_columns = list(columns.keys())  # preserve column order
+
+        # Get _concept_id and _source_concept_id columns for table
+        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
+        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
+        primary_key = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+
+        initial_select_exprs: list = []
+        final_select_exprs: list = []
+
+        for column_name in ordered_omop_columns:
+            column_name = f"tbl.{column_name}"
+            final_select_exprs.append(column_name)
+
+            # Replace new target concept_id in target_concept_id_column
+            if column_name == f"tbl.{target_concept_id_column}":
+                column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
+            
+            # Set _source_concept_id value to previous target
+            if column_name == f"tbl.{source_concept_id_column}":
+                column_name = f"tbl.{target_concept_id_column} AS {source_concept_id_column}"
+
+            initial_select_exprs.append(column_name)
+        
+        # Add columns to store metadata related to vocab harmonization for later reporting
+        metadata_columns = [
+            "vocab.target_concept_id_domain AS target_domain",
+            "'existing non-standard target without source_concept_id remapped to standard code' AS vocab_harmonization_status",
+            f"tbl.{source_concept_id_column} AS source_concept_id",
+            f"tbl.{target_concept_id_column} AS previous_target_concept_id",
+            "vocab.target_concept_id AS target_concept_id"
+        ]
+        for metadata_column in metadata_columns:
+            initial_select_exprs.append(metadata_column)
+
+            # Only include the alias in the second select statement
+            alias = metadata_column.split(" AS ")[1]
+            final_select_exprs.append(alias)
+
+        initial_select_sql = ",\n                ".join(initial_select_exprs)
+
+        initial_from_sql = f"""
+            FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
+            INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
+                ON tbl.{target_concept_id_column} = vocab.concept_id
+            WHERE tbl.{source_concept_id_column} = 0
+            AND tbl.{target_concept_id_column} != vocab.target_concept_id
+            AND vocab.relationship_id IN ('Maps to', 'Maps to value')
             AND vocab.target_concept_id_standard = 'S'
         """
 
@@ -184,58 +319,14 @@ class VocabHarmonizer:
             ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
-        utils.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
-
-    ################################
-
-    def target_remapping(self) -> None:
-        """
-        Generate and execute SQL to check for cases in which there's no source_concept_id,
-        and the target_concept_id is non-standard but has a map to a standard concept
-        """
-
-        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
-
-        columns = schema[self.source_table_name]["columns"]
-        ordered_omop_columns = list(columns.keys())  # preserve column order
-
-        # Get _concept_id and _source_concept_id columns for table
-        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
-        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
-        primary_key = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
-
-        initial_select_exprs: list = []
-        final_select_exprs: list = []
-
-        for column_name in ordered_omop_columns:
-            column_name = f"tbl.{column_name}"
-            final_select_exprs.append(column_name)
-
-            # Replace new target concept_id in target_concept_id_column
-            if column_name == f"tbl.{target_concept_id_column}":
-                column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
-
-            initial_select_exprs.append(column_name)
-        
-        # Add columns to store metadata related to vocab harmonization for later reporting
-        metadata_columns = [
-            "vocab.target_concept_id_domain AS target_domain",
-            "'source concept available, target mapping available and not current; UPDATED' AS vocab_harmonization_status",
-            f"tbl.{source_concept_id_column} AS source_concept_id",
-            f"tbl.{target_concept_id_column} AS previous_target_concept_id",
-            "vocab.target_concept_id AS target_concept_id"
-        ]
-        for metadata_column in metadata_columns:
-            initial_select_exprs.append(metadata_column)
-
-            # Only include the alias in the second select statement
-            alias = metadata_column.split(" AS ")[1]
-            final_select_exprs.append(alias)
-
-        initial_select_sql = ",\n                ".join(initial_select_exprs)
-
+        utils.execute_duckdq_sql(final_sql, f"Unable to execute SQL to remap targets without source_concept_id's {self.source_table_name}")
 
      ################################
+
+
+
+
+
 
 
     def target_replacement(self) -> None:
@@ -384,6 +475,8 @@ class VocabHarmonizer:
             self.source_target_remapping()
         elif step == constants.DOMAIN_CHECK:
             self.domain_table_check()
+        elif step == constants.TARGET_REMAP:
+            self.target_remapping()
         else:
             return
 

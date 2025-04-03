@@ -415,8 +415,6 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
 
 def normalize_file(parquet_gcs_file_path: str, cdm_version: str) -> None:
     fix_sql = get_normalization_sql_statement(parquet_gcs_file_path, cdm_version)
-    fix_sql_no_return = fix_sql.replace('\n', ' ')
-    utils.logger.warning(f"normalization SQL is {fix_sql_no_return}")
     
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM

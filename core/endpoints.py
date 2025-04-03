@@ -227,8 +227,6 @@ def harmonize_vocab() -> tuple[str, int]:
             dataset_id=dataset_id
         )
         vocab_harmonizer.harmonize()
-
-        utils.logger.warning(f"All done with vocab harmonzation for {file_path}, going to return 200")
         
         return f"Vocabulary harmonized to {vocab_version}", 200
     except Exception as e:

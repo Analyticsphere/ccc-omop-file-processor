@@ -40,7 +40,6 @@ def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, t
         write_disposition = bigquery.WriteDisposition.WRITE_APPEND
         #parquet_path = f"gs://{file_path}transformed/{table_name}{constants.PARQUET}"
         parquet_path = file_path
-        utils.logger.warning(f"looking for ETLed parquet in {parquet_path} and will load to {table_name}")
 
         
     # When upgrading to 5.4, some Parquet files may get deleted
