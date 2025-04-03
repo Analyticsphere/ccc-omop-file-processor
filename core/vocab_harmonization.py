@@ -48,6 +48,7 @@ class VocabHarmonizer:
         # Delete all harminzation files files within GCS folder, if they exist
         # Necessary because the task may fail and retry in Airflow
         current_files = utils.list_gcs_files(self.bucket, f"{self.delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{self.source_table_name}", constants.PARQUET)
+        self.logger.warning(f"current_files to delete is {current_files}")
         for file in current_files:
             utils.delete_gcs_file(file)
 
@@ -247,7 +248,7 @@ class VocabHarmonizer:
             
             # Set _source_concept_id value to previous target
             if column_name == f"{source_concept_id_column}":
-                column_name = f"tbl.{target_concept_id_column} AS {source_concept_id_column}"
+                column_name = f"tbl.{target_concept_id_column} AS {source_concept_id_column.replace('tbl.','')}"
 
             initial_select_exprs.append(column_name)
         
