@@ -106,7 +106,7 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                         utils.logger.info(f"Executing vocab conversion query: {no_returns}")
                         conn.execute(convert_query)
                 except Exception as e:
-                    raise Exception(f"Error executing query: {e}")
+                    raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
                 finally:
                     utils.close_duckdb_connection(conn, local_db_file)
         return None
@@ -159,20 +159,20 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
 
 def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
     ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
+
+    # Get DDL with CREATE OR REPLACE TABLE STATEMENTS
     try:
         with open(ddl_file, 'r') as f:
             ddl_sql = f.read()
+
         # Add project_id and data_set to SQL statement
         create_sql = ddl_sql.replace(constants.DDL_PLACEHOLDER_STRING, f"{project_id}.{dataset_id}")
+
         # Execute the CREATE OR REPLACE TABLE statements in BigQuery
         utils.execute_bq_sql(create_sql, None)
+        
     except Exception as e:
-        if isinstance(e, IOError):
-            # Handle file-related errors specifically
-            raise Exception(f"DDL file error: {e}")
-        else:
-            # For BigQuery errors, they've already been processed by the utility function
-            raise
+        raise Exception(f"DDL file error: {e}")
 
 def populate_cdm_source(cdm_source_data: dict) -> None:
     # Add a record to the cdm_source table, if it doesn't have any rows
