@@ -230,7 +230,8 @@ class VocabHarmonizer:
 
         # Get _concept_id and _source_concept_id columns for table
         target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
-        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
+        source_concept_id_column = '0' if constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id'] == "" \
+            else f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']}"
         primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
 
         initial_select_exprs: list = []
@@ -245,7 +246,7 @@ class VocabHarmonizer:
                 column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
             
             # Set _source_concept_id value to previous target
-            if column_name == f"tbl.{source_concept_id_column}":
+            if column_name == f"{source_concept_id_column}":
                 column_name = f"tbl.{target_concept_id_column} AS {source_concept_id_column}"
 
             initial_select_exprs.append(column_name)
@@ -254,7 +255,7 @@ class VocabHarmonizer:
         metadata_columns = [
             "vocab.target_concept_id_domain AS target_domain",
             f"'{vocab_status_string}' AS vocab_harmonization_status",
-            f"tbl.{source_concept_id_column} AS source_concept_id",
+            f"{source_concept_id_column} AS source_concept_id",
             f"tbl.{target_concept_id_column} AS previous_target_concept_id",
             "vocab.target_concept_id AS target_concept_id"
         ]
@@ -296,7 +297,7 @@ class VocabHarmonizer:
                 MAX(vocab.target_concept_id) AS vh_value_as_concept_id
             FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
             INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab 
-                ON tbl.{source_concept_id_column} = vocab.concept_id
+                ON tbl.{target_concept_id_column} = vocab.concept_id
             WHERE vocab.target_concept_id_domain = 'Meas Value'
             GROUP BY tbl.{primary_key_column}
         """
