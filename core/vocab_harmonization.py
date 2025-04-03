@@ -17,7 +17,6 @@ class VocabHarmonizer:
         """
         Initialize a VocabHarmonizer with common parameters needed across all operations.
         """
-        self.logger = utils.logger
         self.file_path = file_path
         self.cdm_version = cdm_version
         self.site = site
@@ -45,10 +44,9 @@ class VocabHarmonizer:
         Harmonize a parquet file by applying defined harmonization steps and saving the result.
         """
 
-        # Delete all harminzation files files within GCS folder, if they exist
-        # Necessary because the task may fail and retry in Airflow
+        # Delete all harminzation files within GCS folder, if they exist
+        # Necessary because the task may fail and retry in Airflow, leaving some files behind
         current_files = utils.list_gcs_files(self.bucket, f"{self.delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{self.source_table_name}", constants.PARQUET)
-        self.logger.warning(f"current_files to delete is {current_files}")
         for file in current_files:
             utils.delete_gcs_file(file)
 
@@ -66,7 +64,7 @@ class VocabHarmonizer:
         """
         Perform a specific harmonization step.
         """
-        self.logger.info(f"Performing harmonization: {step}")
+        self.logger.info(f"Performing vocabulary harmonization: {step}")
 
         if step == constants.SOURCE_TARGET:
             self.source_target_remapping()
@@ -478,10 +476,8 @@ class VocabHarmonizer:
         # Create a new Parquet file for each target table with the appropriate structure
         for target_table in target_tables_list:
             omop_transformer = transformer.Transformer(self.site, self.target_parquet_path, self.cdm_version, self.source_table_name, target_table)
-            #partition_statement = omop_transformer.generate_omop_to_omop_sql()
 
             # Generate the transformed file
-            #utils.execute_duckdq_sql(partition_statement, f"Unable to transform file {self.source_table_name}")
             omop_transformer.omop_to_omop_etl()
 
             # Load the file to BQ; ETLed_FILE write type ensures append only
