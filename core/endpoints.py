@@ -10,9 +10,9 @@ import core.file_processor as file_processor
 import core.file_validation as file_validation
 import core.helpers.pipeline_log as pipeline_log
 import core.omop_client as omop_client
+import core.transformer as transformer
 import core.utils as utils
 import core.vocab_harmonization as vh
-import core.transformer as transformer
 
 app = Flask(__name__)
 

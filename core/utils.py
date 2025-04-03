@@ -158,15 +158,15 @@ def create_gcs_directory(directory_path: str) -> None:
         for blob in blobs:
             try:
                 bucket.blob(blob.name).delete()
-                logger.info(f"Deleted existing file: {blob.name}")
+                #logger.info(f"Deleted existing file: {blob.name}")
             except Exception as e:
-                logger.warning(f"Failed to delete file {blob.name}: {e}")
+                logger.error(f"Failed to delete file {blob.name}: {e}")
         
         # Create the directory marker
         blob = bucket.blob(blob_name)
         if not blob.exists():
             blob.upload_from_string('')
-            logger.info(f"Created directory: {directory_path}")
+            #logger.info(f"Created directory: {directory_path}")
             
     except Exception as e:
         logger.error(f"Unable to process GCS directory {directory_path}: {e}")

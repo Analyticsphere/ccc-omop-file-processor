@@ -1,9 +1,11 @@
-import core.constants as constants
-import core.utils as utils
-import core.bq_client as bq_client
-import core.transformer as transformer
 import logging
 import sys
+
+import core.bq_client as bq_client
+import core.constants as constants
+import core.transformer as transformer
+import core.utils as utils
+
 
 class VocabHarmonizer:
     """

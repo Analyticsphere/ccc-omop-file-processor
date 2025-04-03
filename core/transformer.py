@@ -1,7 +1,9 @@
-import core.constants as constants
-import core.utils as utils
 import re
+
+import core.constants as constants
 import core.file_processor as fp
+import core.utils as utils
+
 
 class Transformer:
     """

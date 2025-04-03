@@ -47,7 +47,7 @@ class ReportArtifact:
                 ) TO '{file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
                 conn.execute(record_statement)
-                utils.logger.info(f"Saved delivery report record to {file_path}")
+                #utils.logger.info(f"Saved delivery report record to {file_path}")
         except Exception as e:
             utils.logger.error(f"Unable to save report artifact: {e}")
             raise Exception(f"Unable to save report artifact: {e}") from e
