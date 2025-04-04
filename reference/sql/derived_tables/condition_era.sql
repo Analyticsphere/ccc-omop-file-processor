@@ -1,6 +1,6 @@
 -- https://ohdsi.github.io/CommonDataModel/sqlScripts.html#Condition_Eras
 -- Modified the OHDSI provided SQL script so it runs in DuckDB, and as a single SELECT statement
--- Generating deterministic hash composite primary key using custom UDF generate_id()
+-- Generating deterministic hash composite primary key
 
 WITH
     cteConditionTarget AS (
@@ -12,7 +12,7 @@ WITH
           TRY_CAST(co.CONDITION_END_DATE AS DATE),
           CAST(CONDITION_START_DATE AS DATE) + INTERVAL 1 DAY
         ) AS CONDITION_END_DATE
-      FROM read_parquet('@CONDITION_OCCURRENCE_PATH') co
+      FROM read_parquet('@CONDITION_OCCURRENCE') co
       WHERE
         TRY_CAST(CONDITION_START_DATE AS DATE) IS NOT NULL
         AND condition_concept_id != 0
@@ -115,12 +115,12 @@ WITH
     ERA_END_DATE
 )
 SELECT
-    generate_id(
+    hash(
         CONCAT(
             '@SITE', CAST(PERSON_ID AS STRING), CAST(CONDITION_CONCEPT_ID AS STRING), CAST(condition_era_start_date AS STRING), 
             CAST(condition_era_end_date AS STRING), CAST(condition_occurrence_count AS STRING)
         )
-    ) AS condition_era_id,
+    ) % 9223372036854775807 AS condition_era_id,
     PERSON_ID AS person_id,
     CONDITION_CONCEPT_ID AS condition_concept_id,
     CAST(condition_era_start_date AS DATE) AS condition_era_start_date,

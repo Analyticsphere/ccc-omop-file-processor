@@ -1,6 +1,6 @@
 -- Custom SQL to generate observation_period records that follow OHDSI recommendations/convensions:
     -- https://ohdsi.github.io/CommonDataModel/ehrObsPeriods.html
--- Generating deterministic hash composite primary key using custom UDF generate_id()
+-- Generating deterministic hash composite primary key
 -- Uses visit_occurrence table
 
 WITH valid_visits AS (
@@ -79,7 +79,7 @@ groupedby AS (
     GROUP BY person_id, island_group
 ), missingpersons AS (
     SELECT DISTINCT
-        generate_id(CONCAT('@SITE', person_id, '1970-01-01', '@CURRENT_DATE')) AS observation_period_id,
+        hash(CONCAT('@SITE', person_id, '1970-01-01', '@CURRENT_DATE')) % 9223372036854775807 AS observation_period_id,
         person_id,
         CAST('1970-01-01' AS DATE) AS observation_period_start_date,
         CAST('@CURRENT_DATE' AS DATE) AS observation_period_end_date,
@@ -90,7 +90,7 @@ groupedby AS (
     )
 )
 SELECT DISTINCT
-    generate_id(CONCAT('@SITE', person_id, island_start_date, island_end_date)) AS observation_period_id,
+    hash(CONCAT('@SITE', person_id, island_start_date, island_end_date)) % 9223372036854775807 AS observation_period_id,
     person_id,
     CAST(island_start_date AS DATE) AS observation_period_start_date,
     CAST(island_end_date AS DATE) AS observation_period_end_date,

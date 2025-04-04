@@ -39,7 +39,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
                 value_as_number=None,
                 value_as_string="invalid table name"
             )
-        utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
+        #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
         ra.save_artifact()
             
         return is_valid_table_name
@@ -61,7 +61,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
         parquet_columns = set(utils.get_columns_from_file(parquet_artifact_location))
 
         # Get schema columns from the table schema and convert to set (for O(1) lookups)
-        schema_columns = set(schema[table_name]['fields'].keys())
+        schema_columns = set(schema[table_name]['columns'].keys())
 
         # Identify valid and invalid columns from the parquet file
         valid_columns = parquet_columns & schema_columns  # Intersection of sets
@@ -73,7 +73,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
         # Process valid columns
         for column in valid_columns:
             ra = report_artifact.ReportArtifact(
-                concept_id=schema[table_name]['fields'][column]['concept_id'],
+                concept_id=schema[table_name]['columns'][column]['concept_id'],
                 delivery_date=delivery_date,
                 artifact_bucket=bucket_name,
                 name=f"Valid column name: {table_name}.{column}",
@@ -81,7 +81,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
                 value_as_number=None,
                 value_as_string="valid column name"
             )
-            utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
+            #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
             ra.save_artifact()
 
         # Process invalid columns (present in parquet but not in schema)
@@ -95,12 +95,12 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
                 value_as_number=None,
                 value_as_string="invalid column name"
             )
-            utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
+            #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
             ra.save_artifact()
 
         for column in missing_columns:
             ra = report_artifact.ReportArtifact(
-                concept_id=schema[table_name]['fields'][column]['concept_id'],
+                concept_id=schema[table_name]['columns'][column]['concept_id'],
                 delivery_date=delivery_date,
                 artifact_bucket=bucket_name,
                 name=f"Missing column: {table_name}.{column}",
@@ -108,7 +108,7 @@ def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_
                 value_as_number=None,
                 value_as_string="missing column"
             )
-            utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
+            #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
             ra.save_artifact()
 
     except Exception as e:

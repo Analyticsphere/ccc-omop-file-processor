@@ -1,5 +1,6 @@
 from google.cloud import bigquery  # type: ignore
 
+import core.constants as constants
 import core.utils as utils
 
 
@@ -23,16 +24,21 @@ def remove_all_tables(project_id: str, dataset_id: str) -> None:
         utils.logger.error(f"Unable to delete BigQuery table: {e}")
         raise Exception(f"Unable to delete BigQuery table: {e}") from e
 
-def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str, derive_path: bool = True) -> None:
+def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, table_name: str, write_type: constants.BQWriteTypes) -> None:
     """
     Load Parquet artifact file from GCS directly into BigQuery.
     """
-    table_name = utils.get_table_name_from_gcs_path(gcs_path)
-    if derive_path:
-        parquet_path = f"gs://{utils.get_parquet_artifact_location(gcs_path)}"
-    else:
-        parquet_path = gcs_path
+    if write_type == constants.BQWriteTypes.SPECIFIC_FILE:
+        write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+        parquet_path = file_path
+    elif write_type == constants.BQWriteTypes.PROCESSED_FILE:
+        write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+        parquet_path = f"gs://{utils.get_parquet_artifact_location(file_path)}"
         
+    elif write_type == constants.BQWriteTypes.ETLed_FILE:
+        write_disposition = bigquery.WriteDisposition.WRITE_APPEND
+        parquet_path = file_path
+
     # When upgrading to 5.4, some Parquet files may get deleted
     # First confirm that Parquet file does exist before trying to load to BQ
     if not utils.parquet_file_exists(parquet_path):
@@ -45,7 +51,7 @@ def load_parquet_to_bigquery(gcs_path: str, project_id: str, dataset_id: str, de
         
         job_config = bigquery.LoadJobConfig(
             source_format=bigquery.SourceFormat.PARQUET,
-            write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+            write_disposition=write_disposition,
             # autodetect=True  # Schema is explicity defined in Parquet file
         )
         

@@ -1,11 +1,12 @@
 {
   "person": {
     "concept_id": "1147314",
-    "fields": {
+    "columns": {
       "person_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147026"
+        "concept_id": "1147026",
+        "primary_key": "true"
       },
       "gender_concept_id": {
         "type": "BIGINT",
@@ -96,11 +97,12 @@
   },
   "observation_period": {
     "concept_id": "1147321",
-    "fields": {
+    "columns": {
       "observation_period_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147044"
+        "concept_id": "1147044",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -126,11 +128,12 @@
   },
   "visit_occurrence": {
     "concept_id": "1147332",
-    "fields": {
+    "columns": {
       "visit_occurrence_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147070"
+        "concept_id": "1147070",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -216,11 +219,12 @@
   },
   "visit_detail": {
     "concept_id": "1147637",
-    "fields": {
+    "columns": {
       "visit_detail_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147624"
+        "concept_id": "1147624",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -316,11 +320,12 @@
   },
   "condition_occurrence": {
     "concept_id": "1147333",
-    "fields": {
+    "columns": {
       "condition_occurrence_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147127"
+        "concept_id": "1147127",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -401,11 +406,12 @@
   },
   "drug_exposure": {
     "concept_id": "1147339",
-    "fields": {
+    "columns": {
       "drug_exposure_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147094"
+        "concept_id": "1147094",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -521,11 +527,12 @@
   },
   "procedure_occurrence": {
     "concept_id": "1147301",
-    "fields": {
+    "columns": {
       "procedure_occurrence_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147082"
+        "concept_id": "1147082",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -596,11 +603,12 @@
   },
   "device_exposure": {
     "concept_id": "1147305",
-    "fields": {
+    "columns": {
       "device_exposure_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147115"
+        "concept_id": "1147115",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -676,11 +684,12 @@
   },
   "measurement": {
     "concept_id": "1147330",
-    "fields": {
+    "columns": {
       "measurement_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147138"
+        "concept_id": "1147138",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -781,11 +790,12 @@
   },
   "observation": {
     "concept_id": "1147304",
-    "fields": {
+    "columns": {
       "observation_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147165"
+        "concept_id": "1147165",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -876,7 +886,7 @@
   },
   "death": {
     "concept_id": "1147312",
-    "fields": {
+    "columns": {
       "person_id": {
         "type": "BIGINT",
         "required": "true",
@@ -916,11 +926,12 @@
   },
   "note": {
     "concept_id": "1147317",
-    "fields": {
+    "columns": {
       "note_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147156"
+        "concept_id": "1147156",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -991,11 +1002,12 @@
   },
   "note_nlp": {
     "concept_id": "1147542",
-    "fields": {
+    "columns": {
       "note_nlp_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147589"
+        "concept_id": "1147589",
+        "primary_key": "true"
       },
       "note_id": {
         "type": "BIGINT",
@@ -1066,11 +1078,12 @@
   },
   "specimen": {
     "concept_id": "1147306",
-    "fields": {
+    "columns": {
       "specimen_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147049"
+        "concept_id": "1147049",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -1146,7 +1159,7 @@
   },
   "fact_relationship": {
     "concept_id": "1147320",
-    "fields": {
+    "columns": {
       "domain_concept_id_1": {
         "type": "BIGINT",
         "required": "true",
@@ -1176,11 +1189,12 @@
   },
   "location": {
     "concept_id": "1147335",
-    "fields": {
+    "columns": {
       "location_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147187"
+        "concept_id": "1147187",
+        "primary_key": "true"
       },
       "address_1": {
         "type": "VARCHAR",
@@ -1221,11 +1235,12 @@
   },
   "care_site": {
     "concept_id": "1147313",
-    "fields": {
+    "columns": {
       "care_site_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147195"
+        "concept_id": "1147195",
+        "primary_key": "true"
       },
       "care_site_name": {
         "type": "VARCHAR",
@@ -1256,11 +1271,12 @@
   },
   "provider": {
     "concept_id": "1147315",
-    "fields": {
+    "columns": {
       "provider_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147201"
+        "concept_id": "1147201",
+        "primary_key": "true"
       },
       "provider_name": {
         "type": "VARCHAR",
@@ -1326,11 +1342,12 @@
   },
   "payer_plan_period": {
     "concept_id": "1147327",
-    "fields": {
+    "columns": {
       "payer_plan_period_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147214"
+        "concept_id": "1147214",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -1416,11 +1433,12 @@
   },
   "cost": {
     "concept_id": "1147366",
-    "fields": {
+    "columns": {
       "cost_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147344"
+        "concept_id": "1147344",
+        "primary_key": "true"
       },
       "cost_event_id": {
         "type": "BIGINT",
@@ -1531,11 +1549,12 @@
   },
   "drug_era": {
     "concept_id": "1147303",
-    "fields": {
+    "columns": {
       "drug_era_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147281"
+        "concept_id": "1147281",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -1571,11 +1590,12 @@
   },
   "dose_era": {
     "concept_id": "1147324",
-    "fields": {
+    "columns": {
       "dose_era_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147288"
+        "concept_id": "1147288",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -1611,11 +1631,12 @@
   },
   "condition_era": {
     "concept_id": "1147329",
-    "fields": {
+    "columns": {
       "condition_era_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1147295"
+        "concept_id": "1147295",
+        "primary_key": "true"
       },
       "person_id": {
         "type": "BIGINT",
@@ -1646,7 +1667,7 @@
   },
   "metadata": {
     "concept_id": "1147636",
-    "fields": {
+    "columns": {
       "metadata_concept_id": {
         "type": "BIGINT",
         "required": "true",
@@ -1686,7 +1707,7 @@
   },
   "cdm_source": {
     "concept_id": "1147325",
-    "fields": {
+    "columns": {
       "cdm_source_name": {
         "type": "VARCHAR",
         "required": "true",
@@ -1741,11 +1762,12 @@
   },
   "concept": {
     "concept_id": "1147311",
-    "fields": {
+    "columns": {
       "concept_id": {
         "type": "BIGINT",
         "required": "true",
-        "concept_id": "1146945"
+        "concept_id": "1146945",
+        "primary_key": "true"
       },
       "concept_name": {
         "type": "VARCHAR",
@@ -1796,11 +1818,12 @@
   },
   "vocabulary": {
     "concept_id": "1147318",
-    "fields": {
+    "columns": {
       "vocabulary_id": {
         "type": "VARCHAR",
         "required": "true",
-        "concept_id": "1146955"
+        "concept_id": "1146955",
+        "primary_key": "true"
       },
       "vocabulary_name": {
         "type": "VARCHAR",
@@ -1826,11 +1849,12 @@
   },
   "domain": {
     "concept_id": "1147310",
-    "fields": {
+    "columns": {
       "domain_id": {
         "type": "VARCHAR",
         "required": "true",
-        "concept_id": "1146960"
+        "concept_id": "1146960",
+        "primary_key": "true"
       },
       "domain_name": {
         "type": "VARCHAR",
@@ -1846,11 +1870,12 @@
   },
   "concept_class": {
     "concept_id": "1147322",
-    "fields": {
+    "columns": {
       "concept_class_id": {
         "type": "VARCHAR",
         "required": "true",
-        "concept_id": "1146963"
+        "concept_id": "1146963",
+        "primary_key": "true"
       },
       "concept_class_name": {
         "type": "VARCHAR",
@@ -1866,7 +1891,7 @@
   },
   "concept_relationship": {
     "concept_id": "1147336",
-    "fields": {
+    "columns": {
       "concept_id_1": {
         "type": "BIGINT",
         "required": "true",
@@ -1901,11 +1926,12 @@
   },
   "relationship": {
     "concept_id": "1147307",
-    "fields": {
+    "columns": {
       "relationship_id": {
         "type": "VARCHAR",
         "required": "true",
-        "concept_id": "1146972"
+        "concept_id": "1146972",
+        "primary_key": "true"
       },
       "relationship_name": {
         "type": "VARCHAR",
@@ -1936,7 +1962,7 @@
   },
   "concept_synonym": {
     "concept_id": "1147308",
-    "fields": {
+    "columns": {
       "concept_id": {
         "type": "BIGINT",
         "required": "true",
@@ -1956,7 +1982,7 @@
   },
   "concept_ancestor": {
     "concept_id": "1147331",
-    "fields": {
+    "columns": {
       "ancestor_concept_id": {
         "type": "BIGINT",
         "required": "true",
@@ -1981,7 +2007,7 @@
   },
   "source_to_concept_map": {
     "concept_id": "1147334",
-    "fields": {
+    "columns": {
       "source_code": {
         "type": "VARCHAR",
         "required": "true",
@@ -2031,7 +2057,7 @@
   },
   "drug_strength": {
     "concept_id": "1147337",
-    "fields": {
+    "columns": {
       "drug_concept_id": {
         "type": "BIGINT",
         "required": "true",
@@ -2096,7 +2122,7 @@
   },
   "cohort_definition": {
     "concept_id": "1147323",
-    "fields": {
+    "columns": {
       "cohort_definition_id": {
         "type": "BIGINT",
         "required": "true",
@@ -2136,7 +2162,7 @@
   },
   "attribute_definition": {
     "concept_id": "1147302",
-    "fields": {
+    "columns": {
       "attribute_definition_id": {
         "type": "BIGINT",
         "required": "true",

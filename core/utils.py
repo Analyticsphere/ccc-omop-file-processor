@@ -13,7 +13,6 @@ from google.cloud import storage  # type: ignore
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
-import core.helpers.udf as udf
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -35,7 +34,6 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
         storage_client = storage.Client()
         
         # Get the bucket
-        logger.info(f"Attempting to access bucket to list files: {bucket_name}")
         bucket = storage_client.bucket(bucket_name)
         
         # Verify bucket exists
@@ -80,15 +78,15 @@ def create_gcs_directory(directory_path: str) -> None:
         for blob in blobs:
             try:
                 bucket.blob(blob.name).delete()
-                logger.info(f"Deleted existing file: {blob.name}")
+                #logger.info(f"Deleted existing file: {blob.name}")
             except Exception as e:
-                logger.warning(f"Failed to delete file {blob.name}: {e}")
+                logger.error(f"Failed to delete file {blob.name}: {e}")
         
         # Create the directory marker
         blob = bucket.blob(blob_name)
         if not blob.exists():
             blob.upload_from_string('')
-            logger.info(f"Created directory: {directory_path}")
+            #logger.info(f"Created directory: {directory_path}")
             
     except Exception as e:
         logger.error(f"Unable to process GCS directory {directory_path}: {e}")
@@ -110,7 +108,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         conn.execute(f"SET max_memory='{constants.DUCKDB_MEMORY_LIMIT}'")
 
         # Improves performance for large queries
-        conn.execute("SET preserve_insertion_order='false'")
+        conn.execute("SET preserve_insertion_order = false")
 
         # Set to number of CPU cores
         # https://duckdb.org/docs/configuration/overview.html#global-configuration-options
@@ -122,9 +120,6 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
 
         # Register GCS filesystem to read/write to GCS buckets
         conn.register_filesystem(filesystem('gcs'))
-
-        # Register UDFs
-        udf.UDFManager(conn).register_udfs()
 
         return conn, local_db_file
     except Exception as e:
@@ -143,6 +138,17 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str)
 
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
+
+def execute_duckdb_sql(sql: str, error_msg: str) -> None:
+    try:
+        conn, local_db_file = create_duckdb_connection()
+
+        with conn:
+            conn.execute(sql)
+    except Exception as e:
+        raise Exception(f"{error_msg}: {str(e)}") from e
+    finally:
+        close_duckdb_connection(conn, local_db_file) 
 
 def parse_duckdb_csv_error(error: Exception) -> Optional[str]:
     """
@@ -302,6 +308,19 @@ def get_parquet_artifact_location(gcs_file_path: str) -> str:
     parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
 
     return parquet_path
+
+def get_parquet_harmonized_path(gcs_file_path: str) -> str:
+    file_name = get_table_name_from_gcs_path(gcs_file_path)
+    base_directory, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+    
+    # Remove trailing slash if present
+    base_directory = base_directory.rstrip('/')
+        
+    # Construct the final parquet path
+    parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{file_name}/"
+
+    return parquet_path
+
 
 def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
     table_name = get_table_name_from_gcs_path(gcs_file_path).lower()
@@ -559,7 +578,8 @@ def download_from_gcs(gcs_file_path: str) -> str:
         raise Exception(f"Error downloading file: {e}")
     
 def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name: str) -> None:
-    """Uploads a file to the specified GCS bucket.
+    """
+    Uploads a file to the specified GCS bucket.
     """
     # Initialize the GCS client
     storage_client = storage.Client()
@@ -570,3 +590,39 @@ def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name:
     # Create a blob object and upload the file
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(local_file_path)
+
+def get_primary_key_column(table_name: str, cdm_version: str) -> str:
+    schema = get_table_schema(table_name, cdm_version)
+    columns = schema[table_name]["columns"]
+
+    # Iterate over each column name and its properties
+    for column_name, column_properties in columns.items():
+        if "primary_key" in column_properties and column_properties["primary_key"] == "true":
+            return column_name
+    
+    # For tables with no primary key, return ""
+    return ""
+
+
+def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
+    """
+    Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
+    """
+    replacement_result = sql_script
+
+    for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
+        clinical_data_table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
+        replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
+
+    # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
+    for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
+        vocab_table_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
+        replacement_result = replacement_result.replace(placeholder, vocab_table_path)
+
+    # Add site name 
+    replacement_result = replacement_result.replace(constants.SITE_PLACEHOLDER_STRING, site)
+
+    # Add current date
+    replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
+
+    return replacement_result

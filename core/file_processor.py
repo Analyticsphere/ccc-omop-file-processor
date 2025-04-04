@@ -93,24 +93,16 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
                 select_list.append(f"{column} AS {column.lower()}")
         select_clause = ", ".join(select_list)
 
-        conn, local_db_file = utils.create_duckdb_connection()
-        try:
-            with conn:
+        copy_sql = f"""
+            COPY (
+                SELECT {select_clause}
+                FROM read_parquet('gs://{gcs_file_path}')
+            )
+            TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+        """
 
-                copy_sql = f"""
-                    COPY (
-                        SELECT {select_clause}
-                        FROM read_parquet('gs://{gcs_file_path}')
-                    )
-                    TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
-                """
+        utils.execute_duckdb_sql(copy_sql, f"Unable to process incoming Parquet file {gcs_file_path}:")
 
-                conn.execute(copy_sql)
-        except Exception as e:
-            utils.logger.error(f"Unable to process incoming Parquet file: {e}")
-            raise Exception(f"Unable to process incoming Parquet file: {e}") from e
-        finally:
-            utils.close_duckdb_connection(conn, local_db_file)
     else:
         utils.logger.error(f"Invalid Parquet file")
         raise Exception(f"Invalid Parquet file")
@@ -134,7 +126,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
             # Special handling required to prevent parsing error
 
-            # Re-add double quotes to offset field prevent DuckDB from returning parsing error
+            # Re-add double quotes to offset column prevent DuckDB from returning parsing error
             select_clause = select_clause.replace('offset', '"offset"')
 
             # Convert CSV to Parquet with lowercase column names
@@ -263,25 +255,26 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         utils.logger.error(f"Unable to convert CSV to UTF8: {e}")
         raise Exception(f"Unable to convert CSV to UTF8: {e}") from e
 
-def get_placeholder_value(field_name: str, field_type: str) -> str:
-    # Return string representation of default value, based on field type
+def get_placeholder_value(column_name: str, column_type: str) -> str:
+    # Return string representation of default value, based on column type
 
-    # *All* fields that end in _concept_id must be populated
-    # If a concept is unknown, OHDSI convention is to explicity populate field with concept_id 0
-    if field_name.endswith("_concept_id"):
+    # *All* columns that end in _concept_id must be populated
+    # If a concept is unknown, OHDSI convention is to explicity populate column with concept_id 0
+    if column_name.endswith("_concept_id"):
         return "'0'"
 
-    default_value = constants.DEFAULT_FIELD_VALUES[field_type]
+    default_value = constants.DEFAULT_COLUMN_VALUES[column_type]
     
     return default_value
 
-def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str:
+def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str) -> str:
     """
-    Generates a SQL statement that, when run:
+    Generates a SQL statement that, when executed:
         - Converts data types of columns within Parquet file to OMOP CDM standard
         - Creates a new Parquet file with the invalid rows from the original data file
         - Converts all column names to lower case
-        - Ensures consistent field order within Parquet
+        - Ensures consistent column order within Parquet
+        - Set (possibly non-unique) deterministric composite key for tables with surrogate primary keys
 
     This SQL has many functions, but it is far more efficient to do this all in one step,
     as compared to reading and writing the Parquet each time, for each piece of functionality.
@@ -290,7 +283,7 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     # --------------------------------------------------------------------------
     # Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
-    table_name = utils.get_table_name_from_gcs_path(gcs_file_path).lower()
+    table_name = utils.get_table_name_from_gcs_path(parquet_gcs_file_path).lower()
 
     # --------------------------------------------------------------------------
     # Retrieve the table schema. If not found, return empty string
@@ -300,13 +293,13 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
         utils.logger.warning(f"No schema found for table {table_name}")
         return ""
 
-    fields = schema[table_name]["fields"]
-    ordered_omop_columns = list(fields.keys())  # preserve column order
+    columns = schema[table_name]["columns"]
+    ordered_omop_columns = list(columns.keys())  # preserve column order
 
     # --------------------------------------------------------------------------
     # Identify which columns actually exist in the Parquet file 
     # --------------------------------------------------------------------------
-    actual_columns = utils.get_columns_from_file(gcs_file_path)
+    actual_columns = utils.get_columns_from_file(parquet_gcs_file_path)
 
     # Get Connect_ID column name, if it exists
     connect_id_column_name = ""
@@ -322,86 +315,97 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
     row_validity = []    # e.g. "cc.some_col IS NOT NULL AND ..."
 
     # --------------------------------------------------------------------------
-    # Coalesce required fields if they're NULL, or generate a placeholder column if that field doesn't exist at all.
+    # Coalesce required columns if they're NULL, or generate a placeholder column if that column doesn't exist at all.
     # --------------------------------------------------------------------------
-    for field_name in ordered_omop_columns:
-        field_type = fields[field_name]["type"]
-        is_required = fields[field_name]["required"].lower() == "true"
+    for column_name in ordered_omop_columns:
+        column_type = columns[column_name]["type"]
+        is_required = columns[column_name]["required"].lower() == "true"
 
-        # Determine default value if a required field is NULL
-        default_value = get_placeholder_value(field_name, field_type) if is_required or field_name.endswith("_concept_id") else "NULL"
+        # Determine default value if a required column is NULL
+        default_value = get_placeholder_value(column_name, column_type) if is_required or column_name.endswith("_concept_id") else "NULL"
 
-        # Build concat statement that will eventually be hashed to identify rows
-        row_hash_statement = ", ".join([f"COALESCE(CAST({field_name} AS VARCHAR), '')" for field_name in actual_columns])
-
-        if field_name in actual_columns:
-            # If the site provided a Connect_ID field and/or person_id, use Connect_ID in place of person_id
-            if field_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
-                coalesce_exprs.append(f"CAST({connect_id_column_name} AS {field_type}) AS {field_name}")
-            # If the column exists in the Parquet file, coalesce it with the default value, then try casting to expected type
-            elif default_value != "NULL":
-                coalesce_exprs.append(f"TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS {field_name}")
+        # If the site delivered table contains an expected column...
+        if column_name in actual_columns:
+            # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
+            if default_value != "NULL":
+                coalesce_exprs.append(f"TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS {column_name}")
             # If default value is NULL, don't coalesce
             else:
-                coalesce_exprs.append(f"TRY_CAST({field_name} AS {field_type}) AS {field_name}")
+                coalesce_exprs.append(f"TRY_CAST({column_name} AS {column_type}) AS {column_name}")
             
-            # If the field is provided, and it's required, add it to list of fields which must be of correct type
+            # If the colum is provided, and it's required, add it to list of columns which must be of correct type
             if is_required:
-                # In the final SQL statement, need to confirm that ALL required fields can be cast to their correct types
-                # If any one of the fields cannot be cast to the correct type, the entire row fails
+                # In the final SQL statement, need to confirm that ALL required columns can be cast to their correct types
+                # If any one of the columns cannot be cast to the correct type, the entire row fails
                 # To do this check in one shot, perform a single COALESCE within the SQL statement
-                # ALL fields in a COALESCE must be of the same type, so casting everything to VARCHAR *after* trying to cast it to its correct type
-                row_validity.append(f"CAST(TRY_CAST(COALESCE({field_name}, {default_value}) AS {field_type}) AS VARCHAR)")
+                # ALL columns in a COALESCE must be of the same type, so casting everything to VARCHAR *after* trying to cast it to its correct type
+                row_validity.append(f"CAST(TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS VARCHAR)")
         else:
             # If the site provided a Connect_ID field and/or person_id, use Connect_ID in place of person_id
-            if field_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
-                coalesce_exprs.append(f"CAST({connect_id_column_name} AS {field_type}) AS {field_name}")
+            if column_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
+                coalesce_exprs.append(f"CAST({connect_id_column_name} AS {column_type}) AS {column_name}")
 
             # If the column doesn't exist, just produce a placeholder (NULL or a special default)
-            # Still need to cast to ensure consistent field types
-            else:
-                coalesce_exprs.append(f"CAST({default_value} AS {field_type}) AS {field_name}")
+            # Still need to cast to ensure consist column types
+            coalesce_exprs.append(f"CAST({default_value} AS {column_type}) AS {column_name}")
 
-            # If the field IS NOT PROVIDED but it's still required - this is not a failed row; just use a default value
-            # No need to add missing, required rows to row_validity check
+            # If a column is required but not provided, all rows should not fail validity check; just use a default value
 
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
 
     # If row_validity list has no statements, add a string so SQL statement stays valid
     if not row_validity:
-        row_validity.append("'faketext'")
+        row_validity.append("''")
     row_validity_sql = ", ".join(row_validity)
 
-    # Build row_check table with row_hash column
-    # Uniquely identify invalid rows using hash generated from concatenting each column
-        # If two rows have the same values, it will result in same hash, but that is okay for this use case
-    # Use the hash values to identify invalid rows from original Parquet, and save those rows to a seperate file
-        # Need to save from original file because row_check will have TRY_CAST result, and will obscure original, invalid values
-    # Resave over original parquet file, saving only the rows which are valid
+    # Create deterministic composite key for tables with surrogate primary keys
+        # At this stage, uniqueness is *not* an expected, nor desired, property of the primary keys
+        # Primary keys uniqueness will be enforced in later tasks, after vocabulary harmonization
+    replace_clause = ""
+    if table_name in constants.SURROGATE_KEY_TABLES:
+        primary_key = utils.get_primary_key_column(table_name, cdm_version)
+
+        # Create composite key by concatenting each column into a single value and taking its hash
+        # Don't include the original primary key in the hash
+        primary_key_sql = ", ".join([f"COALESCE(CAST({column_name} AS VARCHAR), '')" for column_name in ordered_omop_columns if column_name != primary_key])
+        replace_clause = f"""
+            REPLACE(CAST((CAST(hash(CONCAT({primary_key_sql})) AS UBIGINT) % 9223372036854775807) AS BIGINT) AS {primary_key}) 
+        """
+
+    # Build concat statement that will eventually be hashed to identify valid/invalid rows
+    # The row_hash involves ALL columns from incoming Parquet (whereas the primary key includes only columns in OMOP)
+    row_hash_statement = ", ".join([f"COALESCE(CAST({column_name} AS VARCHAR), '')" for column_name in actual_columns])
+
+    # Final normalization SQL statement
+    # Step 1 - Identify invalid rows using output of COALESCE({row_validity_sql}) (NULL COALESCE result = invalid)
+        # If invalid, set new column "row_hash" to unique hash that uniquely identifies the invalid row(s)
+        # If valid, set new column "row_hash" to a NULL value
+    # Step 2 - Create new, seperate invalid rows Parquet file containing all invalid rows
+    # Step 3 - Resave over original Parquet file, saving only the valid rows; and setting deterministric primary key for surrogate key tables
     sql_script = f"""
         CREATE OR REPLACE TABLE row_check AS
             SELECT
                 {coalesce_definitions_sql},
                 CASE 
-                    WHEN COALESCE({row_validity_sql}) IS NULL THEN md5(CONCAT({row_hash_statement}))
+                    WHEN COALESCE({row_validity_sql}) IS NULL THEN CAST((CAST(hash(CONCAT({row_hash_statement})) AS UBIGINT) % 9223372036854775807) AS BIGINT)
                     ELSE NULL END AS row_hash
-            FROM read_parquet('gs://{gcs_file_path}')
+            FROM read_parquet('gs://{parquet_gcs_file_path}')
         ;
 
         COPY (
             SELECT *
-            FROM read_parquet('gs://{gcs_file_path}')
-            WHERE md5(CONCAT({row_hash_statement})) IN (
+            FROM read_parquet('gs://{parquet_gcs_file_path}')
+            WHERE CAST((CAST(hash(CONCAT({row_hash_statement})) AS UBIGINT) % 9223372036854775807) AS BIGINT) IN (
                 SELECT row_hash FROM row_check WHERE row_hash IS NOT NULL
             )
-        ) TO 'gs://{utils.get_invalid_rows_path_from_gcs_path(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+        ) TO 'gs://{utils.get_invalid_rows_path_from_gcs_path(parquet_gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
         COPY (
-            SELECT * EXCLUDE (row_hash)
+            SELECT * EXCLUDE (row_hash) {replace_clause}
             FROM row_check
             WHERE row_hash IS NULL
-        ) TO 'gs://{gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
+        ) TO 'gs://{parquet_gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
     """.strip()
@@ -412,8 +416,8 @@ def get_normalization_sql_statement(gcs_file_path: str, cdm_version: str) -> str
 
     return sql_script
 
-def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
-    fix_sql = get_normalization_sql_statement(gcs_file_path, cdm_version)
+def normalize_file(parquet_gcs_file_path: str, cdm_version: str) -> None:
+    fix_sql = get_normalization_sql_statement(parquet_gcs_file_path, cdm_version)
     
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM
@@ -424,7 +428,7 @@ def normalize_file(gcs_file_path: str, cdm_version: str) -> None:
             with conn:
                 conn.execute(fix_sql)
                 # Get counts of valid/invalid rows for OMOP files
-                create_row_count_artifacts(gcs_file_path, cdm_version, conn)
+                create_row_count_artifacts(parquet_gcs_file_path, cdm_version, conn)
         except Exception as e:
             utils.logger.error(f"Unable to normalize Parquet file: {e}")
             raise Exception(f"Unable to normalize Parquet file: {e}") from e
@@ -463,10 +467,10 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
 def fix_csv_quoting(gcs_file_path: str) -> None:
     """
     Handles some unquoted quote patterns in CSV files 
-    Each CSV row is evaulated as a single string, and regex replacements are made to escape problematic characters
+    Each CSV row is evaulated as a single string, and text replacements are made to escape problematic characters
     
     File gets downloaded from GCS to VM executing Cloud Function.
-    Streaming CSV file directly from GCS to VM resulted in unexpected behaviors, so the logic executes against a local file
+    Streaming CSV file directly from GCS to VM resulted in unexpected behaviors, so this logic executes against a local file
     Ideally, we would read/write directly to/from GCS...
     """
     encoding: str = 'utf-8'
@@ -512,7 +516,7 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             os.remove(output_csv_path)
             
             # After creating new file with fixed quoting, try converting it to Parquet
-            # store_rejects = True leads to more malformed rows getting included, but may add unexpected columns
+            # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
             # Unexpected columns will be reported in data delivery report, and normalization step will remove them
             csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True'])
                 
@@ -522,11 +526,11 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
 def clean_csv_row(row: str) -> str:
     """
     Clean a CSV row by properly handling various quoting issues:
-    1. Quotes within quoted fields need to be properly escaped (doubled)
-    2. Fields containing single quotes need to be properly quoted
-    3. Fields with consecutive single quotes need to be properly quoted
+    1. Quotes within quoted columns need to be properly escaped (doubled)
+    2. Columns containing single quotes need to be properly quoted
+    3. Columns with consecutive single quotes need to be properly quoted
     """
-    # First pass: Fix quotes within quoted fields
+    # First pass: Fix quotes within quoted columns
     result = []
     i = 0
     in_quotes = False
@@ -536,11 +540,11 @@ def clean_csv_row(row: str) -> str:
         
         if char == '"':
             if not in_quotes:
-                # Start of quoted field
+                # Start of quoted column
                 in_quotes = True
                 result.append(char)
             else:
-                # Could be end of quoted field or internal quote
+                # Could be end of quoted column or internal quote
                 if i + 1 < len(row):
                     next_char = row[i + 1]
                     if next_char == '"':
@@ -551,11 +555,11 @@ def clean_csv_row(row: str) -> str:
                         # Internal quote that needs escaping (Example 1)
                         result.append('""')
                     else:
-                        # End of quoted field
+                        # End of quoted column
                         in_quotes = False
                         result.append(char)
                 else:
-                    # End of quoted field at end of string
+                    # End of quoted column at end of string
                     in_quotes = False
                     result.append(char)
         else:
@@ -563,9 +567,9 @@ def clean_csv_row(row: str) -> str:
         
         i += 1
     
-    # Second pass: Split into fields and handle single quotes
+    # Second pass: Split into columns and handle single quotes
     row_with_fixed_quotes = ''.join(result)
-    fields = []
+    columns = []
     current = []
     in_quotes = False
     i = 0
@@ -585,33 +589,33 @@ def clean_csv_row(row: str) -> str:
                 else:
                     in_quotes = False
         elif char == ',' and not in_quotes:
-            # End of field
-            fields.append(''.join(current))
+            # End of column
+            columns.append(''.join(current))
             current = []
         else:
             current.append(char)
         
         i += 1
     
-    # Add the last field
-    if current or not fields:
-        fields.append(''.join(current))
+    # Add the last column
+    if current or not columns:
+        columns.append(''.join(current))
     
-    # Process fields with single quotes
-    cleaned_fields = []
-    for field in fields:
+    # Process columns with single quotes
+    cleaned_columns = []
+    for column in columns:
         # Handle single quotes (Examples 2 & 3)
-        # If field contains single quotes and isn't already quoted
-        if "'" in field and not (field.startswith('"') and field.endswith('"')):
-            field = f'"{field}"'
+        # If column contains single quotes and isn't already quoted
+        if "'" in column and not (column.startswith('"') and column.endswith('"')):
+            column = f'"{column}"'
         
-        # Fields with single quotes aren't get read properly...
-        if field == "\"'\"":
-            field = "''"
+        # Columns with single quotes aren't get read properly...
+        if column == "\"'\"":
+            column = "''"
         
-        cleaned_fields.append(field)
+        cleaned_columns.append(column)
     
-    return ','.join(cleaned_fields)
+    return ','.join(cleaned_columns)
 
 def format_list(items: list) -> str:
     if not items:  # Check if list is empty
