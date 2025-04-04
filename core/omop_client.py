@@ -39,7 +39,7 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
                             FROM read_parquet('gs://{normalized_file_path}')
                         ) TO 'gs://{normalized_file_path}' {constants.DUCKDB_FORMAT_STRING}
                     """
-                    utils.execute_duckdq_sql(select_statement, f"Unable to upgrade file {gcs_file_path}:")
+                    utils.execute_duckdb_sql(select_statement, f"Unable to upgrade file {gcs_file_path}:")
 
                 except Exception as e:
                     utils.logger.error(f"Unable to open SQL upgrade file: {e}")
@@ -131,7 +131,7 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                         IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
                 ) TO 'gs://{optimized_file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
-                utils.execute_duckdq_sql(transform_query, "Unable to create optimized vocab file")
+                utils.execute_duckdb_sql(transform_query, "Unable to create optimized vocab file")
 
             else:
                 utils.logger.error(f"Vocabulary GCS bucket {vocab_path} not found")
@@ -292,7 +292,7 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
                 {select_statement}
             ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
         """
-        utils.execute_duckdq_sql(sql_statement, f"Unable to execute SQL to generate {table_name}")
+        utils.execute_duckdb_sql(sql_statement, f"Unable to execute SQL to generate {table_name}")
 
         # Load the Parquet to BigQuery
         # Because the task that executes this function occurs after load_bq(), 

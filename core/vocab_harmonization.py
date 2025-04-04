@@ -204,7 +204,7 @@ class VocabHarmonizer:
             ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
-        utils.execute_duckdq_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
+        utils.execute_duckdb_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
 
 
     def check_new_targets(self, mapping_type: str) -> None:
@@ -356,7 +356,7 @@ class VocabHarmonizer:
             ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
         """
 
-        utils.execute_duckdq_sql(final_sql, f"Unable to execute SQL to check for new targets ({mapping_type}) {self.source_table_name}")
+        utils.execute_duckdb_sql(final_sql, f"Unable to execute SQL to check for new targets ({mapping_type}) {self.source_table_name}")
 
 
     def domain_table_check(self) -> None:
@@ -452,7 +452,7 @@ class VocabHarmonizer:
             self.vocab_gcs_bucket
         )
 
-        utils.execute_duckdq_sql(final_sql_statement, f"Unable to perform domain check against {self.source_table_name}")
+        utils.execute_duckdb_sql(final_sql_statement, f"Unable to perform domain check against {self.source_table_name}")
 
 
     def omop_etl(self) -> None:

@@ -101,7 +101,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
             TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
         """
 
-        utils.execute_duckdq_sql(copy_sql, f"Unable to process incoming Parquet file {gcs_file_path}:")
+        utils.execute_duckdb_sql(copy_sql, f"Unable to process incoming Parquet file {gcs_file_path}:")
 
     else:
         utils.logger.error(f"Invalid Parquet file")

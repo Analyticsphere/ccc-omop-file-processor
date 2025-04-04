@@ -42,7 +42,7 @@ class ReportArtifact:
                 TRY_CAST('{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' AS DATETIME) AS metadata_datetime
         ) TO '{file_path}' {constants.DUCKDB_FORMAT_STRING}
         """
-        utils.execute_duckdq_sql(record_statement, "Unable to save report artifact")
+        utils.execute_duckdb_sql(record_statement, "Unable to save report artifact")
 
     
     def to_json(self) -> str:

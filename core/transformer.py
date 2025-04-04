@@ -41,7 +41,7 @@ class Transformer:
             sql = f.read()
         
         # Load the target table schema
-        schema = utils.get_table_schema(self.target_table, constants.CDM_v54)
+        schema = utils.get_table_schema(self.target_table, self.cdm_version)
         
         # Keep the full columns dictionary
         target_columns_dict = schema[self.target_table]["columns"]
@@ -191,7 +191,7 @@ class Transformer:
     def omop_to_omop_etl(self) -> None:
         # Execute the OMOP to OMOP ETL SQL script
         transform_sql = self.generate_omop_to_omop_sql()
-        utils.execute_duckdq_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
+        utils.execute_duckdb_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
 
         # Resolve duplicate primary keys within a single 'table part' file
         # TODO: Make this global across ALL table parts
@@ -290,5 +290,5 @@ class Transformer:
         """
         
         # Execute the SQL to handle duplicates
-        utils.execute_duckdq_sql(fix_sql, f"Unable to handle duplicate primary keys in {self.target_table}")
+        utils.execute_duckdb_sql(fix_sql, f"Unable to handle duplicate primary keys in {self.target_table}")
 

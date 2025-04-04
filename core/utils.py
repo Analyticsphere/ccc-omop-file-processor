@@ -139,15 +139,12 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str)
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
 
-def execute_duckdq_sql(sql: str, error_msg: str) -> None:
+def execute_duckdb_sql(sql: str, error_msg: str) -> None:
     try:
         conn, local_db_file = create_duckdb_connection()
 
         with conn:
-            sql_no_return = sql.replace('\n',' ')
-            logger.warning(f"SQL is {sql_no_return}")
             conn.execute(sql)
-            logger.warning(f"DID EXECUTE THE SQL!")
     except Exception as e:
         raise Exception(f"{error_msg}: {str(e)}") from e
     finally:
