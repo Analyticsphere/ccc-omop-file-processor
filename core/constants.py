@@ -7,8 +7,8 @@ DUCKDB_MAX_SIZE = "5000GB"
 DUCKDB_THREADS = "4"
 
 SERVICE_NAME = "omop-file-processor"
-BQ_LOGGING_TABLE = (os.getenv('BQ_LOGGING_TABLE'), '')
-VOCAB_GCS_PATH = (os.getenv('VOCAB_GCS_PATH'), '')
+BQ_LOGGING_TABLE = os.getenv('BQ_LOGGING_TABLE')
+VOCAB_GCS_PATH = os.getenv('VOCAB_GCS_PATH')
 
 CSV = ".csv"
 PARQUET = ".parquet"
