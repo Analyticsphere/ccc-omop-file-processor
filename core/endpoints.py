@@ -31,7 +31,8 @@ def heartbeat() -> tuple[Any, int]:
 def create_optimized_vocab() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     vocab_version: str = data.get('vocab_version', '')
-    vocab_gcs_bucket: str = data.get('vocab_gcs_bucket', '')
+    #vocab_gcs_bucket: str = data.get('vocab_gcs_bucket', '')
+    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
 
     if not vocab_version or not vocab_gcs_bucket:
         return "Missing required parameters: vocab_version and vocab_gcs_bucket", 400
@@ -212,7 +213,8 @@ def harmonize_vocab() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     vocab_version: Optional[str] = data.get('vocab_version')
-    vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
+    #vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
+    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
     omop_version: Optional[str] = data.get('omop_version')
     site: Optional[str] = data.get('site')
     project_id: Optional[str] = data.get('project_id')
@@ -251,7 +253,8 @@ def populate_dervied_data_table() -> tuple[str, int]:
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
     vocab_version: Optional[str] = data.get('vocab_version')
-    vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
+    #vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
+    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
 
     if not site or not delivery_date or not table_name or not project_id or not dataset_id or not vocab_version or not vocab_gcs_bucket or not site_bucket:
         return "Missing required parameters: site, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket, site_bucket", 400
@@ -270,7 +273,8 @@ def target_vocab_to_bq() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     table_file_name: Optional[str] = data.get('table_file_name')
     vocab_version: Optional[str] = data.get('vocab_version')
-    vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
+    #vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
+    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
 
@@ -372,7 +376,8 @@ def add_cdm_source_record() -> tuple[str, int]:
 @app.route('/pipeline_log', methods=['POST'])
 def log_pipeline_state() -> tuple:
     data: dict = request.get_json()
-    logging_table: Optional[str] = data.get('logging_table')
+    #logging_table: str = data.get('logging_table')
+    logging_table: str = constants.BQ_LOGGING_TABLE
     site_name: Optional[str] = data.get('site_name')
     delivery_date: Optional[str] = data.get('delivery_date')
     status: Optional[str] = data.get('status')
@@ -383,11 +388,11 @@ def log_pipeline_state() -> tuple:
 
     try:
         # Check if required columns are present
-        if not all([logging_table, site_name, delivery_date, status, run_id]):
+        if not all([site_name, delivery_date, status, run_id]):
             return "Missing required columns for BigQuery logging", 400
 
         pipeline_logger = pipeline_log.PipelineLog(
-            cast(str, logging_table),
+            logging_table,
             cast(str, site_name),
             cast(str, delivery_date),
             cast(str, status),
@@ -403,8 +408,6 @@ def log_pipeline_state() -> tuple:
     except Exception as e:
         utils.logger.error(f"Unable to save logging information to BigQuery table: {str(e)}")
         return f"Unable to save logging information to BigQuery table: {str(e)}", 500    
-
-
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
