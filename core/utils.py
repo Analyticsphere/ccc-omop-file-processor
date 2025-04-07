@@ -144,6 +144,8 @@ def execute_duckdb_sql(sql: str, error_msg: str) -> None:
         conn, local_db_file = create_duckdb_connection()
 
         with conn:
+            sql_no_return = sql.replace('\n', ' ')
+            logger.warning(f"Going to execute SQL: {sql_no_return}")
             conn.execute(sql)
     except Exception as e:
         raise Exception(f"{error_msg}: {str(e)}") from e
@@ -320,7 +322,6 @@ def get_parquet_harmonized_path(gcs_file_path: str) -> str:
     parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{file_name}/"
 
     return parquet_path
-
 
 def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
     table_name = get_table_name_from_gcs_path(gcs_file_path).lower()
@@ -602,7 +603,6 @@ def get_primary_key_column(table_name: str, cdm_version: str) -> str:
     
     # For tables with no primary key, return ""
     return ""
-
 
 def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
     """
