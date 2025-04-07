@@ -200,7 +200,7 @@ TARGET_REMAP = "Remap non-standard targets to new standard targets"
 TARGET_REPLACEMENT = "Replace non-standard targets with new standard targets"
 
 # Primary key column can be found in schema.json file
-NATURAL_KEY_TABLES = {
+NATURAL_KEY_TABLES = [
     "person",
     "location",
     "care_site",
@@ -213,9 +213,9 @@ NATURAL_KEY_TABLES = {
     "relationship",
     "visit_occurrence",
     "visit_detail"
-}
+]
 
-SURROGATE_KEY_TABLES = {
+SURROGATE_KEY_TABLES = [
     "observation_period",
     "condition_occurrence",
     "drug_exposure",
@@ -231,9 +231,9 @@ SURROGATE_KEY_TABLES = {
     "drug_era",
     "dose_era",
     "condition_era"
-}
+]
 
-NO_PRIMARY_KEY_TABLES = {
+NO_PRIMARY_KEY_TABLES = [
     "death",
     "fact_relationship",
     "episode_event",
@@ -246,4 +246,4 @@ NO_PRIMARY_KEY_TABLES = {
     "cohort",
     "cohort_definition",
     "attribute_definition"
-}
+]

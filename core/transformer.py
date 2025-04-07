@@ -227,8 +227,9 @@ class Transformer:
         This ensures that the new keys are deterministic (same input always gives same output)
         and unique across the table.
         """
-
+        self.logger.warning(f"In handle_duplicate_primary_keys() and table is {self.target_table} ")
         if self.target_table in constants.SURROGATE_KEY_TABLES:
+            self.logger.warning(f"In handle_duplicate_primary_keys() and table is {self.target_table} IS A SURROGATE KEY TABLE!")
             # Get the path to the transformed parquet file
             transformed_file_path = f"gs://{self.get_transformed_path()}"
             
@@ -293,4 +294,7 @@ class Transformer:
             
             # Execute the SQL to handle duplicates
             utils.execute_duckdb_sql(fix_sql, f"Unable to handle duplicate primary keys in {self.target_table}")
+        else:
+            self.logger.warning(f"In handle_duplicate_primary_keys() and table is {self.target_table} IS **not** A SURROGATE KEY TABLE!")
+
 
