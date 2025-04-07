@@ -126,7 +126,7 @@ class Transformer:
             target_column = target_column.strip()
             
             # Apply primary key replacement if this is the primary key column
-            if primary_key_column and target_column == primary_key_column:
+            if primary_key_column and target_column == primary_key_column and self.target_table in constants.SURROGATE_KEY_TABLES:
                 # Generate a composite key using all source expressions
                 concat_parts = []
                 for src_expr, _ in column_mappings:
