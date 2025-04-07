@@ -207,13 +207,13 @@ NATURAL_KEY_TABLES = {
     "vocabulary",
     "domain",
     "concept_class",
-    "relationship"
+    "relationship",
+    "visit_occurrence",
+    "visit_detail"
 }
 
 SURROGATE_KEY_TABLES = {
     "observation_period",
-    "visit_occurrence",
-    "visit_detail",
     "condition_occurrence",
     "drug_exposure",
     "procedure_occurrence",
