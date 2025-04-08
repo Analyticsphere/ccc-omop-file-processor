@@ -81,7 +81,7 @@ def get_log_row() -> tuple[Any, int]:
     delivery_date: Optional[str] = request.args.get('delivery_date')
 
     if not site or not delivery_date:
-        return "Missing required parameter: site and folder", 400
+        return "Missing required parameter: site and delivery_date", 400
     
     try:
         log_row: list[str] = bq_client.get_bq_log_row(site, delivery_date)

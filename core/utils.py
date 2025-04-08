@@ -144,8 +144,6 @@ def execute_duckdb_sql(sql: str, error_msg: str) -> None:
         conn, local_db_file = create_duckdb_connection()
 
         with conn:
-            sql_no_return = sql.replace('\n', ' ')
-            logger.warning(f"Going to execute SQL: {sql_no_return}")
             conn.execute(sql)
     except Exception as e:
         raise Exception(f"{error_msg}: {str(e)}") from e
