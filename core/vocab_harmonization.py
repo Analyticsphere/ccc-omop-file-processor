@@ -46,9 +46,10 @@ class VocabHarmonizer:
 
         # Delete all harminzation files within GCS folder, if they exist
         # Necessary because the task may fail and retry in Airflow, leaving some files behind
-        current_files = utils.list_gcs_files(self.bucket, f"{self.delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{self.source_table_name}", constants.PARQUET)
+        gcs_path = f"{self.delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{self.source_table_name}"
+        current_files = utils.list_gcs_files(self.bucket, gcs_path, constants.PARQUET)
         for file in current_files:
-            gcp_services.delete_gcs_file(file)
+            gcp_services.delete_gcs_file(f"{gcs_path}/{file}")
 
         # List order is very important here!
         harmonization_steps: list = [constants.SOURCE_TARGET, constants.TARGET_REMAP, constants.TARGET_REPLACEMENT, constants.DOMAIN_CHECK]
@@ -480,6 +481,7 @@ class VocabHarmonizer:
             # Generate the transformed file
             omop_transformer.omop_to_omop_etl()
 
+            self.logger.info(f"Loading harmonized data from {self.file_path} to {target_table}...")
             # Load the file to BQ; ETLed_FILE write type ensures append only
             gcp_services.load_parquet_to_bigquery(
                 file_path=f"gs://{omop_transformer.get_transformed_path()}",

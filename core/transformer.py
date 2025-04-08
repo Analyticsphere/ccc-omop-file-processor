@@ -229,6 +229,7 @@ class Transformer:
         and unique across the table.
         """
         if self.target_table in constants.SURROGATE_KEY_TABLES:
+            self.logger.info(f"Checking for an correct duplicate primary keys in {self.get_transformed_path()}")
             # Get the path to the transformed parquet file
             transformed_file_path = f"gs://{self.get_transformed_path()}"
             
