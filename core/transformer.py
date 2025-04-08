@@ -175,11 +175,17 @@ class Transformer:
         # Replace placeholder table strings with paths to Parquet files
         final_sql = self.placeholder_to_file_path(select_sql)
 
+        # transform_sql = f"""
+        #     COPY (
+        #         {final_sql}
+        #         WHERE target_table = '{self.target_table}'
+        #     ) TO 'gs://{self.get_transformed_path()}' {constants.DUCKDB_FORMAT_STRING}
+        # """
         transform_sql = f"""
             COPY (
                 {final_sql}
                 WHERE target_table = '{self.target_table}'
-            ) TO 'gs://{self.get_transformed_path()}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO 'gs://{self.get_transformed_path()}' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1, PER_THREAD_OUTPUT)
         """
 
         return transform_sql
