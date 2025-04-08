@@ -75,6 +75,26 @@ def create_artifact_buckets() -> tuple[str, int]:
         return f"Unable to create artifact buckets: {str(e)}", 500
 
 
+@app.route('/get_log_row', methods=['GET'])
+def get_log_row() -> tuple[Any, int]:
+    site: Optional[str] = request.args.get('site')
+    delivery_date: Optional[str] = request.args.get('delivery_date')
+
+    if not site or not delivery_date:
+        return "Missing required parameter: site and folder", 400
+    
+    try:
+        log_row: list[str] = bq_client.get_bq_log_row(site, delivery_date)
+        return jsonify({
+            'status': 'healthy',
+            'log_row': log_row,
+            'service': constants.SERVICE_NAME
+        }), 200   
+    except Exception as e:
+        utils.logger.error(f"Unable to get get BigQuery log row: {str(e)}")
+        return f"Unable to get get BigQuery log row: {str(e)}", 500
+
+
 @app.route('/get_file_list', methods=['GET'])
 def get_files() -> tuple[Any, int]:
     bucket: Optional[str] = request.args.get('bucket')
@@ -83,7 +103,7 @@ def get_files() -> tuple[Any, int]:
    
     # Validate required parameters
     if not bucket or not folder or not file_format:
-        return "Missing required parameters: bucket and folder", 400
+        return "Missing required parameter: bucket, folder, file_format", 400
 
     try:
         file_list: list[str] = utils.list_gcs_files(bucket, folder, file_format)
@@ -213,7 +233,6 @@ def harmonize_vocab() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     vocab_version: Optional[str] = data.get('vocab_version')
-    #vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
     vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
     omop_version: Optional[str] = data.get('omop_version')
     site: Optional[str] = data.get('site')
@@ -253,7 +272,6 @@ def populate_dervied_data_table() -> tuple[str, int]:
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
     vocab_version: Optional[str] = data.get('vocab_version')
-    #vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
     vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
 
     if not site or not delivery_date or not table_name or not project_id or not dataset_id or not vocab_version or not vocab_gcs_bucket or not site_bucket:
@@ -273,7 +291,6 @@ def target_vocab_to_bq() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     table_file_name: Optional[str] = data.get('table_file_name')
     vocab_version: Optional[str] = data.get('vocab_version')
-    #vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
     vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
@@ -376,7 +393,6 @@ def add_cdm_source_record() -> tuple[str, int]:
 @app.route('/pipeline_log', methods=['POST'])
 def log_pipeline_state() -> tuple:
     data: dict = request.get_json()
-    #logging_table: str = data.get('logging_table')
     logging_table: str = constants.BQ_LOGGING_TABLE
     site_name: Optional[str] = data.get('site_name')
     delivery_date: Optional[str] = data.get('delivery_date')
