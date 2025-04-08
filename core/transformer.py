@@ -198,8 +198,9 @@ class Transformer:
     def omop_to_omop_etl(self) -> None:
         # Execute the OMOP to OMOP ETL SQL script
         transform_sql = self.generate_omop_to_omop_sql()
+        self.logger.warning(f"About to execute DuckDB ETL SQL")
         utils.execute_duckdb_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
-
+        self.logger.warning(f"DID execute DuckDB ETL SQL")
         # Resolve duplicate primary keys within a single 'table part' file
         # TODO: Make this global across ALL table parts
         #self.handle_duplicate_primary_keys()
