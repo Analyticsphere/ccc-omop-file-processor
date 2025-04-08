@@ -255,10 +255,11 @@ def harmonize_vocab() -> tuple[str, int]:
         )
         vocab_harmonizer.harmonize()
         
+        utils.logger.warning(f"About to return 200 response from harmonize_vocab() endpoint")
         return f"Vocabulary harmonized to {vocab_version}", 200
     except Exception as e:
-        utils.logger.error(f"Unable to harmonize vocabulary: {str(e)}")
-        return f"Unable to harmonize vocabulary: {str(e)}", 500
+        utils.logger.error(f"Unable to harmonize vocabulary of {file_path}: {str(e)}")
+        return f"Unable to harmonize vocabulary of {file_path}: {str(e)}", 500
 
 
 @app.route('/populate_derived_data', methods=['POST'])
