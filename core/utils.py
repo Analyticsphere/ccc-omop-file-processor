@@ -12,6 +12,7 @@ from google.cloud import storage  # type: ignore
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
+import gc
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -82,7 +83,10 @@ def execute_duckdb_sql(sql: str, error_msg: str) -> None:
     except Exception as e:
         raise Exception(f"{error_msg}: {str(e)}") from e
     finally:
-        close_duckdb_connection(conn, local_db_file) 
+        close_duckdb_connection(conn, local_db_file)
+        logger.warning("About to garbage collect from execute duckDB function")
+        gc.collect()
+        logger.warning("DID garbage collect from execute duckDB function")
 
 def parse_duckdb_csv_error(error: Exception) -> Optional[str]:
     """
