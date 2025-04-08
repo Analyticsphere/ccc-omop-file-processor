@@ -1,8 +1,8 @@
 
 from google.cloud import bigquery  # type: ignore
 
-import core.bq_client as bq_client
 import core.constants as constants
+import core.gcp_client as gcp_client
 import core.utils as utils
 
 
@@ -26,7 +26,7 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
     elif cdm_version == constants.CDM_v53 and target_omop_version == constants.CDM_v54:
         if table_name in constants.CDM_53_TO_54:
             if constants.CDM_53_TO_54[table_name] == constants.REMOVED:
-                utils.delete_gcs_file(normalized_file_path)
+                gcp_client.delete_gcs_file(normalized_file_path)
             elif constants.CDM_53_TO_54[table_name] == constants.CHANGED:
                 try:
                     upgrade_file_path = f"{constants.CDM_UPGRADE_SCRIPT_PATH}{cdm_version}_to_{target_omop_version}/{table_name}.sql"
@@ -56,8 +56,8 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
     """
     vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     # Confirm desired vocabulary version exists in GCS
-    if utils.vocab_gcs_path_exists(vocab_root_path):
-        vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
+    if gcp_client.vocab_gcs_path_exists(vocab_root_path):
+        vocab_files = gcp_client.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
         for vocab_file in vocab_files:
             vocab_file_name = vocab_file.replace(constants.CSV, '').lower()
             parquet_file_path = f"{vocab_root_path}{constants.OPTIMIZED_VOCAB_FOLDER}/{vocab_file_name}{constants.PARQUET}"
@@ -112,7 +112,7 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
         # Ensure exisiting vocab file can be read
         if not utils.valid_parquet_file(optimized_file_path):
             # Ensure vocabulary version actually exists
-            if utils.vocab_gcs_path_exists(vocab_path):
+            if gcp_client.vocab_gcs_path_exists(vocab_path):
 
                 transform_query = f"""
                 COPY (
@@ -151,7 +151,7 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
         create_sql = ddl_sql.replace(constants.DDL_PLACEHOLDER_STRING, f"{project_id}.{dataset_id}")
 
         # Execute the CREATE OR REPLACE TABLE statements in BigQuery
-        utils.execute_bq_sql(create_sql, None)
+        gcp_client.execute_bq_sql(create_sql, None)
 
     except Exception as e:
         raise Exception(f"DDL file error: {e}")
@@ -220,7 +220,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         )
 
         # Run the query as a job and wait for it to complete.
-        utils.execute_bq_sql(query, job_config)
+        gcp_client.execute_bq_sql(query, job_config)
     except Exception as e:
         error_details = {
             'error_type': type(e).__name__,
@@ -297,7 +297,7 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
         # Load the Parquet to BigQuery
         # Because the task that executes this function occurs after load_bq(), 
         #   this will overwrite the derived data delievered by the site
-        bq_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, table_name, constants.BQWriteTypes.SPECIFIC_FILE)
+        gcp_client.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, table_name, constants.BQWriteTypes.SPECIFIC_FILE)
 
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
@@ -308,6 +308,6 @@ def load_vocabulary_table(vocab_version: str, vocab_gcs_bucket: str, table_file_
     vocab_parquet_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{table_file_name}{constants.PARQUET}"
 
     if utils.parquet_file_exists(vocab_parquet_path) and utils.valid_parquet_file(vocab_parquet_path):
-        bq_client.load_parquet_to_bigquery(vocab_parquet_path, project_id, dataset_id, table_file_name, constants.BQWriteTypes.SPECIFIC_FILE)
+        gcp_client.load_parquet_to_bigquery(vocab_parquet_path, project_id, dataset_id, table_file_name, constants.BQWriteTypes.SPECIFIC_FILE)
     else:
         raise Exception(f"Vocabulary table {table_file_name} not found at {vocab_parquet_path}")

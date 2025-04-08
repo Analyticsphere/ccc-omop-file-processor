@@ -1,5 +1,5 @@
-from enum import Enum
 import os
+from enum import Enum
 
 DUCKDB_FORMAT_STRING = "(FORMAT 'parquet', COMPRESSION 'zstd')"
 DUCKDB_MEMORY_LIMIT = "10GB"

@@ -8,11 +8,11 @@ from typing import Optional, Tuple
 
 import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
-from google.cloud import bigquery  # type: ignore
 from google.cloud import storage  # type: ignore
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
+from core.gcp_client import list_gcs_files
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -24,73 +24,6 @@ logging.basicConfig(
 )
 # Create the logger at module level so its settings are applied throughout code base
 logger = logging.getLogger(__name__)
-
-def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
-    """
-    Lists files within a specific folder in a GCS bucket (non-recursively).
-    """
-    try:
-        # Initialize the GCS client
-        storage_client = storage.Client()
-        
-        # Get the bucket
-        bucket = storage_client.bucket(bucket_name)
-        
-        # Verify bucket exists
-        if not bucket.exists():
-            raise Exception(f"Bucket {bucket_name} does not exist")
-        
-        # Ensure folder_prefix ends with '/' for consistent path handling
-        if folder_prefix and not folder_prefix.endswith('/'):
-            folder_prefix += '/'
-        
-        # List all blobs with the prefix
-        blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
-        
-        # Get only the files in this directory level (not in subdirectories)
-        # Files must be of specific type
-        files = [
-            os.path.basename(blob.name) 
-            for blob in blobs 
-            if blob.name != folder_prefix and blob.name.lower().endswith(file_format)
-        ]
-        
-        return files
-    
-    except Exception as e:
-        raise Exception(f"Error listing files in GCS: {str(e)}")
-
-def create_gcs_directory(directory_path: str) -> None:
-    """Creates a directory in GCS by creating an empty blob.
-    If directory exists, deletes any existing files first.
-    """
-    bucket_name, _ = get_bucket_and_delivery_date_from_gcs_path(directory_path) #directory_path.split('/')[0]
-    blob_name = '/'.join(directory_path.split('/')[1:])
-    
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    
-    try:
-        # First check if directory exists and has files
-        blobs = bucket.list_blobs(prefix=blob_name)
-        
-        # Delete any existing files in the directory
-        for blob in blobs:
-            try:
-                bucket.blob(blob.name).delete()
-                #logger.info(f"Deleted existing file: {blob.name}")
-            except Exception as e:
-                logger.error(f"Failed to delete file {blob.name}: {e}")
-        
-        # Create the directory marker
-        blob = bucket.blob(blob_name)
-        if not blob.exists():
-            blob.upload_from_string('')
-            #logger.info(f"Created directory: {directory_path}")
-            
-    except Exception as e:
-        logger.error(f"Unable to process GCS directory {directory_path}: {e}")
-        raise Exception(f"Unable to process GCS directory {directory_path}: {e}") from e
 
 def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
     # Creates a DuckDB instance with a local database
@@ -328,30 +261,6 @@ def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
 
     return invalid_rows_path
 
-def delete_gcs_file(gcs_path: str) -> None:
-    """
-    Deletes a file from Google Cloud Storage.
-    """
-    try:
-        # Initialize GCS client
-        storage_client = storage.Client()
-        
-        # Extract bucket name and blob path
-        # Remove 'gs://' prefix and split into bucket and path
-        path_without_prefix = gcs_path.replace('gs://', '')
-        bucket_name = path_without_prefix.split('/')[0]
-        blob_path = '/'.join(path_without_prefix.split('/')[1:])
-        
-        # Get bucket and blob
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(blob_path)
-        
-        # Delete the file
-        blob.delete()
-    except Exception as e:
-        logger.error(f"Error deleting file {gcs_path}: {e}")
-        raise Exception(f"Error deleting file {gcs_path}: {e}") from e
-
 def parquet_file_exists(file_path: str) -> bool:
     """
     Check if a Parquet file exists in Google Cloud Storage.
@@ -378,38 +287,6 @@ def parquet_file_exists(file_path: str) -> bool:
 def get_optimized_vocab_file_path(vocab_version: str, vocab_gcs_bucket: str) -> str:
     optimized_vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{constants.OPTIMIZED_VOCAB_FILE_NAME}"
     return optimized_vocab_path
-
-def vocab_gcs_path_exists(gcs_path: str) -> bool:
-    """
-    Check if a specific GCS path exists.
-    """
-    try:
-        # Split the path into bucket name and blob path
-        parts = gcs_path.split('/', 1)
-        bucket_name = parts[0]
-        blob_path = parts[1] if len(parts) > 1 else None
-        
-        # Initialize the client
-        client = storage.Client()
-        
-        # Check if bucket exists
-        try:
-            bucket = client.get_bucket(bucket_name)
-        except Exception:
-            return False
-            
-        # If no blob path, we're just checking bucket existence
-        if not blob_path:
-            return True
-            
-        # Check if blob exists
-        blob = bucket.blob(blob_path)
-        return blob.exists()
-        
-    except Exception as e:
-        # Handle any other unexpected errors
-        print(f"Error checking GCS path: {e}")
-        return False
 
 def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
     vocabulary_parquet_file = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}vocabulary{constants.PARQUET}"
@@ -517,78 +394,6 @@ def generate_report(report_data: dict) -> None:
 def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
     report_tmp_dir = f"gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
     return report_tmp_dir
-
-def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig]) -> bigquery.table.RowIterator:
-    # Initialize the BigQuery client
-    client = bigquery.Client()
-
-    try:
-        # Run the query
-        if job_config:
-            query_job = client.query(sql_script, job_config=job_config)
-        else:
-            query_job = client.query(sql_script)
-
-        # Wait for the job to complete
-        result = query_job.result()
-        return result
-
-    except Exception as e:
-        raise Exception(f"Error executing query: {e}")
-
-def download_from_gcs(gcs_file_path: str) -> str:
-    """
-    Downloads a CSV file from Google Cloud Storage to a local directory.
-    """
-    try:
-        # Define paths
-        bucket, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
-        filename = f"{get_table_name_from_gcs_path(gcs_file_path)}"
-        source_blob = f"{delivery_date}/{filename}{constants.CSV}"
-        destination_file_path = f"/tmp/{filename}{constants.CSV}"
-
-        # Create directory to store file
-        os.makedirs('/tmp', exist_ok=True)
-
-        # Initialize a storage client
-        storage_client = storage.Client()
-        
-        # Get the bucket
-        bucket = storage_client.bucket(bucket)
-        
-        # Get the blob (file)
-        blob = bucket.blob(source_blob)
-
-        # Get the remote file size before downloading
-        blob.reload()  # Ensure we have the latest metadata
-        remote_size_bytes = blob.size
-        remote_size_gb = float(float(remote_size_bytes) / float((1024 * 1024 * 1024)))
-
-        # If the size of the file is greater than half of what is allocated to DuckDB, return exception
-        if remote_size_gb > float(constants.DUCKDB_MEMORY_LIMIT.replace('GB', '')) * 0.5:
-            raise Exception(f"CSV file {gcs_file_path} has invalid quoting, but cannot be fixed due to size constraints. Allocate at least {remote_size_gb * 2}GB of memory to the Cloud Run function")
-        
-        # Download the file
-        blob.download_to_filename(destination_file_path)
-        
-        return destination_file_path
-    
-    except Exception as e:
-        raise Exception(f"Error downloading file: {e}")
-    
-def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name: str) -> None:
-    """
-    Uploads a file to the specified GCS bucket.
-    """
-    # Initialize the GCS client
-    storage_client = storage.Client()
-    
-    # Get the bucket
-    bucket = storage_client.bucket(bucket_name)
-    
-    # Create a blob object and upload the file
-    blob = bucket.blob(destination_blob_name)
-    blob.upload_from_filename(local_file_path)
 
 def get_primary_key_column(table_name: str, cdm_version: str) -> str:
     schema = get_table_schema(table_name, cdm_version)

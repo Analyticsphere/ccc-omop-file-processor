@@ -1,10 +1,11 @@
+import logging
 import re
+import sys
 
 import core.constants as constants
 import core.file_processor as fp
 import core.utils as utils
-import logging
-import sys
+
 
 class Transformer:
     """
