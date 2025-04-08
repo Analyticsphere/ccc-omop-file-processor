@@ -64,7 +64,7 @@ class VocabHarmonizer:
         """
         Perform a specific harmonization step.
         """
-        self.logger.info(f"Performing vocabulary harmonization: {step}")
+        self.logger.info(f"Performing vocabulary harmonization against {self.file_path}: {step}")
 
         if step == constants.SOURCE_TARGET:
             self.source_target_remapping()
@@ -456,7 +456,7 @@ class VocabHarmonizer:
 
 
     def omop_etl(self) -> None:
-        self.logger.info(f"Partitioning table {self.source_table_name} for {self.site} to appropriate target table(s)")
+        self.logger.info(f"Partitioning table {self.source_table_name} for {self.file_path} to appropriate target table(s)")
 
         # Find all target tables in the source file
         conn, local_db_file = utils.create_duckdb_connection()
@@ -469,7 +469,7 @@ class VocabHarmonizer:
                         
                 target_tables_list = conn.execute(target_tables).fetch_df()['target_table'].tolist()
         except Exception as e:
-            raise Exception(f"Unable to get target tables from Parquet file: {e}") from e
+            raise Exception(f"Unable to get target tables from Parquet file {self.file_path}: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
 

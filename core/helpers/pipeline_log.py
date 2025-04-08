@@ -125,7 +125,6 @@ class PipelineLog:
                     'status': self.status
                 }
             }
-            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
     def log_complete(self) -> None:
@@ -186,7 +185,6 @@ class PipelineLog:
                     'status': self.status
                 }
             }
-            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
     def log_running(self) -> None:
@@ -242,7 +240,6 @@ class PipelineLog:
                     'status': self.status
                 }
             }
-            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
     def log_error(self) -> None:
@@ -308,5 +305,4 @@ class PipelineLog:
                     'status': self.status
                 }
             }
-            utils.logger.error(f"Unable to add pipeline log record: {error_details}")
             raise Exception(f"Unable to add pipeline log record: {error_details}") from e

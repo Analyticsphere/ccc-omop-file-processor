@@ -26,8 +26,7 @@ def remove_all_tables(project_id: str, dataset_id: str) -> None:
             client.delete_table(table_id_full)
             utils.logger.info(f"Deleted table {table_id_full}")
     except Exception as e:
-        utils.logger.error(f"Unable to delete BigQuery table: {e}")
-        raise Exception(f"Unable to delete BigQuery table: {e}") from e
+        raise Exception(f"Unable to delete BigQuery table {table_id_full}: {e}") from e
 
 
 def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, table_name: str, write_type: constants.BQWriteTypes) -> None:
@@ -73,8 +72,7 @@ def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, t
         
         utils.logger.info(f"Loaded data to BigQuery table {table_id_full}")
     except Exception as e:
-        utils.logger.error(f"Error loading Parquet file to BigQuery: {e}")
-        raise Exception(f"Error loading Parquet file to BigQuery: {e}") from e
+        raise Exception(f"Error loading Parquet file {parquet_path} to BigQuery: {e}") from e
 
 
 def get_bq_log_row(site: str, date_to_check: str) -> list:
@@ -140,8 +138,7 @@ def create_gcs_directory(directory_path: str) -> None:
             blob.upload_from_string('')
 
     except Exception as e:
-        utils.logger.error(f"Unable to process GCS directory {directory_path}: {e}")
-        raise Exception(f"Unable to process GCS directory {directory_path}: {e}") from e
+        raise Exception(f"Unable to create artifact directories in GCS path {directory_path}: {e}") from e
 
 
 def delete_gcs_file(gcs_path: str) -> None:
@@ -165,7 +162,6 @@ def delete_gcs_file(gcs_path: str) -> None:
         # Delete the file
         blob.delete()
     except Exception as e:
-        utils.logger.error(f"Error deleting file {gcs_path}: {e}")
         raise Exception(f"Error deleting file {gcs_path}: {e}") from e
 
 
@@ -259,7 +255,7 @@ def download_from_gcs(gcs_file_path: str) -> str:
         return destination_file_path
 
     except Exception as e:
-        raise Exception(f"Error downloading file: {e}")
+        raise Exception(f"Error downloading file {gcs_file_path}: {e}")
 
 
 def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name: str) -> None:

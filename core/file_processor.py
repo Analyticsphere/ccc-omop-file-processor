@@ -68,8 +68,7 @@ def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
     elif file_type == constants.PARQUET:
         process_incoming_parquet(gcs_file_path)
     else:
-        utils.logger.info(f"Invalid source file format: {file_type}") 
-        raise Exception(f"Invalid source file format: {file_type}")
+        raise Exception(f"Invalid source file format in file {gcs_file_path}: {file_type}")
 
 def process_incoming_parquet(gcs_file_path: str) -> None:
     """
@@ -105,8 +104,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         utils.execute_duckdb_sql(copy_sql, f"Unable to process incoming Parquet file {gcs_file_path}:")
 
     else:
-        utils.logger.error(f"Invalid Parquet file")
-        raise Exception(f"Invalid Parquet file")
+        raise Exception(f"Invalid Parquet file at {gcs_file_path}")
 
 def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: list = []) -> None:
     conn, local_db_file = utils.create_duckdb_connection()
@@ -151,13 +149,10 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
                 utils.logger.warning(f"Attempting to correct unescaped quote characters in file gs://{gcs_file_path}: {e}")
                 fix_csv_quoting(gcs_file_path)
             elif error_type == "CSV_FORMAT_ERROR":
-                utils.logger.error(f"CSV format error in file gs://{gcs_file_path}: {e}")
                 raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
             else:
-                utils.logger.error(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}")
                 raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e
         else:
-            utils.logger.error(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}")
             raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e    
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
@@ -171,7 +166,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
     Args:
         gcs_file_path (str): Full GCS path including bucket (bucket/path/to/file.csv)
     """
-    utils.logger.info("Attemping to convert file encoding to UTF8")
+    utils.logger.info(f"Attemping to convert file {gcs_file_path} encoding to UTF8")
 
     # Split file path into bucket and object path
     path_parts = gcs_file_path.split('/')
@@ -188,7 +183,6 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         
         # Verify the source file exists
         if not source_blob.exists():
-            utils.logger.error(f"Source file does not exist: gs://{gcs_file_path}")
             raise Exception(f"Source file does not exist: gs://{gcs_file_path}")
 
         # Create output filename
@@ -200,7 +194,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
         new_file_path = f"{date_part}/{constants.ArtifactPaths.FIXED_FILES.value}{file_name_part}{constants.FIXED_FILE_TAG_STRING}.{file_ext}"
         target_blob = bucket.blob(new_file_path)
 
-        utils.logger.info(f"Converting file gs://{gcs_file_path} to UTF-8 encoding...")
+        utils.logger.info(f"Converting file {gcs_file_path} to UTF-8 encoding...")
 
         # First pass: detect encoding from initial chunk
         with source_blob.open("rb") as source_file:
@@ -209,10 +203,9 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             detected_encoding = detected['encoding']
 
         if not detected_encoding:
-            utils.logger.error(f"Could not detect encoding for file: {gcs_file_path}")
             raise Exception(f"Could not detect encoding for file: {gcs_file_path}")
 
-        utils.logger.info(f"Detected source encoding: {detected_encoding}")
+        utils.logger.info(f"Detected source encoding in {gcs_file_path}: {detected_encoding}")
 
         # Process and stream the file
         try:
@@ -246,15 +239,11 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             csv_to_parquet(f"{bucket_name}/{new_file_path}", True, ['store_rejects=True'])
 
         except UnicodeDecodeError as e:
-            utils.logger.error(f"Failed to decode content with detected encoding {detected_encoding}: {str(e)}")
-            raise Exception(f"Failed to decode content with detected encoding {detected_encoding}: {str(e)}") from e
+            raise Exception(f"Failed to decode file {gcs_file_path} with detected encoding {detected_encoding}: {str(e)}") from e
         except csv.Error as e:
-            utils.logger.error(f"CSV parsing error: {str(e)}")
-            raise Exception(f"CSV parsing error: {str(e)}") from e
-
+            raise Exception(f"CSV parsing error for file {gcs_file_path}: {str(e)}") from e
     except Exception as e:
-        utils.logger.error(f"Unable to convert CSV to UTF8: {e}")
-        raise Exception(f"Unable to convert CSV to UTF8: {e}") from e
+        raise Exception(f"Unable to convert CSV to UTF8 for file {gcs_file_path}: {e}") from e
 
 def get_placeholder_value(column_name: str, column_type: str) -> str:
     # Return string representation of default value, based on column type
@@ -431,8 +420,7 @@ def normalize_file(parquet_gcs_file_path: str, cdm_version: str) -> None:
                 # Get counts of valid/invalid rows for OMOP files
                 create_row_count_artifacts(parquet_gcs_file_path, cdm_version, conn)
         except Exception as e:
-            utils.logger.error(f"Unable to normalize Parquet file: {e}")
-            raise Exception(f"Unable to normalize Parquet file: {e}") from e
+            raise Exception(f"Unable to normalize Parquet file {parquet_gcs_file_path}: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
 

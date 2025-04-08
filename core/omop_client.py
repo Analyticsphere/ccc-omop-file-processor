@@ -21,7 +21,7 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
     table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
 
     if cdm_version == target_omop_version:
-        utils.logger.info(f"CDM upgrade not needed")
+        utils.logger.info(f"CDM upgrade not needed for file {gcs_file_path}")
         return
     elif cdm_version == constants.CDM_v53 and target_omop_version == constants.CDM_v54:
         if table_name in constants.CDM_53_TO_54:
@@ -42,12 +42,10 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
                     utils.execute_duckdb_sql(select_statement, f"Unable to upgrade file {gcs_file_path}:")
 
                 except Exception as e:
-                    utils.logger.error(f"Unable to open SQL upgrade file: {e}")
-                    raise Exception(f"Unable to open SQL upgrade file: {e}") from e
+                    raise Exception(f"Unable to open SQL upgrade file {upgrade_file_path}: {e}") from e
         else:
-            utils.logger.info(f"No changes in {table_name} when upgrading from 5.3 to 5.4")
+            utils.logger.info(f"No changes in {gcs_file_path} when upgrading from 5.3 to 5.4")
     else:
-        utils.logger.error(f"OMOP CDM version {cdm_version} not supported")
         raise Exception(f"OMOP CDM version {cdm_version} not supported")
 
 def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
@@ -98,10 +96,6 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                     raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
                 finally:
                     utils.close_duckdb_connection(conn, local_db_file)
-        return None
-    else:
-        utils.logger.info("Vocabulary file has already been created and is valid. No conversion required")
-        return None
                 
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
     vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
@@ -134,10 +128,7 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                 utils.execute_duckdb_sql(transform_query, "Unable to create optimized vocab file")
 
             else:
-                utils.logger.error(f"Vocabulary GCS bucket {vocab_path} not found")
                 raise Exception(f"Vocabulary GCS bucket {vocab_path} not found")
-    else:
-        utils.logger.info(f"Optimized vocabulary already exists")
 
 def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
     ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
@@ -226,7 +217,6 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
             'error_type': type(e).__name__,
             'error_message': str(e),
         }
-        utils.logger.error(f"Unable to add pipeline log record: {error_details}")
         raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
 def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str, vocab_version: str, vocab_gcs_bucket: str) -> None:

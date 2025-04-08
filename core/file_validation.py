@@ -39,13 +39,12 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
                 value_as_number=None,
                 value_as_string="invalid table name"
             )
-        #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
         ra.save_artifact()
             
         return is_valid_table_name
 
     except Exception as e:
-        raise Exception(f"Unexpected error validating CDM file: {str(e)}")
+        raise Exception(f"Unexpected error validating CDM file {file_path}: {str(e)}")
 
 def validate_cdm_table_columns(file_path: str, omop_version: str) -> None:
     """
@@ -81,7 +80,6 @@ def validate_cdm_table_columns(file_path: str, omop_version: str) -> None:
                 value_as_number=None,
                 value_as_string="valid column name"
             )
-            #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
             ra.save_artifact()
 
         # Process invalid columns (present in parquet but not in schema)
@@ -95,7 +93,6 @@ def validate_cdm_table_columns(file_path: str, omop_version: str) -> None:
                 value_as_number=None,
                 value_as_string="invalid column name"
             )
-            #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
             ra.save_artifact()
 
         for column in missing_columns:
@@ -108,11 +105,10 @@ def validate_cdm_table_columns(file_path: str, omop_version: str) -> None:
                 value_as_number=None,
                 value_as_string="missing column"
             )
-            #utils.logger.info(f"ReportArtifact generated: {ra.to_json()}")
             ra.save_artifact()
 
     except Exception as e:
-        raise Exception(f"Unexpected error validating columns for table {table_name}: {str(e)}")
+        raise Exception(f"Unexpected error validating columns for file {file_path}: {str(e)}") from e
 
 def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> None:
     """
@@ -131,7 +127,6 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
         valid_table_name = validate_cdm_table_name(file_path, omop_version, delivery_date, gcs_path)
         # If it's not a valid table name, it does not have a schema to validate
         if valid_table_name:
-            validate_cdm_table_columns(file_path, omop_version)
-            
+            validate_cdm_table_columns(file_path, omop_version)    
     except Exception as e:
-        utils.logger.error(f"Error validating file {file_path}: {str(e)}")
+        raise Exception(f"Error validating file {file_path}: {str(e)}") from e

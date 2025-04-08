@@ -55,7 +55,6 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
 
         return conn, local_db_file
     except Exception as e:
-        logger.error(f"Unable to create DuckDB instance: {e}")
         raise Exception(f"Unable to create DuckDB instance: {e}") from e
 
 def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str) -> None:
@@ -134,10 +133,9 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
         if table_name in schema:
             return {table_name: schema[table_name]}
         else:
-            return {}
-            
+            return {} 
     except Exception as e:
-        raise Exception(f"Unexpected error getting table schema: {str(e)}")
+        raise Exception(f"Unexpected error getting table {table_name} schema: {str(e)}")
     
 def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str, str]:
     # Returns a tuple of the bucket_name and delivery date for a given file in GCS
@@ -202,7 +200,6 @@ def get_columns_from_file(gcs_file_path: str) -> list:
             # Drop the temp table
             conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
     except Exception as e:
-        logger.error(f"Unable to get column list from {'CSV' if is_csv else 'Parquet'} file: {e}")
         raise Exception(f"Unable to get column list from {'CSV' if is_csv else 'Parquet'} file: {e}") from e
     finally:
         close_duckdb_connection(conn, local_db_file)
