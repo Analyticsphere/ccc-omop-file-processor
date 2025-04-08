@@ -4,10 +4,10 @@ from typing import Any, Optional, cast
 
 from flask import Flask, jsonify, request  # type: ignore
 
-import core.bq_client as bq_client
 import core.constants as constants
 import core.file_processor as file_processor
 import core.file_validation as file_validation
+import core.gcp_services as gcp_services
 import core.helpers.pipeline_log as pipeline_log
 import core.omop_client as omop_client
 import core.transformer as transformer
@@ -31,10 +31,11 @@ def heartbeat() -> tuple[Any, int]:
 def create_optimized_vocab() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     vocab_version: str = data.get('vocab_version', '')
-    vocab_gcs_bucket: str = data.get('vocab_gcs_bucket', '')
+    #vocab_gcs_bucket: str = data.get('vocab_gcs_bucket', '')
+    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
 
-    if not vocab_version or not vocab_gcs_bucket:
-        return "Missing required parameters: vocab_version and vocab_gcs_bucket", 400
+    if not all([vocab_version, vocab_gcs_bucket]):
+        return "Missing a required parameter to 'create_optimized_vocab' endpoint. Required: vocab_version, vocab_gcs_bucket", 400
 
     try:
         omop_client.convert_vocab_to_parquet(vocab_version, vocab_gcs_bucket)
@@ -52,7 +53,7 @@ def create_artifact_buckets() -> tuple[str, int]:
     delivery_bucket: Optional[str] = data.get('delivery_bucket')
 
     if not delivery_bucket:
-        return "Missing required parameter: delivery_bucket", 400
+        return "Missing required parameter to 'create_artifact_buckets' endpoint: delivery_bucket", 400
 
     utils.logger.info(f"Creating artifact buckets in gs://{delivery_bucket}")
 
@@ -66,12 +67,32 @@ def create_artifact_buckets() -> tuple[str, int]:
         
         # Create the actual GCS directories
         for directory in directories:
-            utils.create_gcs_directory(directory)
+            gcp_services.create_gcs_directory(directory)
         
         return "Directories created successfully", 200
     except Exception as e:
         utils.logger.error(f"Unable to create artifact buckets: {str(e)}")
         return f"Unable to create artifact buckets: {str(e)}", 500
+
+
+@app.route('/get_log_row', methods=['GET'])
+def get_log_row() -> tuple[Any, int]:
+    site: Optional[str] = request.args.get('site')
+    delivery_date: Optional[str] = request.args.get('delivery_date')
+
+    if not all([site, delivery_date]):
+        return "Missing a required parameter to 'get_log_row' endpoint. Required: site, delivery_date", 400
+    
+    try:
+        log_row: list[str] = gcp_services.get_bq_log_row(site, delivery_date)
+        return jsonify({
+            'status': 'healthy',
+            'log_row': log_row,
+            'service': constants.SERVICE_NAME
+        }), 200   
+    except Exception as e:
+        utils.logger.error(f"Unable to get get BigQuery log row: {str(e)}")
+        return f"Unable to get get BigQuery log row: {str(e)}", 500
 
 
 @app.route('/get_file_list', methods=['GET'])
@@ -81,8 +102,8 @@ def get_files() -> tuple[Any, int]:
     file_format: Optional[str] = request.args.get('file_format')
    
     # Validate required parameters
-    if not bucket or not folder or not file_format:
-        return "Missing required parameters: bucket and folder", 400
+    if not all([bucket, folder, file_format]):
+        return "Missing a required parameter to 'get_file_list' endpoint. Required: bucket, folder, file_format", 400
 
     try:
         file_list: list[str] = utils.list_gcs_files(bucket, folder, file_format)
@@ -103,8 +124,8 @@ def process_file() -> tuple[str, int]:
     file_type: Optional[str] = data.get('file_type')
     file_path: Optional[str] = data.get('file_path')
 
-    if not file_type or not file_path:
-        return "Missing required parameters: file_type and file_path", 400
+    if not all([file_type, file_path]):
+        return "Missing a required parameter to 'process_incoming_file' endpoint. Required: file_type, file_path", 400
 
     try:
         file_processor.process_incoming_file(file_type, file_path)    
@@ -127,8 +148,8 @@ def validate_file() -> tuple[str, int]:
         gcs_path: Optional[str] = data.get('gcs_path')
         
         # Validate required parameters
-        if not file_path or not omop_version or not delivery_date or not gcs_path:
-            return "Missing required parameters: file_path, omop_version, delivery_date, gcs_path", 400
+        if not all([file_path, omop_version, delivery_date, gcs_path]):
+            return "Missing a required parameter to 'validate_file' endpoint. Required: file_path, omop_version, delivery_date, gcs_path", 400
 
         # Use empty string as default for optional params
         file_validation.validate_file(
@@ -152,8 +173,8 @@ def normalize_parquet_file() -> tuple[str, int]:
     file_path: Optional[str] = data.get('file_path')
     omop_version: Optional[str] = data.get('omop_version')
 
-    if not file_path or not omop_version:
-        return "Missing required parameters: file_path and omop_version", 400
+    if not all([file_path, omop_version]):
+        return "Missing a required parameter to 'normalize_parquet' endpoint. Required: file_path, omop_version", 400
 
     parquet_file_path: str = utils.get_parquet_artifact_location(file_path)
 
@@ -174,8 +195,8 @@ def cdm_upgrade() -> tuple[str, int]:
     omop_version: Optional[str] = data.get('omop_version')
     target_omop_version: Optional[str] = data.get('target_omop_version')
 
-    if not file_path or not omop_version or not target_omop_version:
-        return "Missing required parameters: file_path, omop_version, and target_omop_version", 400
+    if not all([file_path, omop_version, target_omop_version]):
+        return "Missing a required parameter to 'upgrade_cdm' endpoint. Required: file_path, omop_version, target_omop_version", 400
 
     try:
         utils.logger.info(f"Attempting to upgrade file {file_path}")
@@ -187,19 +208,18 @@ def cdm_upgrade() -> tuple[str, int]:
         return f"Unable to upgrade file: {str(e)}", 500
 
 
-
 @app.route('/clear_bq_dataset', methods=['POST'])
 def clear_bq_tables() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
 
-    if not project_id or not dataset_id:
-        return "Missing required parameters: project_id and dataset_id", 400
+    if not all([project_id, dataset_id]):
+        return "Missing a required parameter to 'clear_bq_dataset' endpoint. Required: project_id, dataset_id", 400
 
     try:
         utils.logger.info(f"Removing all tables from {project_id}.{dataset_id}")
-        bq_client.remove_all_tables(project_id, dataset_id)
+        gcp_services.remove_all_tables(project_id, dataset_id)
 
         return "Removed all tables", 200
     except Exception as e:
@@ -212,14 +232,14 @@ def harmonize_vocab() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     vocab_version: Optional[str] = data.get('vocab_version')
-    vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
+    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
     omop_version: Optional[str] = data.get('omop_version')
     site: Optional[str] = data.get('site')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
 
-    if not file_path or not vocab_version or not vocab_gcs_bucket or not omop_version or not site or not project_id or not dataset_id:
-        return "Missing required parameters: file_path, vocab_version, vocab_gcs_bucket, omop_version, site, project_id, dataset_id", 400
+    if not all([file_path, vocab_version, vocab_gcs_bucket, omop_version, site, project_id, dataset_id]):
+        return "Missing a required parameter to 'harmonize_vocab' endpoint. Required: file_path, vocab_version, vocab_gcs_bucket, omop_version, site, project_id, dataset_id", 400
 
     try:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}")
@@ -251,10 +271,10 @@ def populate_dervied_data_table() -> tuple[str, int]:
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
     vocab_version: Optional[str] = data.get('vocab_version')
-    vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
+    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
 
-    if not site or not delivery_date or not table_name or not project_id or not dataset_id or not vocab_version or not vocab_gcs_bucket or not site_bucket:
-        return "Missing required parameters: site, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket, site_bucket", 400
+    if not all([site, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket, site_bucket]):
+        return "Missing a required parameter to 'populate_derived_data' endpoint. Required: site, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket, site_bucket", 400
 
     try:
         utils.logger.info(f"Generating derived table {table_name} for {delivery_date} delivery from {site}")
@@ -270,13 +290,12 @@ def target_vocab_to_bq() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     table_file_name: Optional[str] = data.get('table_file_name')
     vocab_version: Optional[str] = data.get('vocab_version')
-    vocab_gcs_bucket: Optional[str] = data.get('vocab_gcs_bucket')
+    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
 
-    if not vocab_version or not vocab_gcs_bucket or not project_id or not dataset_id or not table_file_name:
-        return "Missing required parameters: vocab_version, vocab_gcs_bucket, project_id, dataset_id, table_file_name", 400
-    
+    if not all([vocab_version, vocab_gcs_bucket, project_id, dataset_id, table_file_name]):
+        return "Missing a required parameter to 'load_target_vocab' endpoint. Required: vocab_version, vocab_gcs_bucket, project_id, dataset_id, table_file_name", 400
     try:
         omop_client.load_vocabulary_table(vocab_version, vocab_gcs_bucket, table_file_name,project_id,dataset_id)
 
@@ -295,8 +314,8 @@ def parquet_gcs_to_bq() -> tuple[str, int]:
     table_name: Optional[str] = data.get('table_name')
     write_type: Optional[str] = data.get('write_type')
 
-    if not file_path or not project_id or not dataset_id or not write_type or not table_name:
-        return "Missing required parameters: file_path, project_id, dataset_id, write_type, table_name", 400
+    if not all([file_path, project_id, dataset_id, write_type, table_name]):
+        return "Missing a required parameter to 'parquet_to_bq' endpoint. Required: file_path, project_id, dataset_id, write_type, table_name", 400
     
     try:
         write_type = constants.BQWriteTypes(write_type)
@@ -305,7 +324,7 @@ def parquet_gcs_to_bq() -> tuple[str, int]:
 
     try:
         utils.logger.info(f"Attempting to load file {file_path} to {project_id}.{dataset_id} using {write_type.value} method")
-        bq_client.load_parquet_to_bigquery(file_path, project_id, dataset_id, table_name, write_type)
+        gcp_services.load_parquet_to_bigquery(file_path, project_id, dataset_id, table_name, write_type)
 
         return "Loaded Parquet file to BigQuery", 200
     except Exception as e:
@@ -319,7 +338,7 @@ def generate_final_delivery_report() -> tuple[str, int]:
     
     # Validate required columns for report
     if not report_data.get('delivery_date') or not report_data.get('site'):
-        return "Missing required parameters in report data: delivery_date and site", 400
+        return "Missing required parameters to 'generate_delivery_report' endpoint JSON: delivery_date and site", 400
 
     try:
         utils.logger.info(f"Generating final delivery report for {report_data['delivery_date']} delivery from {report_data['site']}")
@@ -338,8 +357,8 @@ def create_missing_omop_tables() -> tuple[str, int]:
     dataset_id: Optional[str] = data.get('dataset_id')
     omop_version: Optional[str] = data.get('omop_version')
 
-    if not project_id or not dataset_id or not omop_version:
-        return "Missing required parameters: project_id, dataset_id, and omop_version", 400
+    if not all([project_id, dataset_id, omop_version]):
+        return "Missing a required parameter to 'create_missing_tables' endpoint. Required: project_id, dataset_id, omop_version", 400
 
     try:
         utils.logger.info(f"Creating any missing v{omop_version} tables in {project_id}.{dataset_id}")
@@ -357,7 +376,7 @@ def add_cdm_source_record() -> tuple[str, int]:
     
     # Validate required columns
     if not cdm_source_data.get('source_release_date') or not cdm_source_data.get('cdm_source_abbreviation'):
-        return "Missing required parameters in cdm_source_data: source_release_date and cdm_source_abbreviation", 400
+        return "Missing required parameters to 'populate_cdm_source' endpoint JSON: source_release_date and cdm_source_abbreviation", 400
 
     try:
         utils.logger.info(f"If empty, populating cdm_source table for {cdm_source_data['source_release_date']} delivery from {cdm_source_data['cdm_source_abbreviation']}")
@@ -372,7 +391,7 @@ def add_cdm_source_record() -> tuple[str, int]:
 @app.route('/pipeline_log', methods=['POST'])
 def log_pipeline_state() -> tuple:
     data: dict = request.get_json()
-    logging_table: Optional[str] = data.get('logging_table')
+    logging_table: str = constants.BQ_LOGGING_TABLE
     site_name: Optional[str] = data.get('site_name')
     delivery_date: Optional[str] = data.get('delivery_date')
     status: Optional[str] = data.get('status')
@@ -383,11 +402,11 @@ def log_pipeline_state() -> tuple:
 
     try:
         # Check if required columns are present
-        if not all([logging_table, site_name, delivery_date, status, run_id]):
-            return "Missing required columns for BigQuery logging", 400
+        if not all([site_name, delivery_date, status, run_id]):
+            return "Missing a required parameter to 'pipeline_log' endpoint. Required: site_name, delivery_date, status, run_id", 400
 
         pipeline_logger = pipeline_log.PipelineLog(
-            cast(str, logging_table),
+            logging_table,
             cast(str, site_name),
             cast(str, delivery_date),
             cast(str, status),
@@ -403,8 +422,6 @@ def log_pipeline_state() -> tuple:
     except Exception as e:
         utils.logger.error(f"Unable to save logging information to BigQuery table: {str(e)}")
         return f"Unable to save logging information to BigQuery table: {str(e)}", 500    
-
-
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))

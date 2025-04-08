@@ -1,8 +1,8 @@
 import logging
 import sys
 
-import core.bq_client as bq_client
 import core.constants as constants
+import core.gcp_services as gcp_services
 import core.transformer as transformer
 import core.utils as utils
 
@@ -48,7 +48,7 @@ class VocabHarmonizer:
         # Necessary because the task may fail and retry in Airflow, leaving some files behind
         current_files = utils.list_gcs_files(self.bucket, f"{self.delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{self.source_table_name}", constants.PARQUET)
         for file in current_files:
-            utils.delete_gcs_file(file)
+            gcp_services.delete_gcs_file(file)
 
         # List order is very important here!
         harmonization_steps: list = [constants.SOURCE_TARGET, constants.TARGET_REMAP, constants.TARGET_REPLACEMENT, constants.DOMAIN_CHECK]
@@ -64,7 +64,7 @@ class VocabHarmonizer:
         """
         Perform a specific harmonization step.
         """
-        self.logger.info(f"Performing vocabulary harmonization: {step}")
+        self.logger.info(f"Performing vocabulary harmonization against {self.file_path}: {step}")
 
         if step == constants.SOURCE_TARGET:
             self.source_target_remapping()
@@ -456,7 +456,7 @@ class VocabHarmonizer:
 
 
     def omop_etl(self) -> None:
-        self.logger.info(f"Partitioning table {self.source_table_name} for {self.site} to appropriate target table(s)")
+        self.logger.info(f"Partitioning table {self.source_table_name} for {self.file_path} to appropriate target table(s)")
 
         # Find all target tables in the source file
         conn, local_db_file = utils.create_duckdb_connection()
@@ -469,7 +469,7 @@ class VocabHarmonizer:
                         
                 target_tables_list = conn.execute(target_tables).fetch_df()['target_table'].tolist()
         except Exception as e:
-            raise Exception(f"Unable to get target tables from Parquet file: {e}") from e
+            raise Exception(f"Unable to get target tables from Parquet file {self.file_path}: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
 
@@ -481,7 +481,7 @@ class VocabHarmonizer:
             omop_transformer.omop_to_omop_etl()
 
             # Load the file to BQ; ETLed_FILE write type ensures append only
-            bq_client.load_parquet_to_bigquery(
+            gcp_services.load_parquet_to_bigquery(
                 file_path=f"gs://{omop_transformer.get_transformed_path()}",
                 project_id=self.project_id,
                 dataset_id=self.dataset_id,

@@ -1,11 +1,14 @@
+import os
 from enum import Enum
 
 DUCKDB_FORMAT_STRING = "(FORMAT 'parquet', COMPRESSION 'zstd')"
-DUCKDB_MEMORY_LIMIT = "10GB"
+DUCKDB_MEMORY_LIMIT = "12GB"
 DUCKDB_MAX_SIZE = "5000GB"
-DUCKDB_THREADS = "4"
+DUCKDB_THREADS = "1"
 
 SERVICE_NAME = "omop-file-processor"
+BQ_LOGGING_TABLE = os.getenv('BQ_LOGGING_TABLE')
+VOCAB_GCS_PATH = os.getenv('VOCAB_GCS_PATH')
 
 CSV = ".csv"
 PARQUET = ".parquet"
@@ -197,7 +200,7 @@ TARGET_REMAP = "Remap non-standard targets to new standard targets"
 TARGET_REPLACEMENT = "Replace non-standard targets with new standard targets"
 
 # Primary key column can be found in schema.json file
-NATURAL_KEY_TABLES = {
+NATURAL_KEY_TABLES = [
     "person",
     "location",
     "care_site",
@@ -207,13 +210,13 @@ NATURAL_KEY_TABLES = {
     "vocabulary",
     "domain",
     "concept_class",
-    "relationship"
-}
-
-SURROGATE_KEY_TABLES = {
-    "observation_period",
+    "relationship",
     "visit_occurrence",
-    "visit_detail",
+    "visit_detail"
+]
+
+SURROGATE_KEY_TABLES = [
+    "observation_period",
     "condition_occurrence",
     "drug_exposure",
     "procedure_occurrence",
@@ -228,9 +231,9 @@ SURROGATE_KEY_TABLES = {
     "drug_era",
     "dose_era",
     "condition_era"
-}
+]
 
-NO_PRIMARY_KEY_TABLES = {
+NO_PRIMARY_KEY_TABLES = [
     "death",
     "fact_relationship",
     "episode_event",
@@ -243,4 +246,4 @@ NO_PRIMARY_KEY_TABLES = {
     "cohort",
     "cohort_definition",
     "attribute_definition"
-}
+]
