@@ -115,24 +115,24 @@ Common issues and solutions:
 
 - [Introduction](#introduction)
 - [Common Response Codes](#common-response-codes)
+- [Environment Configuration](#environment-configuration)
 - [API Endpoints](#api-endpoints)
   - [Heartbeat](#heartbeat)
   - [Create artifact buckets](#create-artifact-buckets)
   - [Create optimized vocabulary files](#create-optimized-vocab)
+  - [Get BigQuery log row](#get-log-row)
   - [Get list of files to process](#get-file-list)
   - [Process incoming file](#process-incoming-file)
   - [Validate OMOP data file](#validate-file)
   - [Normalize OMOP data file](#normalize-parquet)
   - [Upgrade CDM version](#upgrade-cdm)
-  - [Populate cdm_source table](#populate-cdm-source)
-  - [Harmonize vocabulary version](#update-mappings)
-  - [Get required transformations](#get-required-transforms)
-  - [OMOP to OMOP transformations](#omop-etl)
-  - [Generate derived data](#populate-derived-data)
-  - [Clear BigQuery dataset](#clear-bigquery-dataset)
+  - [Harmonize vocabulary version](#harmonize-vocab)
+  - [Populate derived data](#populate-derived-data)
+  - [Clear BigQuery dataset](#clear-bq-dataset)
   - [Load vocabulary data](#load-target-vocab)
-  - [Load Parquet to BigQuery](#parquet-to-bigquery)
+  - [Load Parquet to BigQuery](#parquet-to-bq)
   - [Create missing tables](#create-missing-tables)
+  - [Populate cdm_source table](#populate-cdm-source)
   - [Generate delivery report](#generate-delivery-report)
   - [BigQuery logging](#pipeline-log)
 
@@ -163,6 +163,18 @@ All POST endpoints in this API return the following standard response codes:
 | 400 | Missing or invalid required parameters |
 | 500 | Server error occurred during operation execution |
 
+## Environment Configuration
+
+Several values used across multiple endpoints are configured through environment variables or constants in the application rather than being passed with each request. This includes:
+
+| Configuration | Variable | Description |
+|---------------|----------|-------------|
+| Vocabulary GCS Path | `VOCAB_GCS_PATH` | GCS bucket path containing vocabulary files |
+| BigQuery Logging Table | `BQ_LOGGING_TABLE` | Fully qualified table ID for pipeline logging |
+| Service Name | `SERVICE_NAME` | Name of the service for identification in logs |
+
+These values must be properly configured in the environment or application constants file before using the API.
+
 ## API Endpoints
 
 ### Heartbeat
@@ -182,7 +194,7 @@ All POST endpoints in this API return the following standard response codes:
 {
     "status": "healthy",
     "timestamp": "2023-05-01T12:34:56.789012",
-    "service": "omop-data-processor"
+    "service": "omop-file-processor"
 }
 ```
 
@@ -192,7 +204,7 @@ All POST endpoints in this API return the following standard response codes:
 
 **Endpoint:** `POST /create_artifact_buckets`
 
-**Description:** Creates the necessary buckets in Google Cloud Storage for the pipeline to store artfifacts generated during data processing.
+**Description:** Creates the necessary buckets in Google Cloud Storage for the pipeline to store artifacts generated during data processing.
 
 **Request Parameters:**
 
@@ -203,7 +215,7 @@ All POST endpoints in this API return the following standard response codes:
 **Example Request:**
 ```json
 {
-    "delivery_bucket": "delivery_site/2025-01-01"
+    "delivery_bucket": "delivery_site/2023-05-01"
 }
 ```
 
@@ -224,13 +236,57 @@ OMOP vocabulary files are updated twice a year. Users will need to manually down
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | vocab_version | string | Yes | The version of the OMOP vocabulary to use |
-| vocab_gcs_bucket | string | Yes | Google Cloud Storage bucket containing vocabulary files |
+
+**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
 
 **Example Request:**
 ```json
 {
-    "vocab_version": "v5.0 29-FEB-24",
-    "vocab_gcs_bucket": "my-vocab-bucket"
+    "vocab_version": "v5.0 29-FEB-24"
+}
+```
+
+---
+
+### Get Log Row
+
+**Endpoint:** `GET /get_log_row`
+
+**Description:** Retrieves log information for a specific site and delivery date from the BigQuery logging table.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| site | string | Yes | Site identifier |
+| delivery_date | string | Yes | Delivery date |
+
+**Response:**
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Log row retrieved successfully |
+| 400 | Missing required parameters |
+| 500 | Unable to get BigQuery log row |
+
+**Response Format:**
+```json
+{
+    "status": "healthy",
+    "log_row": [
+        {
+            "site_name": "hospital-a",
+            "delivery_date": "2023-05-01",
+            "status": "completed",
+            "message": null,
+            "pipeline_start_datetime": "2023-05-01T12:00:00",
+            "pipeline_end_datetime": "2023-05-01T14:30:00",
+            "file_type": ".csv",
+            "omop_version": "5.4",
+            "run_id": "run-123456"
+        }
+    ],
+    "service": "omop-file-processor"
 }
 ```
 
@@ -265,7 +321,7 @@ When OMOP files are stored in the format `gs://delivery_site/YYYY-MM-DD/file1.cs
 {
     "status": "healthy",
     "file_list": ["file1.csv", "file2.csv", "file3.csv"],
-    "service": "omop-data-processor"
+    "service": "omop-file-processor"
 }
 ```
 
@@ -294,7 +350,7 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 ```json
 {
     "file_type": ".csv",
-    "file_path": "gs://delivery_site/2025-01-01/person.csv"
+    "file_path": "delivery_site/2023-05-01/person.csv"
 }
 ```
 
@@ -318,10 +374,10 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 **Example Request:**
 ```json
 {
-    "file_path": "gs://delivery_site/2025-01-01/person.csv",
+    "file_path": "delivery_site/2023-05-01/person.csv",
     "omop_version": "5.4",
-    "delivery_date": "2023-01-15",
-    "gcs_path": "gs://delivery_site/2025-01-01/"
+    "delivery_date": "2023-05-01",
+    "gcs_path": "delivery_site/2023-05-01/"
 }
 ```
 
@@ -334,9 +390,9 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 **Description:** Normalizes a Parquet file according to OMOP standards.
 
 - Converts data types of columns within Parquet file to types specified in OMOP CDM
-- Creates a new Parquet file with the invalid rows from the original data file in `gs://delivery_site/2025-01-02/invalid_rows/`
+- Creates a new Parquet file with the invalid rows from the original data file in `artifacts/invalid_rows/`
 - Ensures consistent column order within Parquet
-- Set (possibly non-unique) deterministric composite key for tables with surrogate primary keys
+- Set (possibly non-unique) deterministic composite key for tables with surrogate primary keys
 - Adds missing columns and removes unexpected columns from Parquet files
 
 **Request Parameters:**
@@ -349,7 +405,7 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 **Example Request:**
 ```json
 {
-    "file_path": "gs://delivery_site/2025-01-01/person.csv",
+    "file_path": "delivery_site/2023-05-01/person.csv",
     "omop_version": "5.4"
 }
 ```
@@ -373,7 +429,7 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 **Example Request:**
 ```json
 {
-    "file_path": "gs://delivery_site/2025-01-01/person.csv",
+    "file_path": "delivery_site/2023-05-01/person.csv",
     "omop_version": "5.3",
     "target_omop_version": "5.4"
 }
@@ -381,36 +437,9 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 
 ---
 
-### Populate CDM Source
+### Harmonize Vocab
 
-**Endpoint:** `POST /populate_cdm_source`
-
-**Description:** Populates the CDM_SOURCE table with metadata about the data source.
-
-**Request Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| source_release_date | string | Yes | Release date of the source data |
-| cdm_source_abbreviation | string | Yes | Abbreviation for the CDM source |
-| [additional parameters] | various | No | Additional source metadata as needed |
-
-**Example Request:**
-```json
-{
-    "source_release_date": "2023-01-15",
-    "cdm_source_abbreviation": "HOSP_A",
-    "cdm_version": "5.4",
-    "vocabulary_version": "v5.0 29-FEB-24",
-    "cdm_release_date": "2023-01-20"
-}
-```
-
----
-
-### Update Mappings
-
-**Endpoint:** `POST /update_mappings`
+**Endpoint:** `POST /harmonize_vocab`
 
 **Description:** Updates OMOP data file with source-to-target concept mappings from a specified vocabulary version. Also replaces non-standard concepts with standard concepts, and identifies concepts which are not in the correct table according to their domain_id.
 
@@ -420,90 +449,22 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 |-----------|------|----------|-------------|
 | file_path | string | Yes | Path to the original data file |
 | vocab_version | string | Yes | Target vocabulary version |
-| vocab_gcs_bucket | string | Yes | GCS bucket containing vocabulary files |
 | omop_version | string | Yes | OMOP CDM version |
 | site | string | Yes | Site identifier |
+| project_id | string | Yes | Google Cloud project ID |
+| dataset_id | string | Yes | BigQuery dataset ID |
+
+**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
 
 **Example Request:**
 ```json
 {
-    "file_path": "gs://delivery_site/2025-01-01/person.csv",
+    "file_path": "delivery_site/2023-05-01/person.csv",
     "vocab_version": "v5.0 29-FEB-24",
-    "vocab_gcs_bucket": "my-vocab-bucket",
     "omop_version": "5.4",
-    "site": "hospital-a"
-}
-```
-
----
-
-### Get Required Transforms
-
-**Endpoint:** `GET /get_required_transforms`
-
-**Description:** Retrieves a list of transformations required for a site's delivery.
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| site | string | Yes | Site identifier/bucket |
-| delivery_date | string | Yes | Delivery date |
-
-**Response:**
-
-| Status Code | Description |
-|-------------|-------------|
-| 200 | List of transformations retrieved successfully |
-| 400 | Missing required parameters |
-| 500 | Unable to get list of transformations |
-
-**Response Format:**
-```json
-{
-    "status": "healthy",
-    "etl_list": [
-        {
-            "source_file": "condition_occurrence",
-            "target_file": "measurement",
-            "file_path": "gs://delivery_site/2025-01-01//harmonized_files/condition_occurrence/partitioned/target_table=measurement/"
-        },
-        {
-            "source_file": "condition_occurrence",
-            "target_file": "condition_occurrence",
-            "file_path": "gs://delivery_site/2025-01-01//harmonized_files/condition_occurrence/partitioned/target_table=condition_occurrence/"
-        }
-    ],
-    "service": "omop-data-processor"
-}
-```
-
----
-
-### OMOP ETL
-
-**Endpoint:** `POST /omop_etl`
-
-**Description:** Performs ETL to transform a file from one OMOP structure to another.
-
-**Request Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| site | string | Yes | Site identifier |
-| file_path | string | Yes | GCS path containing files to transform |
-| cdm_version | string | Yes | OMOP CDM version |
-| source_table | string | Yes | Source table name |
-| target_table | string | Yes | Target table name |
-
-**Example Request:**
-```json
-{
     "site": "hospital-a",
-    "file_path": "gs://delivery_site/2025-01-01/artifacts/harmonized_files/note/partitioned/target_table=device_exposure",
-    "cdm_version": "5.4",
-    "source_table": "note",
-    "target_table": "device_exposure"
+    "project_id": "my-gcp-project",
+    "dataset_id": "omop_cdm"
 }
 ```
 
@@ -526,25 +487,25 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 | project_id | string | Yes | Google Cloud project ID |
 | dataset_id | string | Yes | BigQuery dataset ID |
 | vocab_version | string | Yes | Vocabulary version |
-| vocab_gcs_bucket | string | Yes | GCS bucket containing vocabulary files |
+
+**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
 
 **Example Request:**
 ```json
 {
     "site": "hospital-a",
     "gcs_bucket": "my-site-bucket",
-    "delivery_date": "2025-01-01",
+    "delivery_date": "2023-05-01",
     "table_name": "drug_era",
     "project_id": "my-gcp-project",
     "dataset_id": "omop_cdm",
-    "vocab_version": "v5.0 29-FEB-24",
-    "vocab_gcs_bucket": "my-vocab-bucket"
+    "vocab_version": "v5.0 29-FEB-24"
 }
 ```
 
 ---
 
-### Clear BigQuery Dataset
+### Clear BQ Dataset
 
 **Endpoint:** `POST /clear_bq_dataset`
 
@@ -579,16 +540,16 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 |-----------|------|----------|-------------|
 | table_file_name | string | Yes | Vocabulary table file name |
 | vocab_version | string | Yes | Vocabulary version |
-| vocab_gcs_bucket | string | Yes | GCS bucket containing vocabulary files |
 | project_id | string | Yes | Google Cloud project ID |
 | dataset_id | string | Yes | BigQuery dataset ID |
+
+**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
 
 **Example Request:**
 ```json
 {
     "table_file_name": "concept",
     "vocab_version": "v5.0 29-FEB-24",
-    "vocab_gcs_bucket": "my-vocab-bucket",
     "project_id": "my-gcp-project",
     "dataset_id": "omop_cdm"
 }
@@ -596,7 +557,7 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 
 ---
 
-### Parquet to BigQuery
+### Parquet to BQ
 
 **Endpoint:** `POST /parquet_to_bq`
 
@@ -619,7 +580,7 @@ This endpoint requires the `write_type` parameter, which the file processor API 
 **Example Request:**
 ```json
 {
-    "file_path": "gs://delivery_site/2025-01-01/person.csv",
+    "file_path": "delivery_site/2023-05-01/person.csv",
     "project_id": "my-gcp-project",
     "dataset_id": "omop_cdm",
     "table_name": "person",
@@ -630,7 +591,7 @@ This endpoint requires the `write_type` parameter, which the file processor API 
 **Additional Example Requests:**
 ```json
 {
-    "file_path": "gs://delivery_site/2025-01-01/artifacts/converted_files/person.parquet",
+    "file_path": "delivery_site/2023-05-01/artifacts/converted_files/person.parquet",
     "project_id": "my-gcp-project",
     "dataset_id": "omop_cdm",
     "table_name": "person",
@@ -640,10 +601,10 @@ This endpoint requires the `write_type` parameter, which the file processor API 
 
 ```json
 {
-    "file_path": "gs://delivery_site/2025-01-01/artifacts/harmonized_files/note/partitioned/target_table=device_exposure",
+    "file_path": "delivery_site/2023-05-01/artifacts/harmonized_files/note/transformed",
     "project_id": "my-gcp-project",
     "dataset_id": "omop_cdm",
-    "table_name": "note",
+    "table_name": "device_exposure",
     "write_type": "ETLed_file"
 }
 ```
@@ -675,6 +636,33 @@ This endpoint requires the `write_type` parameter, which the file processor API 
 
 ---
 
+### Populate CDM Source
+
+**Endpoint:** `POST /populate_cdm_source`
+
+**Description:** Populates the CDM_SOURCE table with metadata about the data source.
+
+**Request Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| source_release_date | string | Yes | Release date of the source data |
+| cdm_source_abbreviation | string | Yes | Abbreviation for the CDM source |
+| [additional parameters] | various | No | Additional source metadata as needed |
+
+**Example Request:**
+```json
+{
+    "source_release_date": "2023-05-01",
+    "cdm_source_abbreviation": "HOSP_A",
+    "cdm_version": "5.4",
+    "vocabulary_version": "v5.0 29-FEB-24",
+    "cdm_release_date": "2023-05-05"
+}
+```
+
+---
+
 ### Generate Delivery Report
 
 **Endpoint:** `POST /generate_delivery_report`
@@ -692,13 +680,13 @@ This endpoint requires the `write_type` parameter, which the file processor API 
 **Example Request:**
 ```json
 {
-    "delivery_date": "2025-01-01",
+    "delivery_date": "2023-05-01",
     "site": "hospital-a",
-    "report_items": {
-        "files_processed": 12,
-        "total_records": 500000,
-        "completion_time": "2025-01-02T14:30:00"
-    }
+    "site_display_name": "Hospital A",
+    "file_delivery_format": ".csv",
+    "delivered_cdm_version": "5.3",
+    "target_cdm_version": "5.4",
+    "target_vocabulary_version": "v5.0 29-FEB-24"
 }
 ```
 
@@ -714,7 +702,6 @@ This endpoint requires the `write_type` parameter, which the file processor API 
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| logging_table | string | Yes | BigQuery table for logging |
 | site_name | string | Yes | Site identifier |
 | delivery_date | string | Yes | Delivery date |
 | status | string | Yes | Status of the pipeline step |
@@ -723,12 +710,13 @@ This endpoint requires the `write_type` parameter, which the file processor API 
 | file_type | string | No | Type of file being processed |
 | omop_version | string | No | OMOP CDM version |
 
+**Note:** The logging table is configured via the `BQ_LOGGING_TABLE` constant and does not need to be passed in the request.
+
 **Example Request:**
 ```json
 {
-    "logging_table": "pipeline_logs.execution_log",
     "site_name": "hospital-a",
-    "delivery_date": "2025-01-01",
+    "delivery_date": "2023-05-01",
     "status": "COMPLETED",
     "run_id": "run-123456",
     "message": "Successfully processed person table",
