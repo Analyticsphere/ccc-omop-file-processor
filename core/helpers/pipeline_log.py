@@ -4,7 +4,7 @@ from typing import Optional
 from google.cloud import bigquery  # type: ignore
 
 import core.constants as constants
-import core.gcp_services
+import core.gcp_services as gcp_services
 import core.utils as utils
 
 
@@ -112,7 +112,7 @@ class PipelineLog:
             )
 
             # Run the query as a job and wait for it to complete.
-            core.gcp_services.execute_bq_sql(query, job_config)
+            gcp_services.execute_bq_sql(query, job_config)
 
         except Exception as e:
             error_details = {
@@ -148,7 +148,7 @@ class PipelineLog:
                 ]
             )
 
-            exists = list(core.gcp_services.execute_bq_sql(select_query, select_config))
+            exists = list(gcp_services.execute_bq_sql(select_query, select_config))
 
             if exists:
                 # If the record exists, update it.
@@ -172,7 +172,7 @@ class PipelineLog:
                     ]
                 )
 
-                core.gcp_services.execute_bq_sql(update_query, update_config)
+                gcp_services.execute_bq_sql(update_query, update_config)
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
@@ -209,7 +209,7 @@ class PipelineLog:
                 ]
             )
 
-            exists = list(core.gcp_services.execute_bq_sql(select_query, select_config))
+            exists = list(gcp_services.execute_bq_sql(select_query, select_config))
 
             if exists:
                 # If the record exists and isn't already set to running, update it.
@@ -228,7 +228,7 @@ class PipelineLog:
                     ]
                 )
 
-                core.gcp_services.execute_bq_sql(update_query, update_config)
+                gcp_services.execute_bq_sql(update_query, update_config)
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
@@ -264,7 +264,7 @@ class PipelineLog:
                 ]
             )
 
-            exists = list(core.gcp_services.execute_bq_sql(select_query, select_config))
+            exists = list(gcp_services.execute_bq_sql(select_query, select_config))
 
             if exists:
                 # If the record exists, update it.
@@ -294,7 +294,7 @@ class PipelineLog:
                     ]
                 )
                 
-                core.gcp_services.execute_bq_sql(update_query, update_config)
+                gcp_services.execute_bq_sql(update_query, update_config)
             else:
                 utils.logger.warning(f"No record found for site {self.site_name} on {self.delivery_date}. Update skipped.")
         except Exception as e:
