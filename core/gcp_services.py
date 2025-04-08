@@ -155,6 +155,9 @@ def delete_gcs_file(gcs_path: str) -> None:
         bucket_name = path_without_prefix.split('/')[0]
         blob_path = '/'.join(path_without_prefix.split('/')[1:])
 
+        utils.logger.warning(f"bucket_name is {bucket_name}")
+        utils.logger.warning(f"blob path is {blob_path}")
+
         # Get bucket and blob
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(blob_path)
