@@ -8,7 +8,7 @@ import duckdb  # type: ignore
 from google.cloud import storage  # type: ignore
 
 import core.constants as constants
-import core.gcp_client
+import core.gcp_services
 import core.helpers.report_artifact as report_artifact
 import core.utils as utils
 
@@ -478,7 +478,7 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
     batch_size: int = 1000
 
     # Download and get path to local CSV file
-    broken_csv_path = core.gcp_client.download_from_gcs(gcs_file_path)
+    broken_csv_path = core.gcp_services.download_from_gcs(gcs_file_path)
 
     # Create output path, renaming original file
     filename = utils.get_table_name_from_gcs_path(gcs_file_path)
@@ -510,7 +510,7 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
             destination_blob = f"{delivery_date}/{constants.ArtifactPaths.FIXED_FILES.value}{filename}{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
             # Upload fixed file to GCS
-            core.gcp_client.upload_to_gcs(output_csv_path, bucket, destination_blob)
+            core.gcp_services.upload_to_gcs(output_csv_path, bucket, destination_blob)
 
             # Delete local files
             os.remove(broken_csv_path)

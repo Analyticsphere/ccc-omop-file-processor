@@ -12,7 +12,6 @@ from google.cloud import storage  # type: ignore
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
-from core.gcp_client import list_gcs_files
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -356,6 +355,42 @@ def create_final_report_artifacts(report_data: dict) -> None:
             value_as_number=None
         )
         ra.save_artifact()
+
+
+def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
+    """
+    Lists files within a specific folder in a GCS bucket (non-recursively).
+    """
+    try:
+        # Initialize the GCS client
+        storage_client = storage.Client()
+
+        # Get the bucket
+        bucket = storage_client.bucket(bucket_name)
+
+        # Verify bucket exists
+        if not bucket.exists():
+            raise Exception(f"Bucket {bucket_name} does not exist")
+
+        # Ensure folder_prefix ends with '/' for consistent path handling
+        if folder_prefix and not folder_prefix.endswith('/'):
+            folder_prefix += '/'
+
+        # List all blobs with the prefix
+        blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
+
+        # Get only the files in this directory level (not in subdirectories)
+        # Files must be of specific type
+        files = [
+            os.path.basename(blob.name)
+            for blob in blobs
+            if blob.name != folder_prefix and blob.name.lower().endswith(file_format)
+        ]
+
+        return files
+
+    except Exception as e:
+        raise Exception(f"Error listing files in GCS: {str(e)}")
 
 def generate_report(report_data: dict) -> None:
     create_final_report_artifacts(report_data)

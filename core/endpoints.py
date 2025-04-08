@@ -7,7 +7,7 @@ from flask import Flask, jsonify, request  # type: ignore
 import core.constants as constants
 import core.file_processor as file_processor
 import core.file_validation as file_validation
-import core.gcp_client as gcp_client
+import core.gcp_services as gcp_services
 import core.helpers.pipeline_log as pipeline_log
 import core.omop_client as omop_client
 import core.transformer as transformer
@@ -67,7 +67,7 @@ def create_artifact_buckets() -> tuple[str, int]:
         
         # Create the actual GCS directories
         for directory in directories:
-            gcp_client.create_gcs_directory(directory)
+            gcp_services.create_gcs_directory(directory)
         
         return "Directories created successfully", 200
     except Exception as e:
@@ -84,7 +84,7 @@ def get_log_row() -> tuple[Any, int]:
         return "Missing required parameter: site and delivery_date", 400
     
     try:
-        log_row: list[str] = gcp_client.get_bq_log_row(site, delivery_date)
+        log_row: list[str] = gcp_services.get_bq_log_row(site, delivery_date)
         return jsonify({
             'status': 'healthy',
             'log_row': log_row,
@@ -106,7 +106,7 @@ def get_files() -> tuple[Any, int]:
         return "Missing required parameter: bucket, folder, file_format", 400
 
     try:
-        file_list: list[str] = gcp_client.list_gcs_files(bucket, folder, file_format)
+        file_list: list[str] = utils.list_gcs_files(bucket, folder, file_format)
 
         return jsonify({
             'status': 'healthy',
@@ -220,7 +220,7 @@ def clear_bq_tables() -> tuple[str, int]:
 
     try:
         utils.logger.info(f"Removing all tables from {project_id}.{dataset_id}")
-        gcp_client.remove_all_tables(project_id, dataset_id)
+        gcp_services.remove_all_tables(project_id, dataset_id)
 
         return "Removed all tables", 200
     except Exception as e:
@@ -326,7 +326,7 @@ def parquet_gcs_to_bq() -> tuple[str, int]:
 
     try:
         utils.logger.info(f"Attempting to load file {file_path} to {project_id}.{dataset_id} using {write_type.value} method")
-        gcp_client.load_parquet_to_bigquery(file_path, project_id, dataset_id, table_name, write_type)
+        gcp_services.load_parquet_to_bigquery(file_path, project_id, dataset_id, table_name, write_type)
 
         return "Loaded Parquet file to BigQuery", 200
     except Exception as e:

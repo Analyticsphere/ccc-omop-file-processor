@@ -107,43 +107,6 @@ def get_bq_log_row(site: str, date_to_check: str) -> list:
     except Exception as e:
         raise Exception(f"Failed to retrieve BigQuery pipeline logs for site '{site}' and date '{date_to_check}': {e}") from e
 
-
-def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
-    """
-    Lists files within a specific folder in a GCS bucket (non-recursively).
-    """
-    try:
-        # Initialize the GCS client
-        storage_client = storage.Client()
-
-        # Get the bucket
-        bucket = storage_client.bucket(bucket_name)
-
-        # Verify bucket exists
-        if not bucket.exists():
-            raise Exception(f"Bucket {bucket_name} does not exist")
-
-        # Ensure folder_prefix ends with '/' for consistent path handling
-        if folder_prefix and not folder_prefix.endswith('/'):
-            folder_prefix += '/'
-
-        # List all blobs with the prefix
-        blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
-
-        # Get only the files in this directory level (not in subdirectories)
-        # Files must be of specific type
-        files = [
-            os.path.basename(blob.name)
-            for blob in blobs
-            if blob.name != folder_prefix and blob.name.lower().endswith(file_format)
-        ]
-
-        return files
-
-    except Exception as e:
-        raise Exception(f"Error listing files in GCS: {str(e)}")
-
-
 def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.
     If directory exists, deletes any existing files first.

@@ -47,7 +47,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
     except Exception as e:
         raise Exception(f"Unexpected error validating CDM file: {str(e)}")
 
-def validate_cdm_table_columns(file_path: str, omop_version: str, delivery_date_REMOVE: str, gcs_path_REMOVE: str) -> None:
+def validate_cdm_table_columns(file_path: str, omop_version: str) -> None:
     """
     Verify that column names in the parquet file are valid columns in the CDM schema
     and that there are no columns in the table schema that are absent in the parquet file.
@@ -131,7 +131,7 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
         valid_table_name = validate_cdm_table_name(file_path, omop_version, delivery_date, gcs_path)
         # If it's not a valid table name, it does not have a schema to validate
         if valid_table_name:
-            validate_cdm_table_columns(file_path, omop_version, delivery_date, gcs_path)
+            validate_cdm_table_columns(file_path, omop_version)
             
     except Exception as e:
         utils.logger.error(f"Error validating file {file_path}: {str(e)}")
