@@ -29,6 +29,7 @@ def remove_all_tables(project_id: str, dataset_id: str) -> None:
         utils.logger.error(f"Unable to delete BigQuery table: {e}")
         raise Exception(f"Unable to delete BigQuery table: {e}") from e
 
+
 def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, table_name: str, write_type: constants.BQWriteTypes) -> None:
     """
     Load Parquet artifact file from GCS directly into BigQuery.
@@ -76,40 +77,6 @@ def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, t
         raise Exception(f"Error loading Parquet file to BigQuery: {e}") from e
 
 
-# def get_bq_log_row(site: str, date_to_check: str) -> list:
-#     client = bigquery.Client()
-
-#     # Check if the table exists. If it doesn't, return an empty list.
-#     try:
-#         client.get_table(constants.BQ_LOGGING_TABLE)
-#     except NotFound:
-#         # Table does not exist, so return an empty list without error. This will occur on first run.
-#         return []
-
-#     # Construct the query to retrieve logs for the given site and delivery date.
-#     query = f"""
-#         SELECT *
-#         FROM `{constants.BQ_LOGGING_TABLE}`
-#         WHERE site_name = @site
-#           AND delivery_date = @delivery_date
-#     """
-
-#     job_config = bigquery.QueryJobConfig(
-#         query_parameters=[
-#             bigquery.ScalarQueryParameter("site", "STRING", site),
-#             bigquery.ScalarQueryParameter("delivery_date", "DATE", date_to_check),
-#         ]
-#     )
-
-#     try:
-#         query_job = client.query(query, job_config=job_config)
-#         results = list(query_job.result())
-#         return results
-#     except Exception as e:
-#         raise Exception(f"Failed to retrieve BigQuery pipeline logs for site '{site}' and date '{date_to_check}': {e}") from e
-
-
-
 def get_bq_log_row(site: str, date_to_check: str) -> list:
     client = bigquery.Client()
 
@@ -144,6 +111,7 @@ def get_bq_log_row(site: str, date_to_check: str) -> list:
         return results
     except Exception as e:
         raise Exception(f"Failed to retrieve BigQuery pipeline logs for site '{site}' and date '{date_to_check}': {e}") from e
+
 
 def create_gcs_directory(directory_path: str) -> None:
     """Creates a directory in GCS by creating an empty blob.
