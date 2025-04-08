@@ -4,7 +4,7 @@ from enum import Enum
 DUCKDB_FORMAT_STRING = "(FORMAT 'parquet', COMPRESSION 'zstd')"
 DUCKDB_MEMORY_LIMIT = "14GB"
 DUCKDB_MAX_SIZE = "5000GB"
-DUCKDB_THREADS = "6"
+DUCKDB_THREADS = "2"
 
 SERVICE_NAME = "omop-file-processor"
 BQ_LOGGING_TABLE = os.getenv('BQ_LOGGING_TABLE')
