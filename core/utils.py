@@ -47,7 +47,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         conn.execute(f"SET threads={constants.DUCKDB_THREADS}")
 
         # Reduce write flush threshold to lower chance of OOM
-        conn.execute("SET partitioned_write_flush_threshold = 1024")
+        #conn.execute("SET partitioned_write_flush_threshold = 1024")
 
         # Set max size to allow on disk
         # Unneeded when writing to GCS

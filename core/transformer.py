@@ -196,7 +196,7 @@ class Transformer:
 
         # Resolve duplicate primary keys within a single 'table part' file
         # TODO: Make this global across ALL table parts
-        self.handle_duplicate_primary_keys()
+        #self.handle_duplicate_primary_keys()
 
 
     def placeholder_to_file_path(self, sql: str) -> str:
@@ -229,7 +229,7 @@ class Transformer:
         and unique across the table.
         """
         if self.target_table in constants.SURROGATE_KEY_TABLES:
-            self.logger.info(f"Checking for an correct duplicate primary keys in {self.get_transformed_path()}")
+            self.logger.info(f"Checking for and correcting duplicate primary keys in {self.get_transformed_path()}")
             # Get the path to the transformed parquet file
             transformed_file_path = f"gs://{self.get_transformed_path()}"
             

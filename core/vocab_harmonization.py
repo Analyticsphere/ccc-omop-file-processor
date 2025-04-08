@@ -457,7 +457,7 @@ class VocabHarmonizer:
 
 
     def omop_etl(self) -> None:
-        self.logger.info(f"Partitioning table {self.source_table_name} for {self.file_path} to appropriate target table(s)")
+        self.logger.info(f"Partitioning and ETLing source file {self.file_path} to appropriate target table(s)")
 
         # Find all target tables in the source file
         conn, local_db_file = utils.create_duckdb_connection()
