@@ -84,6 +84,8 @@ def execute_duckdb_sql(sql: str, error_msg: str) -> None:
         raise Exception(f"{error_msg}: {str(e)}") from e
     finally:
         close_duckdb_connection(conn, local_db_file)
+        # Manually run garabage collection here to reclaim memory
+        gc.collect()
 
 def parse_duckdb_csv_error(error: Exception) -> Optional[str]:
     """

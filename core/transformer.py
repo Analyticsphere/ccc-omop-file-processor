@@ -305,14 +305,13 @@ class Transformer:
 
     def handle_duplicate_primary_keys(self) -> None:
         """
-        Efficiently handles duplicate primary keys without using window functions.
-        Only processes the data if duplicates exist and uses temporary tables with
-        GROUP BY to identify duplicates that need new keys.
+        Simplified method to handle duplicate primary keys that avoids problematic SQL constructs.
+        Uses a more direct approach with temporary tables and minimal operations.
         """
         if self.target_table not in constants.SURROGATE_KEY_TABLES:
             self.logger.info(f"Table {self.target_table} does not use surrogate keys. Skipping duplicate check.")
             return
-            
+                
         transformed_file_path = f"gs://{self.get_transformed_path()}"
         
         # Identify primary key column
@@ -331,94 +330,74 @@ class Transformer:
         if primary_key_column not in target_columns_dict:
             self.logger.warning(f"Primary key column {primary_key_column} not found in schema. Skipping duplicate check.")
             return
-        
-        self.logger.info(f"Checking for and correcting duplicated primary keys in {self.target_table}")
+            
         primary_key_type = target_columns_dict[primary_key_column]['type']
         
         try:
-            # Optimized SQL that avoids window functions
-            efficient_sql = f"""
-            -- Step 1: Check if duplicates exist at all
-            CREATE TEMP TABLE IF NOT EXISTS duplicate_keys AS 
-            SELECT {primary_key_column}
-            FROM '{transformed_file_path}'
-            GROUP BY {primary_key_column}
-            HAVING COUNT(*) > 1;
-            
-            -- Step 2: Skip further processing if no duplicates
-            SELECT COUNT(*) = 0 AS no_duplicates FROM duplicate_keys;
-            """
-            
             conn, local_db_file = utils.create_duckdb_connection()
             
             with conn:
-                # First check if there are any duplicates to process
-                result = conn.execute(efficient_sql).fetchone()[0]
+                # Step 1: Check if duplicates exist at all
+                check_sql = f"""
+                SELECT 
+                    {primary_key_column}, 
+                    COUNT(*) as dup_count
+                FROM '{transformed_file_path}'
+                GROUP BY {primary_key_column}
+                HAVING COUNT(*) > 1
+                LIMIT 1;
+                """
                 
-                if result:
+                duplicates = conn.execute(check_sql).fetchall()
+                
+                if not duplicates:
                     self.logger.info(f"No duplicate primary keys found in {self.target_table}. Skipping fix.")
                     return
                 
                 self.logger.info(f"Found duplicate primary keys in {self.target_table}. Fixing...")
                 
-                # Step 3: Process only the duplicates without window functions
-                fix_sql = f"""
-                -- Create a table with first occurrences (to be kept as is)
-                CREATE TEMP TABLE first_occurrences AS
-                SELECT t1.*, 1 AS is_first
-                FROM '{transformed_file_path}' t1
-                JOIN duplicate_keys d ON t1.{primary_key_column} = d.{primary_key_column}
-                WHERE NOT EXISTS (
-                    SELECT 1 
-                    FROM '{transformed_file_path}' t2 
-                    WHERE t2.{primary_key_column} = t1.{primary_key_column} 
-                    AND (CONCAT(t2.*)) < (CONCAT(t1.*))
-                );
+                # Step 2: Create a temporary table to work with
+                conn.execute(f"CREATE TEMP TABLE orig_data AS SELECT * FROM '{transformed_file_path}'")
                 
-                -- Create a table with duplicate occurrences that need new keys
-                CREATE TEMP TABLE other_occurrences AS
-                SELECT t1.*, row_number() AS dup_index
-                FROM '{transformed_file_path}' t1
-                JOIN duplicate_keys d ON t1.{primary_key_column} = d.{primary_key_column}
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM first_occurrences f 
-                    WHERE f.{primary_key_column} = t1.{primary_key_column}
-                    AND (CONCAT(f.*)) = (CONCAT(t1.*))
-                );
+                # Step 3: Add a row_id column
+                conn.execute("ALTER TABLE orig_data ADD COLUMN temp_row_id BIGINT")
+                conn.execute("UPDATE orig_data SET temp_row_id = row_number() OVER ()")
                 
-                -- Create a table with non-duplicate keys
-                CREATE TEMP TABLE non_duplicates AS
-                SELECT * 
-                FROM '{transformed_file_path}'
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM duplicate_keys d 
-                    WHERE d.{primary_key_column} = {primary_key_column}
-                );
-                
-                -- Combine first occurrences (unchanged) with other occurrences (new keys) and non-duplicates
-                COPY (
-                    -- First occurrences (keep original keys)
-                    SELECT * FROM first_occurrences EXCLUDE (is_first)
-                    
-                    UNION ALL
-                    
-                    -- Other occurrences (generate new keys)
+                # Step 4: Identify which rows need new primary keys (all but the first occurrence)
+                conn.execute(f"""
+                CREATE TEMP TABLE needs_new_pk AS
+                SELECT temp_row_id, {primary_key_column}
+                FROM (
                     SELECT 
-                        CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(dup_index AS VARCHAR))) % 9223372036854775807 AS {primary_key_type}) AS {primary_key_column},
-                        * EXCLUDE ({primary_key_column}, dup_index)
-                    FROM other_occurrences
-                    
-                    UNION ALL
-                    
-                    -- Non-duplicates (keep as is)
-                    SELECT * FROM non_duplicates
-                ) TO '{transformed_file_path}' {constants.DUCKDB_FORMAT_STRING};
-                """
+                        temp_row_id, 
+                        {primary_key_column}, 
+                        RANK() OVER (PARTITION BY {primary_key_column} ORDER BY temp_row_id) as rnk
+                    FROM orig_data
+                ) t
+                WHERE rnk > 1
+                """)
                 
-                conn.execute(fix_sql)
+                # Step 5: Update those rows with new primary keys
+                conn.execute(f"""
+                UPDATE orig_data
+                SET {primary_key_column} = CAST(
+                    (CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(temp_row_id AS VARCHAR))) AS UBIGINT) % 9223372036854775807) 
+                    AS {primary_key_type}
+                )
+                WHERE temp_row_id IN (SELECT temp_row_id FROM needs_new_pk)
+                """)
+                
+                # Step 6: Copy back to the original file, excluding the temp column
+                conn.execute(f"""
+                COPY (
+                    SELECT * EXCLUDE (temp_row_id) FROM orig_data
+                ) TO '{transformed_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                """)
+                
                 self.logger.info(f"Successfully fixed duplicate primary keys in {self.target_table}")
-        
         except Exception as e:
+            self.logger.error(f"Error handling duplicate primary keys in {self.target_table}: {str(e)}")
             raise Exception(f"Unable to handle duplicate primary keys in {self.target_table}: {str(e)}") from e
         finally:
+            if 'conn' in locals() and 'local_db_file' in locals():
                 utils.close_duckdb_connection(conn, local_db_file)
