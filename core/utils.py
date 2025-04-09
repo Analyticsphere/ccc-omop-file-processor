@@ -1,3 +1,4 @@
+import gc
 import json
 import logging
 import os
@@ -12,7 +13,6 @@ from google.cloud import storage  # type: ignore
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
-import gc
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)

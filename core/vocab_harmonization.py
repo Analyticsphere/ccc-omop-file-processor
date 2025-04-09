@@ -1,3 +1,4 @@
+import gc
 import logging
 import sys
 
@@ -5,7 +6,6 @@ import core.constants as constants
 import core.gcp_services as gcp_services
 import core.transformer as transformer
 import core.utils as utils
-import gc
 
 
 class VocabHarmonizer:

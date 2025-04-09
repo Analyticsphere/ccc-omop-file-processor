@@ -1,7 +1,6 @@
 import os
 from enum import Enum
 
-
 DUCKDB_FORMAT_STRING = "(FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)"
 DUCKDB_MEMORY_LIMIT = "12GB"
 DUCKDB_MAX_SIZE = "5000GB"
@@ -28,10 +27,8 @@ DDL_PLACEHOLDER_STRING = "@cdmDatabaseSchema"
 
 SQL_PATH = "reference/sql/"
 CDM_UPGRADE_SCRIPT_PATH = f"{SQL_PATH}cdm_upgrade/"
-
-DERIVED_TABLE_PATH = f"{SQL_PATH}derived_tables/"
-
-OMOP_ETL_PATH = f"{SQL_PATH}omop_etl/"
+DERIVED_TABLE_SCRIPT_PATH = f"{SQL_PATH}derived_tables/"
+OMOP_ETL_SCRIPT_PATH = f"{SQL_PATH}omop_etl/"
 
 OPTIMIZED_VOCAB_FOLDER = "optimized"
 OPTIMIZED_VOCAB_FILE = "optimized_vocab_file"

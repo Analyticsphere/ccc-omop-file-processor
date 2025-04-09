@@ -35,7 +35,7 @@ class Transformer:
         """
         
         # Find the transform SQL file
-        transform_file = f"{constants.OMOP_ETL_PATH}{self.cdm_version}/{self.source_table}_to_{self.target_table}.sql"
+        transform_file = f"{constants.OMOP_ETL_SCRIPT_PATH}{self.cdm_version}/{self.source_table}_to_{self.target_table}.sql"
         
         # Read the transform SQL
         with open(transform_file, 'r') as f:
