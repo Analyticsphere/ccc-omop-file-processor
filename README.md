@@ -58,9 +58,9 @@ Set these variables in the Cloud Build trigger configuration:
 
 Adjust these settings in the `constants.py` file to match resouce allocations:
 
-- **`DUCKDB_MEMORY_LIMIT`**: Maximum memory for DuckDB (should be set to Cloud Run memory minus 2GB)
+- **`DUCKDB_MEMORY_LIMIT`**: Maximum memory for DuckDB (should be set to Cloud Run memory minus 2GB-4GB)
   ```
-  DUCKDB_MEMORY_LIMIT = "10GB"  # For a 12GB Cloud Run instance
+  DUCKDB_MEMORY_LIMIT = "12GB"  # For a 16GB Cloud Run instance
   ```
 - **`DUCKDB_THREADS`**: Number of concurrent threads (should never exceed CPU count). Lower the number of threads to reduce memory utilization and prevent out-of-memory errors.
   ```

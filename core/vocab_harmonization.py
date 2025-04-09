@@ -50,7 +50,8 @@ class VocabHarmonizer:
         gcs_path = f"{self.delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{self.source_table_name}"
         current_files = utils.list_gcs_files(self.bucket, gcs_path, constants.PARQUET)
         for file in current_files:
-            gcp_services.delete_gcs_file(f"{self.bucket}/{gcs_path}/{file}")
+            self.logger.warning(f"would have deleted {self.bucket}/{gcs_path}/{file}")
+            #gcp_services.delete_gcs_file(f"{self.bucket}/{gcs_path}/{file}")
 
         # List order is very important here!
         harmonization_steps: list = [constants.SOURCE_TARGET, constants.TARGET_REMAP, constants.TARGET_REPLACEMENT, constants.DOMAIN_CHECK]
