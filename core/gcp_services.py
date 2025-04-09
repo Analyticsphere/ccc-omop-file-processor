@@ -111,9 +111,9 @@ def get_bq_log_row(site: str, date_to_check: str) -> list:
         raise Exception(f"Failed to retrieve BigQuery pipeline logs for site '{site}' and date '{date_to_check}': {e}") from e
 
 
-def create_gcs_directory(directory_path: str) -> None:
+def create_gcs_directory(directory_path: str, delete_exisiting_files: bool = True) -> None:
     """Creates a directory in GCS by creating an empty blob.
-    If directory exists, deletes any existing files first.
+    If directory exists and delete_exisiting_files is True, deletes any existing files first.
     """
     bucket_name, _ = utils.get_bucket_and_delivery_date_from_gcs_path(directory_path) #directory_path.split('/')[0]
     blob_name = '/'.join(directory_path.split('/')[1:])
@@ -125,12 +125,13 @@ def create_gcs_directory(directory_path: str) -> None:
         # First check if directory exists and has files
         blobs = bucket.list_blobs(prefix=blob_name)
 
-        # Delete any existing files in the directory
-        for blob in blobs:
-            try:
-                bucket.blob(blob.name).delete()
-            except Exception as e:
-                utils.logger.error(f"Failed to delete file {blob.name}: {e}")
+        if delete_exisiting_files:
+            # Delete any existing files in the directory
+            for blob in blobs:
+                try:
+                    bucket.blob(blob.name).delete()
+                except Exception as e:
+                    utils.logger.error(f"Failed to delete file {blob.name}: {e}")
 
         # Create the directory marker
         blob = bucket.blob(blob_name)

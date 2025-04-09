@@ -31,8 +31,8 @@ class HarmonizationJobManager:
         bucket_name, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
         
         # Create status directory
-        status_dir = f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}job_status"
-        gcp_services.create_gcs_directory(f"{bucket_name}/{status_dir}")
+        status_dir = f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}job_status/"
+        gcp_services.create_gcs_directory(f"{bucket_name}/{status_dir}", delete_exisiting_files=False)
         
         # Define harmonization steps
         steps = [
