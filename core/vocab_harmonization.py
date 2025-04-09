@@ -482,18 +482,12 @@ class VocabHarmonizer:
             # Generate the transformed file
             omop_transformer.omop_to_omop_etl()
 
-            self.logger.info(f"WOULD Load harmonized data from {self.file_path} to {target_table}...")
-            #self.logger.info(f"Loading harmonized data from {self.file_path} to {target_table}...")
-            # Load the file to BQ; ETLed_FILE write type ensures append only
-            # gcp_services.load_parquet_to_bigquery(
-            #     file_path=f"gs://{omop_transformer.get_transformed_path()}",
-            #     project_id=self.project_id,
-            #     dataset_id=self.dataset_id,
-            #     table_name=target_table,
-            #     write_type=constants.BQWriteTypes.ETLed_FILE
-            # )
-
-            # self.logger.warning("ABOUT TO GARBAGE COLLECT!")
-            # gc.collect()
-            # self.logger.warning("!! DID GARBAGE COLLECT")
-
+            self.logger.info(f"Loading harmonized data from {self.file_path} to {target_table}...")
+            #Load the file to BQ; ETLed_FILE write type ensures append only
+            gcp_services.load_parquet_to_bigquery(
+                file_path=f"gs://{omop_transformer.get_transformed_path()}",
+                project_id=self.project_id,
+                dataset_id=self.dataset_id,
+                table_name=target_table,
+                write_type=constants.BQWriteTypes.ETLed_FILE
+            )

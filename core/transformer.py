@@ -175,18 +175,18 @@ class Transformer:
         # Replace placeholder table strings with paths to Parquet files
         final_sql = self.placeholder_to_file_path(select_sql)
 
-        # transform_sql = f"""
-        #     COPY (
-        #         {final_sql}
-        #         WHERE target_table = '{self.target_table}'
-        #     ) TO 'gs://{self.get_transformed_path()}' {constants.DUCKDB_FORMAT_STRING}
-        # """
         transform_sql = f"""
             COPY (
                 {final_sql}
                 WHERE target_table = '{self.target_table}'
-            ) TO 'gs://{self.get_transformed_path()}' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1, PER_THREAD_OUTPUT)
+            ) TO 'gs://{self.get_transformed_path()}' {constants.DUCKDB_FORMAT_STRING}
         """
+        # transform_sql = f"""
+        #     COPY (
+        #         {final_sql}
+        #         WHERE target_table = '{self.target_table}'
+        #     ) TO 'gs://{self.get_transformed_path()}' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1, PER_THREAD_OUTPUT)
+        # """
 
         return transform_sql
 
@@ -203,7 +203,7 @@ class Transformer:
         self.logger.warning(f"DID execute DuckDB ETL SQL")
         # Resolve duplicate primary keys within a single 'table part' file
         # TODO: Make this global across ALL table parts
-        #self.handle_duplicate_primary_keys()
+        self.handle_duplicate_primary_keys()
 
 
     def placeholder_to_file_path(self, sql: str) -> str:
