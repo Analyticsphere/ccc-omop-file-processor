@@ -203,7 +203,8 @@ class Transformer:
         self.logger.warning(f"DID execute DuckDB ETL SQL")
         # Resolve duplicate primary keys within a single 'table part' file
         # TODO: Make this global across ALL table parts
-        self.handle_duplicate_primary_keys()
+        
+        #self.handle_duplicate_primary_keys()
 
 
     def placeholder_to_file_path(self, sql: str) -> str:
