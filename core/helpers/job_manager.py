@@ -167,7 +167,8 @@ class HarmonizationJobManager:
                     gcs_path = f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{vocab_harmonizer.source_table_name}"
                     existing_files = utils.list_gcs_files(bucket_name, gcs_path, constants.PARQUET)
                     for file in existing_files:
-                        gcp_services.delete_gcs_file(f"{gcs_path}/{file}")
+                        utils.logger.warning(f"IN JOB MANAGER and would have deleted OLD PATH: {gcs_path}/{file} NEW PATH: {bucket}/{gcs_path}/{file}")
+                        #gcp_services.delete_gcs_file(f"{gcs_path}/{file}")
                 
                 # Process the current step
                 if current_step == constants.SOURCE_TARGET:
