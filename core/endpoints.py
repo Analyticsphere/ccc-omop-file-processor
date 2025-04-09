@@ -281,97 +281,173 @@ def harmonize_vocab() -> tuple[Any, int]:
     dataset_id: Optional[str] = data.get('dataset_id')
 
     if not all([file_path, vocab_version, vocab_gcs_bucket, omop_version, site, project_id, dataset_id]):
-        return "Missing a required parameter to 'harmonize_vocab' endpoint. Required: file_path, vocab_version, vocab_gcs_bucket, omop_version, site, project_id, dataset_id", 400
+        return "Missing required parameters", 400
 
     try:
-        # Generate a unique job ID
+        # Generate job ID
         job_id = str(uuid.uuid4())
-        
-        # Get bucket information for storing status
         bucket_name, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
         
-        # Ensure the harmonization job status directory exists
+        # Create status directory
         status_dir = f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}job_status"
         gcp_services.create_gcs_directory(f"{bucket_name}/{status_dir}")
         
-        # Create initial status file
+        # Create initial status file with all parameters needed for processing
         status_file_path = f"{status_dir}/{job_id}.json"
         status_data = {
             "job_id": job_id,
-            "status": "running",
+            "status": "queued",
             "file_path": file_path,
+            "vocab_version": vocab_version,
+            "vocab_gcs_bucket": vocab_gcs_bucket,
+            "omop_version": omop_version,
+            "site": site,
+            "project_id": project_id,
+            "dataset_id": dataset_id,
             "start_time": datetime.utcnow().isoformat(),
-            "end_time": None,
+            "current_step": "init",
+            "current_step_index": 0,
+            "steps": [
+                constants.SOURCE_TARGET,
+                constants.TARGET_REMAP,
+                constants.TARGET_REPLACEMENT, 
+                constants.DOMAIN_CHECK,
+                "omop_etl"
+            ],
             "error": None
         }
         
-        # Save initial status
+        # Save job data
         storage_client = storage.Client()
         bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(status_file_path)
+        blob = bucket.blob(status_file_path) 
         blob.upload_from_string(json.dumps(status_data), content_type="application/json")
         
-        # Define the harmonization function to run in the thread pool
-        def run_harmonization(job_id, file_path, cdm_version, site, vocab_version, vocab_gcs_bucket, project_id, dataset_id):
-            try:
-                utils.logger.info(f"Starting harmonization for job {job_id} - {file_path}")
-                
-                # Create VocabHarmonizer and run harmonization
-                vocab_harmonizer = vh.VocabHarmonizer(
-                    file_path=file_path,
-                    cdm_version=cdm_version,
-                    site=site,
-                    vocab_version=vocab_version,
-                    vocab_gcs_bucket=vocab_gcs_bucket,
-                    project_id=project_id,
-                    dataset_id=dataset_id
-                )
-                
-                # Perform the harmonization
-                vocab_harmonizer.harmonize()
-                
-                # Update status to completed
-                status_data["status"] = "completed"
-                status_data["end_time"] = datetime.utcnow().isoformat()
-                blob.upload_from_string(json.dumps(status_data), content_type="application/json")
-                
-                utils.logger.info(f"Harmonization job {job_id} completed successfully")
-                return True
-            except Exception as e:
-                utils.logger.error(f"Harmonization job {job_id} failed: {str(e)}")
-                
-                # Update status to error
-                status_data["status"] = "error"
-                status_data["end_time"] = datetime.utcnow().isoformat()
-                status_data["error"] = str(e)
-                blob.upload_from_string(json.dumps(status_data), content_type="application/json")
-                return False
-        
-        # Submit the harmonization job to the thread pool
-        harmonization_executor.submit(
-            run_harmonization,
-            job_id,
-            file_path,
-            omop_version,
-            site,
-            vocab_version,
-            vocab_gcs_bucket,
-            project_id,
-            dataset_id
-        )
-        
-        # Return immediately with a 202 Accepted status
+        # Return immediately with job ID for polling
         return jsonify({
             "job_id": job_id,
-            "status": "accepted",
+            "status": "queued",
             "bucket": bucket_name,
             "delivery_date": delivery_date,
-            "message": f"Vocabulary harmonization job started for {file_path}"
+            "message": f"Vocabulary harmonization job queued for {file_path}"
         }), 202
         
     except Exception as e:
-        utils.logger.error(f"Unable to start harmonization for {file_path}: {str(e)}")
-        return f"Unable to start harmonization: {str(e)}", 500
+        utils.logger.error(f"Error setting up harmonization job: {str(e)}")
+        return f"Error: {str(e)}", 500
+
+
+@app.route('/harmonize_vocab_process_step', methods=['POST'])
+def harmonize_vocab_process_step() -> tuple[Any, int]:
+    data = request.get_json() or {}
+    job_id = data.get('job_id')
+    bucket_name = data.get('bucket')
+    delivery_date = data.get('delivery_date')
+    
+    if not all([job_id, bucket_name, delivery_date]):
+        return "Missing required parameters", 400
+        
+    try:
+        # Get job status
+        status_path = f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}job_status/{job_id}.json"
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(status_path)
+        
+        if not blob.exists():
+            return f"Job {job_id} not found", 404
+            
+        # Load job data
+        job_data = json.loads(blob.download_as_string())
+        
+        # If job already completed or errored, return status
+        if job_data['status'] in ['completed', 'error']:
+            return jsonify(job_data), 200
+            
+        # Update status to running if it was queued
+        if job_data['status'] == 'queued':
+            job_data['status'] = 'running'
+            
+        # Get current step and index
+        current_step_index = job_data['current_step_index']
+        steps = job_data['steps']
+        
+        # Check if all steps are complete
+        if current_step_index >= len(steps):
+            job_data['status'] = 'completed'
+            job_data['end_time'] = datetime.utcnow().isoformat()
+            blob.upload_from_string(json.dumps(job_data), content_type="application/json")
+            return jsonify(job_data), 200
+            
+        # Get the current step to execute
+        current_step = steps[current_step_index]
+        job_data['current_step'] = current_step
+        
+        # Initialize harmonizer with job parameters
+        utils.logger.info(f"Job {job_id}: Processing step {current_step_index+1}/{len(steps)}: {current_step}")
+        vocab_harmonizer = vh.VocabHarmonizer(
+            file_path=job_data['file_path'],
+            cdm_version=job_data['omop_version'],
+            site=job_data['site'],
+            vocab_version=job_data['vocab_version'],
+            vocab_gcs_bucket=job_data['vocab_gcs_bucket'],
+            project_id=job_data['project_id'],
+            dataset_id=job_data['dataset_id']
+        )
+        
+        # Execute step based on its type
+        try:
+            if current_step_index == 0:
+                # Clean up existing files on first step
+                gcs_path = f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{vocab_harmonizer.source_table_name}"
+                existing_files = utils.list_gcs_files(bucket_name, gcs_path, constants.PARQUET)
+                for file in existing_files:
+                    gcp_services.delete_gcs_file(f"{gcs_path}/{file}")
+            
+            # Process the current step
+            if current_step == constants.SOURCE_TARGET:
+                vocab_harmonizer.source_target_remapping()
+            elif current_step == constants.DOMAIN_CHECK:
+                vocab_harmonizer.domain_table_check()
+            elif current_step == constants.TARGET_REMAP:
+                vocab_harmonizer.check_new_targets(constants.TARGET_REMAP)
+            elif current_step == constants.TARGET_REPLACEMENT:
+                vocab_harmonizer.check_new_targets(constants.TARGET_REPLACEMENT)
+            elif current_step == "omop_etl":
+                vocab_harmonizer.omop_etl()
+            else:
+                raise Exception(f"Unknown step: {current_step}")
+                
+            # Update job progress
+            job_data['current_step_index'] = current_step_index + 1
+            job_data['last_step_completed'] = current_step
+            job_data['last_updated'] = datetime.utcnow().isoformat()
+            blob.upload_from_string(json.dumps(job_data), content_type="application/json")
+            
+            return jsonify({
+                "job_id": job_id,
+                "status": "running",
+                "current_step": current_step,
+                "progress": f"{current_step_index + 1}/{len(steps)}"
+            }), 200
+            
+        except Exception as e:
+            # Log and save error
+            utils.logger.error(f"Job {job_id} failed at step {current_step}: {str(e)}")
+            job_data['status'] = 'error'
+            job_data['error'] = f"Failed at step {current_step}: {str(e)}"
+            job_data['end_time'] = datetime.utcnow().isoformat()
+            blob.upload_from_string(json.dumps(job_data), content_type="application/json")
+            
+            return jsonify({
+                "job_id": job_id,
+                "status": "error",
+                "step": current_step,
+                "error": str(e)
+            }), 500
+    
+    except Exception as e:
+        return f"Error processing step: {str(e)}", 500
 
 
 @app.route('/harmonize_vocab_status', methods=['GET'])
