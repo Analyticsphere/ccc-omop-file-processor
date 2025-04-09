@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from google.cloud import storage
+from google.cloud import storage # type: ignore
 
 import core.constants as constants
 import core.gcp_services as gcp_services
