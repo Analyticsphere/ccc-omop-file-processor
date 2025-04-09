@@ -40,7 +40,7 @@ class HarmonizationJobManager:
             constants.TARGET_REMAP,
             constants.TARGET_REPLACEMENT, 
             constants.DOMAIN_CHECK,
-            "omop_etl"
+            constants.OMOP_ETL
         ]
         
         # Create job status file
@@ -162,13 +162,13 @@ class HarmonizationJobManager:
             
             # Execute step based on its type
             try:
-                if current_step_index == 0:
-                    # Clean up existing files on first step
-                    gcs_path = f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{vocab_harmonizer.source_table_name}"
-                    existing_files = utils.list_gcs_files(bucket_name, gcs_path, constants.PARQUET)
-                    for file in existing_files:
-                        utils.logger.warning(f"IN JOB MANAGER and would have deleted OLD PATH: {gcs_path}/{file} NEW PATH: {bucket}/{gcs_path}/{file}")
-                        #gcp_services.delete_gcs_file(f"{gcs_path}/{file}")
+                # if current_step_index == 0:
+                #     # Clean up existing files on first step
+                #     gcs_path = f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{vocab_harmonizer.source_table_name}"
+                #     existing_files = utils.list_gcs_files(bucket_name, gcs_path, constants.PARQUET)
+                #     for file in existing_files:
+                #         utils.logger.warning(f"IN JOB MANAGER and would have deleted OLD PATH: {gcs_path}/{file} NEW PATH: {bucket}/{gcs_path}/{file}")
+                #         #gcp_services.delete_gcs_file(f"{gcs_path}/{file}")
                 
                 # Process the current step
                 if current_step == constants.SOURCE_TARGET:
@@ -179,7 +179,7 @@ class HarmonizationJobManager:
                     vocab_harmonizer.check_new_targets(constants.TARGET_REMAP)
                 elif current_step == constants.TARGET_REPLACEMENT:
                     vocab_harmonizer.check_new_targets(constants.TARGET_REPLACEMENT)
-                elif current_step == "omop_etl":
+                elif current_step == constants.OMOP_ETL:
                     vocab_harmonizer.omop_etl()
                 else:
                     raise Exception(f"Unknown step: {current_step}")

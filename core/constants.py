@@ -52,8 +52,6 @@ class BQWriteTypes(str, Enum):
     ETLed_FILE = "ETLed_file"
     PROCESSED_FILE = "processed_file"
 
-
-
 CONDITION_ERA = "condition_era"
 DRUG_ERA = "drug_era"
 OBSERVATION_PERIOD = "observation_period"
@@ -199,6 +197,7 @@ SOURCE_TARGET = "Map source concepts to a updated target codes"
 DOMAIN_CHECK = "Check for latest domain and update if needed"
 TARGET_REMAP = "Remap non-standard targets to new standard targets"
 TARGET_REPLACEMENT = "Replace non-standard targets with new standard targets"
+OMOP_ETL = "OMOP to OMOP structure transformation"
 
 # Primary key column can be found in schema.json file
 NATURAL_KEY_TABLES = [
