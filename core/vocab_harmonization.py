@@ -493,7 +493,7 @@ class VocabHarmonizer:
             #     write_type=constants.BQWriteTypes.ETLed_FILE
             # )
 
-            self.logger.warning("ABOUT TO GARBAGE COLLECT!")
-            gc.collect()
-            self.logger.warning("!! DID GARBAGE COLLECT")
+            # self.logger.warning("ABOUT TO GARBAGE COLLECT!")
+            # gc.collect()
+            # self.logger.warning("!! DID GARBAGE COLLECT")
 
