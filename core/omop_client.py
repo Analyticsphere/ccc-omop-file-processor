@@ -261,12 +261,12 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
         #   1) SQL statements that iteratively creates tables to derive drug_era records. Creating tables offloads data from memory to disk.
         #   2) Performs a final select statement against "last" temp table
         if table_name == constants.DRUG_ERA:
-            create_statement_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}_create.sql"
+            create_statement_path = f"{constants.DERIVED_TABLE_SCRIPT_PATH}{sql_script_name}_create.sql"
             with open(create_statement_path, 'r') as f:
                 create_statement_raw = f.read()
             create_statement = utils.placeholder_to_file_path(site, site_bucket, delivery_date, create_statement_raw, vocab_version, vocab_gcs_bucket)
 
-        sql_path = f"{constants.DERIVED_TABLE_PATH}{sql_script_name}.sql"
+        sql_path = f"{constants.DERIVED_TABLE_SCRIPT_PATH}{sql_script_name}.sql"
         with open(sql_path, 'r') as f:
             select_statement_raw = f.read()
 

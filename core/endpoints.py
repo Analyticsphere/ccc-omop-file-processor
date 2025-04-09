@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 from flask import Flask, jsonify, request  # type: ignore
 
@@ -10,9 +10,8 @@ import core.file_validation as file_validation
 import core.gcp_services as gcp_services
 import core.helpers.pipeline_log as pipeline_log
 import core.omop_client as omop_client
-import core.transformer as transformer
 import core.utils as utils
-import core.vocab_harmonization as vh
+from core.helpers.job_manager import HarmonizationJobManager
 
 app = Flask(__name__)
 
@@ -30,14 +29,16 @@ def heartbeat() -> tuple[Any, int]:
 @app.route('/create_optimized_vocab', methods=['POST'])
 def create_optimized_vocab() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
-    vocab_version: str = data.get('vocab_version', '')
-    #vocab_gcs_bucket: str = data.get('vocab_gcs_bucket', '')
+    vocab_version: Optional[str] = data.get('vocab_version')
     vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
 
     if not all([vocab_version, vocab_gcs_bucket]):
         return "Missing a required parameter to 'create_optimized_vocab' endpoint. Required: vocab_version, vocab_gcs_bucket", 400
 
     try:
+        # At this point, we know vocab_version is not None
+        assert vocab_version is not None
+        
         omop_client.convert_vocab_to_parquet(vocab_version, vocab_gcs_bucket)
         omop_client.create_optimized_vocab_file(vocab_version, vocab_gcs_bucket)
 
@@ -84,6 +85,10 @@ def get_log_row() -> tuple[Any, int]:
         return "Missing a required parameter to 'get_log_row' endpoint. Required: site, delivery_date", 400
     
     try:
+        # At this point, we know site and delivery_date are not None
+        assert site is not None
+        assert delivery_date is not None
+        
         log_row: list[str] = gcp_services.get_bq_log_row(site, delivery_date)
         return jsonify({
             'status': 'healthy',
@@ -106,6 +111,11 @@ def get_files() -> tuple[Any, int]:
         return "Missing a required parameter to 'get_file_list' endpoint. Required: bucket, folder, file_format", 400
 
     try:
+        # At this point we know these are not None
+        assert bucket is not None
+        assert folder is not None
+        assert file_format is not None
+        
         file_list: list[str] = utils.list_gcs_files(bucket, folder, file_format)
 
         return jsonify({
@@ -128,6 +138,10 @@ def process_file() -> tuple[str, int]:
         return "Missing a required parameter to 'process_incoming_file' endpoint. Required: file_type, file_path", 400
 
     try:
+        # At this point we know these are not None
+        assert file_type is not None
+        assert file_path is not None
+        
         file_processor.process_incoming_file(file_type, file_path)    
         return "Converted file to Parquet", 200
     except Exception as e:
@@ -151,7 +165,12 @@ def validate_file() -> tuple[str, int]:
         if not all([file_path, omop_version, delivery_date, gcs_path]):
             return "Missing a required parameter to 'validate_file' endpoint. Required: file_path, omop_version, delivery_date, gcs_path", 400
 
-        # Use empty string as default for optional params
+        # At this point we know these are not None
+        assert file_path is not None
+        assert omop_version is not None
+        assert delivery_date is not None
+        assert gcs_path is not None
+        
         file_validation.validate_file(
             file_path=file_path, 
             omop_version=omop_version, 
@@ -176,9 +195,12 @@ def normalize_parquet_file() -> tuple[str, int]:
     if not all([file_path, omop_version]):
         return "Missing a required parameter to 'normalize_parquet' endpoint. Required: file_path, omop_version", 400
 
-    parquet_file_path: str = utils.get_parquet_artifact_location(file_path)
-
     try:
+        # At this point we know these are not None
+        assert file_path is not None
+        assert omop_version is not None
+        
+        parquet_file_path: str = utils.get_parquet_artifact_location(file_path)
         utils.logger.info(f"Attempting to normalize Parquet file {parquet_file_path}")
         file_processor.normalize_file(parquet_file_path, omop_version)
 
@@ -199,6 +221,11 @@ def cdm_upgrade() -> tuple[str, int]:
         return "Missing a required parameter to 'upgrade_cdm' endpoint. Required: file_path, omop_version, target_omop_version", 400
 
     try:
+        # At this point we know these are not None
+        assert file_path is not None
+        assert omop_version is not None
+        assert target_omop_version is not None
+        
         utils.logger.info(f"Attempting to upgrade file {file_path}")
         omop_client.upgrade_file(file_path, omop_version, target_omop_version)
 
@@ -218,6 +245,10 @@ def clear_bq_tables() -> tuple[str, int]:
         return "Missing a required parameter to 'clear_bq_dataset' endpoint. Required: project_id, dataset_id", 400
 
     try:
+        # At this point we know these are not None
+        assert project_id is not None
+        assert dataset_id is not None
+        
         utils.logger.info(f"Removing all tables from {project_id}.{dataset_id}")
         gcp_services.remove_all_tables(project_id, dataset_id)
 
@@ -228,7 +259,7 @@ def clear_bq_tables() -> tuple[str, int]:
 
 
 @app.route('/harmonize_vocab', methods=['POST'])
-def harmonize_vocab() -> tuple[str, int]:
+def harmonize_vocab() -> tuple[Any, int]:
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     vocab_version: Optional[str] = data.get('vocab_version')
@@ -243,8 +274,17 @@ def harmonize_vocab() -> tuple[str, int]:
 
     try:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}")
-
-        vocab_harmonizer = vh.VocabHarmonizer(
+        
+        # At this point we know these are not None
+        assert file_path is not None
+        assert vocab_version is not None
+        assert omop_version is not None
+        assert site is not None
+        assert project_id is not None
+        assert dataset_id is not None
+        
+        # Create a new harmonization job
+        job_info = HarmonizationJobManager.create_job(
             file_path=file_path,
             cdm_version=omop_version,
             site=site,
@@ -253,12 +293,84 @@ def harmonize_vocab() -> tuple[str, int]:
             project_id=project_id,
             dataset_id=dataset_id
         )
-        vocab_harmonizer.harmonize()
         
-        return f"Vocabulary harmonized to {vocab_version}", 200
+        # Return job info with 202 Accepted status
+        return jsonify(job_info), 202
+        
     except Exception as e:
-        utils.logger.error(f"Unable to harmonize vocabulary: {str(e)}")
-        return f"Unable to harmonize vocabulary: {str(e)}", 500
+        utils.logger.error(f"Unable to harmonize vocabulary of {file_path}: {str(e)}")
+        return f"Unable to harmonize vocabulary of {file_path}: {str(e)}", 500
+
+
+@app.route('/harmonize_vocab_status', methods=['GET'])
+def harmonize_vocab_status() -> tuple[Any, int]:
+    job_id: Optional[str] = request.args.get('job_id')
+    bucket_name: Optional[str] = request.args.get('bucket')
+    delivery_date: Optional[str] = request.args.get('delivery_date')
+
+    if not all([job_id, bucket_name, delivery_date]):
+        return "Missing a required parameter to 'harmonize_vocab_status' endpoint. Required: job_id, bucket, delivery_date", 400
+
+    try:
+        # At this point we know these are not None
+        assert job_id is not None
+        assert bucket_name is not None
+        assert delivery_date is not None
+        
+        # Get job status
+        job_status = HarmonizationJobManager.get_job_status(job_id, bucket_name, delivery_date)
+        
+        # Return appropriate status code based on job status
+        if job_status.get('status') == 'not_found':
+            return jsonify(job_status), 404
+        elif job_status.get('status') == 'error':
+            return jsonify(job_status), 500
+        elif job_status.get('status') == 'completed':
+            return jsonify(job_status), 200
+        else:
+            return jsonify(job_status), 202
+            
+    except Exception as e:
+        utils.logger.error(f"Error checking status for job {job_id}: {str(e)}")
+        return jsonify({
+            "error": f"Error checking status: {str(e)}"
+        }), 500
+
+
+@app.route('/harmonize_vocab_process_step', methods=['POST'])
+def harmonize_vocab_process_step() -> tuple[Any, int]:
+    data = request.get_json() or {}
+    job_id = data.get('job_id')
+    bucket_name = data.get('bucket')
+    delivery_date = data.get('delivery_date')
+    
+    if not all([job_id, bucket_name, delivery_date]):
+        return "Missing required parameters to 'harmonize_vocab_process_step' endpoint. Required: job_id, bucket, delivery_date", 400
+        
+    try:
+        # At this point we know these are not None
+        assert job_id is not None
+        assert bucket_name is not None
+        assert delivery_date is not None
+        
+        # Process a single job step
+        result = HarmonizationJobManager.process_job_step(job_id, bucket_name, delivery_date)
+        
+        # Return appropriate status code based on result
+        if result.get('status') == 'not_found':
+            return jsonify(result), 404
+        elif result.get('status') == 'error':
+            return jsonify(result), 500
+        elif result.get('status') == 'completed':
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 200
+            
+    except Exception as e:
+        utils.logger.error(f"Error processing step for job {job_id}: {str(e)}")
+        return jsonify({
+            "error": f"Error processing step: {str(e)}"
+        }), 500
 
 
 @app.route('/populate_derived_data', methods=['POST'])
@@ -277,6 +389,15 @@ def populate_dervied_data_table() -> tuple[str, int]:
         return "Missing a required parameter to 'populate_derived_data' endpoint. Required: site, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket, site_bucket", 400
 
     try:
+        # At this point we know these are not None
+        assert site is not None
+        assert site_bucket is not None
+        assert delivery_date is not None
+        assert table_name is not None
+        assert project_id is not None
+        assert dataset_id is not None
+        assert vocab_version is not None
+        
         utils.logger.info(f"Generating derived table {table_name} for {delivery_date} delivery from {site}")
         omop_client.generate_derived_data(site, site_bucket, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket)
         return "Created derived table", 200
@@ -297,7 +418,13 @@ def target_vocab_to_bq() -> tuple[str, int]:
     if not all([vocab_version, vocab_gcs_bucket, project_id, dataset_id, table_file_name]):
         return "Missing a required parameter to 'load_target_vocab' endpoint. Required: vocab_version, vocab_gcs_bucket, project_id, dataset_id, table_file_name", 400
     try:
-        omop_client.load_vocabulary_table(vocab_version, vocab_gcs_bucket, table_file_name,project_id,dataset_id)
+        # At this point we know these are not None
+        assert vocab_version is not None
+        assert table_file_name is not None
+        assert project_id is not None
+        assert dataset_id is not None
+        
+        omop_client.load_vocabulary_table(vocab_version, vocab_gcs_bucket, table_file_name, project_id, dataset_id)
 
         return f"Successfully loaded vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}", 200
     except Exception as e:
@@ -318,13 +445,20 @@ def parquet_gcs_to_bq() -> tuple[str, int]:
         return "Missing a required parameter to 'parquet_to_bq' endpoint. Required: file_path, project_id, dataset_id, write_type, table_name", 400
     
     try:
-        write_type = constants.BQWriteTypes(write_type)
+        # At this point we know these are not None
+        assert file_path is not None
+        assert project_id is not None
+        assert dataset_id is not None
+        assert table_name is not None
+        assert write_type is not None
+        
+        write_disposition = constants.BQWriteTypes(write_type)
     except ValueError:
-        return f"Invalid write_disposwrite_typeition: {write_type}. Valid values are: {[e.value for e in constants.BQWriteTypes]}", 400
+        return f"Invalid write_disposition: {write_type}. Valid values are: {[e.value for e in constants.BQWriteTypes]}", 400
 
     try:
-        utils.logger.info(f"Attempting to load file {file_path} to {project_id}.{dataset_id} using {write_type.value} method")
-        gcp_services.load_parquet_to_bigquery(file_path, project_id, dataset_id, table_name, write_type)
+        utils.logger.info(f"Attempting to load file {file_path} to {project_id}.{dataset_id} using {write_disposition.value} method")
+        gcp_services.load_parquet_to_bigquery(file_path, project_id, dataset_id, table_name, write_disposition)
 
         return "Loaded Parquet file to BigQuery", 200
     except Exception as e:
@@ -361,6 +495,11 @@ def create_missing_omop_tables() -> tuple[str, int]:
         return "Missing a required parameter to 'create_missing_tables' endpoint. Required: project_id, dataset_id, omop_version", 400
 
     try:
+        # At this point we know these are not None
+        assert project_id is not None
+        assert dataset_id is not None
+        assert omop_version is not None
+        
         utils.logger.info(f"Creating any missing v{omop_version} tables in {project_id}.{dataset_id}")
         omop_client.create_missing_tables(project_id, dataset_id, omop_version)
 
@@ -405,15 +544,21 @@ def log_pipeline_state() -> tuple:
         if not all([site_name, delivery_date, status, run_id]):
             return "Missing a required parameter to 'pipeline_log' endpoint. Required: site_name, delivery_date, status, run_id", 400
 
+        # At this point we know these are not None
+        assert site_name is not None
+        assert delivery_date is not None
+        assert status is not None
+        assert run_id is not None
+        
         pipeline_logger = pipeline_log.PipelineLog(
             logging_table,
-            cast(str, site_name),
-            cast(str, delivery_date),
-            cast(str, status),
+            site_name,
+            delivery_date,
+            status,
             message,  # Optional parameters don't need casting
             file_type,
             omop_version,
-            cast(str, run_id)
+            run_id
         )
         pipeline_logger.add_log_entry()
 

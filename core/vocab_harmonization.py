@@ -39,27 +39,6 @@ class VocabHarmonizer:
         self.logger = logging.getLogger(__name__)
 
 
-    def harmonize(self) -> None:
-        """
-        Harmonize a parquet file by applying defined harmonization steps and saving the result.
-        """
-
-        # Delete all harminzation files within GCS folder, if they exist
-        # Necessary because the task may fail and retry in Airflow, leaving some files behind
-        current_files = utils.list_gcs_files(self.bucket, f"{self.delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{self.source_table_name}", constants.PARQUET)
-        for file in current_files:
-            gcp_services.delete_gcs_file(file)
-
-        # List order is very important here!
-        harmonization_steps: list = [constants.SOURCE_TARGET, constants.TARGET_REMAP, constants.TARGET_REPLACEMENT, constants.DOMAIN_CHECK]
-
-        for step in harmonization_steps:
-            self.perform_harmonization(step)
-
-        # After finding new targets and domain, partition file based on target OMOP table
-        self.omop_etl()
-
-
     def perform_harmonization(self, step: str) -> None:
         """
         Perform a specific harmonization step.
@@ -456,7 +435,7 @@ class VocabHarmonizer:
 
 
     def omop_etl(self) -> None:
-        self.logger.info(f"Partitioning table {self.source_table_name} for {self.file_path} to appropriate target table(s)")
+        self.logger.info(f"Partitioning and ETLing source file {self.file_path} to appropriate target table(s)")
 
         # Find all target tables in the source file
         conn, local_db_file = utils.create_duckdb_connection()
@@ -480,7 +459,8 @@ class VocabHarmonizer:
             # Generate the transformed file
             omop_transformer.omop_to_omop_etl()
 
-            # Load the file to BQ; ETLed_FILE write type ensures append only
+            self.logger.info(f"Loading harmonized data from {self.file_path} to {target_table}...")
+            #Load the file to BQ; ETLed_FILE write type ensures append only
             gcp_services.load_parquet_to_bigquery(
                 file_path=f"gs://{omop_transformer.get_transformed_path()}",
                 project_id=self.project_id,
@@ -488,4 +468,3 @@ class VocabHarmonizer:
                 table_name=target_table,
                 write_type=constants.BQWriteTypes.ETLed_FILE
             )
-

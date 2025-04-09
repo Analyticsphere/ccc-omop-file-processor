@@ -35,7 +35,7 @@ class Transformer:
         """
         
         # Find the transform SQL file
-        transform_file = f"{constants.OMOP_ETL_PATH}{self.cdm_version}/{self.source_table}_to_{self.target_table}.sql"
+        transform_file = f"{constants.OMOP_ETL_SCRIPT_PATH}{self.cdm_version}/{self.source_table}_to_{self.target_table}.sql"
         
         # Read the transform SQL
         with open(transform_file, 'r') as f:
@@ -196,7 +196,7 @@ class Transformer:
 
         # Resolve duplicate primary keys within a single 'table part' file
         # TODO: Make this global across ALL table parts
-        self.handle_duplicate_primary_keys()
+        self.handle_duplicate_surrogate_primary_keys()
 
 
     def placeholder_to_file_path(self, sql: str) -> str:
@@ -212,7 +212,7 @@ class Transformer:
         return replacement_result
 
 
-    def handle_duplicate_primary_keys(self) -> None:
+    def handle_duplicate_surrogate_primary_keys(self) -> None:
         """
         Among tables with surrogate keys, checks for duplicate primary keys in the transformed parquet file 
         and replaces them with new deterministic keys.
@@ -228,69 +228,105 @@ class Transformer:
         This ensures that the new keys are deterministic (same input always gives same output)
         and unique across the table.
         """
-        if self.target_table in constants.SURROGATE_KEY_TABLES:
-            # Get the path to the transformed parquet file
-            transformed_file_path = f"gs://{self.get_transformed_path()}"
-            
-            # Identify primary key column of the target table
-            primary_key_column = utils.get_primary_key_column(self.target_table, self.cdm_version)
-            
-            if not primary_key_column:
-                self.logger.warning(f"No primary key column defined for table {self.target_table}. Skipping duplicate check.")
-                return
-            
-            # Load the target table schema to get the type of the primary key column
-            schema = utils.get_table_schema(self.target_table, self.cdm_version)
-            if self.target_table not in schema:
-                self.logger.warning(f"Schema not found for table {self.target_table}. Skipping duplicate check.")
-                return
+        if self.target_table not in constants.SURROGATE_KEY_TABLES:
+            self.logger.info(f"Table {self.target_table} does not use surrogate keys. Skipping duplicate check.")
+            return
                 
-            target_columns_dict = schema[self.target_table]["columns"]
+        transformed_file_path = f"gs://{self.get_transformed_path()}"
+        
+        # Identify primary key column
+        primary_key_column = utils.get_primary_key_column(self.target_table, self.cdm_version)
+        if not primary_key_column:
+            self.logger.info(f"No primary key column defined for table {self.target_table}. Skipping duplicate check.")
+            return
+        
+        # Get primary key data type
+        schema = utils.get_table_schema(self.target_table, self.cdm_version)
+        if self.target_table not in schema:
+            self.logger.error(f"Schema not found for table {self.target_table}. Skipping duplicate check.")
+            return
+        
+        target_columns_dict = schema[self.target_table]["columns"]
+        if primary_key_column not in target_columns_dict:
+            self.logger.error(f"Primary key column {primary_key_column} not found in schema. Skipping duplicate check.")
+            return
             
-            if primary_key_column not in target_columns_dict:
-                self.logger.warning(f"Primary key column {primary_key_column} not found in schema for table {self.target_table}. Skipping duplicate check.")
-                return
-                
-            primary_key_type = target_columns_dict[primary_key_column]['type']
+        primary_key_type = target_columns_dict[primary_key_column]['type']
+        
+        try:
+            conn, local_db_file = utils.create_duckdb_connection()
             
-            # SQL to fix duplicates
-            fix_sql = f"""
-            -- Create a temporary table to store duplicate detection results
-            CREATE TEMPORARY TABLE duplicate_keys AS
-            SELECT {primary_key_column}
-            FROM '{transformed_file_path}'
-            GROUP BY {primary_key_column}
-            HAVING COUNT(*) > 1;
-            
-            -- Create a temporary table to store the data with row numbers
-            CREATE TEMPORARY TABLE data_with_row_nums AS
-            SELECT t.*, 
-                CASE 
-                    WHEN d.{primary_key_column} IS NOT NULL THEN ROW_NUMBER() OVER (PARTITION BY t.{primary_key_column})
-                    ELSE 1
-                END AS row_id
-            FROM '{transformed_file_path}' t
-            LEFT JOIN duplicate_keys d ON t.{primary_key_column} = d.{primary_key_column};
-            
-            -- Create a temporary table with the new primary keys
-            CREATE TEMPORARY TABLE data_with_new_keys AS
-            SELECT 
-                CASE 
-                    WHEN row_id = 1 THEN {primary_key_column}  -- Keep first instance unchanged
-                    ELSE CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(row_id AS VARCHAR))) % 9223372036854775807 AS {primary_key_type})  -- Generate new key for duplicates
-                END AS new_primary_key,
-                *
-            FROM data_with_row_nums;
-            
-            -- Write the fixed data back to the original file (replacing old primary key with new one)
-            COPY (
+            with conn:
+                # Step 1: Check if duplicates exist at all
+                check_sql = f"""
                 SELECT 
-                    new_primary_key AS {primary_key_column},
-                    * EXCLUDE (new_primary_key, row_id, {primary_key_column})
-                FROM data_with_new_keys
-            ) TO '{transformed_file_path}' {constants.DUCKDB_FORMAT_STRING};
-            """
-            
-            # Execute the SQL to handle duplicates
-            utils.execute_duckdb_sql(fix_sql, f"Unable to handle duplicate primary keys in {self.target_table}")
+                    {primary_key_column}, 
+                    COUNT(*) as dup_count
+                FROM '{transformed_file_path}'
+                GROUP BY {primary_key_column}
+                HAVING COUNT(*) > 1
+                LIMIT 1;
+                """
+                
+                duplicates = conn.execute(check_sql).fetchall()
+                
+                if not duplicates:
+                    self.logger.info(f"No duplicate primary keys found in {self.target_table}. Skipping fix.")
+                    return
+                
+                self.logger.info(f"Found duplicate primary keys in {self.target_table}. Fixing...")
+                
+                # Step 2: Create a temp table that identifies all duplicate keys
+                conn.execute(f"""
+                CREATE TEMP TABLE duplicate_keys AS
+                SELECT {primary_key_column}
+                FROM '{transformed_file_path}'
+                GROUP BY {primary_key_column}
+                HAVING COUNT(*) > 1;
+                """)
+                
+                # Step 3: Create temp tables for each part of the data we need to process
+                # First, a table for all data with non-duplicate keys (we'll keep these as-is)
+                conn.execute(f"""
+                CREATE TEMP TABLE non_duplicate_data AS
+                SELECT *
+                FROM '{transformed_file_path}'
+                WHERE {primary_key_column} NOT IN (SELECT {primary_key_column} FROM duplicate_keys);
+                """)
+                
+                # Step 4: Create a table with numbered rows for duplicate key data
+                conn.execute(f"""
+                CREATE TEMP TABLE duplicate_data AS
+                SELECT *, 
+                    ROW_NUMBER() OVER (PARTITION BY {primary_key_column} ORDER BY (SELECT 1)) as dup_num
+                FROM '{transformed_file_path}'
+                WHERE {primary_key_column} IN (SELECT {primary_key_column} FROM duplicate_keys);
+                """)
+                
+                # Step 5: Create a new table with fixed keys for duplicates
+                conn.execute(f"""
+                CREATE TEMP TABLE fixed_duplicate_data AS
+                SELECT 
+                    CASE 
+                        WHEN dup_num = 1 THEN {primary_key_column}  -- Keep first occurrence unchanged
+                        ELSE CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(dup_num AS VARCHAR))) % 9223372036854775807 AS {primary_key_type})
+                    END AS {primary_key_column},
+                    * EXCLUDE ({primary_key_column}, dup_num)
+                FROM duplicate_data;
+                """)
+                
+                # Step 6: Combine the fixed data back together and write to the original file
+                conn.execute(f"""
+                COPY (
+                    SELECT * FROM non_duplicate_data
+                    UNION ALL
+                    SELECT * FROM fixed_duplicate_data
+                ) TO '{transformed_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                """)
+                
+                self.logger.info(f"Successfully fixed duplicate primary keys in {self.target_table}")
+        except Exception as e:
+            raise Exception(f"Unable to handle duplicate primary keys in {self.target_table}: {str(e)}") from e
+        finally:
+            utils.close_duckdb_connection(conn, local_db_file)
 

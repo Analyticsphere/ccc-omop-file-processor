@@ -1,5 +1,7 @@
 # OMOP File Processor - Quick Start Guide
 
+Additional documentation, including a [comprehensive user guide](https://github.com/Analyticsphere/ehr-pipeline-documentation/wiki/OMOP-Pipeline-User-Guide), can be found in the [`ehr-pipeline-documentation`](https://github.com/Analyticsphere/ehr-pipeline-documentation) repository.
+
 ## Overview
 
 The OMOP File Processor is an API-driven service that processes healthcare data files conforming to the OMOP Common Data Model (CDM). It performs these key functions:
@@ -39,7 +41,7 @@ Resources allocation is configured in the `cloudbuild.yml` file of the omop-file
   ```
 - **Memory**: RAM allocated to the Cloud Run service
   ```
-  '--memory=12Gi'  # Default is 12GB
+  '--memory=16Gi'  # Default is 16GB
   ```
 
 ### 2. Cloud Build Web UI Substitution Variables
@@ -56,15 +58,13 @@ Set these variables in the Cloud Build trigger configuration:
 
 Adjust these settings in the `constants.py` file to match resouce allocations:
 
-- **`DUCKDB_MEMORY_LIMIT`**: Maximum memory for DuckDB (should be set to Cloud Run memory minus 2GB)
+- **`DUCKDB_MEMORY_LIMIT`**: Maximum memory for DuckDB (should be set to Cloud Run memory minus 2GB-4GB)
   ```
-  python
-  DUCKDB_MEMORY_LIMIT = "10GB"  # For a 12GB Cloud Run instance
+  DUCKDB_MEMORY_LIMIT = "12GB"  # For a 16GB Cloud Run instance
   ```
-- **`DUCKDB_THREADS`**: Number of concurrent threads (should not exceed CPU count)
+- **`DUCKDB_THREADS`**: Number of concurrent threads (should never exceed CPU count). Lower the number of threads to reduce memory utilization and prevent out-of-memory errors.
   ```
-  python
-  DUCKDB_THREADS = "4"  # For a 4-core Cloud Run instance
+  DUCKDB_THREADS = "2"  # For a 4-core Cloud Run instance
   ```
 
 ## Setup Process
@@ -127,6 +127,8 @@ Common issues and solutions:
   - [Normalize OMOP data file](#normalize-parquet)
   - [Upgrade CDM version](#upgrade-cdm)
   - [Harmonize vocabulary version](#harmonize-vocab)
+  - [Get vocabulary harmonization status](#harmonize-vocab-status)
+  - [Perform vocabulary harmonization steps](#harmonize-vocab-process-step)
   - [Populate derived data](#populate-derived-data)
   - [Clear BigQuery dataset](#clear-bq-dataset)
   - [Load vocabulary data](#load-target-vocab)
@@ -437,11 +439,31 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 
 ---
 
-### Harmonize Vocab
+# Vocabulary Harmonization API Documentation
+
+### Why Polling for Vocabulary Harmonization?
+
+The vocabulary harmonization API endpoints use a polling-based approach, as this functionality is particularly resource-intensive and time-consuming. Several constraints led to implementing a polling-based approach:
+
+1. **Airflow Task Management**: The Airflow DAG coordinates API calls and waits for their completion. Long-running synchronous API calls can cause Airflow tasks to remain in a "running" state even after the Cloud Run service has succeeded and returned a response, eventually triggering timeout errors in Airflow.
+
+2. **Resource Efficiency**: Breaking the harmonization into discrete steps allows each step to be processed with full resources, rather than trying to process everything in a single request where resources might be constrained over time.
+
+3. **Resilience to Failures**: If a step fails, only that step needs to be retried rather than the entire process.
+
+4. **Progress Tracking**: The polling mechanism provides detailed progress information, making it easier to monitor and debug the harmonization process.
+
+This approach ensures that both the Cloud Run service and the Airflow DAG operate within their respective constraints while still enabling processing of large datasets.
+
+---
+
+## Harmonize Vocab
 
 **Endpoint:** `POST /harmonize_vocab`
 
-**Description:** Updates OMOP data file with source-to-target concept mappings from a specified vocabulary version. Also replaces non-standard concepts with standard concepts, and identifies concepts which are not in the correct table according to their domain_id.
+**Description:** Initiates an asynchronous vocabulary harmonization job. This endpoint returns immediately with a job ID that can be used to check status and process steps.
+
+The endpoint uses an asynchronous polling pattern due to the resource-intensive nature of vocabulary harmonization, which can exceed Cloud Run or Airflow task request timeouts with large datasets.
 
 **Request Parameters:**
 
@@ -456,10 +478,29 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 
 **Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
 
+**Response:**
+
+| Status Code | Description |
+|-------------|-------------|
+| 202 | Job accepted for processing |
+| 400 | Missing required parameters |
+| 500 | Unable to initiate harmonization job |
+
+**Response Format:**
+```json
+{
+    "job_id": "12345678-1234-5678-1234-567812345678",
+    "status": "queued",
+    "bucket": "my-site-bucket",
+    "delivery_date": "2023-05-01",
+    "message": "Vocabulary harmonization job queued for delivery_site/2023-05-01/condition_occurrence.csv"
+}
+```
+
 **Example Request:**
 ```json
 {
-    "file_path": "delivery_site/2023-05-01/person.csv",
+    "file_path": "delivery_site/2023-05-01/condition_occurrence.csv",
     "vocab_version": "v5.0 29-FEB-24",
     "omop_version": "5.4",
     "site": "hospital-a",
@@ -468,7 +509,95 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 }
 ```
 
+## Harmonize Vocab Status
+
+**Endpoint:** `GET /harmonize_vocab_status`
+
+**Description:** Checks the current status of a previously initiated harmonization job. This endpoint is used by the Airflow DAG to poll for job completion.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| job_id | string | Yes | Unique identifier for the harmonization job |
+| bucket | string | Yes | Google Cloud Storage bucket name |
+| delivery_date | string | Yes | Delivery date of the data |
+
+**Response:**
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Job completed successfully |
+| 202 | Job is still in progress |
+| 404 | Job not found |
+| 500 | Error retrieving job status or job failed |
+
+**Response Format (in progress):**
+```json
+{
+    "job_id": "12345678-1234-5678-1234-567812345678",
+    "status": "running",
+    "current_step": "SOURCE_TARGET",
+    "current_step_index": 1,
+    "steps": ["SOURCE_TARGET", "TARGET_REMAP", "TARGET_REPLACEMENT", "DOMAIN_CHECK", "omop_etl"],
+    "progress": "1/5"
+}
+```
+
+**Response Format (completed):**
+```json
+{
+    "job_id": "12345678-1234-5678-1234-567812345678",
+    "status": "completed",
+    "start_time": "2023-05-01T12:34:56.789Z",
+    "end_time": "2023-05-01T12:35:56.789Z",
+    "file_path": "delivery_site/2023-05-01/condition_occurrence.csv"
+}
+```
+
+## Harmonize Vocab Process Step
+
+**Endpoint:** `POST /harmonize_vocab_process_step`
+
+**Description:** Processes a single step of a vocabulary harmonization job. This endpoint is called by the Airflow DAG to advance the job one step at a time.
+
+**Request Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| job_id | string | Yes | Unique identifier for the harmonization job |
+| bucket | string | Yes | Google Cloud Storage bucket name |
+| delivery_date | string | Yes | Delivery date of the data |
+
+**Response:**
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Step processed successfully or job completed |
+| 404 | Job not found |
+| 500 | Error processing step |
+
+**Response Format:**
+```json
+{
+    "job_id": "12345678-1234-5678-1234-567812345678",
+    "status": "running",
+    "current_step": "TARGET_REMAP",
+    "progress": "2/5"
+}
+```
+
+**Example Request:**
+```json
+{
+    "job_id": "12345678-1234-5678-1234-567812345678",
+    "bucket": "my-site-bucket",
+    "delivery_date": "2023-05-01"
+}
+```
+
 ---
+
 
 ### Populate Derived Data
 

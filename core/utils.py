@@ -1,3 +1,4 @@
+import gc
 import json
 import logging
 import os
@@ -46,9 +47,6 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         # https://duckdb.org/docs/configuration/overview.html#global-configuration-options
         conn.execute(f"SET threads={constants.DUCKDB_THREADS}")
 
-        # Reduce write flush threshold to lower chance of OOM
-        conn.execute("SET partitioned_write_flush_threshold = 1024")
-
         # Set max size to allow on disk
         # Unneeded when writing to GCS
         conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
@@ -82,7 +80,9 @@ def execute_duckdb_sql(sql: str, error_msg: str) -> None:
     except Exception as e:
         raise Exception(f"{error_msg}: {str(e)}") from e
     finally:
-        close_duckdb_connection(conn, local_db_file) 
+        close_duckdb_connection(conn, local_db_file)
+        # Manually run garabage collection here to reclaim memory
+        gc.collect()
 
 def parse_duckdb_csv_error(error: Exception) -> Optional[str]:
     """

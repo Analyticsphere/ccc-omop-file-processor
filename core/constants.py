@@ -1,14 +1,14 @@
 import os
 from enum import Enum
 
-DUCKDB_FORMAT_STRING = "(FORMAT 'parquet', COMPRESSION 'zstd')"
+DUCKDB_FORMAT_STRING = "(FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)"
 DUCKDB_MEMORY_LIMIT = "12GB"
 DUCKDB_MAX_SIZE = "5000GB"
-DUCKDB_THREADS = "1"
+DUCKDB_THREADS = "2"
 
 SERVICE_NAME = "omop-file-processor"
-BQ_LOGGING_TABLE = os.getenv('BQ_LOGGING_TABLE')
-VOCAB_GCS_PATH = os.getenv('VOCAB_GCS_PATH')
+BQ_LOGGING_TABLE = os.getenv('BQ_LOGGING_TABLE', 'NO _BQ_LOGGING_TABLE DEFINED')
+VOCAB_GCS_PATH = os.getenv('VOCAB_GCS_PATH', 'NO _VOCAB_GCS_PATH DEFINED')
 
 CSV = ".csv"
 PARQUET = ".parquet"
@@ -27,10 +27,8 @@ DDL_PLACEHOLDER_STRING = "@cdmDatabaseSchema"
 
 SQL_PATH = "reference/sql/"
 CDM_UPGRADE_SCRIPT_PATH = f"{SQL_PATH}cdm_upgrade/"
-
-DERIVED_TABLE_PATH = f"{SQL_PATH}derived_tables/"
-
-OMOP_ETL_PATH = f"{SQL_PATH}omop_etl/"
+DERIVED_TABLE_SCRIPT_PATH = f"{SQL_PATH}derived_tables/"
+OMOP_ETL_SCRIPT_PATH = f"{SQL_PATH}omop_etl/"
 
 OPTIMIZED_VOCAB_FOLDER = "optimized"
 OPTIMIZED_VOCAB_FILE = "optimized_vocab_file"
@@ -50,8 +48,6 @@ class BQWriteTypes(str, Enum):
     SPECIFIC_FILE = "specific_file"
     ETLed_FILE = "ETLed_file"
     PROCESSED_FILE = "processed_file"
-
-
 
 CONDITION_ERA = "condition_era"
 DRUG_ERA = "drug_era"
@@ -198,6 +194,7 @@ SOURCE_TARGET = "Map source concepts to a updated target codes"
 DOMAIN_CHECK = "Check for latest domain and update if needed"
 TARGET_REMAP = "Remap non-standard targets to new standard targets"
 TARGET_REPLACEMENT = "Replace non-standard targets with new standard targets"
+OMOP_ETL = "OMOP to OMOP structure transformation"
 
 # Primary key column can be found in schema.json file
 NATURAL_KEY_TABLES = [
