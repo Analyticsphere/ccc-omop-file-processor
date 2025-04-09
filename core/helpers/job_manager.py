@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from google.cloud import storage # type: ignore
+from google.cloud import storage  # type: ignore
 
 import core.constants as constants
 import core.gcp_services as gcp_services
@@ -161,15 +161,7 @@ class HarmonizationJobManager:
             )
             
             # Execute step based on its type
-            try:
-                # if current_step_index == 0:
-                #     # Clean up existing files on first step
-                #     gcs_path = f"{delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{vocab_harmonizer.source_table_name}"
-                #     existing_files = utils.list_gcs_files(bucket_name, gcs_path, constants.PARQUET)
-                #     for file in existing_files:
-                #         utils.logger.warning(f"IN JOB MANAGER and would have deleted OLD PATH: {gcs_path}/{file} NEW PATH: {bucket}/{gcs_path}/{file}")
-                #         #gcp_services.delete_gcs_file(f"{gcs_path}/{file}")
-                
+            try:                
                 # Process the current step
                 if current_step == constants.SOURCE_TARGET:
                     vocab_harmonizer.source_target_remapping()

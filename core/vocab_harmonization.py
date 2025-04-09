@@ -40,29 +40,6 @@ class VocabHarmonizer:
         self.logger = logging.getLogger(__name__)
 
 
-    def harmonize(self) -> None:
-        """
-        Harmonize a parquet file by applying defined harmonization steps and saving the result.
-        """
-
-        # Delete all harminzation files within GCS folder, if they exist
-        # Necessary because the task may fail and retry in Airflow, leaving some files behind
-        gcs_path = f"{self.delivery_date}/{constants.ArtifactPaths.HARMONIZED_FILES.value}{self.source_table_name}"
-        current_files = utils.list_gcs_files(self.bucket, gcs_path, constants.PARQUET)
-        for file in current_files:
-            self.logger.warning(f"would have deleted {self.bucket}/{gcs_path}/{file}")
-            #gcp_services.delete_gcs_file(f"{self.bucket}/{gcs_path}/{file}")
-
-        # List order is very important here!
-        harmonization_steps: list = [constants.SOURCE_TARGET, constants.TARGET_REMAP, constants.TARGET_REPLACEMENT, constants.DOMAIN_CHECK]
-
-        for step in harmonization_steps:
-            self.perform_harmonization(step)
-
-        # After finding new targets and domain, partition file based on target OMOP table
-        self.omop_etl()
-
-
     def perform_harmonization(self, step: str) -> None:
         """
         Perform a specific harmonization step.
