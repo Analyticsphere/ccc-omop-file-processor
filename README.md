@@ -41,7 +41,7 @@ Resources allocation is configured in the `cloudbuild.yml` file of the omop-file
   ```
 - **Memory**: RAM allocated to the Cloud Run service
   ```
-  '--memory=12Gi'  # Default is 12GB
+  '--memory=16Gi'  # Default is 16GB
   ```
 
 ### 2. Cloud Build Web UI Substitution Variables
@@ -62,9 +62,9 @@ Adjust these settings in the `constants.py` file to match resouce allocations:
   ```
   DUCKDB_MEMORY_LIMIT = "10GB"  # For a 12GB Cloud Run instance
   ```
-- **`DUCKDB_THREADS`**: Number of concurrent threads (should not exceed CPU count)
+- **`DUCKDB_THREADS`**: Number of concurrent threads (should never exceed CPU count). Lower the number of threads to reduce memory utilization and prevent out-of-memory errors.
   ```
-  DUCKDB_THREADS = "4"  # For a 4-core Cloud Run instance
+  DUCKDB_THREADS = "2"  # For a 4-core Cloud Run instance
   ```
 
 ## Setup Process
