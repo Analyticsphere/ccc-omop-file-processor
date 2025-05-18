@@ -2,6 +2,8 @@ import codecs
 import csv
 import os
 from io import StringIO
+import random
+import time
 
 import chardet  # type: ignore
 import duckdb  # type: ignore
@@ -14,7 +16,7 @@ import core.utils as utils
 
 
 class StreamingCSVWriter:
-    """Helper class to stream CSV data directly to and from GCS"""
+    """Helper class to stream CSV data directly to and from GCS with rate limit handling"""
     def __init__(self, target_blob):
         self.target_blob = target_blob
         self.buffer = StringIO()
@@ -24,15 +26,57 @@ class StreamingCSVWriter:
             timeout=None
         )
         self.total_bytes_uploaded = 0
+        # Increase buffer size from 1MB to 50MB to reduce the number of API calls
+        self.buffer_threshold = 50 * 1024 * 1024
+        # Track last upload time for rate limiting
+        self.last_upload_time = 0
+        self.min_time_between_uploads = 1.0  # seconds
 
     def writerow(self, row):
         """Write a row and upload if buffer reaches threshold"""
         self.writer.writerow(row)
         
         # If buffer gets too large, upload it
-        if self.buffer.tell() > 1024 * 1024:  # 1MB threshold
-            self._upload_buffer()
+        if self.buffer.tell() > self.buffer_threshold:
+            self._upload_buffer_with_retry()
             
+    def _upload_buffer_with_retry(self):
+        """Upload buffer with exponential backoff retry logic"""
+        if self.buffer.tell() > 0:
+            # Rate limiting: ensure minimum time between uploads
+            current_time = time.time()
+            if current_time - self.last_upload_time < self.min_time_between_uploads:
+                sleep_time = self.min_time_between_uploads - (current_time - self.last_upload_time)
+                time.sleep(sleep_time)
+            
+            # Retry logic for rate limiting
+            max_retries = 5
+            retry_count = 0
+            
+            while retry_count < max_retries:
+                try:
+                    self._upload_buffer()
+                    self.last_upload_time = time.time()
+                    return  # Success, exit the retry loop
+                except Exception as e:
+                    # Check if it's a rate limit error
+                    if "rate limit" in str(e).lower() or "429" in str(e):
+                        retry_count += 1
+                        if retry_count < max_retries:
+                            # Exponential backoff with jitter
+                            sleep_time = (2 ** retry_count) + (random.random() * 2)
+                            utils.logger.warning(f"Rate limit hit. Retrying in {sleep_time:.2f} seconds.")
+                            time.sleep(sleep_time)
+                            
+                            # Reduce buffer size for future uploads if we're still hitting limits
+                            self.buffer_threshold = max(10 * 1024 * 1024, self.buffer_threshold // 2)
+                            # Increase minimum time between uploads
+                            self.min_time_between_uploads *= 1.5
+                        else:
+                            raise Exception(f"Rate limit exceeded after {max_retries} retries") from e
+                    else:
+                        # Not a rate limit error, re-raise
+                        raise
 
     def _upload_buffer(self):
         """Upload current buffer contents to GCS using resumable upload"""
@@ -46,8 +90,8 @@ class StreamingCSVWriter:
             self.target_blob.upload_from_string(
                 content,
                 content_type='text/csv',
-                timeout=None,
-                retry=None,
+                timeout=300,  # 5 minute timeout
+                retry=None,   # We handle retries ourselves
                 if_generation_match=None
             )
             
@@ -59,7 +103,8 @@ class StreamingCSVWriter:
 
     def close(self):
         """Upload any remaining data and close the writer"""
-        self._upload_buffer()
+        if self.buffer.tell() > 0:
+            self._upload_buffer_with_retry()
         self.buffer.close()
 
 def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
