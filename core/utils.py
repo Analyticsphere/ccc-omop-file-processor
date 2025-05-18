@@ -234,7 +234,7 @@ def get_parquet_artifact_location(gcs_file_path: str) -> str:
     base_directory = base_directory.rstrip('/')
     
     # Create the parquet file name
-    parquet_file_name = f"{file_name}{constants.PARQUET}"
+    parquet_file_name = f"{file_name.lower()}{constants.PARQUET}"
     
     # Construct the final parquet path
     parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
