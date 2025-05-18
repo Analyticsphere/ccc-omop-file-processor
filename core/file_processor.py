@@ -13,84 +13,56 @@ import core.gcp_services as gcp_services
 import core.helpers.report_artifact as report_artifact
 import core.utils as utils
 
+
 class StreamingCSVWriter:
-    """Helper class to stream CSV data directly to and from GCS with robust error handling"""
+    """Helper class to stream CSV data directly to and from GCS"""
     def __init__(self, target_blob):
         self.target_blob = target_blob
         self.buffer = StringIO()
         self.writer = csv.writer(self.buffer)
-        
-        # Use a smaller buffer size to reduce chances of connection timeouts
-        self.buffer_threshold = 5 * 1024 * 1024  # 5MB buffer
-        
-        # Track last upload time for rate limiting
-        self.last_upload_time = 0
-        self.min_time_between_uploads = 1.0  # seconds
-        
-        # Use GCS client's built-in functionality instead of manual resumable uploads
-        # The client handles retries, connection issues, etc. better than we can manually
+        self.upload_session = target_blob.create_resumable_upload_session(
+            content_type='text/csv',
+            timeout=None
+        )
         self.total_bytes_uploaded = 0
-        self.temp_file = None
-        self.filepath = f"/tmp/temp_csv_{random.randint(1000000, 9999999)}.csv"
-        
-        # Open a temporary file for accumulating the CSV data
-        self.temp_file = open(self.filepath, 'w', encoding='utf-8', newline='')
-        self.file_writer = csv.writer(self.temp_file)
-        
-        utils.logger.info(f"Created temporary file for CSV conversion: {self.filepath}")
 
     def writerow(self, row):
-        """Write a row to the temporary file"""
-        self.file_writer.writerow(row)
+        """Write a row and upload if buffer reaches threshold"""
+        self.writer.writerow(row)
         
+        # If buffer gets too large, upload it
+        if self.buffer.tell() > 102400 * 102400:  # 1MB threshold
+            self._upload_buffer()
+            
+
+    def _upload_buffer(self):
+        """Upload current buffer contents to GCS using resumable upload"""
+        if self.buffer.tell() > 0:
+            content = self.buffer.getvalue().encode('utf-8')
+            
+            # Calculate position for resumable upload
+            end_byte = self.total_bytes_uploaded + len(content)
+            
+            # Upload the chunk using the resumable session
+            self.target_blob.upload_from_string(
+                content,
+                content_type='text/csv',
+                timeout=None,
+                retry=None,
+                if_generation_match=None
+            )
+            
+            self.total_bytes_uploaded = end_byte
+            
+            # Clear the buffer
+            self.buffer.seek(0)
+            self.buffer.truncate()
+
     def close(self):
-        """Close the temp file and upload it to GCS with retries"""
-        if self.temp_file:
-            self.temp_file.close()
-            
-            utils.logger.info(f"Uploading temporary file to GCS")
-            
-            # Use exponential backoff for retrying the upload
-            max_retries = 5
-            retry_count = 0
-            
-            while retry_count < max_retries:
-                try:
-                    # Upload the file with built-in retry logic
-                    with open(self.filepath, 'rb') as f:
-                        self.target_blob.upload_from_file(
-                            f,
-                            content_type='text/csv',
-                            timeout=600,  # Longer timeout
-                            retry=storage.retry.Retry(
-                                predicate=storage.retry.if_transient_error,
-                                initial=1.0,
-                                maximum=60.0,
-                                multiplier=2.0,
-                                deadline=600.0,
-                            )
-                        )
-                    utils.logger.info(f"Successfully uploaded file to GCS")
-                    break
-                    
-                except Exception as e:
-                    retry_count += 1
-                    if retry_count < max_retries:
-                        # Exponential backoff with jitter
-                        sleep_time = (2 ** retry_count) + (random.random() * 5)
-                        error_msg = str(e)
-                        utils.logger.warning(f"Upload error: {error_msg}. Retrying in {sleep_time:.2f} seconds ({retry_count}/{max_retries})")
-                        time.sleep(sleep_time)
-                    else:
-                        utils.logger.error(f"Failed to upload after {max_retries} attempts: {e}")
-                        raise
-            
-            # Remove the temporary file
-            try:
-                os.remove(self.filepath)
-                utils.logger.info(f"Removed temporary file: {self.filepath}")
-            except Exception as e:
-                utils.logger.warning(f"Failed to remove temporary file {self.filepath}: {e}")
+        """Upload any remaining data and close the writer"""
+        self._upload_buffer()
+        self.buffer.close()
+
 
 def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
     if file_type == constants.CSV:
