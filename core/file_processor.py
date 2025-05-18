@@ -16,19 +16,20 @@ import core.utils as utils
 
 
 class StreamingCSVWriter:
-    """Helper class to stream CSV data directly to and from GCS with rate limit handling"""
+    """Helper class to stream CSV data directly to and from GCS with proper resumable uploads"""
     def __init__(self, target_blob):
         self.target_blob = target_blob
         self.buffer = StringIO()
         self.writer = csv.writer(self.buffer)
+        
+        # Create the resumable upload session
         self.upload_session = target_blob.create_resumable_upload_session(
             content_type='text/csv',
             timeout=None
         )
+        
         self.total_bytes_uploaded = 0
-        # Increase buffer size from 1MB to 50MB to reduce the number of API calls
-        self.buffer_threshold = 50 * 1024 * 1024
-        # Track last upload time for rate limiting
+        self.buffer_threshold = 50 * 1024 * 1024  # 50MB buffer
         self.last_upload_time = 0
         self.min_time_between_uploads = 1.0  # seconds
 
@@ -79,33 +80,73 @@ class StreamingCSVWriter:
                         raise
 
     def _upload_buffer(self):
-        """Upload current buffer contents to GCS using resumable upload"""
+        """Upload current buffer contents to GCS using the resumable upload session"""
         if self.buffer.tell() > 0:
+            # Get the content to upload
             content = self.buffer.getvalue().encode('utf-8')
+            content_length = len(content)
             
-            # Calculate position for resumable upload
-            end_byte = self.total_bytes_uploaded + len(content)
-            
-            # Upload the chunk using the resumable session
-            self.target_blob.upload_from_string(
-                content,
-                content_type='text/csv',
-                timeout=300,  # 5 minute timeout
-                retry=None,   # We handle retries ourselves
-                if_generation_match=None
-            )
-            
-            self.total_bytes_uploaded = end_byte
-            
-            # Clear the buffer
-            self.buffer.seek(0)
-            self.buffer.truncate()
+            # Use the resumable upload session to upload this chunk
+            # This is different from the previous implementation - we're using
+            # the session object directly rather than the blob's upload_from_string
+            try:
+                # Calculate the content range
+                start_byte = self.total_bytes_uploaded
+                end_byte = start_byte + content_length - 1
+                
+                # Log chunk info for debugging
+                utils.logger.info(f"Uploading chunk: bytes {start_byte}-{end_byte}")
+                
+                # Make the request to upload this chunk to the resumable session
+                # Must include content-range header
+                headers = {
+                    "Content-Range": f"bytes {start_byte}-{end_byte}/*"
+                }
+                response = self.upload_session.session.put(
+                    self.upload_session.url,
+                    data=content,
+                    headers=headers,
+                    timeout=300
+                )
+                
+                # Raise exception for error status
+                response.raise_for_status()
+                
+                # Update total bytes uploaded
+                self.total_bytes_uploaded += content_length
+                
+                # Clear the buffer
+                self.buffer.seek(0)
+                self.buffer.truncate()
+                
+            except Exception as e:
+                utils.logger.error(f"Error during chunk upload: {e}")
+                raise
 
     def close(self):
-        """Upload any remaining data and close the writer"""
-        if self.buffer.tell() > 0:
-            self._upload_buffer_with_retry()
-        self.buffer.close()
+        """Upload any remaining data, finalize the upload and close the writer"""
+        try:
+            # Upload any remaining buffered data
+            if self.buffer.tell() > 0:
+                self._upload_buffer_with_retry()
+                
+            # Finalize the upload if any data was sent
+            if self.total_bytes_uploaded > 0:
+                # Get the total size
+                headers = {
+                    "Content-Range": f"bytes */{self.total_bytes_uploaded}"
+                }
+                # Send empty PUT to finalize
+                response = self.upload_session.session.put(
+                    self.upload_session.url,
+                    headers=headers,
+                    timeout=300
+                )
+                response.raise_for_status()
+                
+                utils.logger.info(f"Finalized upload. Total bytes: {self.total_bytes_uploaded}")
+        finally:
+            self.buffer.close()
 
 def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
     if file_type == constants.CSV:
