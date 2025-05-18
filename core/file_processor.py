@@ -2,8 +2,7 @@ import codecs
 import csv
 import os
 from io import StringIO
-import random
-import time
+
 import chardet  # type: ignore
 import duckdb  # type: ignore
 from google.cloud import storage  # type: ignore
@@ -31,7 +30,7 @@ class StreamingCSVWriter:
         self.writer.writerow(row)
         
         # If buffer gets too large, upload it
-        if self.buffer.tell() > 102400 * 102400:  # 1MB threshold
+        if self.buffer.tell() > 102400 * 102400:  # 100MB threshold
             self._upload_buffer()
             
 
@@ -62,7 +61,6 @@ class StreamingCSVWriter:
         """Upload any remaining data and close the writer"""
         self._upload_buffer()
         self.buffer.close()
-
 
 def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
     if file_type == constants.CSV:
