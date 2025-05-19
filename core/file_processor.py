@@ -30,7 +30,7 @@ class StreamingCSVWriter:
         self.writer.writerow(row)
         
         # If buffer gets too large, upload it
-        if self.buffer.tell() > 1024 * 1024:  # 1MB threshold
+        if self.buffer.tell() > 102400 * 102400:  # 100MB threshold
             self._upload_buffer()
             
 
