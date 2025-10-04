@@ -328,14 +328,14 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
                 # In the final SQL statement, need to confirm that ALL required columns can be cast to their correct types
                 # If any one of the columns cannot be cast to the correct type, the entire row fails
                 # To do this check in one shot, perform a single COALESCE within the SQL statement
-                # ALL columns in a COALESCE must be of the same type, so casting everything to VARCHAR *after* trying to cast it to its correct type
+                # ALL columns in the final COALESCE must be of the same type; after TRY_CAST to expected type, cast to VARCHAR for the coalese
                 row_validity.append(f"CAST(TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS VARCHAR)")
         else:
             # If the site provided a Connect_ID field and/or person_id, use Connect_ID in place of person_id
             if column_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
                 coalesce_exprs.append(f"CAST({connect_id_column_name} AS {column_type}) AS {column_name}")
 
-            # If the column doesn't exist, just produce a placeholder (NULL or a special default)
+            # If the column doesn't exist in the delivery, add that column with a placeholder (NULL or a special default)
             # Still need to cast to ensure consist column types
             coalesce_exprs.append(f"CAST({default_value} AS {column_type}) AS {column_name}")
 
@@ -357,6 +357,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
 
         # Create composite key by concatenting each column into a single value and taking its hash
         # Don't include the original primary key in the hash
+        # % 9223372036854775807 to get a BIGINT
         primary_key_sql = ", ".join([f"COALESCE(CAST({column_name} AS VARCHAR), '')" for column_name in ordered_omop_columns if column_name != primary_key])
         replace_clause = f"""
             REPLACE(CAST((CAST(hash(CONCAT({primary_key_sql})) AS UBIGINT) % 9223372036854775807) AS BIGINT) AS {primary_key}) 
