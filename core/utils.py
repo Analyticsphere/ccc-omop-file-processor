@@ -107,6 +107,7 @@ def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
         gcs_file_path.split('/')[-1]
         .replace(constants.PARQUET, '')
         .replace(constants.CSV, '')
+        .replace(constants.CSV_GZ, '')
         .replace(constants.FIXED_FILE_TAG_STRING, '')
         .lower()
     )
