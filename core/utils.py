@@ -103,14 +103,16 @@ def parse_duckdb_csv_error(error: Exception) -> Optional[str]:
 def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
     # Extract file name from a GCS path and removes extension
     # e.g. synthea53/2024-12-31/care_site.parquet -> care_site
-    return (
-        gcs_file_path.split('/')[-1]
-        .replace(constants.CSV_GZ, '')
-        .replace(constants.PARQUET, '')
-        .replace(constants.CSV, '')
-        .replace(constants.FIXED_FILE_TAG_STRING, '')
-        .lower()
-    )
+
+    file_name = gcs_file_path.split('/')[-1].lower()
+
+    for ext in constants.FILE_EXTENSIONS:
+        file_name = file_name.replace(ext, '')
+
+    # If using a 'fixed' file, remove the appened string indicating it's a fixed file
+    file_name = file_name.replace(constants.FIXED_FILE_TAG_STRING, '')
+
+    return file_name
 
 def get_cdm_schema(cdm_version: str) -> dict:
     # Returns CDM schema for specified CDM version.
