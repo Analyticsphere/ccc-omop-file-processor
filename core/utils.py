@@ -105,9 +105,9 @@ def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
     # e.g. synthea53/2024-12-31/care_site.parquet -> care_site
     return (
         gcs_file_path.split('/')[-1]
+        .replace(constants.CSV_GZ, '')
         .replace(constants.PARQUET, '')
         .replace(constants.CSV, '')
-        .replace(constants.CSV_GZ, '')
         .replace(constants.FIXED_FILE_TAG_STRING, '')
         .lower()
     )
