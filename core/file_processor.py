@@ -316,17 +316,21 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
 
         # If the site-delivered table contains an expected column...
         if column_name in actual_columns:
-            # Special handling for DATE and TIMESTAMP/DATETIME types using STRPTIME and user-supplied formats
+            # If the field *must* have a value...
             if default_value != "NULL":
-                if column_type == "DATE":
+                # Special handling for DATE and TIMESTAMP/DATETIME types using STRPTIME and user-supplied formats
+                if column_type in ["DATE", "TIMESTAMP", "DATETIME"]:
+                    if column_type == "DATE":
+                        format_to_try = date_format
+                    else:
+                        format_to_try = datetime_format
                     # Use STRPTIME with date_format, then cast to DATE
                     coalesce_exprs.append(
-                        f"CAST(STRPTIME(COALESCE({column_name}, {default_value}), '{date_format}') AS DATE) AS {column_name}"
-                    )
-                elif column_type in ["TIMESTAMP", "DATETIME"]:
-                    # Use STRPTIME with datetime_format, then cast to TIMESTAMP/DATETIME
-                    coalesce_exprs.append(
-                        f"CAST(STRPTIME(COALESCE({column_name}, {default_value}), '{datetime_format}') AS {column_type}) AS {column_name}"
+                        f"""COALESCE(
+                            TRY_CAST(TRY_STRPTIME({column_name}, '{format_to_try}')) AS {column_type}), # first try parsing with specified date format
+                            TRY_CAST({column_name} AS {column_type}), # Then try just casting the value
+                            CAST({default_value} AS {column_type}) # Finally, use default
+                        )"""
                     )
                 else:
                     coalesce_exprs.append(f"TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS {column_name}")
