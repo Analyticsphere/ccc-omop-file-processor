@@ -327,9 +327,9 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
                     # Use STRPTIME with date_format, then cast to DATE
                     coalesce_exprs.append(
                         f"""COALESCE(
-                            TRY_CAST(TRY_STRPTIME({column_name}, '{format_to_try}')) AS {column_type}), # first try parsing with specified date format
-                            TRY_CAST({column_name} AS {column_type}), # Then try just casting the value
-                            CAST({default_value} AS {column_type}) # Finally, use default
+                            TRY_CAST(TRY_STRPTIME({column_name}, '{format_to_try}') AS {column_type}), -- first try parsing with specified date format
+                            TRY_CAST({column_name} AS {column_type}), -- then try just casting the value
+                            CAST({default_value} AS {column_type}) -- finally, use default value
                         )"""
                     )
                 else:
