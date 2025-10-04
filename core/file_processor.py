@@ -257,7 +257,7 @@ def get_placeholder_value(column_name: str, column_type: str) -> str:
     
     return default_value
 
-def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str) -> str:
+def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str, date_format: str, datetime_format: str) -> str:
     """
     Generates a SQL statement that, when executed:
         - Converts data types of columns within Parquet file to OMOP CDM standard
@@ -316,9 +316,20 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
 
         # If the site-delivered table contains an expected column...
         if column_name in actual_columns:
-            # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
+            # Special handling for DATE and TIMESTAMP/DATETIME types using STRPTIME and user-supplied formats
             if default_value != "NULL":
-                coalesce_exprs.append(f"TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS {column_name}")
+                if column_type == "DATE":
+                    # Use STRPTIME with date_format, then cast to DATE
+                    coalesce_exprs.append(
+                        f"CAST(STRPTIME(COALESCE({column_name}, {default_value}), '{date_format}') AS DATE) AS {column_name}"
+                    )
+                elif column_type in ["TIMESTAMP", "DATETIME"]:
+                    # Use STRPTIME with datetime_format, then cast to TIMESTAMP/DATETIME
+                    coalesce_exprs.append(
+                        f"CAST(STRPTIME(COALESCE({column_name}, {default_value}), '{datetime_format}') AS {column_type}) AS {column_name}"
+                    )
+                else:
+                    coalesce_exprs.append(f"TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS {column_name}")
             # If default value is NULL, don't coalesce
             else:
                 coalesce_exprs.append(f"TRY_CAST({column_name} AS {column_type}) AS {column_name}")
@@ -407,8 +418,8 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
 
     return sql_script
 
-def normalize_file(parquet_gcs_file_path: str, cdm_version: str) -> None:
-    fix_sql = get_normalization_sql_statement(parquet_gcs_file_path, cdm_version)
+def normalize_file(parquet_gcs_file_path: str, cdm_version: str, date_format: str, datetime_format: str) -> None:
+    fix_sql = get_normalization_sql_statement(parquet_gcs_file_path, cdm_version, date_format, datetime_format)
     
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM
