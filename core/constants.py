@@ -12,6 +12,7 @@ VOCAB_GCS_PATH = os.getenv('VOCAB_GCS_PATH', 'NO _VOCAB_GCS_PATH DEFINED')
 
 CSV = ".csv"
 PARQUET = ".parquet"
+CSV_GZ = ".csv.gz"
 
 CDM_v53 = "5.3"
 CDM_v53_CONCEPT_ID = 1147543

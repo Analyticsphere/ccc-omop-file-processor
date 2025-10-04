@@ -63,7 +63,7 @@ class StreamingCSVWriter:
         self.buffer.close()
 
 def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
-    if file_type == constants.CSV:
+    if file_type in [constants.CSV, constants.CSV_GZ]:
         csv_to_parquet(gcs_file_path)
     elif file_type == constants.PARQUET:
         process_incoming_parquet(gcs_file_path)
@@ -118,7 +118,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             select_list = []
             for column in csv_column_names:
                 # get rid of " characters in column names to prevent double double quoting in offset handling
-                column_alias = column.lower().replace('"', '')
+                column_alias = column.lower().replace('"', '') # lowercase column names
                 select_list.append(f"{column} AS {column_alias}")
             select_clause = ", ".join(select_list)
 
@@ -128,7 +128,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             # Re-add double quotes to offset column prevent DuckDB from returning parsing error
             select_clause = select_clause.replace('offset', '"offset"')
 
-            # Convert CSV to Parquet with lowercase column names
+            # Convert CSV to Parquet
             convert_statement = f"""
                 COPY (
                     SELECT {select_clause}
@@ -156,7 +156,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e    
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
-    
+
 def convert_csv_file_encoding(gcs_file_path: str) -> None:
     """
     Creates a copy of non-UTF8 CSV files as a new CSV file with UTF8 encoding.
@@ -234,7 +234,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
 
             # After creating new file with UTF8 encoding, try converting it to Parquet
-            # store_rejects = True leads to more malformed rows getting included, but may add unexpected columns
+            # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
             # Unexpected columns will be reported in data delivery report, and normalization step will remove them
             csv_to_parquet(f"{bucket_name}/{new_file_path}", True, ['store_rejects=True'])
 
@@ -299,7 +299,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
             break
 
     # --------------------------------------------------------------------------
-    # Initialize lists to build SQL expressions
+    # Initialize lists to hold SQL expressions
     # --------------------------------------------------------------------------
     coalesce_exprs = []
     row_validity = []    # e.g. "cc.some_col IS NOT NULL AND ..."
@@ -314,7 +314,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
         # Determine default value if a required column is NULL
         default_value = get_placeholder_value(column_name, column_type) if is_required or column_name.endswith("_concept_id") else "NULL"
 
-        # If the site delivered table contains an expected column...
+        # If the site-delivered table contains an expected column...
         if column_name in actual_columns:
             # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
             if default_value != "NULL":
@@ -338,9 +338,9 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
             # If the column doesn't exist in the delivery, add that column with a placeholder (NULL or a special default)
             # Still need to cast to ensure consist column types
             coalesce_exprs.append(f"CAST({default_value} AS {column_type}) AS {column_name}")
-
             # If a column is required but not provided, all rows should not fail validity check; just use a default value
 
+    # Build coalesce statement
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
 
     # If row_validity list has no statements, add a string so SQL statement stays valid
