@@ -1,3 +1,4 @@
+import re
 import gc
 import json
 import logging
@@ -467,3 +468,13 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
     replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
 
     return replacement_result
+
+
+def clean_column_name_for_sql(name: str) -> str:
+    """
+    Remove any character that is not a Unicode word character (letter, digit, underscore).
+    Also strips leading/trailing whitespace and lowercases the name.
+    Useful for cleaning column names for SQL or data processing.
+    """
+    cleaned = re.sub(r'[^\w]', '', name, flags=re.UNICODE)
+    return cleaned.lower()

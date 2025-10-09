@@ -117,8 +117,8 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
 
             select_list = []
             for column in csv_column_names:
-                # get rid of " characters in column names to prevent double double quoting in offset handling
-                column_alias = column.lower().replace('"', '') # lowercase column names
+                # Use the utility function to clean column names for the alias
+                column_alias = utils.clean_column_name_for_sql(column)
                 select_list.append(f"{column} AS {column_alias}")
             select_clause = ", ".join(select_list)
 
