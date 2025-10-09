@@ -90,7 +90,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
             elif column == 'offset':
                 select_list.append(f'"{column}" AS "{column.lower()}"')
             else:
-                select_list.append(f"{column} AS {column.lower()}")
+                select_list.append(f"{column} AS {utils.clean_column_name_for_sql(column)}")
         select_clause = ", ".join(select_list)
 
         copy_sql = f"""
@@ -318,24 +318,25 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
 
         # If the site-delivered table contains an expected column... 
         if column_name in actual_columns:
-            # If the field *must* have a value...
-            if default_value != "NULL":
-                # Special handling for DATE and TIMESTAMP/DATETIME types using STRPTIME and user-supplied formats
-                if column_type in ["DATE", "TIMESTAMP", "DATETIME"]:
-                    if column_type == "DATE":
-                        format_to_try = date_format
-                    else:
-                        format_to_try = datetime_format
-                    # Use STRPTIME with date_format, then cast to DATE
-                    coalesce_exprs.append(
-                        f"""COALESCE(
-                            TRY_CAST(TRY_STRPTIME({column_name}, '{format_to_try}') AS {column_type}), -- first try parsing with specified date format
-                            TRY_CAST({column_name} AS {column_type}), -- then try just casting the value
-                            CAST({default_value} AS {column_type}) -- finally, use default value
-                        ) AS {column_name}"""
-                    )
+            
+            # Special handling for DATE and TIMESTAMP/DATETIME types using STRPTIME and user-supplied formats
+            if column_type in ["DATE", "TIMESTAMP", "DATETIME"]:
+                if column_type == "DATE":
+                    format_to_try = date_format
                 else:
-                    coalesce_exprs.append(f"TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS {column_name}")
+                    format_to_try = datetime_format
+                # Use STRPTIME with date_format, then cast to DATE
+                coalesce_exprs.append(
+                    f"""COALESCE(
+                        TRY_CAST(TRY_STRPTIME({column_name}, '{format_to_try}') AS {column_type}), -- first try parsing with specified date format
+                        TRY_CAST({column_name} AS {column_type}), -- then try just casting the value
+                        CAST({default_value} AS {column_type}) -- finally, use default value
+                    ) AS {column_name}"""
+                )            
+
+            # If the field *must* have a value...
+            elif default_value != "NULL":
+                coalesce_exprs.append(f"TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS {column_name}")
             # If default value is NULL, don't coalesce
             else:
                 coalesce_exprs.append(f"TRY_CAST({column_name} AS {column_type}) AS {column_name}")
