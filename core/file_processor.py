@@ -119,7 +119,9 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             for column in csv_column_names:
                 # Use the utility function to clean column names for the alias
                 column_alias = utils.clean_column_name_for_sql(column)
-                select_list.append(f"{column} AS {column_alias}")
+                select_list.append(f"""
+                    "{column}" AS {column_alias}
+                """)
             select_clause = ", ".join(select_list)
 
             # note_nlp has column name 'offset' which is a reserved keyword in DuckDB

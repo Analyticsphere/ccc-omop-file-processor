@@ -477,4 +477,8 @@ def clean_column_name_for_sql(name: str) -> str:
     Useful for cleaning column names for SQL or data processing.
     """
     cleaned = re.sub(r'[^\w]', '', name, flags=re.UNICODE)
-    return cleaned.lower()
+    cleaned = cleaned.replace('"', '')
+    cleaned = cleaned.strip()
+    cleaned = cleaned.lower()
+
+    return cleaned
