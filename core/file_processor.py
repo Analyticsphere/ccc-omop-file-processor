@@ -138,8 +138,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
                         null_padding=True, ALL_VARCHAR=True, strict_mode=False {format_list(conversion_options)})
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
-            print("!!!!! convert_statement is:")
-            print(convert_statement)
+
             conn.execute(convert_statement)
     except Exception as e:
         if not retry:
