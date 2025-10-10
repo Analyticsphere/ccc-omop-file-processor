@@ -536,7 +536,7 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             # After creating new file with fixed quoting, try converting it to Parquet
             # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
             # Unexpected columns will be reported in data delivery report, and normalization step will remove them
-            csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True'])
+            csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True, ignore_errors=True'])
                 
     except UnicodeDecodeError:
         raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
