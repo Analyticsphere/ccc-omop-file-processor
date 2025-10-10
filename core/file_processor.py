@@ -152,14 +152,19 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             elif error_type == "UNTERMINATED_QUOTE":
                 utils.logger.warning(f"Attempting to correct unescaped quote characters in file gs://{gcs_file_path}: {e}")
                 fix_csv_quoting(gcs_file_path)
-            elif error_type == "CSV_FORMAT_ERROR":
-                raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
             else:
-                raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e
+                utils.logger.warning(f"Retrying conversion of file {gcs_file_path} to Parquet, ignoring errors and storing rejects")
+                retry_ignoring_errors(gcs_file_path)
         else:
             raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e    
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
+
+def retry_ignoring_errors(gcs_file_path: str) -> None:
+    """
+    Retry converting CSV to Parquet, ignoring errors and storing rejects
+    """
+    csv_to_parquet(gcs_file_path, True, ['store_rejects=True, ignore_errors=True'])
 
 def convert_csv_file_encoding(gcs_file_path: str) -> None:
     """
