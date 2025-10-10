@@ -139,8 +139,6 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
 
-            print(f"!!! Converting CSV file gs://{gcs_file_path} to Parquet with SQL: {convert_statement.replace(chr(10), ' ').replace('  ', ' ')}")
-
             conn.execute(convert_statement)
     except Exception as e:
         if not retry:
@@ -434,9 +432,6 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
 
 def normalize_file(parquet_gcs_file_path: str, cdm_version: str, date_format: str, datetime_format: str) -> None:
     fix_sql = get_normalization_sql_statement(parquet_gcs_file_path, cdm_version, date_format, datetime_format)
-
-    fix_sql_no_return = fix_sql.replace('\n', ' ').replace('  ', ' ')
-    print(f"!!! Normalizing Parquet file gs://{parquet_gcs_file_path} with SQL: {fix_sql_no_return}")
     
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM
@@ -537,7 +532,7 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
             # Unexpected columns will be reported in data delivery report, and normalization step will remove them
             csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True, ignore_errors=True'])
-                
+
     except UnicodeDecodeError:
         raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
 

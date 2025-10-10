@@ -198,7 +198,7 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
 
     except Exception as e:
         # Handle any other unexpected errors
-        print(f"Error checking GCS path: {e}")
+        utils.logger.error(f"Error checking GCS path: {e}")
         return False
 
 
