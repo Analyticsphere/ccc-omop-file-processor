@@ -139,6 +139,8 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
                 ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
             """
 
+            print(f"!!! Converting CSV file gs://{gcs_file_path} to Parquet with SQL: {convert_statement.replace(chr(10), ' ').replace('  ', ' ')}")
+
             conn.execute(convert_statement)
     except Exception as e:
         if not retry:
