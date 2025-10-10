@@ -240,7 +240,7 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             # After creating new file with UTF8 encoding, try converting it to Parquet
             # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
             # Unexpected columns will be reported in data delivery report, and normalization step will remove them
-            csv_to_parquet(f"{bucket_name}/{new_file_path}", True, ['store_rejects=True'])
+            csv_to_parquet(f"{bucket_name}/{new_file_path}", True, ['store_rejects=True, ignore_errors=True'])
 
         except UnicodeDecodeError as e:
             raise Exception(f"Failed to decode file {gcs_file_path} with detected encoding {detected_encoding}: {str(e)}") from e

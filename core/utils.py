@@ -168,7 +168,7 @@ def get_columns_from_file(gcs_file_path: str) -> list:
     gcs_file_path = gcs_file_path.replace("gs://", "")
     
     # Determine file type by extension
-    is_csv = gcs_file_path.lower().endswith('.csv')
+    is_csv = gcs_file_path.lower().endswith(constants.CSV) | gcs_file_path.lower().endswith(constants.CSV_GZ)
     
     # Create a unique table name for introspection
     table_name_for_introspection = "temp_introspect_table"
@@ -181,20 +181,24 @@ def get_columns_from_file(gcs_file_path: str) -> list:
 
             # Create a temp table based on file type with zero rows
             if is_csv:
-                conn.execute(f"""
+                tmp_tbl_sql = f"""
                     CREATE TEMP TABLE {table_name_for_introspection} AS
                     SELECT * FROM read_csv('gs://{gcs_file_path}', 
-                                          null_padding=true, 
+                                          null_padding=True, 
                                           ALL_VARCHAR=True,
-                                          strict_mode=False) 
+                                          strict_mode=False,
+                                          ignore_errors=True) 
                     LIMIT 0
-                """)
+                """
+
             else:  # Parquet file
-                conn.execute(f"""
+                tmp_tbl_sql = f"""
                     CREATE TEMP TABLE {table_name_for_introspection} AS
                     SELECT * FROM 'gs://{gcs_file_path}' 
                     LIMIT 0
-                """)
+                """
+            
+            conn.execute(tmp_tbl_sql)
 
             # Retrieve column metadata from DuckDB
             pragma_info = conn.execute(
