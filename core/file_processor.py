@@ -76,6 +76,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
     - Copies incoming Parquet file to artifact GCS directory, ensuring:
        - The output file name is all lowercase
        - All column names within the Parquet file are all lowercase.
+       - All column types are converted to VARCHAR (if not alredy)
     """
     if utils.valid_parquet_file(gcs_file_path):
         # Get columns from parquet file
@@ -85,12 +86,13 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         # Handle offset column in note_nlp
         # May come in as offset or "offset" and need different handling for each scenario
         for column in parquet_columns:
+            # Always cast to VARCHAR, handle offset columns specially
             if column == '"offset"':
-                select_list.append(f'""{column}"" AS {column.lower()}')
+                select_list.append(f'CAST(""{column}"" AS VARCHAR) AS {column.lower()}')
             elif column == 'offset':
-                select_list.append(f'"{column}" AS "{column.lower()}"')
+                select_list.append(f'CAST("{column}" AS VARCHAR) AS "{column.lower()}"')
             else:
-                select_list.append(f"{column} AS {utils.clean_column_name_for_sql(column)}")
+                select_list.append(f"CAST({column} AS VARCHAR) AS {utils.clean_column_name_for_sql(column)}")
         select_clause = ", ".join(select_list)
 
         copy_sql = f"""
