@@ -108,7 +108,7 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
             # Ensure vocabulary version actually exists
 
             # TODO: CHange this back, just adding for now to see what happens if we go ahead with the query
-            if gcp_services.vocab_gcs_path_exists(vocab_path) or not gcp_services.vocab_gcs_path_exists(vocab_gcs_bucket):
+            if 1==1: #gcp_services.vocab_gcs_path_exists(vocab_path) or not gcp_services.vocab_gcs_path_exists(vocab_gcs_bucket):
 
                 transform_query = f"""
                 COPY (
