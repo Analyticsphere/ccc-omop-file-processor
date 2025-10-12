@@ -221,6 +221,9 @@ def valid_parquet_file(gcs_file_path: str) -> bool:
     # Retuns bool indicating whether Parquet file is valid/can be read by DuckDB
     conn, local_db_file = create_duckdb_connection()
 
+    if not parquet_file_exists(gcs_file_path):
+        return False
+
     try:
         with conn:
             # If the file is not a valid Parquet file, this will throw an exception
