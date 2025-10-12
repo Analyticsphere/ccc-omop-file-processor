@@ -98,7 +98,7 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                     utils.close_duckdb_connection(conn, local_db_file)
                 
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
-    vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
+    vocab_path = f"{vocab_gcs_bucket}/{vocab_version}"
     optimized_file_path = utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket)
 
     # Create the optimized vocabulary file if it doesn't exist
