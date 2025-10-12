@@ -87,9 +87,9 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         # May come in as offset or "offset" and need different handling for each scenario
         for column in parquet_columns:
             # Always cast to VARCHAR, handle offset columns specially
-            if column == '"offset"':
+            if column.lower() == '"offset"':
                 select_list.append(f'CAST(""{column}"" AS VARCHAR) AS {column.lower()}')
-            elif column == 'offset':
+            elif column.lower() == 'offset':
                 select_list.append(f'CAST("{column}" AS VARCHAR) AS "{column.lower()}"')
             else:
                 select_list.append(f"CAST({column} AS VARCHAR) AS {utils.clean_column_name_for_sql(column)}")
