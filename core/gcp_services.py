@@ -189,6 +189,7 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
         except Exception:
             print(f"GCP_SERVICES Returning false because bucket {bucket_name} does not exist")
             return False
+        print(f"GCP_SERVICES Bucket {bucket_name} does exist")
 
         # If no blob path, we're just checking bucket existence
         if not blob_path:
@@ -199,7 +200,16 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
         blob = bucket.blob(blob_path)
         print(f"GCP_SERVICES Checking if blob {blob_path} exists in bucket {bucket_name}")
         print(f"GCP_SERVICES Blob exists is: {blob.exists()}")
-        print(f"GCP_SERVICES Blob is: {blob}")
+
+
+        # If blob_path ends with a slash, remove the trailing slash for modified_blob_path
+        if blob_path.endswith('/'):
+            modified_blob_path = blob_path[:-1]
+        else:
+            modified_blob_path = blob_path
+        print(f"GCP_SERVICES Checking if blob {modified_blob_path} exists in bucket {bucket_name}")
+        print(f"GCP_SERVICES Modified Blob exists is: {bucket.blob(modified_blob_path).exists()}")
+        
         return blob.exists()
 
     except Exception as e:
