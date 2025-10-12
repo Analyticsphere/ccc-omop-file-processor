@@ -184,16 +184,22 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
 
         # Check if bucket exists
         try:
+            print(f"GCP_SERVICES Checking if bucket {bucket_name} exists")
             bucket = client.get_bucket(bucket_name)
         except Exception:
+            print(f"GCP_SERVICES Returning false because bucket {bucket_name} does not exist")
             return False
 
         # If no blob path, we're just checking bucket existence
         if not blob_path:
+            print(f"GCP_SERVICES returning true because bucket {bucket_name} exists and no blob path specified")
             return True
 
         # Check if blob exists
         blob = bucket.blob(blob_path)
+        print(f"GCP_SERVICES Checking if blob {blob_path} exists in bucket {bucket_name}")
+        print(f"GCP_SERVICES Blob exists is: {blob.exists()}")
+        print(f"GCP_SERVICES Blob is: {blob}")
         return blob.exists()
 
     except Exception as e:

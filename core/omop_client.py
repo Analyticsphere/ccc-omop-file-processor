@@ -98,7 +98,7 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                     utils.close_duckdb_connection(conn, local_db_file)
                 
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
-    vocab_path = f"{vocab_gcs_bucket}/{vocab_version}"
+    vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     optimized_file_path = utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket)
 
     # Create the optimized vocabulary file if it doesn't exist
@@ -106,7 +106,9 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
         # Ensure exisiting vocab file can be read
         if not utils.valid_parquet_file(optimized_file_path):
             # Ensure vocabulary version actually exists
-            if gcp_services.vocab_gcs_path_exists(vocab_path):
+
+            # TODO: CHange this back, just adding for now to see what happens if we go ahead with the query
+            if gcp_services.vocab_gcs_path_exists(vocab_path) or not gcp_services.vocab_gcs_path_exists(vocab_gcs_bucket):
 
                 transform_query = f"""
                 COPY (
