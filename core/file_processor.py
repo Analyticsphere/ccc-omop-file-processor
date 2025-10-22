@@ -63,7 +63,7 @@ class StreamingCSVWriter:
         self.buffer.close()
 
 def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
-    if file_type == constants.CSV:
+    if file_type in [constants.CSV, constants.CSV_GZ]:
         csv_to_parquet(gcs_file_path)
     elif file_type == constants.PARQUET:
         process_incoming_parquet(gcs_file_path)
@@ -76,6 +76,7 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
     - Copies incoming Parquet file to artifact GCS directory, ensuring:
        - The output file name is all lowercase
        - All column names within the Parquet file are all lowercase.
+       - All column types are converted to VARCHAR (if not alredy)
     """
     if utils.valid_parquet_file(gcs_file_path):
         # Get columns from parquet file
@@ -85,12 +86,13 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         # Handle offset column in note_nlp
         # May come in as offset or "offset" and need different handling for each scenario
         for column in parquet_columns:
-            if column == '"offset"':
-                select_list.append(f'""{column}"" AS {column.lower()}')
-            elif column == 'offset':
-                select_list.append(f'"{column}" AS "{column.lower()}"')
+            # Always cast to VARCHAR, handle offset columns specially
+            if column.lower() == '"offset"':
+                select_list.append(f'CAST(""{column}"" AS VARCHAR) AS {column.lower()}')
+            elif column.lower() == 'offset':
+                select_list.append(f'CAST("{column}" AS VARCHAR) AS "{column.lower()}"')
             else:
-                select_list.append(f"{column} AS {column.lower()}")
+                select_list.append(f"CAST({column} AS VARCHAR) AS {utils.clean_column_name_for_sql(column)}")
         select_clause = ", ".join(select_list)
 
         copy_sql = f"""
@@ -117,18 +119,25 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
 
             select_list = []
             for column in csv_column_names:
-                # get rid of " characters in column names to prevent double double quoting in offset handling
-                column_alias = column.lower().replace('"', '')
-                select_list.append(f"{column} AS {column_alias}")
+                # Use the utility function to clean column names for the alias
+                column_alias = utils.clean_column_name_for_sql(column)
+
+                # Special handling for offset column in note_nlp
+                if column.lower() not in ['offset', '"offset"', "'offset'"]:
+                    select_list.append(f"""
+                        "{column}" AS {column_alias}
+                    """)
+                else:
+                    select_list.append(f"{column} AS {column_alias}")
+            # Build final select statement    
             select_clause = ", ".join(select_list)
 
             # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
             # Special handling required to prevent parsing error
-
             # Re-add double quotes to offset column prevent DuckDB from returning parsing error
             select_clause = select_clause.replace('offset', '"offset"')
 
-            # Convert CSV to Parquet with lowercase column names
+            # Convert CSV to Parquet
             convert_statement = f"""
                 COPY (
                     SELECT {select_clause}
@@ -148,15 +157,20 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             elif error_type == "UNTERMINATED_QUOTE":
                 utils.logger.warning(f"Attempting to correct unescaped quote characters in file gs://{gcs_file_path}: {e}")
                 fix_csv_quoting(gcs_file_path)
-            elif error_type == "CSV_FORMAT_ERROR":
-                raise Exception(f"CSV format error in file gs://{gcs_file_path}: {e}") from e
             else:
-                raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e
+                utils.logger.warning(f"Retrying conversion of file {gcs_file_path} to Parquet, ignoring errors and storing rejects")
+                retry_ignoring_errors(gcs_file_path)
         else:
             raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e    
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
-    
+
+def retry_ignoring_errors(gcs_file_path: str) -> None:
+    """
+    Retry converting CSV to Parquet, ignoring errors and storing rejects
+    """
+    csv_to_parquet(gcs_file_path, True, ['store_rejects=True, ignore_errors=True'])
+
 def convert_csv_file_encoding(gcs_file_path: str) -> None:
     """
     Creates a copy of non-UTF8 CSV files as a new CSV file with UTF8 encoding.
@@ -234,9 +248,9 @@ def convert_csv_file_encoding(gcs_file_path: str) -> None:
             utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
 
             # After creating new file with UTF8 encoding, try converting it to Parquet
-            # store_rejects = True leads to more malformed rows getting included, but may add unexpected columns
+            # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
             # Unexpected columns will be reported in data delivery report, and normalization step will remove them
-            csv_to_parquet(f"{bucket_name}/{new_file_path}", True, ['store_rejects=True'])
+            csv_to_parquet(f"{bucket_name}/{new_file_path}", True, ['store_rejects=True, ignore_errors=True'])
 
         except UnicodeDecodeError as e:
             raise Exception(f"Failed to decode file {gcs_file_path} with detected encoding {detected_encoding}: {str(e)}") from e
@@ -257,7 +271,7 @@ def get_placeholder_value(column_name: str, column_type: str) -> str:
     
     return default_value
 
-def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str) -> str:
+def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str, date_format: str, datetime_format: str) -> str:
     """
     Generates a SQL statement that, when executed:
         - Converts data types of columns within Parquet file to OMOP CDM standard
@@ -299,7 +313,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
             break
 
     # --------------------------------------------------------------------------
-    # Initialize lists to build SQL expressions
+    # Initialize lists to hold SQL expressions
     # --------------------------------------------------------------------------
     coalesce_exprs = []
     row_validity = []    # e.g. "cc.some_col IS NOT NULL AND ..."
@@ -314,10 +328,26 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
         # Determine default value if a required column is NULL
         default_value = get_placeholder_value(column_name, column_type) if is_required or column_name.endswith("_concept_id") else "NULL"
 
-        # If the site delivered table contains an expected column...
+        # If the site-delivered table contains an expected column... 
         if column_name in actual_columns:
-            # If the column exists in the Parquet file, coalesce it with the default value, and try casting to expected type
-            if default_value != "NULL":
+            
+            # Special handling for DATE and TIMESTAMP/DATETIME types using STRPTIME and user-supplied formats
+            if column_type in ["DATE", "TIMESTAMP", "DATETIME"]:
+                if column_type == "DATE":
+                    format_to_try = date_format
+                else:
+                    format_to_try = datetime_format
+                # Use STRPTIME with date_format, then cast to DATE
+                coalesce_exprs.append(
+                    f"""COALESCE(
+                        TRY_CAST(TRY_STRPTIME({column_name}, '{format_to_try}') AS {column_type}), -- first try parsing with specified date format
+                        TRY_CAST({column_name} AS {column_type}), -- then try just casting the value
+                        CAST({default_value} AS {column_type}) -- finally, use default value
+                    ) AS {column_name}"""
+                )            
+
+            # If the field *must* have a value...
+            elif default_value != "NULL":
                 coalesce_exprs.append(f"TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS {column_name}")
             # If default value is NULL, don't coalesce
             else:
@@ -328,19 +358,19 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
                 # In the final SQL statement, need to confirm that ALL required columns can be cast to their correct types
                 # If any one of the columns cannot be cast to the correct type, the entire row fails
                 # To do this check in one shot, perform a single COALESCE within the SQL statement
-                # ALL columns in a COALESCE must be of the same type, so casting everything to VARCHAR *after* trying to cast it to its correct type
+                # ALL columns in the final COALESCE must be of the same type; after TRY_CAST to expected type, cast to VARCHAR for the coalese
                 row_validity.append(f"CAST(TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS VARCHAR)")
         else:
             # If the site provided a Connect_ID field and/or person_id, use Connect_ID in place of person_id
             if column_name == 'person_id' and connect_id_column_name and len(connect_id_column_name) > 1:
                 coalesce_exprs.append(f"CAST({connect_id_column_name} AS {column_type}) AS {column_name}")
 
-            # If the column doesn't exist, just produce a placeholder (NULL or a special default)
+            # If the column doesn't exist in the delivery, add that column with a placeholder (NULL or a special default)
             # Still need to cast to ensure consist column types
             coalesce_exprs.append(f"CAST({default_value} AS {column_type}) AS {column_name}")
-
             # If a column is required but not provided, all rows should not fail validity check; just use a default value
 
+    # Build coalesce statement
     coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
 
     # If row_validity list has no statements, add a string so SQL statement stays valid
@@ -357,6 +387,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
 
         # Create composite key by concatenting each column into a single value and taking its hash
         # Don't include the original primary key in the hash
+        # % 9223372036854775807 to get a BIGINT
         primary_key_sql = ", ".join([f"COALESCE(CAST({column_name} AS VARCHAR), '')" for column_name in ordered_omop_columns if column_name != primary_key])
         replace_clause = f"""
             REPLACE(CAST((CAST(hash(CONCAT({primary_key_sql})) AS UBIGINT) % 9223372036854775807) AS BIGINT) AS {primary_key}) 
@@ -406,9 +437,12 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
 
     return sql_script
 
-def normalize_file(parquet_gcs_file_path: str, cdm_version: str) -> None:
-    fix_sql = get_normalization_sql_statement(parquet_gcs_file_path, cdm_version)
-    
+def normalize_file(parquet_gcs_file_path: str, cdm_version: str, date_format: str, datetime_format: str) -> None:
+    fix_sql = get_normalization_sql_statement(parquet_gcs_file_path, cdm_version, date_format, datetime_format)
+
+    fix_sql_no_return = fix_sql.replace('\n', ' ').replace('  ', ' ')
+    print(f"Normalizing Parquet file gs://{parquet_gcs_file_path} with SQL: {fix_sql_no_return}")
+
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM
     if fix_sql and len(fix_sql) > 1:
@@ -507,8 +541,8 @@ def fix_csv_quoting(gcs_file_path: str) -> None:
             # After creating new file with fixed quoting, try converting it to Parquet
             # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
             # Unexpected columns will be reported in data delivery report, and normalization step will remove them
-            csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True'])
-                
+            csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True, ignore_errors=True'])
+
     except UnicodeDecodeError:
         raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
 

@@ -1,3 +1,4 @@
+import re
 import gc
 import json
 import logging
@@ -103,13 +104,16 @@ def parse_duckdb_csv_error(error: Exception) -> Optional[str]:
 def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
     # Extract file name from a GCS path and removes extension
     # e.g. synthea53/2024-12-31/care_site.parquet -> care_site
-    return (
-        gcs_file_path.split('/')[-1]
-        .replace(constants.PARQUET, '')
-        .replace(constants.CSV, '')
-        .replace(constants.FIXED_FILE_TAG_STRING, '')
-        .lower()
-    )
+
+    file_name = gcs_file_path.split('/')[-1].lower()
+
+    for ext in constants.FILE_EXTENSIONS:
+        file_name = file_name.replace(ext, '')
+
+    # If using a 'fixed' file, remove the appened string indicating it's a fixed file
+    file_name = file_name.replace(constants.FIXED_FILE_TAG_STRING, '')
+
+    return file_name
 
 def get_cdm_schema(cdm_version: str) -> dict:
     # Returns CDM schema for specified CDM version.
@@ -164,7 +168,7 @@ def get_columns_from_file(gcs_file_path: str) -> list:
     gcs_file_path = gcs_file_path.replace("gs://", "")
     
     # Determine file type by extension
-    is_csv = gcs_file_path.lower().endswith('.csv')
+    is_csv = gcs_file_path.lower().endswith(constants.CSV) | gcs_file_path.lower().endswith(constants.CSV_GZ)
     
     # Create a unique table name for introspection
     table_name_for_introspection = "temp_introspect_table"
@@ -177,20 +181,24 @@ def get_columns_from_file(gcs_file_path: str) -> list:
 
             # Create a temp table based on file type with zero rows
             if is_csv:
-                conn.execute(f"""
+                tmp_tbl_sql = f"""
                     CREATE TEMP TABLE {table_name_for_introspection} AS
                     SELECT * FROM read_csv('gs://{gcs_file_path}', 
-                                          null_padding=true, 
+                                          null_padding=True, 
                                           ALL_VARCHAR=True,
-                                          strict_mode=False) 
+                                          strict_mode=False,
+                                          ignore_errors=True) 
                     LIMIT 0
-                """)
+                """
+
             else:  # Parquet file
-                conn.execute(f"""
+                tmp_tbl_sql = f"""
                     CREATE TEMP TABLE {table_name_for_introspection} AS
                     SELECT * FROM 'gs://{gcs_file_path}' 
                     LIMIT 0
-                """)
+                """
+            
+            conn.execute(tmp_tbl_sql)
 
             # Retrieve column metadata from DuckDB
             pragma_info = conn.execute(
@@ -212,6 +220,9 @@ def get_columns_from_file(gcs_file_path: str) -> list:
 def valid_parquet_file(gcs_file_path: str) -> bool:
     # Retuns bool indicating whether Parquet file is valid/can be read by DuckDB
     conn, local_db_file = create_duckdb_connection()
+
+    if not parquet_file_exists(gcs_file_path):
+        return False
 
     try:
         with conn:
@@ -464,3 +475,18 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
     replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
 
     return replacement_result
+
+
+def clean_column_name_for_sql(name: str) -> str:
+    """
+    Remove any character that is not a Unicode word character (letter, digit, underscore).
+    Also strips leading/trailing whitespace and lowercases the name.
+    Useful for cleaning column names for SQL or data processing.
+    """
+    cleaned = re.sub(r'[^\w]', '', name, flags=re.UNICODE)
+    cleaned = cleaned.strip()
+    cleaned = cleaned.replace('"', '')
+    cleaned = cleaned.lower()
+    cleaned = cleaned.replace(' ', '_')
+
+    return cleaned

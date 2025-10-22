@@ -54,7 +54,7 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
     """
     vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     # Confirm desired vocabulary version exists in GCS
-    if gcp_services.vocab_gcs_path_exists(vocab_root_path):
+    if gcp_services.vocab_gcs_path_exists(vocab_root_path) or not gcp_services.vocab_gcs_path_exists(vocab_gcs_bucket):
         vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
         for vocab_file in vocab_files:
             vocab_file_name = vocab_file.replace(constants.CSV, '').lower()
@@ -106,8 +106,7 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
         # Ensure exisiting vocab file can be read
         if not utils.valid_parquet_file(optimized_file_path):
             # Ensure vocabulary version actually exists
-            if gcp_services.vocab_gcs_path_exists(vocab_path):
-
+            if gcp_services.vocab_gcs_path_exists(vocab_path) or not gcp_services.vocab_gcs_path_exists(vocab_gcs_bucket):
                 transform_query = f"""
                 COPY (
                     SELECT DISTINCT

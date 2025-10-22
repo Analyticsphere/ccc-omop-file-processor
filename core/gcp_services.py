@@ -194,11 +194,12 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
 
         # Check if blob exists
         blob = bucket.blob(blob_path)
+        
         return blob.exists()
 
     except Exception as e:
         # Handle any other unexpected errors
-        print(f"Error checking GCS path: {e}")
+        utils.logger.error(f"Error checking GCS path: {e}")
         return False
 
 

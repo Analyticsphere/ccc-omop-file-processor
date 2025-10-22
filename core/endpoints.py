@@ -191,18 +191,22 @@ def normalize_parquet_file() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     omop_version: Optional[str] = data.get('omop_version')
+    date_format: Optional[str] = data.get('date_format')
+    datetime_format: Optional[str] = data.get('datetime_format')
 
-    if not all([file_path, omop_version]):
-        return "Missing a required parameter to 'normalize_parquet' endpoint. Required: file_path, omop_version", 400
+    if not all([file_path, omop_version, date_format, datetime_format]):
+        return "Missing a required parameter to 'normalize_parquet' endpoint. Required: file_path, omop_version, date_format, datetime_format", 400
 
     try:
         # At this point we know these are not None
         assert file_path is not None
         assert omop_version is not None
+        assert date_format is not None
+        assert datetime_format is not None
         
         parquet_file_path: str = utils.get_parquet_artifact_location(file_path)
         utils.logger.info(f"Attempting to normalize Parquet file {parquet_file_path}")
-        file_processor.normalize_file(parquet_file_path, omop_version)
+        file_processor.normalize_file(parquet_file_path, omop_version, date_format, datetime_format)
 
         return "Normalized Parquet file", 200
     except Exception as e:
