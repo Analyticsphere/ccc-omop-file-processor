@@ -192,11 +192,11 @@ TARGET_CDM_VERSION_REPORT_NAME = "Standardized to CDM version"
 FILE_PROCESSOR_VERSION_REPORT_NAME = "Pipeline file processor version"
 PROCESSED_DATE_REPORT_NAME = "Delivery processing date"
 
-SOURCE_TARGET = "Map source concepts to a updated target codes"
+SOURCE_TARGET = "Map source concepts to updated target codes"
 DOMAIN_CHECK = "Check for latest domain and update if needed"
 TARGET_REMAP = "Remap non-standard targets to new standard targets"
 TARGET_REPLACEMENT = "Replace non-standard targets with new standard targets"
-OMOP_ETL = "OMOP to OMOP structure transformation"
+OMOP_ETL = "OMOP to OMOP ETL"
 
 # Primary key column can be found in schema.json file
 NATURAL_KEY_TABLES = [

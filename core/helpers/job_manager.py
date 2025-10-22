@@ -26,8 +26,9 @@ class HarmonizationJobManager:
         """
         Creates a new harmonization job and returns the job info
         """
-        # Generate job ID
-        job_id = str(uuid.uuid4())
+        # Generate job ID with table name for easier identification
+        table_name = utils.get_table_name_from_gcs_path(file_path)
+        job_id = f"{uuid.uuid4()}_{table_name}"
         bucket_name, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
         
         # Create status directory
