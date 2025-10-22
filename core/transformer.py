@@ -257,7 +257,7 @@ class Transformer:
             conn, local_db_file = utils.create_duckdb_connection()
             
             with conn:
-                # Step 1: Check if duplicates exist at all
+                # Step 1: Quick check if duplicates exist at all
                 check_sql = f"""
                 SELECT 
                     {primary_key_column}, 
@@ -267,7 +267,6 @@ class Transformer:
                 HAVING COUNT(*) > 1
                 LIMIT 1;
                 """
-                
                 duplicates = conn.execute(check_sql).fetchall()
                 
                 if not duplicates:
@@ -276,53 +275,28 @@ class Transformer:
                 
                 self.logger.info(f"Found duplicate primary keys in {self.target_table}. Fixing...")
                 
-                # Step 2: Create a temp table that identifies all duplicate keys
-                conn.execute(f"""
-                CREATE TEMP TABLE duplicate_keys AS
-                SELECT {primary_key_column}
-                FROM '{transformed_file_path}'
-                GROUP BY {primary_key_column}
-                HAVING COUNT(*) > 1;
-                """)
-                
-                # Step 3: Create temp tables for each part of the data we need to process
-                # First, a table for all data with non-duplicate keys (we'll keep these as-is)
-                conn.execute(f"""
-                CREATE TEMP TABLE non_duplicate_data AS
-                SELECT *
-                FROM '{transformed_file_path}'
-                WHERE {primary_key_column} NOT IN (SELECT {primary_key_column} FROM duplicate_keys);
-                """)
-                
-                # Step 4: Create a table with numbered rows for duplicate key data
-                conn.execute(f"""
-                CREATE TEMP TABLE duplicate_data AS
-                SELECT *, 
-                    ROW_NUMBER() OVER (PARTITION BY {primary_key_column} ORDER BY (SELECT 1)) as dup_num
-                FROM '{transformed_file_path}'
-                WHERE {primary_key_column} IN (SELECT {primary_key_column} FROM duplicate_keys);
-                """)
-                
-                # Step 5: Create a new table with fixed keys for duplicates
-                conn.execute(f"""
-                CREATE TEMP TABLE fixed_duplicate_data AS
-                SELECT 
-                    CASE 
-                        WHEN dup_num = 1 THEN {primary_key_column}  -- Keep first occurrence unchanged
-                        ELSE CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(dup_num AS VARCHAR))) % 9223372036854775807 AS {primary_key_type})
-                    END AS {primary_key_column},
-                    * EXCLUDE ({primary_key_column}, dup_num)
-                FROM duplicate_data;
-                """)
-                
-                # Step 6: Combine the fixed data back together and write to the original file
-                conn.execute(f"""
+                # Step 2: Process everything in a single pass using window functions
+                # This reads the file once, applies the fix inline, and writes the result
+                # The ROW_NUMBER is calculated for all rows, but only used where count > 1
+                fix_sql = f"""
                 COPY (
-                    SELECT * FROM non_duplicate_data
-                    UNION ALL
-                    SELECT * FROM fixed_duplicate_data
+                    SELECT 
+                        CASE 
+                            WHEN row_num = 1 THEN {primary_key_column}  -- Keep first occurrence unchanged
+                            WHEN key_count > 1 THEN CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(row_num AS VARCHAR))) % 9223372036854775807 AS {primary_key_type})
+                            ELSE {primary_key_column}  -- Non-duplicates remain unchanged
+                        END AS {primary_key_column},
+                        * EXCLUDE ({primary_key_column}, row_num, key_count)
+                    FROM (
+                        SELECT *,
+                            ROW_NUMBER() OVER (PARTITION BY {primary_key_column} ORDER BY (SELECT 1)) as row_num,
+                            COUNT(*) OVER (PARTITION BY {primary_key_column}) as key_count
+                        FROM '{transformed_file_path}'
+                    )
                 ) TO '{transformed_file_path}' {constants.DUCKDB_FORMAT_STRING}
-                """)
+                """
+                
+                conn.execute(fix_sql)
                 
                 self.logger.info(f"Successfully fixed duplicate primary keys in {self.target_table}")
         except Exception as e:
