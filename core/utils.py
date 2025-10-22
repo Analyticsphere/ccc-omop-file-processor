@@ -20,7 +20,7 @@ Set up a logging instance that will write to stdout (and therefor show up in Goo
 """
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='omop-fp %(name)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 # Create the logger at module level so its settings are applied throughout code base
