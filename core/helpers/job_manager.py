@@ -145,6 +145,10 @@ class HarmonizationJobManager:
             # Get the current step to execute
             current_step = steps[current_step_index]
             job_data['current_step'] = current_step
+            job_data['last_updated'] = datetime.utcnow().isoformat()
+            
+            # Update status BEFORE starting the step to ensure it's persisted even if the request times out
+            blob.upload_from_string(json.dumps(job_data), content_type="application/json")
             
             # Initialize harmonizer with job parameters
             utils.logger.info(f"Job {job_id}: Processing step {current_step_index+1}/{len(steps)}: {current_step}")
@@ -176,7 +180,14 @@ class HarmonizationJobManager:
                 else:
                     raise Exception(f"Unknown step: {current_step}")
                     
-                # Update job progress
+                utils.logger.info(f"Job {job_id}: Completed step {current_step}")
+                
+                # Update job progress - reload from GCS to get latest state in case of concurrent updates
+                try:
+                    job_data = json.loads(blob.download_as_string())
+                except Exception as reload_error:
+                    utils.logger.warning(f"Could not reload job data, using cached version: {reload_error}")
+                
                 job_data['current_step_index'] = current_step_index + 1
                 job_data['last_step_completed'] = current_step
                 job_data['last_updated'] = datetime.utcnow().isoformat()
@@ -186,6 +197,7 @@ class HarmonizationJobManager:
                 if job_data['current_step_index'] >= len(steps):
                     job_data['status'] = 'completed'
                     job_data['end_time'] = datetime.utcnow().isoformat()
+                    utils.logger.info(f"Job {job_id}: All steps completed successfully")
                 
                 blob.upload_from_string(json.dumps(job_data), content_type="application/json")
                 return job_data
