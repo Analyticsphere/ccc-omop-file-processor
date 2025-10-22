@@ -101,18 +101,12 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
     vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     optimized_file_path = utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket)
 
-    print("In create_optimized_vocab_file STEP 1")
     # Create the optimized vocabulary file if it doesn't exist
     if not utils.parquet_file_exists(optimized_file_path):
-        print("In create_optimized_vocab_file STEP 2")
         # Ensure exisiting vocab file can be read
         if not utils.valid_parquet_file(optimized_file_path):
-            print("In create_optimized_vocab_file STEP 3")
             # Ensure vocabulary version actually exists
-
-            # TODO: CHange this back, just adding for now to see what happens if we go ahead with the query
-            if 1==1: #gcp_services.vocab_gcs_path_exists(vocab_path) or not gcp_services.vocab_gcs_path_exists(vocab_gcs_bucket):
-
+            if gcp_services.vocab_gcs_path_exists(vocab_path) or not gcp_services.vocab_gcs_path_exists(vocab_gcs_bucket):
                 transform_query = f"""
                 COPY (
                     SELECT DISTINCT
@@ -130,10 +124,6 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                         IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
                 ) TO 'gs://{optimized_file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
-                print("In create_optimized_vocab_file about to execute_duckdb_sql")
-                transform_sql = transform_query.replace('\n', ' ').replace('  ', ' ')
-                print(f"Transform SQL is: {transform_sql}")
-                print(f"Vocab path is: {vocab_path}")
                 utils.execute_duckdb_sql(transform_query, "Unable to create optimized vocab file")
 
             else:
