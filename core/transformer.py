@@ -293,60 +293,67 @@ class Transformer:
                 # Pass 2: Process only the duplicate rows with window functions
                 # This way we only apply expensive window functions to the small duplicate subset
                 
-                # Create a temporary output location for the fixed file
+                # Create temporary output locations
                 import uuid
-                temp_output = f"gs://{self.file_path}temp_{uuid.uuid4()}.parquet"
+                temp_id = uuid.uuid4()
+                temp_non_dup = f"gs://{self.file_path}temp_non_dup_{temp_id}.parquet"
+                temp_dup_fixed = f"gs://{self.file_path}temp_dup_fixed_{temp_id}.parquet"
                 
                 self.logger.info(f"Processing non-duplicate rows...")
-                # Pass 1: Stream non-duplicates directly to output (fast, no window functions)
+                # Pass 1: Stream non-duplicates directly to temp file (fast, no window functions)
                 conn.execute(f"""
                 COPY (
                     SELECT *
                     FROM '{transformed_file_path}'
                     WHERE {primary_key_column} NOT IN (SELECT {primary_key_column} FROM duplicate_keys)
-                ) TO '{temp_output}' {constants.DUCKDB_FORMAT_STRING}
+                ) TO '{temp_non_dup}' {constants.DUCKDB_FORMAT_STRING}
                 """)
                 
                 self.logger.info(f"Processing duplicate rows with fixes...")
-                # Pass 2: Process ONLY duplicate rows with window functions, append to output
-                # This is memory-safe because we're only processing ~50k rows, not 1.5GB
+                # Pass 2: Process ONLY duplicate rows with window functions, write to separate temp file
                 conn.execute(f"""
-                INSERT INTO '{temp_output}' BY NAME
-                SELECT 
-                    CASE 
-                        WHEN row_num = 1 THEN {primary_key_column}  -- Keep first occurrence unchanged
-                        ELSE CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(row_num AS VARCHAR))) % 9223372036854775807 AS {primary_key_type})
-                    END AS {primary_key_column},
-                    * EXCLUDE ({primary_key_column}, row_num)
-                FROM (
-                    SELECT *,
-                        ROW_NUMBER() OVER (PARTITION BY {primary_key_column} ORDER BY (SELECT 1)) as row_num
-                    FROM '{transformed_file_path}'
-                    WHERE {primary_key_column} IN (SELECT {primary_key_column} FROM duplicate_keys)
-                )
+                COPY (
+                    SELECT 
+                        CASE 
+                            WHEN row_num = 1 THEN {primary_key_column}  -- Keep first occurrence unchanged
+                            ELSE CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(row_num AS VARCHAR))) % 9223372036854775807 AS {primary_key_type})
+                        END AS {primary_key_column},
+                        * EXCLUDE ({primary_key_column}, row_num)
+                    FROM (
+                        SELECT *,
+                            ROW_NUMBER() OVER (PARTITION BY {primary_key_column} ORDER BY (SELECT 1)) as row_num
+                        FROM '{transformed_file_path}'
+                        WHERE {primary_key_column} IN (SELECT {primary_key_column} FROM duplicate_keys)
+                    )
+                ) TO '{temp_dup_fixed}' {constants.DUCKDB_FORMAT_STRING}
                 """)
                 
-                # Step 4: Replace the original file with the fixed one
-                self.logger.info(f"Replacing original file with fixed version...")
+                # Step 4: Combine both temp files and write to final location
+                self.logger.info(f"Merging non-duplicate and fixed duplicate rows...")
                 conn.execute(f"""
-                COPY (SELECT * FROM '{temp_output}') 
-                TO '{transformed_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                COPY (
+                    SELECT * FROM '{temp_non_dup}'
+                    UNION ALL
+                    SELECT * FROM '{temp_dup_fixed}'
+                ) TO '{transformed_file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """)
                 
-                # Clean up temp file
+                # Clean up temp files
                 try:
                     from google.cloud import storage
-                    # Parse the temp path to extract bucket and blob
-                    temp_path_parts = temp_output.replace('gs://', '').split('/', 1)
-                    if len(temp_path_parts) == 2:
-                        bucket_name, blob_path = temp_path_parts
-                        storage_client = storage.Client()
-                        bucket = storage_client.bucket(bucket_name)
-                        blob = bucket.blob(blob_path)
-                        blob.delete()
-                        self.logger.info(f"Cleaned up temporary file")
+                    storage_client = storage.Client()
+                    
+                    for temp_file in [temp_non_dup, temp_dup_fixed]:
+                        temp_path_parts = temp_file.replace('gs://', '').split('/', 1)
+                        if len(temp_path_parts) == 2:
+                            bucket_name, blob_path = temp_path_parts
+                            bucket = storage_client.bucket(bucket_name)
+                            blob = bucket.blob(blob_path)
+                            blob.delete()
+                    
+                    self.logger.info(f"Cleaned up temporary files")
                 except Exception as cleanup_error:
-                    self.logger.warning(f"Could not clean up temp file: {cleanup_error}")
+                    self.logger.warning(f"Could not clean up temp files: {cleanup_error}")
                 
                 self.logger.info(f"Successfully fixed duplicate primary keys in {self.target_table}")
         except Exception as e:
