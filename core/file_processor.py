@@ -13,54 +13,54 @@ import core.helpers.report_artifact as report_artifact
 import core.utils as utils
 
 
-class StreamingCSVWriter:
-    """Helper class to stream CSV data directly to and from GCS"""
-    def __init__(self, target_blob):
-        self.target_blob = target_blob
-        self.buffer = StringIO()
-        self.writer = csv.writer(self.buffer)
-        self.upload_session = target_blob.create_resumable_upload_session(
-            content_type='text/csv',
-            timeout=None
-        )
-        self.total_bytes_uploaded = 0
+# class StreamingCSVWriter:
+#     """Helper class to stream CSV data directly to and from GCS"""
+#     def __init__(self, target_blob):
+#         self.target_blob = target_blob
+#         self.buffer = StringIO()
+#         self.writer = csv.writer(self.buffer)
+#         self.upload_session = target_blob.create_resumable_upload_session(
+#             content_type='text/csv',
+#             timeout=None
+#         )
+#         self.total_bytes_uploaded = 0
 
-    def writerow(self, row):
-        """Write a row and upload if buffer reaches threshold"""
-        self.writer.writerow(row)
+#     def writerow(self, row):
+#         """Write a row and upload if buffer reaches threshold"""
+#         self.writer.writerow(row)
         
-        # If buffer gets too large, upload it
-        if self.buffer.tell() > 102400 * 102400:  # 100MB threshold
-            self._upload_buffer()
+#         # If buffer gets too large, upload it
+#         if self.buffer.tell() > 102400 * 102400:  # 100MB threshold
+#             self._upload_buffer()
             
 
-    def _upload_buffer(self):
-        """Upload current buffer contents to GCS using resumable upload"""
-        if self.buffer.tell() > 0:
-            content = self.buffer.getvalue().encode('utf-8')
+#     def _upload_buffer(self):
+#         """Upload current buffer contents to GCS using resumable upload"""
+#         if self.buffer.tell() > 0:
+#             content = self.buffer.getvalue().encode('utf-8')
             
-            # Calculate position for resumable upload
-            end_byte = self.total_bytes_uploaded + len(content)
+#             # Calculate position for resumable upload
+#             end_byte = self.total_bytes_uploaded + len(content)
             
-            # Upload the chunk using the resumable session
-            self.target_blob.upload_from_string(
-                content,
-                content_type='text/csv',
-                timeout=None,
-                retry=None,
-                if_generation_match=None
-            )
+#             # Upload the chunk using the resumable session
+#             self.target_blob.upload_from_string(
+#                 content,
+#                 content_type='text/csv',
+#                 timeout=None,
+#                 retry=None,
+#                 if_generation_match=None
+#             )
             
-            self.total_bytes_uploaded = end_byte
+#             self.total_bytes_uploaded = end_byte
             
-            # Clear the buffer
-            self.buffer.seek(0)
-            self.buffer.truncate()
+#             # Clear the buffer
+#             self.buffer.seek(0)
+#             self.buffer.truncate()
 
-    def close(self):
-        """Upload any remaining data and close the writer"""
-        self._upload_buffer()
-        self.buffer.close()
+#     def close(self):
+#         """Upload any remaining data and close the writer"""
+#         self._upload_buffer()
+#         self.buffer.close()
 
 def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
     if file_type in [constants.CSV, constants.CSV_GZ]:
@@ -109,6 +109,12 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         raise Exception(f"Invalid Parquet file at {gcs_file_path}")
 
 def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: list = []) -> None:
+    """
+    Converts a CSV file in GCS to Parquet format using DuckDB.
+    On first attempt, uses strict and more performant parsing settings.
+    On failure, retries with more permissive settings to handle malformed rows.
+    On subsequent failure, an exception is raised.
+    """
     conn, local_db_file = utils.create_duckdb_connection()
 
     try:
@@ -149,17 +155,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             conn.execute(convert_statement)
     except Exception as e:
         if not retry:
-            # DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific DuckDB errors
-            error_type = utils.parse_duckdb_csv_error(e)
-            if error_type == "INVALID_UNICODE":
-                utils.logger.warning(f"Non-UTF8 character found in file gs://{gcs_file_path}: {e}")
-                convert_csv_file_encoding(gcs_file_path)
-            elif error_type == "UNTERMINATED_QUOTE":
-                utils.logger.warning(f"Attempting to correct unescaped quote characters in file gs://{gcs_file_path}: {e}")
-                fix_csv_quoting(gcs_file_path)
-            else:
-                utils.logger.warning(f"Retrying conversion of file {gcs_file_path} to Parquet, ignoring errors and storing rejects")
-                retry_ignoring_errors(gcs_file_path)
+            retry_ignoring_errors(gcs_file_path)
         else:
             raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e    
     finally:
@@ -167,97 +163,97 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
 
 def retry_ignoring_errors(gcs_file_path: str) -> None:
     """
-    Retry converting CSV to Parquet, ignoring errors and storing rejects
+    Retry converting CSV to Parquet with more permissive settings.
     """
-    csv_to_parquet(gcs_file_path, True, ['store_rejects=True, ignore_errors=True'])
+    csv_to_parquet(gcs_file_path, True, ['store_rejects=True, ignore_errors=True, parallel=False'])
 
-def convert_csv_file_encoding(gcs_file_path: str) -> None:
-    """
-    Creates a copy of non-UTF8 CSV files as a new CSV file with UTF8 encoding.
-    File chunks are read and written in streaming mode; conversion done in memory 
-    without downloading or saving files to VM.
+# def convert_csv_file_encoding(gcs_file_path: str) -> None:
+#     """
+#     Creates a copy of non-UTF8 CSV files as a new CSV file with UTF8 encoding.
+#     File chunks are read and written in streaming mode; conversion done in memory 
+#     without downloading or saving files to VM.
     
-    Args:
-        gcs_file_path (str): Full GCS path including bucket (bucket/path/to/file.csv)
-    """
-    utils.logger.info(f"Attemping to convert file {gcs_file_path} encoding to UTF8")
+#     Args:
+#         gcs_file_path (str): Full GCS path including bucket (bucket/path/to/file.csv)
+#     """
+#     utils.logger.info(f"Attemping to convert file {gcs_file_path} encoding to UTF8")
 
-    # Split file path into bucket and object path
-    path_parts = gcs_file_path.split('/')
-    bucket_name = path_parts[0]
-    file_path = '/'.join(path_parts[1:])
+#     # Split file path into bucket and object path
+#     path_parts = gcs_file_path.split('/')
+#     bucket_name = path_parts[0]
+#     file_path = '/'.join(path_parts[1:])
 
-    try:
-        # Initialize GCS client
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(bucket_name)
+#     try:
+#         # Initialize GCS client
+#         storage_client = storage.Client()
+#         bucket = storage_client.bucket(bucket_name)
         
-        # Source blob (aka file)
-        source_blob = bucket.blob(file_path)
+#         # Source blob (aka file)
+#         source_blob = bucket.blob(file_path)
         
-        # Verify the source file exists
-        if not source_blob.exists():
-            raise Exception(f"Source file does not exist: gs://{gcs_file_path}")
+#         # Verify the source file exists
+#         if not source_blob.exists():
+#             raise Exception(f"Source file does not exist: gs://{gcs_file_path}")
 
-        # Create output filename
-        file_name_parts = file_path.rsplit('.', 1)
-        date_part = path_parts[1]
-        file_name_part = file_name_parts[0].split('/')[1]
-        file_ext = file_name_parts[1]
+#         # Create output filename
+#         file_name_parts = file_path.rsplit('.', 1)
+#         date_part = path_parts[1]
+#         file_name_part = file_name_parts[0].split('/')[1]
+#         file_ext = file_name_parts[1]
 
-        new_file_path = f"{date_part}/{constants.ArtifactPaths.FIXED_FILES.value}{file_name_part}{constants.FIXED_FILE_TAG_STRING}.{file_ext}"
-        target_blob = bucket.blob(new_file_path)
+#         new_file_path = f"{date_part}/{constants.ArtifactPaths.FIXED_FILES.value}{file_name_part}{constants.FIXED_FILE_TAG_STRING}.{file_ext}"
+#         target_blob = bucket.blob(new_file_path)
 
-        utils.logger.info(f"Converting file {gcs_file_path} to UTF-8 encoding...")
+#         utils.logger.info(f"Converting file {gcs_file_path} to UTF-8 encoding...")
 
-        # First pass: detect encoding from initial chunk
-        with source_blob.open("rb") as source_file:
-            initial_chunk = source_file.read(1024 * 1024)  # Read 1MB for encoding detection
-            detected = chardet.detect(initial_chunk)
-            detected_encoding = detected['encoding']
+#         # First pass: detect encoding from initial chunk
+#         with source_blob.open("rb") as source_file:
+#             initial_chunk = source_file.read(1024 * 1024)  # Read 1MB for encoding detection
+#             detected = chardet.detect(initial_chunk)
+#             detected_encoding = detected['encoding']
 
-        if not detected_encoding:
-            raise Exception(f"Could not detect encoding for file: {gcs_file_path}")
+#         if not detected_encoding:
+#             raise Exception(f"Could not detect encoding for file: {gcs_file_path}")
 
-        utils.logger.info(f"Detected source encoding in {gcs_file_path}: {detected_encoding}")
+#         utils.logger.info(f"Detected source encoding in {gcs_file_path}: {detected_encoding}")
 
-        # Process and stream the file
-        try:
-            # Create streaming writer
-            streaming_writer = StreamingCSVWriter(target_blob)
+#         # Process and stream the file
+#         try:
+#             # Create streaming writer
+#             streaming_writer = StreamingCSVWriter(target_blob)
 
-            # Stream from source and process
-            with source_blob.open("rb") as source_file:
-                # Map Windows encodings to their Python codec names
-                codec_name = detected_encoding.replace('Windows-', 'cp')
+#             # Stream from source and process
+#             with source_blob.open("rb") as source_file:
+#                 # Map Windows encodings to their Python codec names
+#                 codec_name = detected_encoding.replace('Windows-', 'cp')
                 
-                # Create a text wrapper that handles the encoding
-                # If there's an issue with converting any of the non-UTF8 characters, replace them with a question mark symbol
-                    # mypy doesn't recognize that the stream reader constructor accepts the errors parameter; skip checking in mypy
-                text_stream = codecs.getreader(codec_name)(source_file, errors='replace') # type: ignore[call-arg]
+#                 # Create a text wrapper that handles the encoding
+#                 # If there's an issue with converting any of the non-UTF8 characters, replace them with a question mark symbol
+#                     # mypy doesn't recognize that the stream reader constructor accepts the errors parameter; skip checking in mypy
+#                 text_stream = codecs.getreader(codec_name)(source_file, errors='replace') # type: ignore[call-arg]
 
-                csv_reader = csv.reader(text_stream)
+#                 csv_reader = csv.reader(text_stream)
                 
-                # Process CSV row by row, streaming directly to GCS
-                for row in csv_reader:
-                    streaming_writer.writerow(row)
+#                 # Process CSV row by row, streaming directly to GCS
+#                 for row in csv_reader:
+#                     streaming_writer.writerow(row)
             
-            # Ensure all remaining data is uploaded
-            streaming_writer.close()
+#             # Ensure all remaining data is uploaded
+#             streaming_writer.close()
 
-            utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
+#             utils.logger.info(f"Successfully converted file to UTF-8. New file: gs://{bucket_name}/{new_file_path}")
 
-            # After creating new file with UTF8 encoding, try converting it to Parquet
-            # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
-            # Unexpected columns will be reported in data delivery report, and normalization step will remove them
-            csv_to_parquet(f"{bucket_name}/{new_file_path}", True, ['store_rejects=True, ignore_errors=True'])
+#             # After creating new file with UTF8 encoding, try converting it to Parquet
+#             # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
+#             # Unexpected columns will be reported in data delivery report, and normalization step will remove them
+#             csv_to_parquet(f"{bucket_name}/{new_file_path}", True, ['store_rejects=True, ignore_errors=True'])
 
-        except UnicodeDecodeError as e:
-            raise Exception(f"Failed to decode file {gcs_file_path} with detected encoding {detected_encoding}: {str(e)}") from e
-        except csv.Error as e:
-            raise Exception(f"CSV parsing error for file {gcs_file_path}: {str(e)}") from e
-    except Exception as e:
-        raise Exception(f"Unable to convert CSV to UTF8 for file {gcs_file_path}: {e}") from e
+#         except UnicodeDecodeError as e:
+#             raise Exception(f"Failed to decode file {gcs_file_path} with detected encoding {detected_encoding}: {str(e)}") from e
+#         except csv.Error as e:
+#             raise Exception(f"CSV parsing error for file {gcs_file_path}: {str(e)}") from e
+#     except Exception as e:
+#         raise Exception(f"Unable to convert CSV to UTF8 for file {gcs_file_path}: {e}") from e
 
 def get_placeholder_value(column_name: str, column_type: str) -> str:
     # Return string representation of default value, based on column type
@@ -487,158 +483,158 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
         )
         ra.save_artifact()
 
-def fix_csv_quoting(gcs_file_path: str) -> None:
-    """
-    Handles some unquoted quote patterns in CSV files 
-    Each CSV row is evaulated as a single string, and text replacements are made to escape problematic characters
+# def fix_csv_quoting(gcs_file_path: str) -> None:
+#     """
+#     Handles some unquoted quote patterns in CSV files 
+#     Each CSV row is evaulated as a single string, and text replacements are made to escape problematic characters
     
-    File gets downloaded from GCS to VM executing Cloud Function.
-    Streaming CSV file directly from GCS to VM resulted in unexpected behaviors, so this logic executes against a local file
-    Ideally, we would read/write directly to/from GCS...
-    """
-    encoding: str = 'utf-8'
-    batch_size: int = 1000
+#     File gets downloaded from GCS to VM executing Cloud Function.
+#     Streaming CSV file directly from GCS to VM resulted in unexpected behaviors, so this logic executes against a local file
+#     Ideally, we would read/write directly to/from GCS...
+#     """
+#     encoding: str = 'utf-8'
+#     batch_size: int = 1000
 
-    # Download and get path to local CSV file
-    broken_csv_path = gcp_services.download_from_gcs(gcs_file_path)
+#     # Download and get path to local CSV file
+#     broken_csv_path = gcp_services.download_from_gcs(gcs_file_path)
 
-    # Create output path, renaming original file
-    filename = utils.get_table_name_from_gcs_path(gcs_file_path)
-    output_csv_path = broken_csv_path.replace(filename, f"{filename}{constants.FIXED_FILE_TAG_STRING}")
+#     # Create output path, renaming original file
+#     filename = utils.get_table_name_from_gcs_path(gcs_file_path)
+#     output_csv_path = broken_csv_path.replace(filename, f"{filename}{constants.FIXED_FILE_TAG_STRING}")
 
-    try:
-        with open(broken_csv_path, 'r', encoding=encoding) as infile, \
-             open(output_csv_path, 'w', encoding=encoding, newline='') as outfile:
+#     try:
+#         with open(broken_csv_path, 'r', encoding=encoding) as infile, \
+#              open(output_csv_path, 'w', encoding=encoding, newline='') as outfile:
             
-            # Process header separately to preserve it exactly as is
-            header = next(infile, None)
-            if header is not None:
-                outfile.write(header)
+#             # Process header separately to preserve it exactly as is
+#             header = next(infile, None)
+#             if header is not None:
+#                 outfile.write(header)
             
-            # Process the rest of the file in batches
-            batch = []
-            for line in infile:
-                batch.append(clean_csv_row(line.strip()))
+#             # Process the rest of the file in batches
+#             batch = []
+#             for line in infile:
+#                 batch.append(clean_csv_row(line.strip()))
                 
-                if len(batch) >= batch_size:
-                    outfile.write('\n'.join(batch) + '\n')
-                    batch = []
+#                 if len(batch) >= batch_size:
+#                     outfile.write('\n'.join(batch) + '\n')
+#                     batch = []
             
-            # Write any remaining rows
-            if batch:
-                outfile.write('\n'.join(batch) + '\n')
+#             # Write any remaining rows
+#             if batch:
+#                 outfile.write('\n'.join(batch) + '\n')
 
-            # Build GCS location for locally fixed file
-            bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
-            destination_blob = f"{delivery_date}/{constants.ArtifactPaths.FIXED_FILES.value}{filename}{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
-            # Upload fixed file to GCS
-            gcp_services.upload_to_gcs(output_csv_path, bucket, destination_blob)
+#             # Build GCS location for locally fixed file
+#             bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+#             destination_blob = f"{delivery_date}/{constants.ArtifactPaths.FIXED_FILES.value}{filename}{constants.FIXED_FILE_TAG_STRING}{constants.CSV}"
+#             # Upload fixed file to GCS
+#             gcp_services.upload_to_gcs(output_csv_path, bucket, destination_blob)
 
-            # Delete local files
-            os.remove(broken_csv_path)
-            os.remove(output_csv_path)
+#             # Delete local files
+#             os.remove(broken_csv_path)
+#             os.remove(output_csv_path)
             
-            # After creating new file with fixed quoting, try converting it to Parquet
-            # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
-            # Unexpected columns will be reported in data delivery report, and normalization step will remove them
-            csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True, ignore_errors=True'])
+#             # After creating new file with fixed quoting, try converting it to Parquet
+#             # store_rejects = True leads to more malformed rows getting included, and may add unexpected columns
+#             # Unexpected columns will be reported in data delivery report, and normalization step will remove them
+#             csv_to_parquet(f"{bucket}/{destination_blob}", True, ['store_rejects=True, ignore_errors=True'])
 
-    except UnicodeDecodeError:
-        raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
+#     except UnicodeDecodeError:
+#         raise ValueError(f"Failed to read the file with {encoding} encoding. Try a different encoding.")
 
-def clean_csv_row(row: str) -> str:
-    """
-    Clean a CSV row by properly handling various quoting issues:
-    1. Quotes within quoted columns need to be properly escaped (doubled)
-    2. Columns containing single quotes need to be properly quoted
-    3. Columns with consecutive single quotes need to be properly quoted
-    """
-    # First pass: Fix quotes within quoted columns
-    result = []
-    i = 0
-    in_quotes = False
+# def clean_csv_row(row: str) -> str:
+#     """
+#     Clean a CSV row by properly handling various quoting issues:
+#     1. Quotes within quoted columns need to be properly escaped (doubled)
+#     2. Columns containing single quotes need to be properly quoted
+#     3. Columns with consecutive single quotes need to be properly quoted
+#     """
+#     # First pass: Fix quotes within quoted columns
+#     result = []
+#     i = 0
+#     in_quotes = False
     
-    while i < len(row):
-        char = row[i]
+#     while i < len(row):
+#         char = row[i]
         
-        if char == '"':
-            if not in_quotes:
-                # Start of quoted column
-                in_quotes = True
-                result.append(char)
-            else:
-                # Could be end of quoted column or internal quote
-                if i + 1 < len(row):
-                    next_char = row[i + 1]
-                    if next_char == '"':
-                        # Already escaped quote
-                        result.append('""')
-                        i += 1
-                    elif next_char != ',' and next_char != '\r' and next_char != '\n':
-                        # Internal quote that needs escaping (Example 1)
-                        result.append('""')
-                    else:
-                        # End of quoted column
-                        in_quotes = False
-                        result.append(char)
-                else:
-                    # End of quoted column at end of string
-                    in_quotes = False
-                    result.append(char)
-        else:
-            result.append(char)
+#         if char == '"':
+#             if not in_quotes:
+#                 # Start of quoted column
+#                 in_quotes = True
+#                 result.append(char)
+#             else:
+#                 # Could be end of quoted column or internal quote
+#                 if i + 1 < len(row):
+#                     next_char = row[i + 1]
+#                     if next_char == '"':
+#                         # Already escaped quote
+#                         result.append('""')
+#                         i += 1
+#                     elif next_char != ',' and next_char != '\r' and next_char != '\n':
+#                         # Internal quote that needs escaping (Example 1)
+#                         result.append('""')
+#                     else:
+#                         # End of quoted column
+#                         in_quotes = False
+#                         result.append(char)
+#                 else:
+#                     # End of quoted column at end of string
+#                     in_quotes = False
+#                     result.append(char)
+#         else:
+#             result.append(char)
         
-        i += 1
+#         i += 1
     
-    # Second pass: Split into columns and handle single quotes
-    row_with_fixed_quotes = ''.join(result)
-    columns = []
-    current = []
-    in_quotes = False
-    i = 0
+#     # Second pass: Split into columns and handle single quotes
+#     row_with_fixed_quotes = ''.join(result)
+#     columns = []
+#     current = []
+#     in_quotes = False
+#     i = 0
     
-    while i < len(row_with_fixed_quotes):
-        char = row_with_fixed_quotes[i]
+#     while i < len(row_with_fixed_quotes):
+#         char = row_with_fixed_quotes[i]
         
-        if char == '"':
-            current.append(char)
-            if not in_quotes:
-                in_quotes = True
-            else:
-                # Check if it's an escaped quote
-                if i + 1 < len(row_with_fixed_quotes) and row_with_fixed_quotes[i + 1] == '"':
-                    current.append(row_with_fixed_quotes[i + 1])
-                    i += 1
-                else:
-                    in_quotes = False
-        elif char == ',' and not in_quotes:
-            # End of column
-            columns.append(''.join(current))
-            current = []
-        else:
-            current.append(char)
+#         if char == '"':
+#             current.append(char)
+#             if not in_quotes:
+#                 in_quotes = True
+#             else:
+#                 # Check if it's an escaped quote
+#                 if i + 1 < len(row_with_fixed_quotes) and row_with_fixed_quotes[i + 1] == '"':
+#                     current.append(row_with_fixed_quotes[i + 1])
+#                     i += 1
+#                 else:
+#                     in_quotes = False
+#         elif char == ',' and not in_quotes:
+#             # End of column
+#             columns.append(''.join(current))
+#             current = []
+#         else:
+#             current.append(char)
         
-        i += 1
+#         i += 1
     
-    # Add the last column
-    if current or not columns:
-        columns.append(''.join(current))
+#     # Add the last column
+#     if current or not columns:
+#         columns.append(''.join(current))
     
-    # Process columns with single quotes
-    cleaned_columns = []
-    for column in columns:
-        # Handle single quotes (Examples 2 & 3)
-        # If column contains single quotes and isn't already quoted
-        if "'" in column and not (column.startswith('"') and column.endswith('"')):
-            column = f'"{column}"'
+#     # Process columns with single quotes
+#     cleaned_columns = []
+#     for column in columns:
+#         # Handle single quotes (Examples 2 & 3)
+#         # If column contains single quotes and isn't already quoted
+#         if "'" in column and not (column.startswith('"') and column.endswith('"')):
+#             column = f'"{column}"'
         
-        # Columns with single quotes aren't get read properly...
-        if column == "\"'\"":
-            column = "''"
+#         # Columns with single quotes aren't get read properly...
+#         if column == "\"'\"":
+#             column = "''"
         
-        cleaned_columns.append(column)
+#         cleaned_columns.append(column)
     
-    return ','.join(cleaned_columns)
+#     return ','.join(cleaned_columns)
 
 def format_list(items: list) -> str:
     if not items:  # Check if list is empty
