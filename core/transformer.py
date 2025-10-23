@@ -257,7 +257,7 @@ class Transformer:
             conn, local_db_file = utils.create_duckdb_connection()
             
             with conn:
-                # Step 1: Quick check if duplicates exist at all
+                # Step 1: Quick check if duplicates exist at all (lightweight aggregation)
                 check_sql = f"""
                 SELECT 
                     {primary_key_column}, 
@@ -275,28 +275,78 @@ class Transformer:
                 
                 self.logger.info(f"Found duplicate primary keys in {self.target_table}. Fixing...")
                 
-                # Step 2: Process everything in a single pass using window functions
-                # This reads the file once, applies the fix inline, and writes the result
-                # The ROW_NUMBER is calculated for all rows, but only used where count > 1
-                fix_sql = f"""
-                COPY (
-                    SELECT 
-                        CASE 
-                            WHEN row_num = 1 THEN {primary_key_column}  -- Keep first occurrence unchanged
-                            WHEN key_count > 1 THEN CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(row_num AS VARCHAR))) % 9223372036854775807 AS {primary_key_type})
-                            ELSE {primary_key_column}  -- Non-duplicates remain unchanged
-                        END AS {primary_key_column},
-                        * EXCLUDE ({primary_key_column}, row_num, key_count)
-                    FROM (
-                        SELECT *,
-                            ROW_NUMBER() OVER (PARTITION BY {primary_key_column} ORDER BY (SELECT 1)) as row_num,
-                            COUNT(*) OVER (PARTITION BY {primary_key_column}) as key_count
-                        FROM '{transformed_file_path}'
-                    )
-                ) TO '{transformed_file_path}' {constants.DUCKDB_FORMAT_STRING}
-                """
+                # Step 2: Build a small lookup table containing ONLY the keys that have duplicates
+                # This is tiny - just the unique keys that appear more than once (not all occurrences)
+                conn.execute(f"""
+                CREATE TEMP TABLE duplicate_keys AS
+                SELECT {primary_key_column}
+                FROM '{transformed_file_path}'
+                GROUP BY {primary_key_column}
+                HAVING COUNT(*) > 1;
+                """)
                 
-                conn.execute(fix_sql)
+                dup_count = conn.execute("SELECT COUNT(*) FROM duplicate_keys").fetchone()[0]
+                self.logger.info(f"Found {dup_count} unique keys with duplicates")
+                
+                # Step 3: Use a two-pass streaming approach:
+                # Pass 1: Write all non-duplicate rows directly (these are untouched)
+                # Pass 2: Process only the duplicate rows with window functions
+                # This way we only apply expensive window functions to the small duplicate subset
+                
+                # Create a temporary output location for the fixed file
+                import uuid
+                temp_output = f"gs://{self.file_path}temp_{uuid.uuid4()}.parquet"
+                
+                self.logger.info(f"Processing non-duplicate rows...")
+                # Pass 1: Stream non-duplicates directly to output (fast, no window functions)
+                conn.execute(f"""
+                COPY (
+                    SELECT *
+                    FROM '{transformed_file_path}'
+                    WHERE {primary_key_column} NOT IN (SELECT {primary_key_column} FROM duplicate_keys)
+                ) TO '{temp_output}' {constants.DUCKDB_FORMAT_STRING}
+                """)
+                
+                self.logger.info(f"Processing duplicate rows with fixes...")
+                # Pass 2: Process ONLY duplicate rows with window functions, append to output
+                # This is memory-safe because we're only processing ~50k rows, not 1.5GB
+                conn.execute(f"""
+                INSERT INTO '{temp_output}' BY NAME
+                SELECT 
+                    CASE 
+                        WHEN row_num = 1 THEN {primary_key_column}  -- Keep first occurrence unchanged
+                        ELSE CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(row_num AS VARCHAR))) % 9223372036854775807 AS {primary_key_type})
+                    END AS {primary_key_column},
+                    * EXCLUDE ({primary_key_column}, row_num)
+                FROM (
+                    SELECT *,
+                        ROW_NUMBER() OVER (PARTITION BY {primary_key_column} ORDER BY (SELECT 1)) as row_num
+                    FROM '{transformed_file_path}'
+                    WHERE {primary_key_column} IN (SELECT {primary_key_column} FROM duplicate_keys)
+                )
+                """)
+                
+                # Step 4: Replace the original file with the fixed one
+                self.logger.info(f"Replacing original file with fixed version...")
+                conn.execute(f"""
+                COPY (SELECT * FROM '{temp_output}') 
+                TO '{transformed_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                """)
+                
+                # Clean up temp file
+                try:
+                    from google.cloud import storage
+                    # Parse the temp path to extract bucket and blob
+                    temp_path_parts = temp_output.replace('gs://', '').split('/', 1)
+                    if len(temp_path_parts) == 2:
+                        bucket_name, blob_path = temp_path_parts
+                        storage_client = storage.Client()
+                        bucket = storage_client.bucket(bucket_name)
+                        blob = bucket.blob(blob_path)
+                        blob.delete()
+                        self.logger.info(f"Cleaned up temporary file")
+                except Exception as cleanup_error:
+                    self.logger.warning(f"Could not clean up temp file: {cleanup_error}")
                 
                 self.logger.info(f"Successfully fixed duplicate primary keys in {self.target_table}")
         except Exception as e:
