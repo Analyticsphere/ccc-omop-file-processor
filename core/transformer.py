@@ -3,7 +3,6 @@ import re
 import sys
 
 import core.constants as constants
-import core.file_processor as fp
 import core.utils as utils
 
 
@@ -152,7 +151,7 @@ class Transformer:
                 # Process differently based on whether field is required or not
                 if is_required:
                     # For required fields: COALESCE first, then CAST
-                    placeholder = fp.get_placeholder_value(target_column, column_type)
+                    placeholder = utils.get_placeholder_value(target_column, column_type)
                     final_expr = f"CAST(COALESCE({source_expr}, {placeholder}) AS {column_type})"
                 else:
                     # For non-required fields: TRY_CAST only

@@ -1,8 +1,8 @@
-import re
 import gc
 import json
 import logging
 import os
+import re
 import sys
 import uuid
 from datetime import datetime
@@ -490,3 +490,15 @@ def clean_column_name_for_sql(name: str) -> str:
     cleaned = cleaned.replace(' ', '_')
 
     return cleaned
+
+def get_placeholder_value(column_name: str, column_type: str) -> str:
+    # Return string representation of default value, based on column type
+
+    # *All* columns that end in _concept_id must be populated
+    # If a concept is unknown, OHDSI convention is to explicity populate column with concept_id 0
+    if column_name.endswith("_concept_id"):
+        return "'0'"
+
+    default_value = constants.DEFAULT_COLUMN_VALUES[column_type]
+    
+    return default_value

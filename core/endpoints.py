@@ -9,6 +9,7 @@ import core.file_processor as file_processor
 import core.file_validation as file_validation
 import core.gcp_services as gcp_services
 import core.helpers.pipeline_log as pipeline_log
+import core.normalization as normalization
 import core.omop_client as omop_client
 import core.utils as utils
 from core.helpers.job_manager import HarmonizationJobManager
@@ -206,7 +207,7 @@ def normalize_parquet_file() -> tuple[str, int]:
         
         parquet_file_path: str = utils.get_parquet_artifact_location(file_path)
         utils.logger.info(f"Attempting to normalize Parquet file {parquet_file_path}")
-        file_processor.normalize_file(parquet_file_path, omop_version, date_format, datetime_format)
+        normalization.normalize_file(parquet_file_path, omop_version, date_format, datetime_format)
 
         return "Normalized Parquet file", 200
     except Exception as e:
