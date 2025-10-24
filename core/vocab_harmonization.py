@@ -53,6 +53,8 @@ class VocabHarmonizer:
             self.check_new_targets(constants.TARGET_REMAP)
         elif step == constants.TARGET_REPLACEMENT:
             self.check_new_targets(constants.TARGET_REPLACEMENT)
+        elif step == constants.OMOP_ETL:
+            self.omop_etl()
         else:
             raise Exception(f"Unknown harmonization step {step}")
 

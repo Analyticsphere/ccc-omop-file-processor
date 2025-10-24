@@ -107,7 +107,6 @@ def retry_ignoring_errors(gcs_file_path: str) -> None:
     """
     csv_to_parquet(gcs_file_path, True, ['store_rejects=True, ignore_errors=True, parallel=False'])
 
-
 def format_list(items: list) -> str:
     if not items:  # Check if list is empty
         return ''

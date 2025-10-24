@@ -12,7 +12,7 @@ import core.helpers.pipeline_log as pipeline_log
 import core.normalization as normalization
 import core.omop_client as omop_client
 import core.utils as utils
-from core.helpers.job_manager import HarmonizationJobManager
+import core.vocab_harmonization as vocab_harmonization
 
 app = Flask(__name__)
 
@@ -273,12 +273,13 @@ def harmonize_vocab() -> tuple[Any, int]:
     site: Optional[str] = data.get('site')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
+    step: Optional[str] = data.get('step')
 
-    if not all([file_path, vocab_version, vocab_gcs_bucket, omop_version, site, project_id, dataset_id]):
-        return "Missing a required parameter to 'harmonize_vocab' endpoint. Required: file_path, vocab_version, vocab_gcs_bucket, omop_version, site, project_id, dataset_id", 400
+    if not all([file_path, vocab_version, vocab_gcs_bucket, omop_version, site, project_id, dataset_id, step]):
+        return "Missing a required parameter to 'harmonize_vocab' endpoint. Required: file_path, vocab_version, vocab_gcs_bucket, omop_version, site, project_id, dataset_id, step", 400
 
     try:
-        utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}")
+        utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}, step: {step}")
         
         # At this point we know these are not None
         assert file_path is not None
@@ -287,9 +288,10 @@ def harmonize_vocab() -> tuple[Any, int]:
         assert site is not None
         assert project_id is not None
         assert dataset_id is not None
+        assert step is not None
         
-        # Create a new harmonization job
-        job_info = HarmonizationJobManager.create_job(
+        # Initialize the VocabHarmonizer
+        vocab_harmonizer = vocab_harmonization.VocabHarmonizer(
             file_path=file_path,
             cdm_version=omop_version,
             site=site,
@@ -299,83 +301,19 @@ def harmonize_vocab() -> tuple[Any, int]:
             dataset_id=dataset_id
         )
         
-        # Return job info with 202 Accepted status
-        return jsonify(job_info), 202
+        # Perform the requested harmonization step
+        vocab_harmonizer.perform_harmonization(step)
         
-    except Exception as e:
-        utils.logger.error(f"Unable to harmonize vocabulary of {file_path}: {str(e)}")
-        return f"Unable to harmonize vocabulary of {file_path}: {str(e)}", 500
-
-
-@app.route('/harmonize_vocab_status', methods=['GET'])
-def harmonize_vocab_status() -> tuple[Any, int]:
-    job_id: Optional[str] = request.args.get('job_id')
-    bucket_name: Optional[str] = request.args.get('bucket')
-    delivery_date: Optional[str] = request.args.get('delivery_date')
-
-    if not all([job_id, bucket_name, delivery_date]):
-        return "Missing a required parameter to 'harmonize_vocab_status' endpoint. Required: job_id, bucket, delivery_date", 400
-
-    try:
-        # At this point we know these are not None
-        assert job_id is not None
-        assert bucket_name is not None
-        assert delivery_date is not None
-        
-        # Get job status
-        job_status = HarmonizationJobManager.get_job_status(job_id, bucket_name, delivery_date)
-        
-        # Return appropriate status code based on job status
-        if job_status.get('status') == 'not_found':
-            return jsonify(job_status), 404
-        elif job_status.get('status') == 'error':
-            return jsonify(job_status), 500
-        elif job_status.get('status') == 'completed':
-            return jsonify(job_status), 200
-        else:
-            return jsonify(job_status), 202
-            
-    except Exception as e:
-        utils.logger.error(f"Error checking status for job {job_id}: {str(e)}")
         return jsonify({
-            "error": f"Error checking status: {str(e)}"
-        }), 500
-
-
-@app.route('/harmonize_vocab_process_step', methods=['POST'])
-def harmonize_vocab_process_step() -> tuple[Any, int]:
-    data = request.get_json() or {}
-    job_id = data.get('job_id')
-    bucket_name = data.get('bucket')
-    delivery_date = data.get('delivery_date')
-    
-    if not all([job_id, bucket_name, delivery_date]):
-        return "Missing required parameters to 'harmonize_vocab_process_step' endpoint. Required: job_id, bucket, delivery_date", 400
+            'status': 'success',
+            'message': f'Successfully completed {step} for {file_path}',
+            'file_path': file_path,
+            'step': step
+        }), 200
         
-    try:
-        # At this point we know these are not None
-        assert job_id is not None
-        assert bucket_name is not None
-        assert delivery_date is not None
-        
-        # Process a single job step
-        result = HarmonizationJobManager.process_job_step(job_id, bucket_name, delivery_date)
-        
-        # Return appropriate status code based on result
-        if result.get('status') == 'not_found':
-            return jsonify(result), 404
-        elif result.get('status') == 'error':
-            return jsonify(result), 500
-        elif result.get('status') == 'completed':
-            return jsonify(result), 200
-        else:
-            return jsonify(result), 200
-            
     except Exception as e:
-        utils.logger.error(f"Error processing step for job {job_id}: {str(e)}")
-        return jsonify({
-            "error": f"Error processing step: {str(e)}"
-        }), 500
+        utils.logger.error(f"Unable to harmonize vocabulary of {file_path} at step {step}: {str(e)}")
+        return f"Unable to harmonize vocabulary of {file_path} at step {step}: {str(e)}", 500
 
 
 @app.route('/populate_derived_data', methods=['POST'])
