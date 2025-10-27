@@ -264,7 +264,6 @@ def get_parquet_harmonized_path(gcs_file_path: str) -> str:
 
     return parquet_path
 
-
 def get_omop_etl_destination_path(gcs_file_path: str) -> str:
     base_directory, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
     
@@ -275,8 +274,6 @@ def get_omop_etl_destination_path(gcs_file_path: str) -> str:
     parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}"
 
     return parquet_path
-
-
 
 def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
     table_name = get_table_name_from_gcs_path(gcs_file_path).lower()
@@ -380,7 +377,6 @@ def create_final_report_artifacts(report_data: dict) -> None:
             value_as_number=None
         )
         ra.save_artifact()
-
 
 def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
     """
@@ -489,7 +485,6 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
     replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
 
     return replacement_result
-
 
 def clean_column_name_for_sql(name: str) -> str:
     """

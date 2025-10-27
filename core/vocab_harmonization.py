@@ -3,6 +3,7 @@ import sys
 
 import core.constants as constants
 import core.gcp_services as gcp_services
+import core.helpers.report_artifact as report_artifact
 import core.transformer as transformer
 import core.utils as utils
 
@@ -436,6 +437,52 @@ class VocabHarmonizer:
         utils.execute_duckdb_sql(final_sql_statement, f"Unable to perform domain check against {self.source_table_name}")
 
 
+    def generate_table_transition_report(self, conn) -> None:
+        """
+        Generate report artifacts showing how many rows transitioned from the source table 
+        to each target table during vocabulary harmonization.
+        
+        Args:
+            conn: Active DuckDB connection to use for queries
+        """
+        try:
+            self.logger.info(f"Generating table transition report for {self.source_table_name}")
+            
+            # Get the source table concept_id from the schema
+            schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
+            source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
+            
+            # Query to count rows by target table
+            count_query = f"""
+                SELECT 
+                    target_table,
+                    COUNT(*) as row_count
+                FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+                GROUP BY target_table
+                ORDER BY target_table
+            """
+            
+            results = conn.execute(count_query).fetchall()
+            
+            # Create a report artifact for each target table
+            for target_table, row_count in results:
+                ra = report_artifact.ReportArtifact(
+                    delivery_date=self.delivery_date,
+                    artifact_bucket=self.bucket,
+                    concept_id=source_table_concept_id,
+                    name=f"Vocab harmonization table transition: {self.source_table_name} → {target_table}",
+                    value_as_string=None,
+                    value_as_concept_id=None,
+                    value_as_number=row_count
+                )
+                ra.save_artifact()
+                self.logger.info(f"Table transition: {self.source_table_name} → {target_table}: {row_count} rows")
+                
+        except Exception as e:
+            # Log the error but don't fail the entire process
+            self.logger.error(f"Error generating table transition report: {str(e)}")
+
+
     def omop_etl(self) -> None:
         self.logger.info(f"Partitioning and ETLing source file {self.file_path} to appropriate target table(s)")
 
@@ -450,6 +497,9 @@ class VocabHarmonizer:
                 """
                         
                 target_tables_list = conn.execute(target_tables).fetch_df()['target_table'].tolist()
+                
+                # Generate table transition report before transformation
+                self.generate_table_transition_report(conn)
         except Exception as e:
             raise Exception(f"Unable to get target tables from Parquet file {self.file_path}: {e}") from e
         finally:
