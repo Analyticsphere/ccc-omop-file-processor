@@ -272,7 +272,7 @@ def get_omop_etl_destination_path(gcs_file_path: str) -> str:
     base_directory = base_directory.rstrip('/')
         
     # Construct the path to the OMOP ETL directory to store ETL'ed files
-    parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}/"
+    parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}"
 
     return parquet_path
 
