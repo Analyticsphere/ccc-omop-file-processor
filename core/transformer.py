@@ -29,6 +29,14 @@ class Transformer:
         # Create the logger at module level so its settings are applied throughout class
         self.logger = logging.getLogger(__name__)
 
+    def omop_to_omop_etl(self) -> None:
+        # Execute the OMOP to OMOP ETL SQL script
+        transform_sql = self.generate_omop_to_omop_sql()
+        utils.execute_duckdb_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
+        # Resolve duplicate primary keys within a single 'table part' file
+        # TODO: Make this global across ALL table parts
+        #self.handle_duplicate_surrogate_primary_keys()
+
     def generate_omop_to_omop_sql(self) -> str:
         """
         Generate a SQL statement that transforms data from one OMOP table to another,
@@ -185,7 +193,6 @@ class Transformer:
 
         return transform_sql
 
-
     # TODO: Put the transformed file in a common location for all files being processed in the pipeline
     # In a subsequent step, all transformed files can be combined and then checked for duplicates globally
     # Afer duplicates are resolved, the file can be loaded to BQ
@@ -193,17 +200,6 @@ class Transformer:
         return f"{self.etl_artifact_path}{self.target_table}/{self.target_table}_{uuid.uuid4()}{constants.PARQUET}"
         
         # f"{self.file_path}transformed/{self.target_table}_{uuid.uuid4()}{constants.PARQUET}"
-
-
-    def omop_to_omop_etl(self) -> None:
-        # Execute the OMOP to OMOP ETL SQL script
-        transform_sql = self.generate_omop_to_omop_sql()
-        utils.execute_duckdb_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
-
-        # Resolve duplicate primary keys within a single 'table part' file
-        # TODO: Make this global across ALL table parts
-        self.handle_duplicate_surrogate_primary_keys()
-
 
     def placeholder_to_file_path(self, sql: str) -> str:
         """
@@ -216,7 +212,6 @@ class Transformer:
             replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
         return replacement_result
-
 
     def handle_duplicate_surrogate_primary_keys(self) -> None:
         """
