@@ -440,8 +440,9 @@ class VocabHarmonizer:
         self.logger.info(f"Partitioning and ETLing source file {self.file_path} to appropriate target table(s)")
 
         # Find all target tables in the source file
+        # Each of the target tables will be transformed to its own Parquet file with the appropriate structure
+        # That Parquet file will then be loaded to BQ
         conn, local_db_file = utils.create_duckdb_connection()
-
         try:
             with conn:
                 target_tables = f"""
@@ -456,7 +457,9 @@ class VocabHarmonizer:
 
         # Create a new Parquet file for each target table with the appropriate structure
         for target_table in target_tables_list:
-            omop_transformer = transformer.Transformer(self.site, self.target_parquet_path, self.cdm_version, self.source_table_name, target_table)
+            omop_transformer = transformer.Transformer(
+                self.site, self.target_parquet_path, self.cdm_version, self.source_table_name, target_table, utils.get_omop_etl_destination_path(self.file_path)
+            )
 
             # Generate the transformed file
             omop_transformer.omop_to_omop_etl()

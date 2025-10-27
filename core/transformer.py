@@ -1,6 +1,7 @@
 import logging
 import re
 import sys
+import uuid
 
 import core.constants as constants
 import core.utils as utils
@@ -12,12 +13,13 @@ class Transformer:
     The domain_id of a concept may change between different vocabulary versions, and data 
     must be moved to the table appropriate for their new domain.
     """
-    def __init__(self, site: str, file_path: str, cdm_version: str, source_table: str, target_table: str):
+    def __init__(self, site: str, file_path: str, cdm_version: str, source_table: str, target_table: str, etl_artifact_path: str):
         self.site = site
         self.file_path = file_path
         self.cdm_version = cdm_version
         self.source_table = source_table
         self.target_table = target_table
+        self.etl_artifact_path = etl_artifact_path
         
         logging.basicConfig(
             level=logging.INFO,
@@ -184,8 +186,13 @@ class Transformer:
         return transform_sql
 
 
+    # TODO: Put the transformed file in a common location for all files being processed in the pipeline
+    # In a subsequent step, all transformed files can be combined and then checked for duplicates globally
+    # Afer duplicates are resolved, the file can be loaded to BQ
     def get_transformed_path(self) -> str:
-        return f"{self.file_path}transformed/{self.target_table}{constants.PARQUET}"
+        return f"{self.etl_artifact_path}{self.target_table}/{self.target_table}_{uuid.uuid4()}{constants.PARQUET}"
+        
+        # f"{self.file_path}transformed/{self.target_table}_{uuid.uuid4()}{constants.PARQUET}"
 
 
     def omop_to_omop_etl(self) -> None:
