@@ -28,7 +28,6 @@ def remove_all_tables(project_id: str, dataset_id: str) -> None:
     except Exception as e:
         raise Exception(f"Unable to delete BigQuery table {table_id_full}: {e}") from e
 
-
 def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, table_name: str, write_type: constants.BQWriteTypes) -> None:
     """
     Load Parquet artifact file from GCS directly into BigQuery.
@@ -74,7 +73,6 @@ def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, t
     except Exception as e:
         raise Exception(f"Error loading Parquet file {parquet_path} to BigQuery: {e}") from e
 
-
 def get_bq_log_row(site: str, date_to_check: str) -> list:
     client = bigquery.Client()
 
@@ -110,7 +108,6 @@ def get_bq_log_row(site: str, date_to_check: str) -> list:
     except Exception as e:
         raise Exception(f"Failed to retrieve BigQuery pipeline logs for site '{site}' and date '{date_to_check}': {e}") from e
 
-
 def create_gcs_directory(directory_path: str, delete_exisiting_files: bool = True) -> None:
     """Creates a directory in GCS by creating an empty blob.
     If directory exists and delete_exisiting_files is True, deletes any existing files first.
@@ -141,7 +138,6 @@ def create_gcs_directory(directory_path: str, delete_exisiting_files: bool = Tru
     except Exception as e:
         raise Exception(f"Unable to create artifact directories in GCS path {directory_path}: {e}") from e
 
-
 def delete_gcs_file(gcs_path: str) -> None:
     """
     Deletes a file from Google Cloud Storage.
@@ -167,7 +163,6 @@ def delete_gcs_file(gcs_path: str) -> None:
         blob.delete()
     except Exception as e:
         raise Exception(f"Error deleting file {gcs_path}: {e}") from e
-
 
 def vocab_gcs_path_exists(gcs_path: str) -> bool:
     """
@@ -202,7 +197,6 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
         utils.logger.error(f"Error checking GCS path: {e}")
         return False
 
-
 def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig]) -> bigquery.table.RowIterator:
     # Initialize the BigQuery client
     client = bigquery.Client()
@@ -220,7 +214,6 @@ def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig
 
     except Exception as e:
         raise Exception(f"Error executing query: {e}")
-
 
 def download_from_gcs(gcs_file_path: str) -> str:
     """
@@ -262,7 +255,6 @@ def download_from_gcs(gcs_file_path: str) -> str:
     except Exception as e:
         raise Exception(f"Error downloading file {gcs_file_path}: {e}")
 
-
 def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name: str) -> None:
     """
     Uploads a file to the specified GCS bucket.
@@ -277,3 +269,29 @@ def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name:
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(local_file_path)
 
+def list_gcs_subdirectories(gcs_path: str) -> list:
+    """
+    Lists all subdirectories within a given GCS path.
+    """
+    try:
+        # Split the path into bucket name and prefix
+        parts = gcs_path.replace('gs://', '').split('/', 1)
+        bucket_name = parts[0]
+        prefix = parts[1] if len(parts) > 1 else ''
+
+        # Initialize the client
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+
+        # List blobs with the specified prefix
+        blobs = bucket.list_blobs(prefix=prefix, delimiter='/')
+
+        # Extract subdirectory names
+        subdirectories = set()
+        for page in blobs.pages:
+            subdirectories.update(page.prefixes)
+
+        return list(subdirectories)
+
+    except Exception as e:
+        raise Exception(f"Error listing subdirectories in GCS path {gcs_path}: {e}") from e 
