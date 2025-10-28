@@ -1,5 +1,6 @@
 import logging
 import sys
+import uuid
 
 import core.constants as constants
 import core.gcp_services as gcp_services
@@ -661,7 +662,6 @@ class VocabHarmonizer:
                 self.logger.info(f"Found {dup_count} unique keys with duplicates")
                 
                 # Generate temp file paths
-                import uuid
                 tmp_id = uuid.uuid4()
                 bucket_path = file_path.rsplit('/', 1)[0]
                 tmp_non_dup = f"{bucket_path}/tmp/tmp_non_dup_{tmp_id}.parquet"
@@ -705,6 +705,15 @@ class VocabHarmonizer:
                         SELECT * FROM read_parquet('{tmp_dup_fixed}')
                     ) TO '{file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """)
+                
+                # Cleanup temporary files
+                self.logger.info(f"Cleaning up temporary files...")
+                try:
+                    gcp_services.delete_gcs_file(tmp_non_dup)
+                    gcp_services.delete_gcs_file(tmp_dup_fixed)
+                    self.logger.info(f"Successfully cleaned up temporary files")
+                except Exception as cleanup_error:
+                    self.logger.warning(f"Failed to clean up temporary files: {str(cleanup_error)}")
                 
                 self.logger.info(f"Successfully deduplicated primary keys in {table_name}")
                 
