@@ -567,7 +567,7 @@ class VocabHarmonizer:
         self.logger.info(f"Consolidating files for table: {table_name}")
         
         # Construct paths
-        table_dir = f"{etl_folder}{table_name}/"
+        table_dir = f"{etl_folder}{table_name}/parts/"
         parquet_pattern = f"gs://{bucket_name}/{table_dir}*.parquet"
         consolidated_file_path = f"gs://{bucket_name}/{table_dir}{table_name}{constants.PARQUET}"
                 
