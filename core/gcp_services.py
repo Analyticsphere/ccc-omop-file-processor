@@ -32,17 +32,15 @@ def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, t
     """
     Load Parquet artifact file from GCS directly into BigQuery.
     """
+    # SPECIFIC_FILE -> overwrite table with the exact Parquet file in file_path
     if write_type == constants.BQWriteTypes.SPECIFIC_FILE:
         write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
         parquet_path = file_path
+    # PROCESSED_FILE -> overwrite table with the pipeline-processed version of the file in file_path
     elif write_type == constants.BQWriteTypes.PROCESSED_FILE:
         write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
         parquet_path = f"gs://{utils.get_parquet_artifact_location(file_path)}"
         
-    elif write_type == constants.BQWriteTypes.ETLed_FILE:
-        write_disposition = bigquery.WriteDisposition.WRITE_APPEND
-        parquet_path = file_path
-
     # When upgrading to 5.4, some Parquet files may get deleted
     # First confirm that Parquet file does exist before trying to load to BQ
     if not utils.parquet_file_exists(parquet_path):
@@ -295,3 +293,74 @@ def list_gcs_subdirectories(gcs_path: str) -> list:
 
     except Exception as e:
         raise Exception(f"Error listing subdirectories in GCS path {gcs_path}: {e}") from e 
+
+def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_id: str, dataset_id: str) -> dict[str, list[str]]:
+    """
+    Load consolidated OMOP ETL parquet files from GCS to BigQuery.
+    
+    Discovers all consolidated parquet files in the OMOP_ETL artifacts directory
+    and loads each one to its corresponding BigQuery table.
+    
+    Args:
+        gcs_bucket: GCS bucket containing the ETL files
+        delivery_date: Delivery date for path construction
+        project_id: BigQuery project ID
+        dataset_id: BigQuery dataset ID
+        
+    Returns:
+        Dictionary with 'loaded' and 'skipped' keys, each containing a list of table names
+        
+    Raises:
+        Exception: If no table directories are found or if there's an error during processing
+    """
+    # Construct the OMOP_ETL directory path
+    etl_folder = f"{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}"
+    gcs_path = f"gs://{gcs_bucket}/{etl_folder}"
+    
+    utils.logger.info(f"Looking for consolidated parquet files in {gcs_path}")
+    
+    # Get list of table subdirectories
+    subdirectories = list_gcs_subdirectories(gcs_path)
+    
+    # Extract just the table names from the full paths
+    table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
+    
+    if not table_names:
+        utils.logger.warning(f"No table directories found in {gcs_path}")
+        raise Exception(f"No table directories found in {gcs_path}")
+    
+    utils.logger.info(f"Found {len(table_names)} table(s) to load: {sorted(table_names)}")
+    
+    # Load each consolidated parquet file to BigQuery
+    loaded_tables = []
+    skipped_tables = []
+    
+    for table_name in sorted(table_names):
+        # Construct path to consolidated parquet file
+        consolidated_file_path = f"gs://{gcs_bucket}/{etl_folder}{table_name}/{table_name}{constants.PARQUET}"
+        
+        # Check if the consolidated file exists
+        if not utils.parquet_file_exists(consolidated_file_path):
+            utils.logger.warning(f"Consolidated parquet file not found: {consolidated_file_path}")
+            skipped_tables.append(table_name)
+            continue
+        
+        try:
+            utils.logger.info(f"Loading {table_name} from {consolidated_file_path} to BigQuery")
+            load_parquet_to_bigquery(
+                consolidated_file_path,
+                project_id,
+                dataset_id,
+                table_name,
+                constants.BQWriteTypes.SPECIFIC_FILE
+            )
+            loaded_tables.append(table_name)
+            utils.logger.info(f"Successfully loaded {table_name} to BigQuery")
+        except Exception as e:
+            utils.logger.error(f"Failed to load {table_name}: {str(e)}")
+            skipped_tables.append(table_name)
+    
+    return {
+        'loaded': loaded_tables,
+        'skipped': skipped_tables
+    }

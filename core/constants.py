@@ -47,8 +47,9 @@ PIPELINE_DAG_FAIL_MESSAGE = "DAG failed"
 FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
 
 class BQWriteTypes(str, Enum):
+    # SPECIFIC_FILE -> overwrite table with the exact Parquet file in file_path
     SPECIFIC_FILE = "specific_file"
-    ETLed_FILE = "ETLed_file"
+    # PROCESSED_FILE -> overwrite table with the pipeline-processed version of the file in file_path
     PROCESSED_FILE = "processed_file"
 
 CONDITION_ERA = "condition_era"

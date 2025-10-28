@@ -470,6 +470,58 @@ def add_cdm_source_record() -> tuple[str, int]:
         return f"Unable to populate cdm_source table: {str(e)}", 500 
  
 
+@app.route('/harmonized_parquets_to_bq', methods=['POST'])
+def harmonized_parquets_to_bq() -> tuple[str, int]:
+    """
+    Load consolidated OMOP ETL parquet files from GCS to BigQuery.
+    
+    This endpoint discovers all consolidated parquet files in the OMOP_ETL artifacts directory
+    and loads each one to its corresponding BigQuery table.
+    """
+    data: dict[str, Any] = request.get_json() or {}
+    gcs_bucket: Optional[str] = data.get('gcs_bucket')
+    delivery_date: Optional[str] = data.get('delivery_date')
+    project_id: Optional[str] = data.get('project_id')
+    dataset_id: Optional[str] = data.get('dataset_id')
+
+    if not all([gcs_bucket, delivery_date, project_id, dataset_id]):
+        return "Missing a required parameter to 'harmonized_parquets_to_bq' endpoint. Required: gcs_bucket, delivery_date, project_id, dataset_id", 400
+    
+    try:
+        # At this point we know these are not None
+        assert gcs_bucket is not None
+        assert delivery_date is not None
+        assert project_id is not None
+        assert dataset_id is not None
+        
+        # Call the GCP service function to handle the heavy lifting
+        results = gcp_services.load_harmonized_parquets_to_bq(
+            gcs_bucket,
+            delivery_date,
+            project_id,
+            dataset_id
+        )
+        
+        # Prepare response message
+        loaded_tables = results['loaded']
+        skipped_tables = results['skipped']
+        
+        response_parts = []
+        if loaded_tables:
+            response_parts.append(f"Successfully loaded {len(loaded_tables)} table(s): {', '.join(loaded_tables)}")
+        if skipped_tables:
+            response_parts.append(f"Skipped {len(skipped_tables)} table(s): {', '.join(skipped_tables)}")
+        
+        response_message = ". ".join(response_parts)
+        utils.logger.info(response_message)
+        
+        return response_message, 200
+        
+    except Exception as e:
+        utils.logger.error(f"Error loading harmonized parquets to BigQuery: {str(e)}")
+        return f"Error loading harmonized parquets to BigQuery: {str(e)}", 500
+
+
 @app.route('/pipeline_log', methods=['POST'])
 def log_pipeline_state() -> tuple:
     data: dict = request.get_json()

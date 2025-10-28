@@ -15,7 +15,7 @@ class VocabHarmonizer:
     Handles the entire process from reading parquet files to generating SQL and saving the harmonized output to BQ.
     """
     
-    def __init__(self, file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str, project_id: str, dataset_id):
+    def __init__(self, file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str, project_id: str, dataset_id: str):
         """
         Initialize a VocabHarmonizer with common parameters needed across all operations.
         """
@@ -31,15 +31,6 @@ class VocabHarmonizer:
         self.target_parquet_path = utils.get_parquet_harmonized_path(file_path)
         self.project_id = project_id
         self.dataset_id = dataset_id
-
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[logging.StreamHandler(sys.stdout)]
-        )
-        # Create the logger at module level so its settings are applied throughout class
-        self.logger = logging.getLogger(__name__)
-
 
     def perform_harmonization(self, step: str) -> None:
         """
@@ -509,18 +500,8 @@ class VocabHarmonizer:
                 self.site, self.target_parquet_path, self.cdm_version, self.source_table_name, target_table, utils.get_omop_etl_destination_path(self.file_path)
             )
 
-            # Generate the transformed file
+            # Perform the OMOP-to-OMOP ETL for this target table
             omop_transformer.omop_to_omop_etl()
-
-            self.logger.info(f"Loading harmonized data from {self.file_path} to {target_table}...")
-            #Load the file to BQ; ETLed_FILE write type ensures append only
-            gcp_services.load_parquet_to_bigquery(
-                file_path=f"gs://{omop_transformer.get_transformed_path()}",
-                project_id=self.project_id,
-                dataset_id=self.dataset_id,
-                table_name=target_table,
-                write_type=constants.BQWriteTypes.ETLed_FILE
-            )
 
     def consolidate_and_deduplicate_etl_tables(self) -> None:
         """
