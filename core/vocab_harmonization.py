@@ -570,12 +570,7 @@ class VocabHarmonizer:
         table_dir = f"{etl_folder}{table_name}/"
         parquet_pattern = f"gs://{bucket_name}/{table_dir}*.parquet"
         consolidated_file_path = f"gs://{bucket_name}/{table_dir}{table_name}{constants.PARQUET}"
-        
-        # Check if there are any files to consolidate
-        if not utils.valid_parquet_file(parquet_pattern):
-            self.logger.warning(f"No valid parquet files found for {table_name} at {parquet_pattern}")
-            return
-        
+                
         # Combine all parquet files into one
         conn, local_db_file = utils.create_duckdb_connection()
         

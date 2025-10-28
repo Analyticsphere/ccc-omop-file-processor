@@ -33,9 +33,7 @@ class Transformer:
         # Execute the OMOP to OMOP ETL SQL script
         transform_sql = self.generate_omop_to_omop_sql()
         utils.execute_duckdb_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
-        # Resolve duplicate primary keys within a single 'table part' file
-        # TODO: Make this global across ALL table parts
-        #self.handle_duplicate_surrogate_primary_keys()
+
 
     def generate_omop_to_omop_sql(self) -> str:
         """
@@ -197,7 +195,7 @@ class Transformer:
     # In a subsequent step, all transformed files can be combined and then checked for duplicates globally
     # Afer duplicates are resolved, the file can be loaded to BQ
     def get_transformed_path(self) -> str:
-        return f"{self.etl_artifact_path}{self.target_table}/parts/{self.target_table}_{uuid.uuid4()}{constants.PARQUET}"
+        return f"{self.etl_artifact_path}{self.target_table}/parts/{self.target_table}_from_{self.source_table}{constants.PARQUET}"
         
         # f"{self.file_path}transformed/{self.target_table}_{uuid.uuid4()}{constants.PARQUET}"
 
