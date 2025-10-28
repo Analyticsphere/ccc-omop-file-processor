@@ -36,7 +36,7 @@ class VocabHarmonizer:
         """
         Perform a specific harmonization step.
         """
-        self.logger.info(f"Performing vocabulary harmonization against {self.file_path}: {step}")
+        utils.logger.info(f"Performing vocabulary harmonization against {self.file_path}: {step}")
 
         if step == constants.SOURCE_TARGET:
             self.source_target_remapping()
@@ -436,7 +436,7 @@ class VocabHarmonizer:
             conn: Active DuckDB connection to use for queries
         """
         try:
-            self.logger.info(f"Generating table transition report for {self.source_table_name}")
+            utils.logger.info(f"Generating table transition report for {self.source_table_name}")
             
             # Get the source table concept_id from the schema
             schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
@@ -466,14 +466,14 @@ class VocabHarmonizer:
                     value_as_number=row_count
                 )
                 ra.save_artifact()
-                self.logger.info(f"Table transition: {self.source_table_name} → {target_table}: {row_count} rows")
+                utils.logger.info(f"Table transition: {self.source_table_name} → {target_table}: {row_count} rows")
                 
         except Exception as e:
             # Log the error but don't fail the entire process
-            self.logger.error(f"Error generating table transition report: {str(e)}")
+            utils.logger.error(f"Error generating table transition report: {str(e)}")
 
     def omop_etl(self) -> None:
-        self.logger.info(f"Partitioning and ETLing source file {self.file_path} to appropriate target table(s)")
+        utils.logger.info(f"Partitioning and ETLing source file {self.file_path} to appropriate target table(s)")
 
         # Find all target tables in the source file
         # Each of the target tables will be transformed to its own Parquet file with the appropriate structure
@@ -510,7 +510,7 @@ class VocabHarmonizer:
         Discovers all table subdirectories in the OMOP_ETL artifacts directory
         and consolidates each one by delegating to the single-table processing method.
         """
-        self.logger.info(f"Consolidating ETL files for {self.file_path}")
+        utils.logger.info(f"Consolidating ETL files for {self.file_path}")
         
         # Get the OMOP ETL directory path
         etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
@@ -518,7 +518,7 @@ class VocabHarmonizer:
         etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
         gcs_path = f"gs://{bucket_name}/{etl_folder}"
         
-        self.logger.info(f"Looking for table directories in {gcs_path}")
+        utils.logger.info(f"Looking for table directories in {gcs_path}")
         
         # Get list of table subdirectories using existing utility
         subdirectories = gcp_services.list_gcs_subdirectories(gcs_path)
@@ -527,10 +527,10 @@ class VocabHarmonizer:
         table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
         
         if not table_names:
-            self.logger.warning(f"No table directories found in {gcs_path}")
+            utils.logger.warning(f"No table directories found in {gcs_path}")
             return
         
-        self.logger.info(f"Found {len(table_names)} table(s) to consolidate: {sorted(table_names)}")
+        utils.logger.info(f"Found {len(table_names)} table(s) to consolidate: {sorted(table_names)}")
         
         # Process each table directory
         for table_name in sorted(table_names):
@@ -546,7 +546,7 @@ class VocabHarmonizer:
             etl_folder: Path to the ETL folder within the bucket
             table_name: Name of the OMOP table to consolidate
         """
-        self.logger.info(f"Consolidating files for table: {table_name}")
+        utils.logger.info(f"Consolidating files for table: {table_name}")
         
         # Construct paths
         table_dir = f"{etl_folder}{table_name}/"
@@ -564,7 +564,7 @@ class VocabHarmonizer:
                     ) TO '{consolidated_file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
                 conn.execute(combine_sql)
-                self.logger.info(f"Successfully consolidated {table_name}")
+                utils.logger.info(f"Successfully consolidated {table_name}")
                 
         except Exception as e:
             raise Exception(f"Unable to consolidate files for table {table_name}: {str(e)}") from e
@@ -585,24 +585,24 @@ class VocabHarmonizer:
         """
         # Only process tables with surrogate keys
         if table_name not in constants.SURROGATE_KEY_TABLES:
-            self.logger.info(f"Table {table_name} does not use surrogate keys. Skipping deduplication.")
+            utils.logger.info(f"Table {table_name} does not use surrogate keys. Skipping deduplication.")
             return
         
         # Get primary key column
         primary_key_column = utils.get_primary_key_column(table_name, self.cdm_version)
         if not primary_key_column:
-            self.logger.info(f"No primary key column defined for table {table_name}. Skipping deduplication.")
+            utils.logger.info(f"No primary key column defined for table {table_name}. Skipping deduplication.")
             return
         
         # Get primary key data type
         schema = utils.get_table_schema(table_name, self.cdm_version)
         if table_name not in schema:
-            self.logger.warning(f"Schema not found for table {table_name}. Skipping deduplication.")
+            utils.logger.warning(f"Schema not found for table {table_name}. Skipping deduplication.")
             return
         
         target_columns_dict = schema[table_name]["columns"]
         if primary_key_column not in target_columns_dict:
-            self.logger.warning(f"Primary key column {primary_key_column} not found in schema. Skipping deduplication.")
+            utils.logger.warning(f"Primary key column {primary_key_column} not found in schema. Skipping deduplication.")
             return
         
         primary_key_type = target_columns_dict[primary_key_column]['type']
@@ -612,7 +612,7 @@ class VocabHarmonizer:
         try:
             with conn:
                 # Check if duplicates exist
-                self.logger.info(f"Checking for duplicate primary keys in {table_name}...")
+                utils.logger.info(f"Checking for duplicate primary keys in {table_name}...")
                 check_sql = f"""
                     SELECT 
                         {primary_key_column}, 
@@ -625,10 +625,10 @@ class VocabHarmonizer:
                 duplicates = conn.execute(check_sql).fetchall()
                 
                 if not duplicates:
-                    self.logger.info(f"No duplicate primary keys found in {table_name}")
+                    utils.logger.info(f"No duplicate primary keys found in {table_name}")
                     return
                 
-                self.logger.info(f"Found duplicate primary keys in {table_name}. Fixing...")
+                utils.logger.info(f"Found duplicate primary keys in {table_name}. Fixing...")
                 
                 # Create temp table with duplicate keys only
                 conn.execute(f"""
@@ -640,7 +640,7 @@ class VocabHarmonizer:
                 """)
                 
                 dup_count = conn.execute("SELECT COUNT(*) FROM duplicate_keys").fetchone()[0]
-                self.logger.info(f"Found {dup_count} unique keys with duplicates")
+                utils.logger.info(f"Found {dup_count} unique keys with duplicates")
                 
                 # Generate temp file paths
                 tmp_id = uuid.uuid4()
@@ -649,7 +649,7 @@ class VocabHarmonizer:
                 tmp_dup_fixed = f"{bucket_path}/tmp/tmp_dup_fixed_{tmp_id}.parquet"
                 
                 # Pass 1: Write non-duplicate rows
-                self.logger.info(f"Processing non-duplicate rows...")
+                utils.logger.info(f"Processing non-duplicate rows...")
                 conn.execute(f"""
                     COPY (
                         SELECT *
@@ -659,7 +659,7 @@ class VocabHarmonizer:
                 """)
                 
                 # Pass 2: Fix duplicate rows
-                self.logger.info(f"Processing duplicate rows with fixes...")
+                utils.logger.info(f"Processing duplicate rows with fixes...")
                 conn.execute(f"""
                     COPY (
                         SELECT 
@@ -678,7 +678,7 @@ class VocabHarmonizer:
                 """)
                 
                 # Combine both temp files and overwrite original
-                self.logger.info(f"Merging non-duplicate and fixed duplicate rows...")
+                utils.logger.info(f"Merging non-duplicate and fixed duplicate rows...")
                 conn.execute(f"""
                     COPY (
                         SELECT * FROM read_parquet('{tmp_non_dup}')
@@ -688,15 +688,15 @@ class VocabHarmonizer:
                 """)
                 
                 # Cleanup temporary files
-                self.logger.info(f"Cleaning up temporary files...")
+                utils.logger.info(f"Cleaning up temporary files...")
                 try:
                     gcp_services.delete_gcs_file(tmp_non_dup)
                     gcp_services.delete_gcs_file(tmp_dup_fixed)
-                    self.logger.info(f"Successfully cleaned up temporary files")
+                    utils.logger.info(f"Successfully cleaned up temporary files")
                 except Exception as cleanup_error:
-                    self.logger.warning(f"Failed to clean up temporary files: {str(cleanup_error)}")
+                    utils.logger.warning(f"Failed to clean up temporary files: {str(cleanup_error)}")
                 
-                self.logger.info(f"Successfully deduplicated primary keys in {table_name}")
+                utils.logger.info(f"Successfully deduplicated primary keys in {table_name}")
                 
         except Exception as e:
             raise Exception(f"Unable to deduplicate primary keys for table {table_name}: {str(e)}") from e
