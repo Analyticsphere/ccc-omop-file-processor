@@ -567,8 +567,8 @@ class VocabHarmonizer:
         self.logger.info(f"Consolidating files for table: {table_name}")
         
         # Construct paths
-        table_dir = f"{etl_folder}{table_name}/parts/"
-        parquet_pattern = f"gs://{bucket_name}/{table_dir}*.parquet"
+        table_dir = f"{etl_folder}{table_name}/"
+        source_parquet_pattern = f"gs://{bucket_name}/{table_dir}parts/*.parquet"
         consolidated_file_path = f"gs://{bucket_name}/{table_dir}{table_name}{constants.PARQUET}"
                 
         # Combine all parquet files into one
@@ -578,7 +578,7 @@ class VocabHarmonizer:
             with conn:
                 combine_sql = f"""
                     COPY (
-                        SELECT * FROM read_parquet('{parquet_pattern}')
+                        SELECT * FROM read_parquet('{source_parquet_pattern}')
                     ) TO '{consolidated_file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
                 conn.execute(combine_sql)
