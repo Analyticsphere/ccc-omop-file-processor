@@ -662,10 +662,10 @@ class VocabHarmonizer:
                 
                 # Generate temp file paths
                 import uuid
-                temp_id = uuid.uuid4()
+                tmp_id = uuid.uuid4()
                 bucket_path = file_path.rsplit('/', 1)[0]
-                temp_non_dup = f"{bucket_path}/temp_non_dup_{temp_id}.parquet"
-                temp_dup_fixed = f"{bucket_path}/temp_dup_fixed_{temp_id}.parquet"
+                tmp_non_dup = f"{bucket_path}/tmp/tmp_non_dup_{tmp_id}.parquet"
+                tmp_dup_fixed = f"{bucket_path}/tmp/tmp_dup_fixed_{tmp_id}.parquet"
                 
                 # Pass 1: Write non-duplicate rows
                 self.logger.info(f"Processing non-duplicate rows...")
@@ -674,7 +674,7 @@ class VocabHarmonizer:
                         SELECT *
                         FROM read_parquet('{file_path}')
                         WHERE {primary_key_column} NOT IN (SELECT {primary_key_column} FROM duplicate_keys)
-                    ) TO '{temp_non_dup}' {constants.DUCKDB_FORMAT_STRING}
+                    ) TO '{tmp_non_dup}' {constants.DUCKDB_FORMAT_STRING}
                 """)
                 
                 # Pass 2: Fix duplicate rows
@@ -693,16 +693,16 @@ class VocabHarmonizer:
                             FROM read_parquet('{file_path}')
                             WHERE {primary_key_column} IN (SELECT {primary_key_column} FROM duplicate_keys)
                         )
-                    ) TO '{temp_dup_fixed}' {constants.DUCKDB_FORMAT_STRING}
+                    ) TO '{tmp_dup_fixed}' {constants.DUCKDB_FORMAT_STRING}
                 """)
                 
                 # Combine both temp files and overwrite original
                 self.logger.info(f"Merging non-duplicate and fixed duplicate rows...")
                 conn.execute(f"""
                     COPY (
-                        SELECT * FROM read_parquet('{temp_non_dup}')
+                        SELECT * FROM read_parquet('{tmp_non_dup}')
                         UNION ALL
-                        SELECT * FROM read_parquet('{temp_dup_fixed}')
+                        SELECT * FROM read_parquet('{tmp_dup_fixed}')
                     ) TO '{file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """)
                 
