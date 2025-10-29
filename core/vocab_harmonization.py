@@ -1,5 +1,3 @@
-import logging
-import sys
 import uuid
 
 import core.constants as constants
@@ -572,7 +570,7 @@ class VocabHarmonizer:
             utils.close_duckdb_connection(conn, local_db_file)
         
         # Now deduplicate primary keys in the consolidated file
-        self._deduplicate_primary_keys(consolidated_file_path, table_name)
+        #self._deduplicate_primary_keys(consolidated_file_path, table_name)
 
     def _deduplicate_primary_keys(self, file_path: str, table_name: str) -> None:
         """
