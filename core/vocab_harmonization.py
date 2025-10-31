@@ -47,7 +47,9 @@ class VocabHarmonizer:
         elif step == constants.OMOP_ETL:
             self.omop_etl()
         elif step == constants.CONSOLIDATE_ETL:
-            self.consolidate_and_deduplicate_etl_tables()
+            self.consolidate_etl_tables()
+        elif step == constants.DEDUPLICATE_PRIMARY_KEYS:
+            self.deduplicate_primary_keys_all_tables()
         else:
             raise Exception(f"Unknown harmonization step {step}")
 
@@ -501,9 +503,9 @@ class VocabHarmonizer:
             # Perform the OMOP-to-OMOP ETL for this target table
             omop_transformer.omop_to_omop_etl()
 
-    def consolidate_and_deduplicate_etl_tables(self) -> None:
+    def consolidate_etl_tables(self) -> None:
         """
-        Orchestrates consolidation and deduplication across all ETL'd tables.
+        Orchestrates consolidation across all ETL'd tables.
         
         Discovers all table subdirectories in the OMOP_ETL artifacts directory
         and consolidates each one by delegating to the single-table processing method.
@@ -531,13 +533,57 @@ class VocabHarmonizer:
         utils.logger.info(f"Found {len(table_names)} table(s) to consolidate: {sorted(table_names)}")
         
         # Process each table directory
+        utils.logger.info("Starting consolidation for each table...")
         for table_name in sorted(table_names):
             self._process_single_table(bucket_name, etl_folder, table_name)
+        utils.logger.info("Completed consolidation for all tables.")
+
+    def deduplicate_primary_keys_all_tables(self) -> None:
+        """
+        Orchestrates deduplication of primary keys across all consolidated ETL tables.
+        
+        Discovers all table subdirectories in the OMOP_ETL artifacts directory
+        and deduplicates primary keys for each table that has surrogate keys.
+        """
+        utils.logger.info(f"Deduplicating primary keys for ETL files for {self.file_path}")
+        
+        # Get the OMOP ETL directory path
+        etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
+        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_gcs_path(etl_base_path)
+        etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
+        gcs_path = f"gs://{bucket_name}/{etl_folder}"
+        
+        utils.logger.info(f"Looking for table directories in {gcs_path}")
+        
+        # Get list of table subdirectories using existing utility
+        subdirectories = gcp_services.list_gcs_subdirectories(gcs_path)
+        
+        # Extract just the table names from the full paths
+        table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
+        
+        if not table_names:
+            utils.logger.warning(f"No table directories found in {gcs_path}")
+            return
+        
+        utils.logger.info(f"Found {len(table_names)} table(s) to check for deduplication: {sorted(table_names)}")
+        
+        # Process each table directory
+        utils.logger.info("Starting deduplication for each table...")
+        for table_name in sorted(table_names):
+            # Construct the consolidated file path
+            table_dir = f"{etl_folder}{table_name}/"
+            consolidated_file_path = f"gs://{bucket_name}/{table_dir}{table_name}{constants.PARQUET}"
+            
+            # Deduplicate primary keys for this table
+            self._deduplicate_primary_keys(consolidated_file_path, table_name)
+        utils.logger.info("Completed deduplication for all tables.")
+
+        
+            
 
     def _process_single_table(self, bucket_name: str, etl_folder: str, table_name: str) -> None:
         """
-        Combine all parquet files for a single table into one consolidated file,
-        then deduplicate primary keys.
+        Combine all parquet files for a single table into one consolidated file.
         
         Args:
             bucket_name: GCS bucket name
@@ -568,9 +614,6 @@ class VocabHarmonizer:
             raise Exception(f"Unable to consolidate files for table {table_name}: {str(e)}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
-        
-        # Now deduplicate primary keys in the consolidated file
-        #self._deduplicate_primary_keys(consolidated_file_path, table_name)
 
     def _deduplicate_primary_keys(self, file_path: str, table_name: str) -> None:
         """
