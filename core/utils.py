@@ -1,8 +1,8 @@
-import re
 import gc
 import json
 import logging
 import os
+import re
 import sys
 import uuid
 from datetime import datetime
@@ -20,7 +20,7 @@ Set up a logging instance that will write to stdout (and therefor show up in Goo
 """
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='omop-fp %(name)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 # Create the logger at module level so its settings are applied throughout code base
@@ -44,7 +44,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         # Improves performance for large queries
         conn.execute("SET preserve_insertion_order = false")
 
-        # Set to number of CPU cores
+        # Set to <= number of CPU cores
         # https://duckdb.org/docs/configuration/overview.html#global-configuration-options
         conn.execute(f"SET threads={constants.DUCKDB_THREADS}")
 
@@ -264,6 +264,17 @@ def get_parquet_harmonized_path(gcs_file_path: str) -> str:
 
     return parquet_path
 
+def get_omop_etl_destination_path(gcs_file_path: str) -> str:
+    base_directory, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+    
+    # Remove trailing slash if present
+    base_directory = base_directory.rstrip('/')
+        
+    # Construct the path to the OMOP ETL directory to store ETL'ed files
+    parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}"
+
+    return parquet_path
+
 def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
     table_name = get_table_name_from_gcs_path(gcs_file_path).lower()
     bucket, subfolder = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
@@ -366,7 +377,6 @@ def create_final_report_artifacts(report_data: dict) -> None:
             value_as_number=None
         )
         ra.save_artifact()
-
 
 def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
     """
@@ -476,12 +486,10 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
 
     return replacement_result
 
-
 def clean_column_name_for_sql(name: str) -> str:
     """
     Remove any character that is not a Unicode word character (letter, digit, underscore).
     Also strips leading/trailing whitespace and lowercases the name.
-    Useful for cleaning column names for SQL or data processing.
     """
     cleaned = re.sub(r'[^\w]', '', name, flags=re.UNICODE)
     cleaned = cleaned.strip()
@@ -490,3 +498,15 @@ def clean_column_name_for_sql(name: str) -> str:
     cleaned = cleaned.replace(' ', '_')
 
     return cleaned
+
+def get_placeholder_value(column_name: str, column_type: str) -> str:
+    # Return string representation of default value, based on column type
+
+    # *All* columns that end in _concept_id must be populated
+    # If a concept is unknown, OHDSI convention is to explicity populate column with concept_id 0
+    if column_name.endswith("_concept_id"):
+        return "'0'"
+
+    default_value = constants.DEFAULT_COLUMN_VALUES[column_type]
+    
+    return default_value

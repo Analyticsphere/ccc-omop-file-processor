@@ -47,8 +47,9 @@ PIPELINE_DAG_FAIL_MESSAGE = "DAG failed"
 FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
 
 class BQWriteTypes(str, Enum):
+    # SPECIFIC_FILE -> overwrite table with the exact Parquet file in file_path
     SPECIFIC_FILE = "specific_file"
-    ETLed_FILE = "ETLed_file"
+    # PROCESSED_FILE -> overwrite table with the pipeline-processed version of the file in file_path
     PROCESSED_FILE = "processed_file"
 
 CONDITION_ERA = "condition_era"
@@ -102,6 +103,7 @@ class ArtifactPaths(str, Enum):
     FIXED_FILES = f"{ARTIFACTS}fixed_files/"
     CONVERTED_FILES = f"{ARTIFACTS}converted_files/"
     HARMONIZED_FILES = f"{ARTIFACTS}harmonized_files/"
+    OMOP_ETL = f"{ARTIFACTS}omop_etl/"
     CREATED_FILES = f"{ARTIFACTS}created_files/"
     REPORT = f"{ARTIFACTS}delivery_report/"
     REPORT_TMP = f"{ARTIFACTS}delivery_report/tmp/"
@@ -192,11 +194,13 @@ TARGET_CDM_VERSION_REPORT_NAME = "Standardized to CDM version"
 FILE_PROCESSOR_VERSION_REPORT_NAME = "Pipeline file processor version"
 PROCESSED_DATE_REPORT_NAME = "Delivery processing date"
 
-SOURCE_TARGET = "Map source concepts to a updated target codes"
+SOURCE_TARGET = "Map source concepts to updated target codes"
 DOMAIN_CHECK = "Check for latest domain and update if needed"
 TARGET_REMAP = "Remap non-standard targets to new standard targets"
 TARGET_REPLACEMENT = "Replace non-standard targets with new standard targets"
-OMOP_ETL = "OMOP to OMOP structure transformation"
+OMOP_ETL = "OMOP to OMOP ETL"
+CONSOLIDATE_ETL = "Consolidate ETL files"
+DEDUPLICATE_PRIMARY_KEYS = "Deduplicate primary keys in ETL files"
 
 # Primary key column can be found in schema.json file
 NATURAL_KEY_TABLES = [

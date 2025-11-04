@@ -1,5 +1,7 @@
 import pytest
+
 import core.utils as utils
+
 
 @pytest.mark.parametrize(
     "gcs_path,expected",
