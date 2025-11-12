@@ -28,11 +28,12 @@ def get_birth_datetime_sql_expression(datetime_format: str, column_exists_in_fil
         SQL expression string for birth_datetime calculation
     """
     # Build calculation expression for birth_datetime from component fields
+    # Note: At this stage, columns are still VARCHAR, so we use string literals in COALESCE
     calculation_expr = """TRY_CAST(
                 CONCAT(
-                    LPAD(CAST(COALESCE(year_of_birth, 1900) AS VARCHAR), 4, '0'), '-',
-                    LPAD(CAST(COALESCE(month_of_birth, 1) AS VARCHAR), 2, '0'), '-',
-                    LPAD(CAST(COALESCE(day_of_birth, 1) AS VARCHAR), 2, '0'),
+                    LPAD(COALESCE(year_of_birth, '1900'), 4, '0'), '-',
+                    LPAD(COALESCE(month_of_birth, '1'), 2, '0'), '-',
+                    LPAD(COALESCE(day_of_birth, '1'), 2, '0'),
                     ' 00:00:00'
                 ) AS DATETIME)"""
 

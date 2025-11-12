@@ -46,12 +46,12 @@ class TestBirthDatetimeSqlExpression:
         """Test that proper default values are used for missing date components."""
         sql = get_birth_datetime_sql_expression(datetime_format, column_exists_in_file=False)
 
-        # Default year to 1900 if missing
-        assert "COALESCE(year_of_birth, 1900)" in sql
-        # Default month to 1 if missing
-        assert "COALESCE(month_of_birth, 1)" in sql
-        # Default day to 1 if missing
-        assert "COALESCE(day_of_birth, 1)" in sql
+        # Default year to '1900' if missing (string literal because columns are VARCHAR at this stage)
+        assert "COALESCE(year_of_birth, '1900')" in sql
+        # Default month to '1' if missing (string literal)
+        assert "COALESCE(month_of_birth, '1')" in sql
+        # Default day to '1' if missing (string literal)
+        assert "COALESCE(day_of_birth, '1')" in sql
         # Use midnight time (UTC)
         assert "00:00:00" in sql
 
@@ -70,12 +70,12 @@ class TestBirthDatetimeSqlExpression:
         """Test that date components are properly padded to ensure YYYY-MM-DD format."""
         sql = get_birth_datetime_sql_expression(datetime_format, column_exists_in_file=False)
 
-        # Year should be padded to 4 digits
-        assert "LPAD(CAST(COALESCE(year_of_birth, 1900) AS VARCHAR), 4, '0')" in sql
+        # Year should be padded to 4 digits (columns are already VARCHAR at this stage)
+        assert "LPAD(COALESCE(year_of_birth, '1900'), 4, '0')" in sql
         # Month should be padded to 2 digits
-        assert "LPAD(CAST(COALESCE(month_of_birth, 1) AS VARCHAR), 2, '0')" in sql
+        assert "LPAD(COALESCE(month_of_birth, '1'), 2, '0')" in sql
         # Day should be padded to 2 digits
-        assert "LPAD(CAST(COALESCE(day_of_birth, 1) AS VARCHAR), 2, '0')" in sql
+        assert "LPAD(COALESCE(day_of_birth, '1'), 2, '0')" in sql
 
     def test_concat_operation(self, datetime_format):
         """Test that date components are concatenated with proper separators."""
