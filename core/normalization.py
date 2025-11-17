@@ -5,6 +5,50 @@ import core.helpers.report_artifact as report_artifact
 import core.utils as utils
 
 
+def get_birth_datetime_sql_expression(datetime_format: str, column_exists_in_file: bool) -> str:
+    """
+    Generates SQL expression to populate person.birth_datetime field.
+
+    This field is required for downstream OHDSI tools like DataQualityDashboard and Achilles.
+
+    Rules for calculating birth_datetime:
+    1. If birth_datetime is already populated with valid DATETIME, use it
+    2. Else if year/month/day are populated, concat them (YYYY-MM-DD 00:00:00)
+    3. Else if year/month are populated, use YYYY-MM-01 00:00:00 (default missing day to 01)
+    4. Else if year is populated, use YYYY-01-01 00:00:00 (default missing month/day to 01)
+    5. Else use 1900-01-01 00:00:00 (default missing year to 1900)
+
+    Always uses midnight (00:00:00) as the time component in UTC.
+
+    Args:
+        datetime_format: The datetime format string to use for parsing (e.g., '%Y-%m-%d %H:%M:%S')
+        column_exists_in_file: Whether birth_datetime column exists in the source file
+
+    Returns:
+        SQL expression string for birth_datetime calculation
+    """
+    # Build calculation expression for birth_datetime from component fields
+    # Note: At this stage, columns are still VARCHAR, so we use string literals in COALESCE
+    calculation_expr = """TRY_CAST(
+                CONCAT(
+                    LPAD(COALESCE(year_of_birth, '1900'), 4, '0'), '-',
+                    LPAD(COALESCE(month_of_birth, '1'), 2, '0'), '-',
+                    LPAD(COALESCE(day_of_birth, '1'), 2, '0'),
+                    ' 00:00:00'
+                ) AS DATETIME)"""
+
+    # If birth_datetime column exists in the file, try to use it first, then fall back to calculation
+    if column_exists_in_file:
+        return f"""COALESCE(
+                TRY_CAST(TRY_STRPTIME(birth_datetime, '{datetime_format}') AS DATETIME),
+                TRY_CAST(birth_datetime AS DATETIME),
+                {calculation_expr}
+            ) AS birth_datetime"""
+    else:
+        # If birth_datetime doesn't exist in file, calculate from year/month/day
+        return f"{calculation_expr} AS birth_datetime"
+
+
 def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str, date_format: str, datetime_format: str) -> str:
     """
     Generates a SQL statement that, when executed:
@@ -58,6 +102,14 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
     for column_name in ordered_omop_columns:
         column_type = columns[column_name]["type"]
         is_required = columns[column_name]["required"].lower() == "true"
+
+        # Special handling for person.birth_datetime
+        # Calculate from year/month/day_of_birth if not already populated
+        # This field is required for downstream OHDSI tools like DataQualityDashboard and Achilles
+        if table_name == "person" and column_name == "birth_datetime":
+            column_exists = column_name in actual_columns
+            coalesce_exprs.append(get_birth_datetime_sql_expression(datetime_format, column_exists))
+            continue
 
         # Determine default value if a required column is NULL
         default_value = utils.get_placeholder_value(column_name, column_type) if is_required or column_name.endswith("_concept_id") else "NULL"
