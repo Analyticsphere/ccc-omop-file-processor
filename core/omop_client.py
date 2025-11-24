@@ -54,7 +54,7 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
     """
     vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     # Confirm desired vocabulary version exists in GCS
-    if gcp_services.vocab_gcs_path_exists(vocab_root_path) or not gcp_services.vocab_gcs_path_exists(vocab_gcs_bucket):
+    if gcp_services.vocab_gcs_path_exists(vocab_root_path):
         vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
         for vocab_file in vocab_files:
             vocab_file_name = vocab_file.replace(constants.CSV, '').lower()
@@ -96,7 +96,9 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                     raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
                 finally:
                     utils.close_duckdb_connection(conn, local_db_file)
-                
+    else:
+        raise Exception(f"Vocabulary GCS path {vocab_root_path} not found")
+
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
     vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     optimized_file_path = utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket)
@@ -106,21 +108,21 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
         # Ensure exisiting vocab file can be read
         if not utils.valid_parquet_file(optimized_file_path):
             # Ensure vocabulary version actually exists
-            if gcp_services.vocab_gcs_path_exists(vocab_path) or not gcp_services.vocab_gcs_path_exists(vocab_gcs_bucket):
+            if gcp_services.vocab_gcs_path_exists(vocab_path):
                 transform_query = f"""
                 COPY (
                     SELECT DISTINCT
                         c1.concept_id AS concept_id, -- Every concept_id from concept table
-                        c1.standard_concept AS concept_id_standard, 
+                        c1.standard_concept AS concept_id_standard,
                         c1.domain_id AS concept_id_domain,
-                        cr.relationship_id, 
+                        cr.relationship_id,
                         cr.concept_id_2 AS target_concept_id, -- targets to concept_id's
-                        c2.standard_concept AS target_concept_id_standard, 
+                        c2.standard_concept AS target_concept_id_standard,
                         c2.domain_id AS target_concept_id_domain
                     FROM read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c1
                     LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept_relationship{constants.PARQUET}') cr on c1.concept_id = cr.concept_id_1
                     LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c2 on cr.concept_id_2 = c2.concept_id
-                    WHERE IFNULL(cr.relationship_id, '') 
+                    WHERE IFNULL(cr.relationship_id, '')
                         IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
                 ) TO 'gs://{optimized_file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """

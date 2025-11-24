@@ -162,6 +162,8 @@ def delete_gcs_file(gcs_path: str) -> None:
 def vocab_gcs_path_exists(gcs_path: str) -> bool:
     """
     Check if a specific GCS path exists.
+    For directory paths (ending with /), checks if any files exist with that prefix.
+    For file paths, checks if the exact blob exists.
     """
     try:
         # Split the path into bucket name and blob path
@@ -182,10 +184,16 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
         if not blob_path:
             return True
 
-        # Check if blob exists
-        blob = bucket.blob(blob_path)
-        
-        return blob.exists()
+        # If path ends with /, treat it as a directory prefix
+        # Check if any blobs exist with this prefix
+        if blob_path.endswith('/'):
+            blobs = bucket.list_blobs(prefix=blob_path, max_results=1)
+            # Check if at least one blob exists with this prefix
+            return any(True for _ in blobs)
+        else:
+            # For file paths, check exact blob existence
+            blob = bucket.blob(blob_path)
+            return blob.exists()
 
     except Exception as e:
         # Handle any other unexpected errors
