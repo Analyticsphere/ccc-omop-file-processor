@@ -50,6 +50,10 @@ class VocabHarmonizer:
             self.consolidate_etl_tables()
         elif step == constants.DEDUPLICATE_PRIMARY_KEYS:
             self.deduplicate_primary_keys_all_tables()
+        elif step == constants.DISCOVER_TABLES_FOR_DEDUP:
+            return self.discover_tables_for_deduplication()
+        elif step == constants.DEDUPLICATE_SINGLE_TABLE:
+            self.deduplicate_single_table()
         else:
             raise Exception(f"Unknown harmonization step {step}")
 
@@ -738,8 +742,99 @@ class VocabHarmonizer:
                     utils.logger.warning(f"Failed to clean up temporary files for {table_name}: {str(cleanup_error)}")
                 
                 utils.logger.info(f"Successfully deduplicated primary keys in {table_name}")
-                
+
         except Exception as e:
             raise Exception(f"Unable to deduplicate primary keys for table {table_name}: {str(e)}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
+
+    def discover_tables_for_deduplication(self) -> list[dict]:
+        """
+        Discover all tables in the OMOP_ETL artifacts directory that need deduplication.
+        Returns a list of table configuration dictionaries for parallel processing.
+
+        Returns:
+            List of dicts, each containing:
+                - site: Site identifier
+                - delivery_date: Delivery date
+                - table_name: Name of the OMOP table
+                - bucket_name: GCS bucket name
+                - etl_folder: Path to ETL folder
+                - file_path: Full path to the consolidated parquet file
+        """
+        utils.logger.info(f"Discovering tables for deduplication for {self.file_path}")
+
+        # Get the OMOP ETL directory path
+        etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
+        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_gcs_path(etl_base_path)
+        etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
+        gcs_path = f"gs://{bucket_name}/{etl_folder}"
+
+        utils.logger.info(f"Looking for table directories in {gcs_path}")
+
+        # Get list of table subdirectories
+        subdirectories = gcp_services.list_gcs_subdirectories(gcs_path)
+
+        # Extract table names from the full paths
+        table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
+
+        if not table_names:
+            utils.logger.warning(f"No table directories found in {gcs_path}")
+            return []
+
+        utils.logger.info(f"Found {len(table_names)} table(s) for potential deduplication: {sorted(table_names)}")
+
+        # Build configuration for each table
+        table_configs = []
+        for table_name in sorted(table_names):
+            table_dir = f"{etl_folder}{table_name}/"
+            consolidated_file_path = f"gs://{bucket_name}/{table_dir}{table_name}{constants.PARQUET}"
+
+            table_config = {
+                "site": self.site,
+                "delivery_date": self.delivery_date,
+                "table_name": table_name,
+                "bucket_name": bucket_name,
+                "etl_folder": etl_folder,
+                "file_path": consolidated_file_path,
+                "cdm_version": self.cdm_version,
+                "project_id": self.project_id,
+                "dataset_id": self.dataset_id
+            }
+            table_configs.append(table_config)
+
+        utils.logger.info(f"Prepared {len(table_configs)} table configuration(s) for deduplication")
+        return table_configs
+
+    def deduplicate_single_table(self) -> None:
+        """
+        Deduplicate primary keys for a single table based on the configuration in file_path.
+
+        This method expects self.file_path to be a JSON string containing the table configuration
+        with keys: table_name, file_path (path to consolidated parquet), cdm_version
+
+        This is designed to be called per-table in parallel by the Airflow DAG.
+        """
+        import json
+
+        # The file_path parameter will contain JSON configuration for the table
+        try:
+            # Parse the table configuration from file_path
+            table_config = json.loads(self.file_path)
+            table_name = table_config['table_name']
+            consolidated_file_path = table_config['file_path']
+
+            utils.logger.info(f"Deduplicating primary keys for table: {table_name}")
+            utils.logger.info(f"Consolidated file path: {consolidated_file_path}")
+
+            # Call the existing _deduplicate_primary_keys method with the table-specific info
+            self._deduplicate_primary_keys(consolidated_file_path, table_name)
+
+            utils.logger.info(f"Successfully completed deduplication for table: {table_name}")
+
+        except json.JSONDecodeError as e:
+            raise Exception(f"Invalid table configuration JSON: {str(e)}") from e
+        except KeyError as e:
+            raise Exception(f"Missing required key in table configuration: {str(e)}") from e
+        except Exception as e:
+            raise Exception(f"Unable to deduplicate table: {str(e)}") from e

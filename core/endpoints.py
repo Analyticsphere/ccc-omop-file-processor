@@ -280,7 +280,7 @@ def harmonize_vocab() -> tuple[Any, int]:
 
     try:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}, step: {step}")
-        
+
         # At this point we know these are not None
         assert file_path is not None
         assert vocab_version is not None
@@ -289,7 +289,7 @@ def harmonize_vocab() -> tuple[Any, int]:
         assert project_id is not None
         assert dataset_id is not None
         assert step is not None
-        
+
         # Initialize the VocabHarmonizer
         vocab_harmonizer = vocab_harmonization.VocabHarmonizer(
             file_path=file_path,
@@ -300,17 +300,27 @@ def harmonize_vocab() -> tuple[Any, int]:
             project_id=project_id,
             dataset_id=dataset_id
         )
-        
+
         # Perform the requested harmonization step
-        vocab_harmonizer.perform_harmonization(step)
-        
+        result = vocab_harmonizer.perform_harmonization(step)
+
+        # If this is the discovery step, return the list of tables
+        if step == constants.DISCOVER_TABLES_FOR_DEDUP:
+            return jsonify({
+                'status': 'success',
+                'message': f'Successfully discovered tables for deduplication',
+                'table_configs': result,
+                'step': step
+            }), 200
+
+        # For all other steps, return standard success message
         return jsonify({
             'status': 'success',
             'message': f'Successfully completed {step} for {file_path}',
             'file_path': file_path,
             'step': step
         }), 200
-        
+
     except Exception as e:
         utils.logger.error(f"Unable to harmonize vocabulary of {file_path} at step {step}: {str(e)}")
         return f"Unable to harmonize vocabulary of {file_path} at step {step}: {str(e)}", 500

@@ -201,6 +201,8 @@ TARGET_REPLACEMENT = "Replace non-standard targets with new standard targets"
 OMOP_ETL = "OMOP to OMOP ETL"
 CONSOLIDATE_ETL = "Consolidate ETL files"
 DEDUPLICATE_PRIMARY_KEYS = "Deduplicate primary keys in ETL files"
+DISCOVER_TABLES_FOR_DEDUP = "Discover tables for deduplication"
+DEDUPLICATE_SINGLE_TABLE = "Deduplicate single table"
 
 # Primary key column can be found in schema.json file
 NATURAL_KEY_TABLES = [
