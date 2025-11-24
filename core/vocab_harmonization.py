@@ -681,7 +681,7 @@ class VocabHarmonizer:
                 """)
                 
                 dup_count = conn.execute("SELECT COUNT(*) FROM duplicate_keys").fetchone()[0]
-                utils.logger.info(f"Found {dup_count} unique keys with duplicates")
+                utils.logger.info(f"Found {dup_count} unique keys in {table_name} with duplicates")
                 
                 # Generate temp file paths
                 tmp_id = uuid.uuid4()
@@ -690,7 +690,7 @@ class VocabHarmonizer:
                 tmp_dup_fixed = f"{bucket_path}/tmp/tmp_dup_fixed_{tmp_id}.parquet"
                 
                 # Pass 1: Write non-duplicate rows
-                utils.logger.info(f"Processing non-duplicate rows...")
+                utils.logger.info(f"Processing non-duplicate rows in in {table_name}...")
                 conn.execute(f"""
                     COPY (
                         SELECT *
@@ -700,7 +700,7 @@ class VocabHarmonizer:
                 """)
                 
                 # Pass 2: Fix duplicate rows
-                utils.logger.info(f"Processing duplicate rows with fixes...")
+                utils.logger.info(f"Processing duplicate rows with fixes in {table_name}...")
                 conn.execute(f"""
                     COPY (
                         SELECT 
@@ -719,7 +719,7 @@ class VocabHarmonizer:
                 """)
                 
                 # Combine both temp files and overwrite original
-                utils.logger.info(f"Merging non-duplicate and fixed duplicate rows...")
+                utils.logger.info(f"Merging non-duplicate and fixed duplicate rows in {table_name}...")
                 conn.execute(f"""
                     COPY (
                         SELECT * FROM read_parquet('{tmp_non_dup}')
@@ -729,13 +729,13 @@ class VocabHarmonizer:
                 """)
                 
                 # Cleanup temporary files
-                utils.logger.info(f"Cleaning up temporary files...")
+                utils.logger.info(f"Cleaning up temporary files for {table_name}...")
                 try:
                     gcp_services.delete_gcs_file(tmp_non_dup)
                     gcp_services.delete_gcs_file(tmp_dup_fixed)
-                    utils.logger.info(f"Successfully cleaned up temporary files")
+                    utils.logger.info(f"Successfully cleaned up temporary files for {table_name}")
                 except Exception as cleanup_error:
-                    utils.logger.warning(f"Failed to clean up temporary files: {str(cleanup_error)}")
+                    utils.logger.warning(f"Failed to clean up temporary files for {table_name}: {str(cleanup_error)}")
                 
                 utils.logger.info(f"Successfully deduplicated primary keys in {table_name}")
                 
