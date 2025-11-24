@@ -486,6 +486,34 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
 
     return replacement_result
 
+def placeholder_to_harmonized_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
+    """
+    Replaces clinical data table placeholder strings in SQL scripts with paths to harmonized parquet files
+    from the omop_etl directory (post-vocabulary harmonization).
+
+    This is used for derived table generation after vocabulary harmonization is complete.
+    """
+    replacement_result = sql_script
+
+    # Replace clinical data placeholders with harmonized file paths
+    # Harmonized files are in: gs://{bucket}/{date}/artifacts/omop_etl/{table_name}/{table_name}.parquet
+    for placeholder, table_name in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
+        harmonized_table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{table_name}/{table_name}{constants.PARQUET}"
+        replacement_result = replacement_result.replace(placeholder, harmonized_table_path)
+
+    # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
+    for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
+        vocab_table_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
+        replacement_result = replacement_result.replace(placeholder, vocab_table_path)
+
+    # Add site name
+    replacement_result = replacement_result.replace(constants.SITE_PLACEHOLDER_STRING, site)
+
+    # Add current date
+    replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
+
+    return replacement_result
+
 def clean_column_name_for_sql(name: str) -> str:
     """
     Remove any character that is not a Unicode word character (letter, digit, underscore).

@@ -105,6 +105,7 @@ class ArtifactPaths(str, Enum):
     HARMONIZED_FILES = f"{ARTIFACTS}harmonized_files/"
     OMOP_ETL = f"{ARTIFACTS}omop_etl/"
     CREATED_FILES = f"{ARTIFACTS}created_files/"
+    DERIVED_FILES = f"{ARTIFACTS}derived_files/"
     REPORT = f"{ARTIFACTS}delivery_report/"
     REPORT_TMP = f"{ARTIFACTS}delivery_report/tmp/"
     DQD = f"{ARTIFACTS}dqd/"
