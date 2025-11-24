@@ -442,19 +442,20 @@ Incoming Parquet files are copied to the pipeline artifacts bucket, during which
 
 ### Vocabulary Harmonization Process
 
-The vocabulary harmonization process is divided into **7 discrete steps** that must be executed in order. Each step is a synchronous operation called via the `/harmonize_vocab` endpoint with a specific `step` parameter.
+The vocabulary harmonization process is divided into **8 discrete steps** that must be executed in order. Each step is a synchronous operation called via the `/harmonize_vocab` endpoint with a specific `step` parameter.
 
-Airflow is responsible for calling each step in sequence. 
+Airflow is responsible for calling each step in sequence.
 
-**The 7 harmonization steps (in order):**
+**The 8 harmonization steps (in order):**
 
 1. **Map source concepts to updated target codes** - Updates source concept mappings to new vocabulary targets
 2. **Remap non-standard targets to new standard targets** - Ensures non-standard concepts map to standard equivalents
 3. **Replace non-standard targets with new standard targets** - Replaces deprecated target concepts
 4. **Check for latest domain and update if needed** - Verifies and updates concept domains
 5. **OMOP to OMOP ETL** - Performs domain-based ETL when concepts change tables
-6. **Consolidate ETL files** - Merges all ETL outputs per table
-7. **Deduplicate primary keys in ETL files** - Removes duplicate keys in surrogate key tables
+6. **Consolidate ETL files** - Merges all ETL outputs per table per site
+7. **Discover tables for deduplication** - Identifies all tables that need primary key deduplication (executed per site, returns list for parallel processing)
+8. **Deduplicate single table** - Removes duplicate keys in a single surrogate key table (executed in parallel per table)
 
 ---
 
@@ -462,13 +463,13 @@ Airflow is responsible for calling each step in sequence.
 
 **Endpoint:** `POST /harmonize_vocab`
 
-**Description:** Performs a single vocabulary harmonization step for a given data file. This endpoint must be called once for each of the 7 harmonization steps, in order.
+**Description:** Performs a single vocabulary harmonization step for a given data file. This endpoint must be called once for each of the 8 harmonization steps, in order.
 
 **Request Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| file_path | string | Yes | Path to the original data file |
+| file_path | string | Yes | Path to the original data file (or JSON table config for step 8) |
 | vocab_version | string | Yes | Target vocabulary version |
 | omop_version | string | Yes | OMOP CDM version |
 | site | string | Yes | Site identifier |
@@ -483,7 +484,8 @@ Airflow is responsible for calling each step in sequence.
 - `"Check for latest domain and update if needed"`
 - `"OMOP to OMOP ETL"`
 - `"Consolidate ETL files"`
-- `"Deduplicate primary keys in ETL files"`
+- `"Discover tables for deduplication"`
+- `"Deduplicate single table"`
 
 **Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
 
@@ -528,6 +530,68 @@ Airflow is responsible for calling each step in sequence.
     "project_id": "my-gcp-project",
     "dataset_id": "omop_cdm",
     "step": "Remap non-standard targets to new standard targets"
+}
+```
+
+**Example Request (Step 7 - Discovery):**
+```json
+{
+    "file_path": "delivery_site/2023-05-01/dummy_value_for_discovery",
+    "vocab_version": "v5.0 29-FEB-24",
+    "omop_version": "5.4",
+    "site": "hospital-a",
+    "project_id": "my-gcp-project",
+    "dataset_id": "omop_cdm",
+    "step": "Discover tables for deduplication"
+}
+```
+
+**Example Response (Step 7 - Discovery):**
+```json
+{
+    "status": "success",
+    "message": "Successfully discovered tables for deduplication",
+    "table_configs": [
+        {
+            "site": "hospital-a",
+            "delivery_date": "2023-05-01",
+            "table_name": "condition_occurrence",
+            "bucket_name": "delivery_site",
+            "etl_folder": "2023-05-01/artifacts/omop_etl/",
+            "file_path": "gs://delivery_site/2023-05-01/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet",
+            "cdm_version": "5.4",
+            "project_id": "my-gcp-project",
+            "dataset_id": "omop_cdm"
+        },
+        {
+            "site": "hospital-a",
+            "delivery_date": "2023-05-01",
+            "table_name": "drug_exposure",
+            "bucket_name": "delivery_site",
+            "etl_folder": "2023-05-01/artifacts/omop_etl/",
+            "file_path": "gs://delivery_site/2023-05-01/artifacts/omop_etl/drug_exposure/drug_exposure.parquet",
+            "cdm_version": "5.4",
+            "project_id": "my-gcp-project",
+            "dataset_id": "omop_cdm"
+        }
+    ],
+    "step": "Discover tables for deduplication"
+}
+```
+
+**Example Request (Step 8 - Deduplicate Single Table):**
+
+Note: The `file_path` parameter contains a JSON-encoded table configuration from step 7.
+
+```json
+{
+    "file_path": "{\"site\":\"hospital-a\",\"delivery_date\":\"2023-05-01\",\"table_name\":\"condition_occurrence\",\"bucket_name\":\"delivery_site\",\"etl_folder\":\"2023-05-01/artifacts/omop_etl/\",\"file_path\":\"gs://delivery_site/2023-05-01/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet\",\"cdm_version\":\"5.4\",\"project_id\":\"my-gcp-project\",\"dataset_id\":\"omop_cdm\"}",
+    "vocab_version": "v5.0 29-FEB-24",
+    "omop_version": "5.4",
+    "site": "hospital-a",
+    "project_id": "my-gcp-project",
+    "dataset_id": "omop_cdm",
+    "step": "Deduplicate single table"
 }
 ```
 
