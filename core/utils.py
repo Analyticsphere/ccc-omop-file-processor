@@ -488,18 +488,27 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
 
 def placeholder_to_harmonized_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
     """
-    Replaces clinical data table placeholder strings in SQL scripts with paths to harmonized parquet files
-    from the omop_etl directory (post-vocabulary harmonization).
+    Replaces clinical data table placeholder strings in SQL scripts with paths to the appropriate parquet files.
+
+    This intelligently determines the correct path based on whether the table underwent vocabulary harmonization:
+    - Harmonized tables (in VOCAB_HARMONIZED_TABLES): gs://{bucket}/{date}/artifacts/omop_etl/{table}/{table}.parquet
+    - Non-harmonized tables (not in list): gs://{bucket}/{date}/artifacts/converted_files/{table}.parquet
 
     This is used for derived table generation after vocabulary harmonization is complete.
     """
     replacement_result = sql_script
 
-    # Replace clinical data placeholders with harmonized file paths
-    # Harmonized files are in: gs://{bucket}/{date}/artifacts/omop_etl/{table_name}/{table_name}.parquet
+    # Replace clinical data placeholders with the appropriate file paths
     for placeholder, table_name in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-        harmonized_table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{table_name}/{table_name}{constants.PARQUET}"
-        replacement_result = replacement_result.replace(placeholder, harmonized_table_path)
+        # Check if this table underwent vocabulary harmonization
+        if table_name in constants.VOCAB_HARMONIZED_TABLES:
+            # Harmonized tables are in: omop_etl/{table_name}/{table_name}.parquet
+            table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{table_name}/{table_name}{constants.PARQUET}"
+        else:
+            # Non-harmonized tables are in: converted_files/{table_name}.parquet
+            table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{table_name}{constants.PARQUET}"
+
+        replacement_result = replacement_result.replace(placeholder, table_path)
 
     # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
     for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
