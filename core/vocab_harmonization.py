@@ -582,9 +582,6 @@ class VocabHarmonizer:
             self._deduplicate_primary_keys(consolidated_file_path, table_name)
         utils.logger.info("Completed deduplication for all tables.")
 
-        
-            
-
     def _process_single_table(self, bucket_name: str, etl_folder: str, table_name: str) -> None:
         """
         Combine all parquet files for a single table into one consolidated file.

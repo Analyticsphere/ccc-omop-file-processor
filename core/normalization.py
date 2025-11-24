@@ -124,9 +124,11 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
                 else:
                     format_to_try = datetime_format
                 # Use STRPTIME with date_format, then cast to DATE
+                # Cast column_name to VARCHAR to start; on retry, the field may already have been converted to DATE/DATETIME,
+                # and TRY_STRPTIME() fails on non-string columns.
                 coalesce_exprs.append(
                     f"""COALESCE(
-                        TRY_CAST(TRY_STRPTIME({column_name}, '{format_to_try}') AS {column_type}), -- first try parsing with specified date format
+                        TRY_CAST(TRY_STRPTIME(CAST({column_name} AS VARCHAR), '{format_to_try}') AS {column_type}), -- first try parsing with specified date format
                         TRY_CAST({column_name} AS {column_type}), -- then try just casting the value
                         CAST({default_value} AS {column_type}) -- finally, use default value
                     ) AS {column_name}"""
