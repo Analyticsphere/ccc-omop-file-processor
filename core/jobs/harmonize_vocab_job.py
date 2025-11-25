@@ -28,6 +28,8 @@ import os
 import sys
 import traceback
 
+from google.cloud import storage
+
 import core.constants as constants
 import core.gcp_services as gcp_services
 import core.utils as utils
@@ -115,7 +117,7 @@ def main():
                 blob_path = parts[1] if len(parts) > 1 else 'table_configs.json'
 
                 # Upload to GCS
-                storage_client = gcp_services.get_storage_client()
+                storage_client = storage.Client()
                 bucket = storage_client.bucket(bucket_name)
                 blob = bucket.blob(blob_path)
                 blob.upload_from_string(result_json, content_type='application/json')
