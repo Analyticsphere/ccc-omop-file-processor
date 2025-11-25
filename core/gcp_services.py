@@ -162,6 +162,8 @@ def delete_gcs_file(gcs_path: str) -> None:
 def vocab_gcs_path_exists(gcs_path: str) -> bool:
     """
     Check if a specific GCS path exists.
+    For directory paths (ending with /), checks if any files exist with that prefix.
+    For file paths, checks if the exact blob exists.
     """
     try:
         # Split the path into bucket name and blob path
@@ -182,10 +184,16 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
         if not blob_path:
             return True
 
-        # Check if blob exists
-        blob = bucket.blob(blob_path)
-        
-        return blob.exists()
+        # If path ends with /, treat it as a directory prefix
+        # Check if any blobs exist with this prefix
+        if blob_path.endswith('/'):
+            blobs = bucket.list_blobs(prefix=blob_path, max_results=1)
+            # Check if at least one blob exists with this prefix
+            return any(True for _ in blobs)
+        else:
+            # For file paths, check exact blob existence
+            blob = bucket.blob(blob_path)
+            return blob.exists()
 
     except Exception as e:
         # Handle any other unexpected errors
@@ -357,6 +365,86 @@ def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_
             utils.logger.error(f"Failed to load {table_name}: {str(e)}")
             skipped_tables.append(table_name)
     
+    return {
+        'loaded': loaded_tables,
+        'skipped': skipped_tables
+    }
+
+def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: str, dataset_id: str) -> dict[str, list[str]]:
+    """
+    Load derived table parquet files from GCS to BigQuery.
+
+    Discovers all derived table parquet files in the DERIVED_FILES artifacts directory
+    and loads each one to its corresponding BigQuery table.
+
+    Args:
+        gcs_bucket: GCS bucket containing the derived files
+        delivery_date: Delivery date for path construction
+        project_id: BigQuery project ID
+        dataset_id: BigQuery dataset ID
+
+    Returns:
+        Dictionary with 'loaded' and 'skipped' keys, each containing a list of table names
+
+    Raises:
+        Exception: If there's an error during processing
+    """
+    # Construct the DERIVED_FILES directory path
+    derived_folder = f"{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}"
+    gcs_path = f"gs://{gcs_bucket}/{derived_folder}"
+
+    utils.logger.info(f"Looking for derived table parquet files in {gcs_path}")
+
+    # List all parquet files in the derived_files directory
+    client = storage.Client(project=project_id)
+    bucket = client.bucket(gcs_bucket)
+    prefix = derived_folder
+
+    blobs = list(bucket.list_blobs(prefix=prefix))
+    parquet_files = [blob.name for blob in blobs if blob.name.endswith(constants.PARQUET)]
+
+    if not parquet_files:
+        utils.logger.warning(f"No derived table parquet files found in {gcs_path}")
+        return {
+            'loaded': [],
+            'skipped': []
+        }
+
+    # Extract table names from file paths
+    # File format: {delivery_date}/artifacts/derived_files/{table_name}.parquet
+    table_names = [file_path.split('/')[-1].replace(constants.PARQUET, '') for file_path in parquet_files]
+
+    utils.logger.info(f"Found {len(table_names)} derived table(s) to load: {sorted(table_names)}")
+
+    # Load each derived table parquet file to BigQuery
+    loaded_tables = []
+    skipped_tables = []
+
+    for table_name in sorted(table_names):
+        # Construct path to derived table parquet file
+        derived_file_path = f"gs://{gcs_bucket}/{derived_folder}{table_name}{constants.PARQUET}"
+
+        # Check if the file exists
+        if not utils.parquet_file_exists(derived_file_path):
+            utils.logger.warning(f"Derived table parquet file not found: {derived_file_path}")
+            skipped_tables.append(table_name)
+            continue
+
+        try:
+            utils.logger.info(f"Loading derived table {table_name} from {derived_file_path} to BigQuery")
+            load_parquet_to_bigquery(
+                derived_file_path,
+                project_id,
+                dataset_id,
+                table_name,
+                constants.BQWriteTypes.SPECIFIC_FILE
+            )
+            loaded_tables.append(table_name)
+            utils.logger.info(f"Successfully loaded derived table {table_name} to BigQuery")
+        except Exception as e:
+            utils.logger.error(f"Failed to load derived table {table_name}: {str(e)}")
+            skipped_tables.append(table_name)
+
     return {
         'loaded': loaded_tables,
         'skipped': skipped_tables

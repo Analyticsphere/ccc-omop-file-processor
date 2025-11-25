@@ -61,6 +61,20 @@ DERIVED_DATA_TABLES_REQUIREMENTS = {
     OBSERVATION_PERIOD: ["person"]
 }
 
+# Tables that undergo vocabulary harmonization
+# These are available in the omop_etl/ directory after harmonization
+VOCAB_HARMONIZED_TABLES = [
+    "visit_occurrence",
+    "condition_occurrence",
+    "drug_exposure",
+    "procedure_occurrence",
+    "device_exposure",
+    "measurement",
+    "observation",
+    "note",
+    "specimen"
+]
+
 SITE_PLACEHOLDER_STRING = "@SITE"
 CURRENT_DATE_PLACEHOLDER_STRING = "@CURRENT_DATE"
 CONDITION_OCCURRENCE_PLACEHOLDER_STRING = "@CONDITION_OCCURRENCE"
@@ -105,6 +119,7 @@ class ArtifactPaths(str, Enum):
     HARMONIZED_FILES = f"{ARTIFACTS}harmonized_files/"
     OMOP_ETL = f"{ARTIFACTS}omop_etl/"
     CREATED_FILES = f"{ARTIFACTS}created_files/"
+    DERIVED_FILES = f"{ARTIFACTS}derived_files/"
     REPORT = f"{ARTIFACTS}delivery_report/"
     REPORT_TMP = f"{ARTIFACTS}delivery_report/tmp/"
     DQD = f"{ARTIFACTS}dqd/"
@@ -201,6 +216,8 @@ TARGET_REPLACEMENT = "Replace non-standard targets with new standard targets"
 OMOP_ETL = "OMOP to OMOP ETL"
 CONSOLIDATE_ETL = "Consolidate ETL files"
 DEDUPLICATE_PRIMARY_KEYS = "Deduplicate primary keys in ETL files"
+DISCOVER_TABLES_FOR_DEDUP = "Discover tables for deduplication"
+DEDUPLICATE_SINGLE_TABLE = "Deduplicate single table"
 
 # Primary key column can be found in schema.json file
 NATURAL_KEY_TABLES = [

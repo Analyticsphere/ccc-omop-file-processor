@@ -280,7 +280,7 @@ def harmonize_vocab() -> tuple[Any, int]:
 
     try:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}, step: {step}")
-        
+
         # At this point we know these are not None
         assert file_path is not None
         assert vocab_version is not None
@@ -289,7 +289,7 @@ def harmonize_vocab() -> tuple[Any, int]:
         assert project_id is not None
         assert dataset_id is not None
         assert step is not None
-        
+
         # Initialize the VocabHarmonizer
         vocab_harmonizer = vocab_harmonization.VocabHarmonizer(
             file_path=file_path,
@@ -300,36 +300,53 @@ def harmonize_vocab() -> tuple[Any, int]:
             project_id=project_id,
             dataset_id=dataset_id
         )
-        
+
         # Perform the requested harmonization step
-        vocab_harmonizer.perform_harmonization(step)
-        
+        result = vocab_harmonizer.perform_harmonization(step)
+
+        # If this is the discovery step, return the list of tables
+        if step == constants.DISCOVER_TABLES_FOR_DEDUP:
+            return jsonify({
+                'status': 'success',
+                'message': f'Successfully discovered tables for deduplication',
+                'table_configs': result,
+                'step': step
+            }), 200
+
+        # For all other steps, return standard success message
         return jsonify({
             'status': 'success',
             'message': f'Successfully completed {step} for {file_path}',
             'file_path': file_path,
             'step': step
         }), 200
-        
+
     except Exception as e:
         utils.logger.error(f"Unable to harmonize vocabulary of {file_path} at step {step}: {str(e)}")
         return f"Unable to harmonize vocabulary of {file_path} at step {step}: {str(e)}", 500
 
 
-@app.route('/populate_derived_data', methods=['POST'])
-def populate_dervied_data_table() -> tuple[str, int]:
+@app.route('/generate_derived_tables_from_harmonized', methods=['POST'])
+def generate_derived_tables_from_harmonized() -> tuple[str, int]:
+    """
+    Generate derived tables from HARMONIZED data (post-vocabulary harmonization).
+
+    This endpoint should be called AFTER vocabulary harmonization is complete but
+    BEFORE loading to BigQuery. It reads from harmonized Parquet files in the
+    omop_etl directory and writes to the derived_files directory.
+
+    The derived tables will be loaded to BigQuery in a separate step.
+    """
     data: dict[str, Any] = request.get_json() or {}
     site: Optional[str] = data.get('site')
     site_bucket: Optional[str] = data.get('gcs_bucket')
     delivery_date: Optional[str] = data.get('delivery_date')
     table_name: Optional[str] = data.get('table_name')
-    project_id: Optional[str] = data.get('project_id')
-    dataset_id: Optional[str] = data.get('dataset_id')
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
 
-    if not all([site, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket, site_bucket]):
-        return "Missing a required parameter to 'populate_derived_data' endpoint. Required: site, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket, site_bucket", 400
+    if not all([site, delivery_date, table_name, vocab_version, vocab_gcs_bucket, site_bucket]):
+        return "Missing a required parameter to 'generate_derived_tables_from_harmonized' endpoint. Required: site, delivery_date, table_name, vocab_version, vocab_gcs_bucket, site_bucket", 400
 
     try:
         # At this point we know these are not None
@@ -337,16 +354,14 @@ def populate_dervied_data_table() -> tuple[str, int]:
         assert site_bucket is not None
         assert delivery_date is not None
         assert table_name is not None
-        assert project_id is not None
-        assert dataset_id is not None
         assert vocab_version is not None
-        
-        utils.logger.info(f"Generating derived table {table_name} for {delivery_date} delivery from {site}")
-        omop_client.generate_derived_data(site, site_bucket, delivery_date, table_name, project_id, dataset_id, vocab_version, vocab_gcs_bucket)
-        return "Created derived table", 200
+
+        utils.logger.info(f"Generating derived table {table_name} from harmonized data for {delivery_date} delivery from {site}")
+        omop_client.generate_derived_data_from_harmonized(site, site_bucket, delivery_date, table_name, vocab_version, vocab_gcs_bucket)
+        return "Created derived table from harmonized data", 200
     except Exception as e:
-        utils.logger.error(f"Unable to create dervied table: {str(e)}")
-        return f"Unable to create derived tables: {str(e)}", 500
+        utils.logger.error(f"Unable to create derived table from harmonized data: {str(e)}")
+        return f"Unable to create derived table from harmonized data: {str(e)}", 500
 
 
 @app.route('/load_target_vocab', methods=['POST'])
@@ -520,6 +535,62 @@ def harmonized_parquets_to_bq() -> tuple[str, int]:
     except Exception as e:
         utils.logger.error(f"Error loading harmonized parquets to BigQuery: {str(e)}")
         return f"Error loading harmonized parquets to BigQuery: {str(e)}", 500
+
+
+@app.route('/load_derived_tables_to_bq', methods=['POST'])
+def load_derived_tables_to_bq() -> tuple[str, int]:
+    """
+    Load derived table parquet files from GCS to BigQuery.
+
+    This endpoint discovers all derived table parquet files in the DERIVED_FILES artifacts directory
+    and loads each one to its corresponding BigQuery table.
+    """
+    data: dict[str, Any] = request.get_json() or {}
+    gcs_bucket: Optional[str] = data.get('gcs_bucket')
+    delivery_date: Optional[str] = data.get('delivery_date')
+    project_id: Optional[str] = data.get('project_id')
+    dataset_id: Optional[str] = data.get('dataset_id')
+
+    if not all([gcs_bucket, delivery_date, project_id, dataset_id]):
+        return "Missing a required parameter to 'load_derived_tables_to_bq' endpoint. Required: gcs_bucket, delivery_date, project_id, dataset_id", 400
+
+    try:
+        # At this point we know these are not None
+        assert gcs_bucket is not None
+        assert delivery_date is not None
+        assert project_id is not None
+        assert dataset_id is not None
+
+        # Call the GCP service function to handle the heavy lifting
+        results = gcp_services.load_derived_tables_to_bq(
+            gcs_bucket,
+            delivery_date,
+            project_id,
+            dataset_id
+        )
+
+        # Prepare response message
+        loaded_tables = results['loaded']
+        skipped_tables = results['skipped']
+
+        response_parts = []
+        if loaded_tables:
+            response_parts.append(f"Successfully loaded {len(loaded_tables)} derived table(s): {', '.join(loaded_tables)}")
+        if skipped_tables:
+            response_parts.append(f"Skipped {len(skipped_tables)} derived table(s): {', '.join(skipped_tables)}")
+
+        if not response_parts:
+            response_message = "No derived tables found to load"
+        else:
+            response_message = ". ".join(response_parts)
+
+        utils.logger.info(response_message)
+
+        return response_message, 200
+
+    except Exception as e:
+        utils.logger.error(f"Error loading derived tables to BigQuery: {str(e)}")
+        return f"Error loading derived tables to BigQuery: {str(e)}", 500
 
 
 @app.route('/pipeline_log', methods=['POST'])

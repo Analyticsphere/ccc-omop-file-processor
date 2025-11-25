@@ -54,7 +54,7 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
     """
     vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     # Confirm desired vocabulary version exists in GCS
-    if gcp_services.vocab_gcs_path_exists(vocab_root_path) or not gcp_services.vocab_gcs_path_exists(vocab_gcs_bucket):
+    if gcp_services.vocab_gcs_path_exists(vocab_root_path):
         vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
         for vocab_file in vocab_files:
             vocab_file_name = vocab_file.replace(constants.CSV, '').lower()
@@ -96,7 +96,9 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                     raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
                 finally:
                     utils.close_duckdb_connection(conn, local_db_file)
-                
+    else:
+        raise Exception(f"Vocabulary GCS path {vocab_root_path} not found")
+
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
     vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     optimized_file_path = utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket)
@@ -106,21 +108,21 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
         # Ensure exisiting vocab file can be read
         if not utils.valid_parquet_file(optimized_file_path):
             # Ensure vocabulary version actually exists
-            if gcp_services.vocab_gcs_path_exists(vocab_path) or not gcp_services.vocab_gcs_path_exists(vocab_gcs_bucket):
+            if gcp_services.vocab_gcs_path_exists(vocab_path):
                 transform_query = f"""
                 COPY (
                     SELECT DISTINCT
                         c1.concept_id AS concept_id, -- Every concept_id from concept table
-                        c1.standard_concept AS concept_id_standard, 
+                        c1.standard_concept AS concept_id_standard,
                         c1.domain_id AS concept_id_domain,
-                        cr.relationship_id, 
+                        cr.relationship_id,
                         cr.concept_id_2 AS target_concept_id, -- targets to concept_id's
-                        c2.standard_concept AS target_concept_id_standard, 
+                        c2.standard_concept AS target_concept_id_standard,
                         c2.domain_id AS target_concept_id_domain
                     FROM read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c1
                     LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept_relationship{constants.PARQUET}') cr on c1.concept_id = cr.concept_id_1
                     LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c2 on cr.concept_id_2 = c2.concept_id
-                    WHERE IFNULL(cr.relationship_id, '') 
+                    WHERE IFNULL(cr.relationship_id, '')
                         IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
                 ) TO 'gs://{optimized_file_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
@@ -218,33 +220,53 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         }
         raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
-def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table_name: str, project_id: str, dataset_id: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
+def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_date: str, table_name: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
     """
-    Execute SQL scripts to generate derived data table Parquet files
+    Execute SQL scripts to generate derived data table Parquet files from HARMONIZED data.
+
+    This function is called AFTER vocabulary harmonization is complete and reads from the
+    harmonized Parquet files in the omop_etl directory. The output is written to the
+    derived_files directory and will be loaded to BigQuery in a separate step.
+
+    Key differences from generate_derived_data():
+    - Reads from harmonized files (omop_etl/) instead of converted files
+    - Writes to derived_files/ instead of created_files/
+    - Does NOT load to BigQuery (that happens later in the pipeline)
     """
     sql_script_name = table_name
 
     if table_name not in constants.DERIVED_DATA_TABLES_REQUIREMENTS.keys():
         raise Exception(f"{table_name} is not a derived data table")
 
-    # Check if tables necessary to generate dervied data exist in delivery
+    # Check if tables necessary to generate derived data exist in harmonized delivery
+    # For vocab-harmonized tables, check in omop_etl/
+    # For non-harmonized tables (like person), check in converted_files/
     for required_table in constants.DERIVED_DATA_TABLES_REQUIREMENTS[table_name]:
-        parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
+        # Check if this table goes through vocabulary harmonization
+        if required_table in constants.VOCAB_HARMONIZED_TABLES:
+            # Look for harmonized version
+            parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{required_table}/{required_table}{constants.PARQUET}"
+        else:
+            # Look for converted version (e.g., person, death)
+            parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
+
         if not utils.parquet_file_exists(parquet_path):
-            # Don't raise execption if required table doesn't exist, just log warning
+            # Don't raise exception if required table doesn't exist, just log warning
             utils.logger.warning(f"Required table {required_table} not in {site}'s {delivery_date} data delivery, cannot generate derived data table {table_name}")
             return
-    
+
     # observation_period table requires special logic
     # observation_period records are necessary when using OHDSI analytic tools
     # Create observation_period records using standard logic for all sites
-        # https://ohdsi.github.io/CommonDataModel/ehrObsPeriods.html
+    # https://ohdsi.github.io/CommonDataModel/ehrObsPeriods.html
     if table_name == constants.OBSERVATION_PERIOD:
-        visit_occurrence_table = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}visit_occurrence{constants.PARQUET}"
+        # Check for harmonized visit_occurrence
+        visit_occurrence_table = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}visit_occurrence/visit_occurrence{constants.PARQUET}"
+        # Death table doesn't go through harmonization
         death_table = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}death{constants.PARQUET}"
 
-        # Need seperate SQL scripts for different file delivery scenarios 
-        # DuckDB doesn't support branch logic based on table/file availablity so choosing SQL script via Python
+        # Need separate SQL scripts for different file delivery scenarios
+        # DuckDB doesn't support branch logic based on table/file availability so choosing SQL script via Python
         if utils.parquet_file_exists(visit_occurrence_table) and utils.parquet_file_exists(death_table):
             sql_script_name = "observation_period_vod"
         elif utils.parquet_file_exists(visit_occurrence_table):
@@ -252,26 +274,28 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
         else:
             sql_script_name = table_name
 
-    # Get SQL script with place holder values for table locations
+    # Get SQL script with placeholder values for table locations
     try:
         create_statement = ""
-        # The drug_era script provided by OHDSI is resource intenstive
-        # The script is split into two parts: 
+        # The drug_era script provided by OHDSI is resource intensive
+        # The script is split into two parts:
         #   1) SQL statements that iteratively creates tables to derive drug_era records. Creating tables offloads data from memory to disk.
         #   2) Performs a final select statement against "last" temp table
         if table_name == constants.DRUG_ERA:
             create_statement_path = f"{constants.DERIVED_TABLE_SCRIPT_PATH}{sql_script_name}_create.sql"
             with open(create_statement_path, 'r') as f:
                 create_statement_raw = f.read()
-            create_statement = utils.placeholder_to_file_path(site, site_bucket, delivery_date, create_statement_raw, vocab_version, vocab_gcs_bucket)
+            create_statement = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, create_statement_raw, vocab_version, vocab_gcs_bucket)
 
         sql_path = f"{constants.DERIVED_TABLE_SCRIPT_PATH}{sql_script_name}.sql"
         with open(sql_path, 'r') as f:
             select_statement_raw = f.read()
 
-        # Add table locations
-        select_statement = utils.placeholder_to_file_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
-        parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CREATED_FILES.value}{table_name}{constants.PARQUET}"
+        # Add table locations using harmonized file paths
+        select_statement = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
+
+        # Output to derived_files directory
+        parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}{table_name}{constants.PARQUET}"
 
         # Generate and execute final SQL
         sql_statement = f"""
@@ -283,13 +307,10 @@ def generate_derived_data(site: str, site_bucket: str, delivery_date: str, table
         """
         utils.execute_duckdb_sql(sql_statement, f"Unable to execute SQL to generate {table_name}")
 
-        # Load the Parquet to BigQuery
-        # Because the task that executes this function occurs after load_bq(), 
-        #   this will overwrite the derived data delievered by the site
-        gcp_services.load_parquet_to_bigquery(parquet_gcs_path, project_id, dataset_id, table_name, constants.BQWriteTypes.SPECIFIC_FILE)
+        utils.logger.info(f"Successfully generated derived table {table_name} from harmonized data to {parquet_gcs_path}")
 
     except Exception as e:
-        raise Exception(f"Unable to generate {table_name} derived data: {str(e)}") from e
+        raise Exception(f"Unable to generate {table_name} derived data from harmonized files: {str(e)}") from e
 
 def load_vocabulary_table(vocab_version: str, vocab_gcs_bucket: str, table_file_name: str, project_id: str, dataset_id: str) -> None:
     # Loads an optimized vocabulary file to BigQuery as a table

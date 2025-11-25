@@ -486,6 +486,43 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
 
     return replacement_result
 
+def placeholder_to_harmonized_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
+    """
+    Replaces clinical data table placeholder strings in SQL scripts with paths to the appropriate parquet files.
+
+    This intelligently determines the correct path based on whether the table underwent vocabulary harmonization:
+    - Harmonized tables (in VOCAB_HARMONIZED_TABLES): gs://{bucket}/{date}/artifacts/omop_etl/{table}/{table}.parquet
+    - Non-harmonized tables (not in list): gs://{bucket}/{date}/artifacts/converted_files/{table}.parquet
+
+    This is used for derived table generation after vocabulary harmonization is complete.
+    """
+    replacement_result = sql_script
+
+    # Replace clinical data placeholders with the appropriate file paths
+    for placeholder, table_name in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
+        # Check if this table underwent vocabulary harmonization
+        if table_name in constants.VOCAB_HARMONIZED_TABLES:
+            # Harmonized tables are in: omop_etl/{table_name}/{table_name}.parquet
+            table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{table_name}/{table_name}{constants.PARQUET}"
+        else:
+            # Non-harmonized tables are in: converted_files/{table_name}.parquet
+            table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{table_name}{constants.PARQUET}"
+
+        replacement_result = replacement_result.replace(placeholder, table_path)
+
+    # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
+    for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
+        vocab_table_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
+        replacement_result = replacement_result.replace(placeholder, vocab_table_path)
+
+    # Add site name
+    replacement_result = replacement_result.replace(constants.SITE_PLACEHOLDER_STRING, site)
+
+    # Add current date
+    replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
+
+    return replacement_result
+
 def clean_column_name_for_sql(name: str) -> str:
     """
     Remove any character that is not a Unicode word character (letter, digit, underscore).
