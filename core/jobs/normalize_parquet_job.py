@@ -67,8 +67,8 @@ def main():
 
         # Execute normalization
         normalization.normalize_file(
-            file_path=parquet_file_path,
-            omop_version=env_values['OMOP_VERSION'],
+            parquet_gcs_file_path=parquet_file_path,
+            cdm_version=env_values['OMOP_VERSION'],
             date_format=env_values['DATE_FORMAT'],
             datetime_format=env_values['DATETIME_FORMAT']
         )

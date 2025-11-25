@@ -62,8 +62,8 @@ def main():
         # Execute CDM upgrade
         utils.logger.info(f"Upgrading file from CDM {env_values['OMOP_VERSION']} to {env_values['TARGET_OMOP_VERSION']}")
         omop_client.upgrade_file(
-            file_path=env_values['FILE_PATH'],
-            omop_version=env_values['OMOP_VERSION'],
+            gcs_file_path=env_values['FILE_PATH'],
+            cdm_version=env_values['OMOP_VERSION'],
             target_omop_version=env_values['TARGET_OMOP_VERSION']
         )
 
