@@ -14,7 +14,7 @@ steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA']
 
-# Deploy container image to Cloud Run
+# Deploy container image to Cloud Run Service (for remaining API endpoints)
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   entrypoint: gcloud
   args: [
@@ -29,6 +29,101 @@ steps:
     '--execution-environment=gen2',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
     '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data'
+  ]
+
+# Deploy Cloud Run Job: Process Incoming File
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: [
+    'run', 'jobs', 'deploy', 'ccc-omop-file-processor-process-file-job',
+    '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
+    '--region=us-central1',
+    '--service-account=$SERVICE_ACCOUNT_EMAIL',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,VOCAB_GCS_PATH=$_VOCAB_GCS_PATH',
+    '--cpu=4',
+    '--memory=16Gi',
+    '--task-timeout=3600s',
+    '--max-retries=0',
+    '--parallelism=1',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
+    '--args=python,-m,core.jobs.process_incoming_file_job'
+  ]
+
+# Deploy Cloud Run Job: Normalize Parquet
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: [
+    'run', 'jobs', 'deploy', 'ccc-omop-file-processor-normalize-parquet-job',
+    '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
+    '--region=us-central1',
+    '--service-account=$SERVICE_ACCOUNT_EMAIL',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,VOCAB_GCS_PATH=$_VOCAB_GCS_PATH',
+    '--cpu=4',
+    '--memory=16Gi',
+    '--task-timeout=3600s',
+    '--max-retries=0',
+    '--parallelism=1',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
+    '--args=python,-m,core.jobs.normalize_parquet_job'
+  ]
+
+# Deploy Cloud Run Job: Upgrade CDM
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: [
+    'run', 'jobs', 'deploy', 'ccc-omop-file-processor-upgrade-cdm-job',
+    '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
+    '--region=us-central1',
+    '--service-account=$SERVICE_ACCOUNT_EMAIL',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,VOCAB_GCS_PATH=$_VOCAB_GCS_PATH',
+    '--cpu=4',
+    '--memory=16Gi',
+    '--task-timeout=3600s',
+    '--max-retries=0',
+    '--parallelism=1',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
+    '--args=python,-m,core.jobs.upgrade_cdm_job'
+  ]
+
+# Deploy Cloud Run Job: Harmonize Vocabulary
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: [
+    'run', 'jobs', 'deploy', 'ccc-omop-file-processor-harmonize-vocab-job',
+    '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
+    '--region=us-central1',
+    '--service-account=$SERVICE_ACCOUNT_EMAIL',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,VOCAB_GCS_PATH=$_VOCAB_GCS_PATH',
+    '--cpu=4',
+    '--memory=16Gi',
+    '--task-timeout=7200s',
+    '--max-retries=0',
+    '--parallelism=1',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
+    '--args=python,-m,core.jobs.harmonize_vocab_job'
+  ]
+
+# Deploy Cloud Run Job: Generate Derived Tables
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: [
+    'run', 'jobs', 'deploy', 'ccc-omop-file-processor-generate-derived-tables-job',
+    '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
+    '--region=us-central1',
+    '--service-account=$SERVICE_ACCOUNT_EMAIL',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,VOCAB_GCS_PATH=$_VOCAB_GCS_PATH',
+    '--cpu=4',
+    '--memory=16Gi',
+    '--task-timeout=3600s',
+    '--max-retries=0',
+    '--parallelism=1',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
+    '--args=python,-m,core.jobs.generate_derived_tables_job'
   ]
 
 options:
