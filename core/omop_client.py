@@ -227,11 +227,6 @@ def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_
     This function is called AFTER vocabulary harmonization is complete and reads from the
     harmonized Parquet files in the omop_etl directory. The output is written to the
     derived_files directory and will be loaded to BigQuery in a separate step.
-
-    Key differences from generate_derived_data():
-    - Reads from harmonized files (omop_etl/) instead of converted files
-    - Writes to derived_files/ instead of created_files/
-    - Does NOT load to BigQuery (that happens later in the pipeline)
     """
     sql_script_name = table_name
 

@@ -6,7 +6,7 @@ import re
 import sys
 import uuid
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Tuple
 
 import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
@@ -84,22 +84,6 @@ def execute_duckdb_sql(sql: str, error_msg: str) -> None:
         close_duckdb_connection(conn, local_db_file)
         # Manually run garabage collection here to reclaim memory
         gc.collect()
-
-def parse_duckdb_csv_error(error: Exception) -> Optional[str]:
-    """
-    Parse DuckDB CSV error messages to identify specific error types.
-    Returns error type as string or None if unrecognized.
-    DuckDB doesn't have very specific exception types; this function allows us to catch and handle specific errors
-    """
-    error_msg = str(error).lower()
-    
-    if "invalid unicode" in error_msg or "byte sequence mismatch" in error_msg:
-        return "INVALID_UNICODE"
-    elif "unterminated quote" in error_msg or "parallel scanner does not support null_padding in conjunction with quoted new lines" in error_msg:
-        return "UNTERMINATED_QUOTE"
-    elif "csv error on line" in error_msg:  # Generic CSV error fallback
-        return "CSV_FORMAT_ERROR"
-    return None
 
 def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
     # Extract file name from a GCS path and removes extension

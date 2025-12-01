@@ -1,7 +1,6 @@
 import logging
 import re
 import sys
-import uuid
 
 import core.constants as constants
 import core.utils as utils
@@ -20,20 +19,11 @@ class Transformer:
         self.source_table = source_table
         self.target_table = target_table
         self.etl_artifact_path = etl_artifact_path
-        
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[logging.StreamHandler(sys.stdout)]
-        )
-        # Create the logger at module level so its settings are applied throughout class
-        self.logger = logging.getLogger(__name__)
 
     def omop_to_omop_etl(self) -> None:
         # Execute the OMOP to OMOP ETL SQL script
         transform_sql = self.generate_omop_to_omop_sql()
         utils.execute_duckdb_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
-
 
     def generate_omop_to_omop_sql(self) -> str:
         """
