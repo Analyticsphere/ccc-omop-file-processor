@@ -185,10 +185,11 @@ class VocabHarmonizer:
             self.vocab_gcs_bucket
         )
 
+        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}")
         final_sql = f"""
             COPY (
                 {final_cte}
-            ) TO '{storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}")}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         utils.execute_duckdb_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
@@ -268,9 +269,10 @@ class VocabHarmonizer:
         #   so they can be used for identification here
         exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
         if exisiting_files:
+            existing_files_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
             where_sql = f"""
                 AND tbl.{primary_key_column} NOT IN (
-                    SELECT {primary_key_column} FROM read_parquet('{storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")}')
+                    SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
                 )
             """
             initial_from_sql = initial_from_sql + where_sql
@@ -336,10 +338,11 @@ class VocabHarmonizer:
             self.vocab_gcs_bucket
         )
 
+        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_{table_name}{constants.PARQUET}")
         final_sql = f"""
             COPY (
                 {final_cte}
-            ) TO '{storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_{table_name}{constants.PARQUET}")}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         utils.execute_duckdb_sql(final_sql, f"Unable to execute SQL to check for new targets ({mapping_type}) {self.source_table_name}")
@@ -406,14 +409,16 @@ class VocabHarmonizer:
         exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
         where_sql = ""
         if exisiting_files:
+            existing_files_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
             where_sql = f"""
                 WHERE tbl.{primary_key_column} NOT IN (
-                    SELECT {primary_key_column} FROM read_parquet('{storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")}')
+                    SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
                 )
             """
 
         # Create vocab CTE with distinct concept_id and domain_id values
         # Without the CTE, duplicates will occur when 1 concept_id is mapped to more than 1 target
+        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}")
         sql_statement = f"""
             COPY (
                 WITH vocab AS (
@@ -425,7 +430,7 @@ class VocabHarmonizer:
                 SELECT {select_sql}
                 {from_sql}
                 {where_sql}
-            ) TO '{storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}")}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         final_sql_statement = utils.placeholder_to_file_path(
@@ -455,11 +460,12 @@ class VocabHarmonizer:
             source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
             
             # Query to count rows by target table
+            parquet_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
             count_query = f"""
-                SELECT 
+                SELECT
                     target_table,
                     COUNT(*) as row_count
-                FROM read_parquet('{storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")}')
+                FROM read_parquet('{parquet_path}')
                 GROUP BY target_table
                 ORDER BY target_table
             """
@@ -493,8 +499,9 @@ class VocabHarmonizer:
         conn, local_db_file = utils.create_duckdb_connection()
         try:
             with conn:
+                parquet_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
                 target_tables = f"""
-                    SELECT DISTINCT target_table FROM read_parquet('{storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")}')
+                    SELECT DISTINCT target_table FROM read_parquet('{parquet_path}')
                 """
                         
                 target_tables_list = conn.execute(target_tables).fetch_df()['target_table'].tolist()

@@ -110,6 +110,11 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
         if not utils.valid_parquet_file(optimized_file_path):
             # Ensure vocabulary version actually exists
             if gcp_services.vocab_gcs_path_exists(vocab_path):
+                # Build paths for read_parquet statements
+                concept_path = storage.get_uri(f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}")
+                concept_relationship_path = storage.get_uri(f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept_relationship{constants.PARQUET}")
+                output_path = storage.get_uri(optimized_file_path)
+
                 transform_query = f"""
                 COPY (
                     SELECT DISTINCT
@@ -120,12 +125,12 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                         cr.concept_id_2 AS target_concept_id, -- targets to concept_id's
                         c2.standard_concept AS target_concept_id_standard,
                         c2.domain_id AS target_concept_id_domain
-                    FROM read_parquet('{storage.get_uri(f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}")}') c1
-                    LEFT JOIN read_parquet('{storage.get_uri(f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept_relationship{constants.PARQUET}")}') cr on c1.concept_id = cr.concept_id_1
-                    LEFT JOIN read_parquet('{storage.get_uri(f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}")}') c2 on cr.concept_id_2 = c2.concept_id
+                    FROM read_parquet('{concept_path}') c1
+                    LEFT JOIN read_parquet('{concept_relationship_path}') cr on c1.concept_id = cr.concept_id_1
+                    LEFT JOIN read_parquet('{concept_path}') c2 on cr.concept_id_2 = c2.concept_id
                     WHERE IFNULL(cr.relationship_id, '')
                         IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
-                ) TO '{storage.get_uri(optimized_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+                ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
                 """
                 utils.execute_duckdb_sql(transform_query, "Unable to create optimized vocab file")
 
