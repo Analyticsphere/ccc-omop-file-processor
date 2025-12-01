@@ -72,6 +72,9 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str)
 
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
+    finally:
+        # Manually run garabage collection here to reclaim memory
+        gc.collect()
 
 def execute_duckdb_sql(sql: str, error_msg: str) -> None:
     try:
@@ -83,8 +86,6 @@ def execute_duckdb_sql(sql: str, error_msg: str) -> None:
         raise Exception(f"{error_msg}: {str(e)}") from e
     finally:
         close_duckdb_connection(conn, local_db_file)
-        # Manually run garabage collection here to reclaim memory
-        gc.collect()
 
 def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
     # Extract file name from a GCS path and removes extension
