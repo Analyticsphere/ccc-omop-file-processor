@@ -6,6 +6,7 @@ from typing import Optional
 
 import core.constants as constants
 import core.utils as utils
+from core.storage_backend import storage
 
 
 class ReportArtifact:
@@ -23,7 +24,7 @@ class ReportArtifact:
         random_id = random.randint(0, 2**31 - 1) # Random, positive, integer within 32 bit signed space
         random_string = str(uuid.uuid4())
 
-        file_path = f"{self.report_artifact_path}delivery_report_part_{random_string}{constants.PARQUET}"
+        file_path = storage.get_uri(f"{self.report_artifact_path}delivery_report_part_{random_string}{constants.PARQUET}")
 
         value_as_string_sql = 'NULL' if self.value_as_string is None else f"'{self.value_as_string}'"
         value_as_number_sql = 'NULL' if self.value_as_number is None else f"'{self.value_as_number}'"
