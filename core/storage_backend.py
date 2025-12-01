@@ -1,35 +1,28 @@
-"""
-Storage backend abstraction for handling different storage systems (GCS, Local).
-
-This module provides a simple abstraction layer that allows the codebase to work with
-different storage backends by configuring a single environment variable.
-
-Usage:
-    from core.storage_backend import storage
-
-    # Add storage scheme to path for DuckDB, etc.
-    uri = storage.get_uri("bucket/path/file.parquet")
-    # Returns: "gs://bucket/path/file.parquet" (default GCS)
-
-    # Remove storage scheme from path for parsing
-    path = storage.strip_scheme("gs://bucket/path/file.parquet")
-    # Returns: "bucket/path/file.parquet"
-
-Configuration:
-    Set the STORAGE_BACKEND environment variable to one of:
-    - 'gcs' (default): Google Cloud Storage (gs://)
-    - 'local': Local filesystem (file://)
-"""
-
 import os
 
 
 class StorageBackend:
     """
-    Handles storage backend URI formatting for different cloud storage systems.
+    Storage backend abstraction for handling different storage systems (GCS, Local).
 
-    This class provides methods to add or remove storage scheme prefixes (like gs://, s3://)
-    from file paths, allowing the codebase to work with multiple storage backends.
+    This module provides a simple abstraction layer that allows the codebase to work with
+    different storage backends by configuring a single environment variable.
+
+    Usage:
+        from core.storage_backend import storage
+
+        # Add storage scheme to path for DuckDB, etc.
+        uri = storage.get_uri("bucket/path/file.parquet")
+        # Returns: "gs://bucket/path/file.parquet" (default GCS)
+
+        # Remove storage scheme from path for parsing
+        path = storage.strip_scheme("gs://bucket/path/file.parquet")
+        # Returns: "bucket/path/file.parquet"
+
+    Configuration:
+        Set the STORAGE_BACKEND environment variable to one of:
+        - 'gcs' (default): Google Cloud Storage (gs://)
+        - 'local': Local filesystem (file://)
     """
 
     # Supported storage backends and their URI schemes
