@@ -13,6 +13,7 @@ import core.normalization as normalization
 import core.omop_client as omop_client
 import core.utils as utils
 import core.vocab_harmonization as vocab_harmonization
+from core.storage_backend import storage
 
 app = Flask(__name__)
 
@@ -57,7 +58,7 @@ def create_artifact_buckets() -> tuple[str, int]:
     if not delivery_bucket:
         return "Missing required parameter to 'create_artifact_buckets' endpoint: delivery_bucket", 400
 
-    utils.logger.info(f"Creating artifact buckets in gs://{delivery_bucket}")
+    utils.logger.info(f"Creating artifact buckets in {storage.get_uri(delivery_bucket)}")
 
     directories: list[str] = []
 

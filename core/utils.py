@@ -10,10 +10,11 @@ from typing import Tuple
 
 import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
-from google.cloud import storage  # type: ignore
+from google.cloud import storage as gcs_storage  # type: ignore
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
+from core.storage_backend import storage
 
 """
 Set up a logging instance that will write to stdout (and therefor show up in Google Cloud logs)
@@ -131,13 +132,13 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
 def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str, str]:
     # Returns a tuple of the bucket_name and delivery date for a given file in GCS
     # e.g. synthea53/2024-12-31/care_site.parquet -> synthea53, 2024-12-31
-    gcs_file_path = gcs_file_path.replace("gs://", "")
+    gcs_file_path = storage.strip_scheme(gcs_file_path)
     bucket_name, delivery_date = gcs_file_path.split('/')[:2]
     return bucket_name, delivery_date
 
 def get_columns_from_file(gcs_file_path: str) -> list:
     """
-    Reads file schema from the specified 'gs://{gcs_file_path}' using DuckDB
+    Reads file schema from the specified file path using DuckDB
     to introspect its columns. Supports both Parquet and CSV files.
     Returns a list of columns found in the file.
 
@@ -148,8 +149,8 @@ def get_columns_from_file(gcs_file_path: str) -> list:
         4. Drops the temporary table.
         5. Returns a list of the actual column names present in the file.
     """
-    
-    gcs_file_path = gcs_file_path.replace("gs://", "")
+
+    gcs_file_path = storage.strip_scheme(gcs_file_path)
     
     # Determine file type by extension
     is_csv = gcs_file_path.lower().endswith(constants.CSV) | gcs_file_path.lower().endswith(constants.CSV_GZ)
@@ -167,18 +168,18 @@ def get_columns_from_file(gcs_file_path: str) -> list:
             if is_csv:
                 tmp_tbl_sql = f"""
                     CREATE TEMP TABLE {table_name_for_introspection} AS
-                    SELECT * FROM read_csv('gs://{gcs_file_path}', 
-                                          null_padding=True, 
+                    SELECT * FROM read_csv('{storage.get_uri(gcs_file_path)}',
+                                          null_padding=True,
                                           ALL_VARCHAR=True,
                                           strict_mode=False,
-                                          ignore_errors=True) 
+                                          ignore_errors=True)
                     LIMIT 0
                 """
 
             else:  # Parquet file
                 tmp_tbl_sql = f"""
                     CREATE TEMP TABLE {table_name_for_introspection} AS
-                    SELECT * FROM 'gs://{gcs_file_path}' 
+                    SELECT * FROM '{storage.get_uri(gcs_file_path)}'
                     LIMIT 0
                 """
             
@@ -211,7 +212,7 @@ def valid_parquet_file(gcs_file_path: str) -> bool:
     try:
         with conn:
             # If the file is not a valid Parquet file, this will throw an exception
-            conn.execute(f"DESCRIBE SELECT * FROM read_parquet('gs://{gcs_file_path}')")
+            conn.execute(f"DESCRIBE SELECT * FROM read_parquet('{storage.get_uri(gcs_file_path)}')")
 
             # If we get to this point, we were able to describe the Parquet file and will assume it's valid
             return True
@@ -270,8 +271,8 @@ def parquet_file_exists(file_path: str) -> bool:
     """
     Check if a Parquet file exists in Google Cloud Storage.
     """
-    # Strip gs:// prefix if it exists
-    gcs_path = file_path.replace('gs://', '')
+    # Strip storage scheme prefix if it exists
+    gcs_path = storage.strip_scheme(file_path)
     
     # Parse bucket and blob name
     path_parts = gcs_path.split('/')
@@ -280,7 +281,7 @@ def parquet_file_exists(file_path: str) -> bool:
     
     try:
         # Initialize storage client with default credentials
-        storage_client = storage.Client()
+        storage_client = gcs_storage.Client()
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(blob_name)
         
@@ -302,11 +303,13 @@ def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
             with conn:
                 vocab_version_query = f"""
                     SELECT vocabulary_version
-                    FROM read_parquet('gs://{vocabulary_parquet_file}')
+                    FROM read_parquet('{storage.get_uri(vocabulary_parquet_file)}')
                     WHERE vocabulary_id = 'None'
                 """
-                vocab_version_string = conn.execute(vocab_version_query).fetchone()[0]
-                return vocab_version_string
+                result = conn.execute(vocab_version_query).fetchone()
+                if result:
+                    return result[0]
+                return "Unknown vocabulary version"
         except Exception as e:
             logger.error(f"Unable to upgrade file: {e}")
             return "Unknown vocabulary version"
@@ -368,7 +371,7 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
     """
     try:
         # Initialize the GCS client
-        storage_client = storage.Client()
+        storage_client = gcs_storage.Client()
 
         # Get the bucket
         bucket = storage_client.bucket(bucket_name)
@@ -413,15 +416,15 @@ def generate_report(report_data: dict) -> None:
         conn.execute("SET max_expression_depth TO 1000000")
 
         # Build UNION ALL SELECT statement to join together files
-        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('gs://{gcs_bucket}/{report_tmp_dir}{file}')" for file in tmp_files])
+        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('{storage.get_uri(f"{gcs_bucket}/{report_tmp_dir}{file}")}')" for file in tmp_files])
 
         try:
             with conn:
                 join_files_query = f"""
                     COPY (
                         {select_statement}
-                    ) TO 
-                        'gs://{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}' 
+                    ) TO
+                        '{storage.get_uri(f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}")}'
                         (HEADER, DELIMITER ',')
                 """ 
                 conn.execute(join_files_query)
@@ -432,7 +435,14 @@ def generate_report(report_data: dict) -> None:
             close_duckdb_connection(conn, local_db_file)
 
 def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
-    report_tmp_dir = f"gs://{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
+    """
+    Returns the path to the temporary report artifacts directory.
+
+    NOTE: This function now returns the path WITHOUT storage scheme prefix (e.g., gs://),
+    consistent with all other path utility functions. Callers should use storage.get_uri()
+    if they need the full URI.
+    """
+    report_tmp_dir = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
     return report_tmp_dir
 
 def get_primary_key_column(table_name: str, cdm_version: str) -> str:
@@ -454,12 +464,12 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
     replacement_result = sql_script
 
     for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-        clinical_data_table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}"
+        clinical_data_table_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}")
         replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
     # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
     for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
-        vocab_table_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
+        vocab_table_path = storage.get_uri(f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}")
         replacement_result = replacement_result.replace(placeholder, vocab_table_path)
 
     # Add site name 
@@ -475,8 +485,8 @@ def placeholder_to_harmonized_file_path(site: str, site_bucket: str, delivery_da
     Replaces clinical data table placeholder strings in SQL scripts with paths to the appropriate parquet files.
 
     This intelligently determines the correct path based on whether the table underwent vocabulary harmonization:
-    - Harmonized tables (in VOCAB_HARMONIZED_TABLES): gs://{bucket}/{date}/artifacts/omop_etl/{table}/{table}.parquet
-    - Non-harmonized tables (not in list): gs://{bucket}/{date}/artifacts/converted_files/{table}.parquet
+    - Harmonized tables (in VOCAB_HARMONIZED_TABLES): {scheme}://{bucket}/{date}/artifacts/omop_etl/{table}/{table}.parquet
+    - Non-harmonized tables (not in list): {scheme}://{bucket}/{date}/artifacts/converted_files/{table}.parquet
 
     This is used for derived table generation after vocabulary harmonization is complete.
     """
@@ -487,16 +497,16 @@ def placeholder_to_harmonized_file_path(site: str, site_bucket: str, delivery_da
         # Check if this table underwent vocabulary harmonization
         if table_name in constants.VOCAB_HARMONIZED_TABLES:
             # Harmonized tables are in: omop_etl/{table_name}/{table_name}.parquet
-            table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{table_name}/{table_name}{constants.PARQUET}"
+            table_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{table_name}/{table_name}{constants.PARQUET}")
         else:
             # Non-harmonized tables are in: converted_files/{table_name}.parquet
-            table_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{table_name}{constants.PARQUET}"
+            table_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{table_name}{constants.PARQUET}")
 
         replacement_result = replacement_result.replace(placeholder, table_path)
 
     # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
     for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
-        vocab_table_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}"
+        vocab_table_path = storage.get_uri(f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}")
         replacement_result = replacement_result.replace(placeholder, vocab_table_path)
 
     # Add site name

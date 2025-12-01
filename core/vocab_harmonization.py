@@ -1,10 +1,12 @@
 import uuid
+from typing import Optional
 
 import core.constants as constants
 import core.gcp_services as gcp_services
 import core.helpers.report_artifact as report_artifact
 import core.transformer as transformer
 import core.utils as utils
+from core.storage_backend import storage
 
 
 class VocabHarmonizer:
@@ -30,9 +32,13 @@ class VocabHarmonizer:
         self.project_id = project_id
         self.dataset_id = dataset_id
 
-    def perform_harmonization(self, step: str) -> None:
+    def perform_harmonization(self, step: str) -> Optional[list[dict]]:
         """
         Perform a specific harmonization step.
+
+        Returns:
+            For DISCOVER_TABLES_FOR_DEDUP step, returns a list of table configs.
+            For all other steps, returns None.
         """
         utils.logger.info(f"Performing vocabulary harmonization against {self.file_path}: {step}")
 
@@ -56,6 +62,8 @@ class VocabHarmonizer:
             self.deduplicate_single_table()
         else:
             raise Exception(f"Unknown harmonization step {step}")
+
+        return None
 
     def source_target_remapping(self) -> None:
         """
@@ -180,7 +188,7 @@ class VocabHarmonizer:
         final_sql = f"""
             COPY (
                 {final_cte}
-            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO '{storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}")}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         utils.execute_duckdb_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
@@ -262,7 +270,7 @@ class VocabHarmonizer:
         if exisiting_files:
             where_sql = f"""
                 AND tbl.{primary_key_column} NOT IN (
-                    SELECT {primary_key_column} FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+                    SELECT {primary_key_column} FROM read_parquet('{storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")}')
                 )
             """
             initial_from_sql = initial_from_sql + where_sql
@@ -331,7 +339,7 @@ class VocabHarmonizer:
         final_sql = f"""
             COPY (
                 {final_cte}
-            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_{table_name}{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO '{storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_{table_name}{constants.PARQUET}")}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         utils.execute_duckdb_sql(final_sql, f"Unable to execute SQL to check for new targets ({mapping_type}) {self.source_table_name}")
@@ -400,7 +408,7 @@ class VocabHarmonizer:
         if exisiting_files:
             where_sql = f"""
                 WHERE tbl.{primary_key_column} NOT IN (
-                    SELECT {primary_key_column} FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+                    SELECT {primary_key_column} FROM read_parquet('{storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")}')
                 )
             """
 
@@ -417,7 +425,7 @@ class VocabHarmonizer:
                 SELECT {select_sql}
                 {from_sql}
                 {where_sql}
-            ) TO 'gs://{self.target_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO '{storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}")}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         final_sql_statement = utils.placeholder_to_file_path(
@@ -451,7 +459,7 @@ class VocabHarmonizer:
                 SELECT 
                     target_table,
                     COUNT(*) as row_count
-                FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+                FROM read_parquet('{storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")}')
                 GROUP BY target_table
                 ORDER BY target_table
             """
@@ -486,7 +494,7 @@ class VocabHarmonizer:
         try:
             with conn:
                 target_tables = f"""
-                    SELECT DISTINCT target_table FROM read_parquet('gs://{self.target_parquet_path}*{constants.PARQUET}')
+                    SELECT DISTINCT target_table FROM read_parquet('{storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")}')
                 """
                         
                 target_tables_list = conn.execute(target_tables).fetch_df()['target_table'].tolist()
@@ -520,7 +528,7 @@ class VocabHarmonizer:
         etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
         bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_gcs_path(etl_base_path)
         etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        gcs_path = f"gs://{bucket_name}/{etl_folder}"
+        gcs_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
         
         utils.logger.info(f"Looking for table directories in {gcs_path}")
         
@@ -555,7 +563,7 @@ class VocabHarmonizer:
         etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
         bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_gcs_path(etl_base_path)
         etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        gcs_path = f"gs://{bucket_name}/{etl_folder}"
+        gcs_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
         
         utils.logger.info(f"Looking for table directories in {gcs_path}")
         
@@ -576,7 +584,7 @@ class VocabHarmonizer:
         for table_name in sorted(table_names):
             # Construct the consolidated file path
             table_dir = f"{etl_folder}{table_name}/"
-            consolidated_file_path = f"gs://{bucket_name}/{table_dir}{table_name}{constants.PARQUET}"
+            consolidated_file_path = storage.get_uri(f"{bucket_name}/{table_dir}{table_name}{constants.PARQUET}")
             
             # Deduplicate primary keys for this table
             self._deduplicate_primary_keys(consolidated_file_path, table_name)
@@ -595,8 +603,8 @@ class VocabHarmonizer:
         
         # Construct paths
         table_dir = f"{etl_folder}{table_name}/"
-        source_parquet_pattern = f"gs://{bucket_name}/{table_dir}parts/*.parquet"
-        consolidated_file_path = f"gs://{bucket_name}/{table_dir}{table_name}{constants.PARQUET}"
+        source_parquet_pattern = storage.get_uri(f"{bucket_name}/{table_dir}parts/*.parquet")
+        consolidated_file_path = storage.get_uri(f"{bucket_name}/{table_dir}{table_name}{constants.PARQUET}")
                 
         # Combine all parquet files into one
         conn, local_db_file = utils.create_duckdb_connection()
@@ -680,8 +688,9 @@ class VocabHarmonizer:
                     GROUP BY {primary_key_column}
                     HAVING COUNT(*) > 1
                 """)
-                
-                dup_count = conn.execute("SELECT COUNT(*) FROM duplicate_keys").fetchone()[0]
+
+                dup_count_result = conn.execute("SELECT COUNT(*) FROM duplicate_keys").fetchone()
+                dup_count = dup_count_result[0] if dup_count_result else 0
                 utils.logger.info(f"Found {dup_count} unique keys in {table_name} with duplicates")
                 
                 # Generate temp file paths
@@ -765,7 +774,7 @@ class VocabHarmonizer:
         etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
         bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_gcs_path(etl_base_path)
         etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        gcs_path = f"gs://{bucket_name}/{etl_folder}"
+        gcs_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
 
         utils.logger.info(f"Looking for table directories in {gcs_path}")
 
@@ -785,7 +794,7 @@ class VocabHarmonizer:
         table_configs = []
         for table_name in sorted(table_names):
             table_dir = f"{etl_folder}{table_name}/"
-            consolidated_file_path = f"gs://{bucket_name}/{table_dir}{table_name}{constants.PARQUET}"
+            consolidated_file_path = storage.get_uri(f"{bucket_name}/{table_dir}{table_name}{constants.PARQUET}")
 
             table_config = {
                 "site": self.site,

@@ -2,11 +2,12 @@ import os
 from typing import Optional
 
 from google.cloud import bigquery  # type: ignore
-from google.cloud import storage  # type: ignore
+from google.cloud import storage as gcs_storage  # type: ignore
 from google.cloud.exceptions import NotFound  # type: ignore
 
 import core.constants as constants
 import core.utils as utils
+from core.storage_backend import storage
 
 
 def remove_all_tables(project_id: str, dataset_id: str) -> None:
@@ -39,7 +40,7 @@ def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, t
     # PROCESSED_FILE -> overwrite table with the pipeline-processed version of the file in file_path
     elif write_type == constants.BQWriteTypes.PROCESSED_FILE:
         write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-        parquet_path = f"gs://{utils.get_parquet_artifact_location(file_path)}"
+        parquet_path = storage.get_uri(utils.get_parquet_artifact_location(file_path))
         
     # When upgrading to 5.4, some Parquet files may get deleted
     # First confirm that Parquet file does exist before trying to load to BQ
@@ -113,7 +114,7 @@ def create_gcs_directory(directory_path: str, delete_exisiting_files: bool = Tru
     bucket_name, _ = utils.get_bucket_and_delivery_date_from_gcs_path(directory_path) #directory_path.split('/')[0]
     blob_name = '/'.join(directory_path.split('/')[1:])
 
-    storage_client = storage.Client()
+    storage_client = gcs_storage.Client()
     bucket = storage_client.bucket(bucket_name)
 
     try:
@@ -142,11 +143,11 @@ def delete_gcs_file(gcs_path: str) -> None:
     """
     try:
         # Initialize GCS client
-        storage_client = storage.Client()
+        storage_client = gcs_storage.Client()
 
         # Extract bucket name and blob path
-        # Remove 'gs://' prefix and split into bucket and path
-        path_without_prefix = gcs_path.replace('gs://', '')
+        # Remove storage scheme prefix and split into bucket and path
+        path_without_prefix = storage.strip_scheme(gcs_path)
         bucket_name = path_without_prefix.split('/')[0]
         blob_path = '/'.join(path_without_prefix.split('/')[1:])
 
@@ -172,7 +173,7 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
         blob_path = parts[1] if len(parts) > 1 else None
 
         # Initialize the client
-        client = storage.Client()
+        client = gcs_storage.Client()
 
         # Check if bucket exists
         try:
@@ -224,12 +225,12 @@ def list_gcs_subdirectories(gcs_path: str) -> list:
     """
     try:
         # Split the path into bucket name and prefix
-        parts = gcs_path.replace('gs://', '').split('/', 1)
+        parts = storage.strip_scheme(gcs_path).split('/', 1)
         bucket_name = parts[0]
         prefix = parts[1] if len(parts) > 1 else ''
 
         # Initialize the client
-        client = storage.Client()
+        client = gcs_storage.Client()
         bucket = client.bucket(bucket_name)
 
         # List blobs with the specified prefix
@@ -266,8 +267,8 @@ def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_
     """
     # Construct the OMOP_ETL directory path
     etl_folder = f"{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}"
-    gcs_path = f"gs://{gcs_bucket}/{etl_folder}"
-    
+    gcs_path = storage.get_uri(f"{gcs_bucket}/{etl_folder}")
+
     utils.logger.info(f"Looking for consolidated parquet files in {gcs_path}")
     
     # Get list of table subdirectories
@@ -288,7 +289,7 @@ def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_
     
     for table_name in sorted(table_names):
         # Construct path to consolidated parquet file
-        consolidated_file_path = f"gs://{gcs_bucket}/{etl_folder}{table_name}/{table_name}{constants.PARQUET}"
+        consolidated_file_path = storage.get_uri(f"{gcs_bucket}/{etl_folder}{table_name}/{table_name}{constants.PARQUET}")
         
         # Check if the consolidated file exists
         if not utils.parquet_file_exists(consolidated_file_path):
@@ -337,12 +338,12 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
     """
     # Construct the DERIVED_FILES directory path
     derived_folder = f"{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}"
-    gcs_path = f"gs://{gcs_bucket}/{derived_folder}"
+    gcs_path = storage.get_uri(f"{gcs_bucket}/{derived_folder}")
 
     utils.logger.info(f"Looking for derived table parquet files in {gcs_path}")
 
     # List all parquet files in the derived_files directory
-    client = storage.Client(project=project_id)
+    client = gcs_storage.Client(project=project_id)
     bucket = client.bucket(gcs_bucket)
     prefix = derived_folder
 
@@ -368,7 +369,7 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
 
     for table_name in sorted(table_names):
         # Construct path to derived table parquet file
-        derived_file_path = f"gs://{gcs_bucket}/{derived_folder}{table_name}{constants.PARQUET}"
+        derived_file_path = storage.get_uri(f"{gcs_bucket}/{derived_folder}{table_name}{constants.PARQUET}")
 
         # Check if the file exists
         if not utils.parquet_file_exists(derived_file_path):

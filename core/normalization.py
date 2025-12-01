@@ -3,6 +3,7 @@ import duckdb  # type: ignore
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
 import core.utils as utils
+from core.storage_backend import storage
 
 
 def get_birth_datetime_sql_expression(datetime_format: str, column_exists_in_file: bool) -> str:
@@ -198,23 +199,23 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
                 CASE 
                     WHEN COALESCE({row_validity_sql}) IS NULL THEN CAST((CAST(hash(CONCAT({row_hash_statement})) AS UBIGINT) % 9223372036854775807) AS BIGINT)
                     ELSE NULL END AS row_hash
-            FROM read_parquet('gs://{parquet_gcs_file_path}')
+            FROM read_parquet('{storage.get_uri(parquet_gcs_file_path)}')
         ;
 
         COPY (
             SELECT *
-            FROM read_parquet('gs://{parquet_gcs_file_path}')
+            FROM read_parquet('{storage.get_uri(parquet_gcs_file_path)}')
             WHERE CAST((CAST(hash(CONCAT({row_hash_statement})) AS UBIGINT) % 9223372036854775807) AS BIGINT) IN (
                 SELECT row_hash FROM row_check WHERE row_hash IS NOT NULL
             )
-        ) TO 'gs://{utils.get_invalid_rows_path_from_gcs_path(parquet_gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+        ) TO '{storage.get_uri(utils.get_invalid_rows_path_from_gcs_path(parquet_gcs_file_path))}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
         COPY (
             SELECT * EXCLUDE (row_hash) {replace_clause}
             FROM row_check
             WHERE row_hash IS NULL
-        ) TO 'gs://{parquet_gcs_file_path}' {constants.DUCKDB_FORMAT_STRING}
+        ) TO '{storage.get_uri(parquet_gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
     """.strip()
@@ -230,7 +231,7 @@ def normalize_file(parquet_gcs_file_path: str, cdm_version: str, date_format: st
     fix_sql = get_normalization_sql_statement(parquet_gcs_file_path, cdm_version, date_format, datetime_format)
 
     fix_sql_no_return = fix_sql.replace('\n', ' ').replace('  ', ' ')
-    print(f"Normalizing Parquet file gs://{parquet_gcs_file_path} with SQL: {fix_sql_no_return}")
+    print(f"Normalizing Parquet file {storage.get_uri(parquet_gcs_file_path)} with SQL: {fix_sql_no_return}")
 
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM
@@ -262,9 +263,10 @@ def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckd
         file_path, count_type = file
 
         count_query = f"""
-            SELECT COUNT(*) FROM read_parquet('gs://{file_path}')
+            SELECT COUNT(*) FROM read_parquet('{storage.get_uri(file_path)}')
         """
-        result = conn.execute(count_query).fetchone()[0]
+        result_row = conn.execute(count_query).fetchone()
+        result = result_row[0] if result_row else 0
 
         ra = report_artifact.ReportArtifact(
             delivery_date=delivery_date,

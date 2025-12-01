@@ -4,6 +4,7 @@ import sys
 
 import core.constants as constants
 import core.utils as utils
+from core.storage_backend import storage
 
 
 class Transformer:
@@ -176,7 +177,7 @@ class Transformer:
             COPY (
                 {final_sql}
                 WHERE target_table = '{self.target_table}'
-            ) TO 'gs://{self.get_transformed_path()}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO '{storage.get_uri(self.get_transformed_path())}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         return transform_sql
@@ -196,7 +197,7 @@ class Transformer:
         replacement_result = sql
 
         for placeholder, _ in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-            clinical_data_table_path = f"gs://{self.file_path}*{constants.PARQUET}"
+            clinical_data_table_path = storage.get_uri(f"{self.file_path}*{constants.PARQUET}")
             replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
         return replacement_result

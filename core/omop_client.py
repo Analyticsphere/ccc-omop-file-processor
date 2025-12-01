@@ -4,6 +4,7 @@ from google.cloud import bigquery  # type: ignore
 import core.constants as constants
 import core.gcp_services as gcp_services
 import core.utils as utils
+from core.storage_backend import storage
 
 
 def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str) -> None:
@@ -36,8 +37,8 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
                     select_statement = f"""
                         COPY (
                             {upgrade_script}
-                            FROM read_parquet('gs://{normalized_file_path}')
-                        ) TO 'gs://{normalized_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                            FROM read_parquet('{storage.get_uri(normalized_file_path)}')
+                        ) TO '{storage.get_uri(normalized_file_path)}' {constants.DUCKDB_FORMAT_STRING}
                     """
                     utils.execute_duckdb_sql(select_statement, f"Unable to upgrade file {gcs_file_path}:")
 
@@ -87,8 +88,8 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                     convert_query = f"""
                     COPY (
                         SELECT {select_statement}
-                        FROM read_csv('gs://{csv_file_path}', delim='\t',strict_mode=False)
-                    ) TO 'gs://{parquet_file_path}' {constants.DUCKDB_FORMAT_STRING};
+                        FROM read_csv('{storage.get_uri(csv_file_path)}', delim='\t',strict_mode=False)
+                    ) TO '{storage.get_uri(parquet_file_path)}' {constants.DUCKDB_FORMAT_STRING};
                     """
                     with conn:
                         conn.execute(convert_query)
@@ -119,12 +120,12 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                         cr.concept_id_2 AS target_concept_id, -- targets to concept_id's
                         c2.standard_concept AS target_concept_id_standard,
                         c2.domain_id AS target_concept_id_domain
-                    FROM read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c1
-                    LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept_relationship{constants.PARQUET}') cr on c1.concept_id = cr.concept_id_1
-                    LEFT JOIN read_parquet('gs://{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}') c2 on cr.concept_id_2 = c2.concept_id
+                    FROM read_parquet('{storage.get_uri(f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}")}') c1
+                    LEFT JOIN read_parquet('{storage.get_uri(f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept_relationship{constants.PARQUET}")}') cr on c1.concept_id = cr.concept_id_1
+                    LEFT JOIN read_parquet('{storage.get_uri(f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}")}') c2 on cr.concept_id_2 = c2.concept_id
                     WHERE IFNULL(cr.relationship_id, '')
                         IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
-                ) TO 'gs://{optimized_file_path}' {constants.DUCKDB_FORMAT_STRING}
+                ) TO '{storage.get_uri(optimized_file_path)}' {constants.DUCKDB_FORMAT_STRING}
                 """
                 utils.execute_duckdb_sql(transform_query, "Unable to create optimized vocab file")
 
@@ -290,7 +291,7 @@ def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_
         select_statement = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
 
         # Output to derived_files directory
-        parquet_gcs_path = f"gs://{site_bucket}/{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}{table_name}{constants.PARQUET}"
+        parquet_gcs_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}{table_name}{constants.PARQUET}")
 
         # Generate and execute final SQL
         sql_statement = f"""
@@ -309,8 +310,8 @@ def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_
 
 def load_vocabulary_table(vocab_version: str, vocab_gcs_bucket: str, table_file_name: str, project_id: str, dataset_id: str) -> None:
     # Loads an optimized vocabulary file to BigQuery as a table
-    
-    vocab_parquet_path = f"gs://{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{table_file_name}{constants.PARQUET}"
+
+    vocab_parquet_path = storage.get_uri(f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{table_file_name}{constants.PARQUET}")
 
     if utils.parquet_file_exists(vocab_parquet_path) and utils.valid_parquet_file(vocab_parquet_path):
         gcp_services.load_parquet_to_bigquery(vocab_parquet_path, project_id, dataset_id, table_file_name, constants.BQWriteTypes.SPECIFIC_FILE)

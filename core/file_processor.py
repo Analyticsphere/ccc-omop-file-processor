@@ -1,5 +1,6 @@
 import core.constants as constants
 import core.utils as utils
+from core.storage_backend import storage
 
 
 def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
@@ -38,9 +39,9 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         copy_sql = f"""
             COPY (
                 SELECT {select_clause}
-                FROM read_parquet('gs://{gcs_file_path}')
+                FROM read_parquet('{storage.get_uri(gcs_file_path)}')
             )
-            TO 'gs://{utils.get_parquet_artifact_location(gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+            TO '{storage.get_uri(utils.get_parquet_artifact_location(gcs_file_path))}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         utils.execute_duckdb_sql(copy_sql, f"Unable to process incoming Parquet file {gcs_file_path}:")
@@ -87,9 +88,9 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             convert_statement = f"""
                 COPY (
                     SELECT {select_clause}
-                    FROM read_csv('gs://{gcs_file_path}', 
+                    FROM read_csv('{storage.get_uri(gcs_file_path)}',
                         null_padding=True, ALL_VARCHAR=True, strict_mode=False {format_list(conversion_options)})
-                ) TO 'gs://{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
+                ) TO '{storage.get_uri(parquet_path)}' {constants.DUCKDB_FORMAT_STRING}
             """
 
             conn.execute(convert_statement)
@@ -97,7 +98,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
         if not retry:
             retry_ignoring_errors(gcs_file_path)
         else:
-            raise Exception(f"Unable to convert CSV file to Parquet gs://{gcs_file_path}: {e}") from e    
+            raise Exception(f"Unable to convert CSV file to Parquet {storage.get_uri(gcs_file_path)}: {e}") from e    
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
 

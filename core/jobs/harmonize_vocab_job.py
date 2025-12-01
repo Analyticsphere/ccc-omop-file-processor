@@ -28,12 +28,13 @@ import os
 import sys
 import traceback
 
-from google.cloud import storage
+from google.cloud import storage as gcs_storage  # type: ignore
 
 import core.constants as constants
 import core.gcp_services as gcp_services
 import core.utils as utils
 import core.vocab_harmonization as vocab_harmonization
+from core.storage_backend import storage
 
 
 def validate_env_vars() -> dict[str, str]:
@@ -107,17 +108,14 @@ def main():
                 result_json = json.dumps(result, indent=2)
 
                 # Parse GCS path
-                if env_values['OUTPUT_GCS_PATH'].startswith('gs://'):
-                    gcs_path = env_values['OUTPUT_GCS_PATH'].replace('gs://', '')
-                else:
-                    gcs_path = env_values['OUTPUT_GCS_PATH']
+                gcs_path = storage.strip_scheme(env_values['OUTPUT_GCS_PATH'])
 
                 parts = gcs_path.split('/', 1)
                 bucket_name = parts[0]
                 blob_path = parts[1] if len(parts) > 1 else 'table_configs.json'
 
                 # Upload to GCS
-                storage_client = storage.Client()
+                storage_client = gcs_storage.Client()
                 bucket = storage_client.bucket(bucket_name)
                 blob = bucket.blob(blob_path)
                 blob.upload_from_string(result_json, content_type='application/json')

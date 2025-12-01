@@ -37,12 +37,15 @@ def test_get_cdm_version_concept_id(cdm_version, expected_concept_id):
 @pytest.mark.parametrize(
     "bucket,delivery_date,expected_path",
     [
-        ("synthea53", "2024-12-31", "gs://synthea53/2024-12-31/artifacts/delivery_report/tmp/"),
-        ("bucket", "folder", "gs://bucket/folder/artifacts/delivery_report/tmp/"),
-        ("test-bucket", "2025-10-04", "gs://test-bucket/2025-10-04/artifacts/delivery_report/tmp/"),
+        ("synthea53", "2024-12-31", "synthea53/2024-12-31/artifacts/delivery_report/tmp/"),
+        ("bucket", "folder", "bucket/folder/artifacts/delivery_report/tmp/"),
+        ("test-bucket", "2025-10-04", "test-bucket/2025-10-04/artifacts/delivery_report/tmp/"),
     ]
 )
 def test_get_report_tmp_artifacts_gcs_path(bucket, delivery_date, expected_path):
+    # NOTE: This function now returns WITHOUT storage scheme prefix (e.g., gs://),
+    # consistent with all other path utility functions. Callers should use storage.get_uri()
+    # if they need the full URI.
     assert utils.get_report_tmp_artifacts_gcs_path(bucket, delivery_date) == expected_path
 
 
