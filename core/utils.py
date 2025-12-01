@@ -416,15 +416,17 @@ def generate_report(report_data: dict) -> None:
         conn.execute("SET max_expression_depth TO 1000000")
 
         # Build UNION ALL SELECT statement to join together files
-        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('{storage.get_uri(f"{gcs_bucket}/{report_tmp_dir}{file}")}')" for file in tmp_files])
+        file_paths = [storage.get_uri(f"{gcs_bucket}/{report_tmp_dir}{file}") for file in tmp_files]
+        select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('{path}')" for path in file_paths])
 
         try:
             with conn:
+                output_path = storage.get_uri(f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}")
                 join_files_query = f"""
                     COPY (
                         {select_statement}
                     ) TO
-                        '{storage.get_uri(f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}")}'
+                        '{output_path}'
                         (HEADER, DELIMITER ',')
                 """ 
                 conn.execute(join_files_query)
