@@ -101,6 +101,10 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
         raise Exception(f"Vocabulary GCS path {vocab_root_path} not found")
 
 def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
+    """
+    Create optimized vocabulary file by denormalizing concept and concept_relationship tables.
+    Combines concept IDs with their mapping/replacement relationships into a single table/file for efficient lookups.
+    """
     vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
     optimized_file_path = utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket)
 
@@ -138,6 +142,7 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                 raise Exception(f"Vocabulary GCS bucket {vocab_path} not found")
 
 def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
+    """Create OMOP CDM tables in BigQuery dataset using DDL scripts for specified CDM version."""
     ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
 
     # Get DDL with CREATE OR REPLACE TABLE statements
@@ -155,7 +160,7 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
         raise Exception(f"DDL file error: {e}")
 
 def populate_cdm_source(cdm_source_data: dict) -> None:
-    # Add a record to the cdm_source table, if it doesn't have any rows
+    """Populate cdm_source table with metadata about the CDM instance."""
     project_id = cdm_source_data["project_id"]
     dataset_id = cdm_source_data["dataset_id"]
     gcs_bucket = cdm_source_data["gcs_bucket"]
@@ -314,8 +319,7 @@ def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_
         raise Exception(f"Unable to generate {table_name} derived data from harmonized files: {str(e)}") from e
 
 def load_vocabulary_table(vocab_version: str, vocab_gcs_bucket: str, table_file_name: str, project_id: str, dataset_id: str) -> None:
-    # Loads an optimized vocabulary file to BigQuery as a table
-
+    """Load vocabulary Parquet file from GCS to BigQuery table."""
     vocab_parquet_path = storage.get_uri(f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{table_file_name}{constants.PARQUET}")
 
     if utils.parquet_file_exists(vocab_parquet_path) and utils.valid_parquet_file(vocab_parquet_path):

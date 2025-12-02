@@ -19,8 +19,9 @@ app = Flask(__name__)
 
 @app.route('/heartbeat', methods=['GET'])
 def heartbeat() -> tuple[Any, int]:
+    """API health check endpoint."""
     utils.logger.info("API status check called")
-    
+
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
@@ -30,6 +31,7 @@ def heartbeat() -> tuple[Any, int]:
 
 @app.route('/create_optimized_vocab', methods=['POST'])
 def create_optimized_vocab() -> tuple[str, int]:
+    """Convert vocabulary CSV files to Parquet and create optimized vocabulary lookup file."""
     data: dict[str, Any] = request.get_json() or {}
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
@@ -52,6 +54,7 @@ def create_optimized_vocab() -> tuple[str, int]:
 
 @app.route('/create_artifact_buckets', methods=['POST'])
 def create_artifact_buckets() -> tuple[str, int]:
+    """Create GCS directories for storing processing artifacts (converted files, reports, etc.)."""
     data: dict[str, Any] = request.get_json() or {}
     delivery_bucket: Optional[str] = data.get('delivery_bucket')
 
@@ -80,6 +83,7 @@ def create_artifact_buckets() -> tuple[str, int]:
 
 @app.route('/get_log_row', methods=['GET'])
 def get_log_row() -> tuple[Any, int]:
+    """Retrieve pipeline log entries from BigQuery for specified site and delivery date."""
     site: Optional[str] = request.args.get('site')
     delivery_date: Optional[str] = request.args.get('delivery_date')
 
@@ -104,6 +108,7 @@ def get_log_row() -> tuple[Any, int]:
 
 @app.route('/get_file_list', methods=['GET'])
 def get_files() -> tuple[Any, int]:
+    """List files in GCS directory matching specified format."""
     bucket: Optional[str] = request.args.get('bucket')
     folder: Optional[str] = request.args.get('folder')
     file_format: Optional[str] = request.args.get('file_format')
@@ -132,6 +137,7 @@ def get_files() -> tuple[Any, int]:
 
 @app.route('/process_incoming_file', methods=['POST'])
 def process_file() -> tuple[str, int]:
+    """Convert incoming OMOP file (.csv/.csv.gz/.parquet) to standardized Parquet format."""
     data: dict[str, Any] = request.get_json() or {}
     file_type: Optional[str] = data.get('file_type')
     file_path: Optional[str] = data.get('file_path')
@@ -190,6 +196,7 @@ def validate_file() -> tuple[str, int]:
 
 @app.route('/normalize_parquet', methods=['POST'])
 def normalize_parquet_file() -> tuple[str, int]:
+    """Normalize Parquet file to conform to OMOP CDM schema with type conversions and constraints."""
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     omop_version: Optional[str] = data.get('omop_version')
@@ -218,6 +225,7 @@ def normalize_parquet_file() -> tuple[str, int]:
 
 @app.route('/upgrade_cdm', methods=['POST'])
 def cdm_upgrade() -> tuple[str, int]:
+    """Upgrade OMOP CDM file from one version to another (e.g., 5.3 to 5.4)."""
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     omop_version: Optional[str] = data.get('omop_version')
@@ -243,6 +251,7 @@ def cdm_upgrade() -> tuple[str, int]:
 
 @app.route('/clear_bq_dataset', methods=['POST'])
 def clear_bq_tables() -> tuple[str, int]:
+    """Delete all tables from BigQuery dataset."""
     data: dict[str, Any] = request.get_json() or {}
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
@@ -266,6 +275,10 @@ def clear_bq_tables() -> tuple[str, int]:
 
 @app.route('/harmonize_vocab', methods=['POST'])
 def harmonize_vocab() -> tuple[Any, int]:
+    """
+    Execute vocabulary harmonization step on OMOP file.
+    Harmonizes concepts to target vocabulary version through multi-step process.
+    """
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     vocab_version: Optional[str] = data.get('vocab_version')
@@ -367,6 +380,7 @@ def generate_derived_tables_from_harmonized() -> tuple[str, int]:
 
 @app.route('/load_target_vocab', methods=['POST'])
 def target_vocab_to_bq() -> tuple[str, int]:
+    """Load target vocabulary Parquet files to BigQuery tables."""
     data: dict[str, Any] = request.get_json() or {}
     table_file_name: Optional[str] = data.get('table_file_name')
     vocab_version: Optional[str] = data.get('vocab_version')
@@ -393,6 +407,7 @@ def target_vocab_to_bq() -> tuple[str, int]:
 
 @app.route('/parquet_to_bq', methods=['POST'])
 def parquet_gcs_to_bq() -> tuple[str, int]:
+    """Load Parquet file from GCS to BigQuery table."""
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     project_id: Optional[str] = data.get('project_id')
@@ -427,8 +442,9 @@ def parquet_gcs_to_bq() -> tuple[str, int]:
 
 @app.route('/generate_delivery_report', methods=['POST'])
 def generate_final_delivery_report() -> tuple[str, int]:
+    """Generate final delivery report CSV by consolidating all report artifacts."""
     report_data: dict[str, Any] = request.get_json() or {}
-    
+
     # Validate required columns for report
     if not report_data.get('delivery_date') or not report_data.get('site'):
         return "Missing required parameters to 'generate_delivery_report' endpoint JSON: delivery_date and site", 400
@@ -445,6 +461,7 @@ def generate_final_delivery_report() -> tuple[str, int]:
 
 @app.route('/create_missing_tables', methods=['POST'])
 def create_missing_omop_tables() -> tuple[str, int]:
+    """Create missing OMOP CDM tables in BigQuery dataset using DDL scripts."""
     data: dict[str, Any] = request.get_json() or {}
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
@@ -470,8 +487,9 @@ def create_missing_omop_tables() -> tuple[str, int]:
 
 @app.route('/populate_cdm_source', methods=['POST'])
 def add_cdm_source_record() -> tuple[str, int]:
+    """Populate cdm_source table with metadata about the CDM instance and delivery."""
     cdm_source_data: dict[str, Any] = request.get_json() or {}
-    
+
     # Validate required columns
     if not cdm_source_data.get('source_release_date') or not cdm_source_data.get('cdm_source_abbreviation'):
         return "Missing required parameters to 'populate_cdm_source' endpoint JSON: source_release_date and cdm_source_abbreviation", 400
@@ -596,6 +614,7 @@ def load_derived_tables_to_bq() -> tuple[str, int]:
 
 @app.route('/pipeline_log', methods=['POST'])
 def log_pipeline_state() -> tuple:
+    """Log pipeline execution state to BigQuery logging table."""
     data: dict = request.get_json()
     logging_table: str = constants.BQ_LOGGING_TABLE
     site_name: Optional[str] = data.get('site_name')

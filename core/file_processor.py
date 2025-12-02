@@ -4,6 +4,10 @@ from core.storage_backend import storage
 
 
 def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
+    """
+    Process incoming OMOP file by routing to appropriate converter based on file type.
+    Converts .csv/.csv.gz/.parquet files to standardized Parquet, or processes existing Parquet files.
+    """
     if file_type in [constants.CSV, constants.CSV_GZ]:
         csv_to_parquet(gcs_file_path)
     elif file_type == constants.PARQUET:
@@ -109,6 +113,7 @@ def retry_ignoring_errors(gcs_file_path: str) -> None:
     csv_to_parquet(gcs_file_path, True, ['store_rejects=True, ignore_errors=True, parallel=False'])
 
 def format_list(items: list) -> str:
+    """Format list as comma-separated string with leading comma, or empty string if list is empty."""
     if not items:  # Check if list is empty
         return ''
     else:

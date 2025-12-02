@@ -11,6 +11,7 @@ from core.storage_backend import storage
 
 class ReportArtifact:
     def __init__(self, delivery_date: str, artifact_bucket: str, concept_id: Optional[int], name: str, value_as_string: Optional[str], value_as_concept_id: Optional[int], value_as_number: Optional[float]):
+        """Initialize ReportArtifact object for creating delivery reports."""
         self.delivery_date = delivery_date
         self.artifact_bucket = artifact_bucket
         self.report_artifact_path = utils.get_report_tmp_artifacts_gcs_path(artifact_bucket, delivery_date)
@@ -21,6 +22,7 @@ class ReportArtifact:
         self.value_as_number = value_as_number
 
     def save_artifact(self) -> None:
+        """Save report artifact as Parquet file in temporary report directory."""
         random_id = random.randint(0, 2**31 - 1) # Random, positive, integer within 32 bit signed space
         random_string = str(uuid.uuid4())
 

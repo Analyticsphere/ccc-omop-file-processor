@@ -228,6 +228,10 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
 
 
 def normalize_file(parquet_gcs_file_path: str, cdm_version: str, date_format: str, datetime_format: str) -> None:
+    """
+    Normalize Parquet file to conform to OMOP CDM schema.
+    Applies data type conversions, supplies default values for missing required columns, and separates valid/invalid rows.
+    """
     fix_sql = get_normalization_sql_statement(parquet_gcs_file_path, cdm_version, date_format, datetime_format)
 
     fix_sql_no_return = fix_sql.replace('\n', ' ').replace('  ', ' ')
@@ -250,6 +254,7 @@ def normalize_file(parquet_gcs_file_path: str, cdm_version: str, date_format: st
 
 
 def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckdb.DuckDBPyConnection) -> None:
+    """Create report artifacts with row counts for valid and invalid rows after normalization."""
     table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
     table_concept_id = utils.get_cdm_schema(cdm_version)[table_name]['concept_id']
     bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)

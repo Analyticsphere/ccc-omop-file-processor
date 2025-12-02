@@ -28,8 +28,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
-    # Creates a DuckDB instance with a local database
-    # Returns tuple of DuckDB object, name of db file, and path to db file
+    """
+    Create DuckDB connection with optimized settings for processing OMOP files.
+    Configures memory limits, threading, and GCS filesystem support.
+    """
     try:
         random_string = str(uuid.uuid4())
         
@@ -61,7 +63,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         raise Exception(f"Unable to create DuckDB instance: {e}") from e
 
 def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str) -> None:
-    # Destory DuckDB object to free memory, and remove temporary files
+    """Close DuckDB connection, remove temporary files, and free memory."""
     try:
         # Close the DuckDB connection
         conn.close()
@@ -77,6 +79,7 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str)
         gc.collect()
 
 def execute_duckdb_sql(sql: str, error_msg: str) -> None:
+    """Execute SQL statement using DuckDB with automatic connection management."""
     try:
         conn, local_db_file = create_duckdb_connection()
 
@@ -88,9 +91,10 @@ def execute_duckdb_sql(sql: str, error_msg: str) -> None:
         close_duckdb_connection(conn, local_db_file)
 
 def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
-    # Extract file name from a GCS path and removes extension
-    # e.g. synthea53/2024-12-31/care_site.parquet -> care_site
-
+    """
+    Extract table name from file path by removing directory and extension.
+    Example: synthea53/2024-12-31/care_site.parquet -> care_site
+    """
     file_name = gcs_file_path.split('/')[-1].lower()
 
     for ext in constants.FILE_EXTENSIONS:
@@ -102,7 +106,7 @@ def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
     return file_name
 
 def get_cdm_schema(cdm_version: str) -> dict:
-    # Returns CDM schema for specified CDM version.
+    """Load OMOP CDM schema JSON for specified version."""
     schema_file = f"{constants.CDM_SCHEMA_PATH}{cdm_version}/{constants.CDM_SCHEMA_FILE_NAME}"
     try:
         with open(schema_file, 'r') as f:
@@ -115,8 +119,10 @@ def get_cdm_schema(cdm_version: str) -> dict:
         raise Exception(f"Invalid JSON format in schema file: {schema_file}")
 
 def get_table_schema(table_name: str, cdm_version: str) -> dict:
-    # Returns schema for specified OMOP table, if table exists in CDM
-    # Returns empty dictionary if table is not in OMOP
+    """
+    Get schema for specified OMOP table from CDM schema.
+    Returns empty dict if table doesn't exist in OMOP CDM.
+    """
     table_name = table_name.lower()
 
     try:
@@ -131,8 +137,10 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
         raise Exception(f"Unexpected error getting table {table_name} schema: {str(e)}")
     
 def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str, str]:
-    # Returns a tuple of the bucket_name and delivery date for a given file in GCS
-    # e.g. synthea53/2024-12-31/care_site.parquet -> synthea53, 2024-12-31
+    """
+    Extract bucket name and delivery date from file path.
+    Example: synthea53/2024-12-31/care_site.parquet -> (synthea53, 2024-12-31)
+    """
     gcs_file_path = storage.strip_scheme(gcs_file_path)
     bucket_name, delivery_date = gcs_file_path.split('/')[:2]
     return bucket_name, delivery_date
@@ -204,7 +212,7 @@ def get_columns_from_file(gcs_file_path: str) -> list:
     return actual_columns
 
 def valid_parquet_file(gcs_file_path: str) -> bool:
-    # Retuns bool indicating whether Parquet file is valid/can be read by DuckDB
+    """Check if Parquet file exists and can be read by DuckDB."""
     conn, local_db_file = create_duckdb_connection()
 
     if not parquet_file_exists(gcs_file_path):
@@ -224,6 +232,7 @@ def valid_parquet_file(gcs_file_path: str) -> bool:
         close_duckdb_connection(conn, local_db_file)
 
 def get_parquet_artifact_location(gcs_file_path: str) -> str:
+    """Get path to processed Parquet artifact in converted_files directory."""
     file_name = get_table_name_from_gcs_path(gcs_file_path)
     base_directory, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
     
@@ -239,6 +248,7 @@ def get_parquet_artifact_location(gcs_file_path: str) -> str:
     return parquet_path
 
 def get_parquet_harmonized_path(gcs_file_path: str) -> str:
+    """Get path to directory for vocabulary-harmonized Parquet artifacts."""
     file_name = get_table_name_from_gcs_path(gcs_file_path)
     base_directory, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
     
@@ -251,6 +261,7 @@ def get_parquet_harmonized_path(gcs_file_path: str) -> str:
     return parquet_path
 
 def get_omop_etl_destination_path(gcs_file_path: str) -> str:
+    """Get path to OMOP ETL artifacts directory for transformed tables."""
     base_directory, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
     
     # Remove trailing slash if present
@@ -262,6 +273,7 @@ def get_omop_etl_destination_path(gcs_file_path: str) -> str:
     return parquet_path
 
 def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
+    """Get path to invalid rows Parquet file for tables that failed normalization."""
     table_name = get_table_name_from_gcs_path(gcs_file_path).lower()
     bucket, subfolder = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
     invalid_rows_path = f"{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}"
@@ -292,10 +304,12 @@ def parquet_file_exists(file_path: str) -> bool:
         return False
 
 def get_optimized_vocab_file_path(vocab_version: str, vocab_gcs_bucket: str) -> str:
+    """Get path to optimized vocabulary Parquet file."""
     optimized_vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{constants.OPTIMIZED_VOCAB_FILE_NAME}"
     return optimized_vocab_path
 
 def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
+    """Extract vocabulary version from vocabulary table in a site's delivery."""
     vocabulary_parquet_file = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}vocabulary{constants.PARQUET}"
 
     if parquet_file_exists(vocabulary_parquet_file):
@@ -320,14 +334,16 @@ def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
         return "No vocabulary file provided"
 
 def get_cdm_version_concept_id(cdm_version: str) -> int:
+    """Get OMOP concept_id for CDM version."""
     if cdm_version == constants.CDM_v53:
         return constants.CDM_v53_CONCEPT_ID
     elif cdm_version == constants.CDM_v54:
         return constants.CDM_v54_CONCEPT_ID
     else:
         return 0
-    
+
 def create_final_report_artifacts(report_data: dict) -> None:
+    """Create report artifacts with delivery and processing metadata."""
     gcs_bucket = report_data["gcs_bucket"]
     delivery_date = report_data["delivery_date"]
 
@@ -402,6 +418,10 @@ def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> li
         raise Exception(f"Error listing files in GCS: {str(e)}")
 
 def generate_report(report_data: dict) -> None:
+    """
+    Generate final delivery report by consolidating all report artifacts into CSV.
+    Combines temporary report files and creates metadata entries.
+    """
     create_final_report_artifacts(report_data)
 
     site = report_data["site"]
@@ -449,6 +469,7 @@ def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
     return report_tmp_dir
 
 def get_primary_key_column(table_name: str, cdm_version: str) -> str:
+    """Get primary key column name for OMOP table, or empty string if no primary key exists."""
     schema = get_table_schema(table_name, cdm_version)
     columns = schema[table_name]["columns"]
 
@@ -534,10 +555,11 @@ def clean_column_name_for_sql(name: str) -> str:
     return cleaned
 
 def get_placeholder_value(column_name: str, column_type: str) -> str:
-    # Return string representation of default value, based on column type
-
-    # *All* columns that end in _concept_id must be populated
-    # If a concept is unknown, OHDSI convention is to explicity populate column with concept_id 0
+    """
+    Get default value for column based on type.
+    """
+    
+    # Concept ID columns default to 0 per OHDSI convention for unknown concepts.
     if column_name.endswith("_concept_id"):
         return "'0'"
 

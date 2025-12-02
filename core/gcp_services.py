@@ -73,6 +73,7 @@ def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, t
         raise Exception(f"Error loading Parquet file {parquet_path} to BigQuery: {e}") from e
 
 def get_bq_log_row(site: str, date_to_check: str) -> list:
+    """Retrieve pipeline log entries from BigQuery for specified site and delivery date."""
     client = bigquery.Client()
 
     # Check if the table exists. If it doesn't, return an empty list.
@@ -202,7 +203,7 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
         return False
 
 def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig]) -> bigquery.table.RowIterator:
-    # Initialize the BigQuery client
+    """Execute BigQuery SQL query and return results."""
     client = bigquery.Client()
 
     try:

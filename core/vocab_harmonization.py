@@ -348,9 +348,10 @@ class VocabHarmonizer:
         utils.execute_duckdb_sql(final_sql, f"Unable to execute SQL to check for new targets ({mapping_type}) {self.source_table_name}")
 
     def domain_table_check(self) -> None:
-        # The domain of a concept_id may change between different vocabulary versions
-        # Sites may also ETL data into an OMOP table that doesn't align with its domain
-        # Add current domain_id and appropriate target table for all concepts which weren't remapped 
+        """
+        Assign current domain and target table to concepts not remapped in previous steps.
+        Handles domain changes between vocabulary versions and site ETL misalignments.
+        """
         schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
 
         columns = schema[self.source_table_name]["columns"]
@@ -491,6 +492,10 @@ class VocabHarmonizer:
             utils.logger.error(f"Error generating table transition report: {str(e)}")
 
     def omop_etl(self) -> None:
+        """
+        Partition harmonized data and transform to target OMOP tables.
+        Discovers all target tables and transforms each using OMOP-to-OMOP ETL.
+        """
         utils.logger.info(f"Partitioning and ETLing source file {self.file_path} to appropriate target table(s)")
 
         # Find all target tables in the source file

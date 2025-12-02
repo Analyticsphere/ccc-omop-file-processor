@@ -10,6 +10,7 @@ import core.utils as utils
 
 class PipelineLog:
     def __init__(self, logging_table: str, site_name: str, delivery_date: str, status: str, message: Optional[str], file_format: Optional[str], cdm_version: Optional[str], run_id: str):
+        """Initialize PipelineLog object used to store execution details in BigQuery."""
         self.logging_table = logging_table
         self.site_name = site_name
         self.delivery_date = delivery_date
@@ -22,6 +23,7 @@ class PipelineLog:
         self.run_id = run_id
 
     def add_log_entry(self) -> None:
+        """Route to appropriate logging method based on pipeline status."""
         if self.status == constants.PIPELINE_START_STRING:
             self.log_start()
         elif self.status == constants.PIPELINE_RUNNING_STRING:

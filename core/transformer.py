@@ -14,6 +14,7 @@ class Transformer:
     must be moved to the table appropriate for their new domain.
     """
     def __init__(self, site: str, file_path: str, cdm_version: str, source_table: str, target_table: str, etl_artifact_path: str):
+        """Initialize Transformer object used for OMOP-to-OMOP ETL."""
         self.site = site
         self.file_path = file_path
         self.cdm_version = cdm_version
@@ -22,7 +23,7 @@ class Transformer:
         self.etl_artifact_path = etl_artifact_path
 
     def omop_to_omop_etl(self) -> None:
-        # Execute the OMOP to OMOP ETL SQL script
+        """Execute OMOP-to-OMOP ETL transformation using SQL scripts."""
         transform_sql = self.generate_omop_to_omop_sql()
         utils.execute_duckdb_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
 
@@ -183,9 +184,8 @@ class Transformer:
         return transform_sql
 
     # TODO: Put the transformed file in a common location for all files being processed in the pipeline
-    # In a subsequent step, all transformed files can be combined and then checked for duplicates globally
-    # Afer duplicates are resolved, the file can be loaded to BQ
     def get_transformed_path(self) -> str:
+        """Return output path for transformed Parquet file."""
         return f"{self.etl_artifact_path}{self.target_table}/parts/{self.target_table}_from_{self.source_table}{constants.PARQUET}"
         
         # f"{self.file_path}transformed/{self.target_table}_{uuid.uuid4()}{constants.PARQUET}"
