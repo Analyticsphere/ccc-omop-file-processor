@@ -162,3 +162,74 @@ def test_get_invalid_rows_path_from_gcs_path(gcs_path, expected_invalid_rows_pat
 )
 def test_get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket, expected_path):
     assert utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket) == expected_path
+
+
+@pytest.mark.parametrize(
+    "gcs_path,expected_etl_path",
+    [
+        (
+            "synthea53/2024-12-31/care_site.parquet",
+            "synthea53/2024-12-31/artifacts/omop_etl/"
+        ),
+        (
+            "bucket/folder/person.csv",
+            "bucket/folder/artifacts/omop_etl/"
+        ),
+        (
+            "gs://bucket/2025-01-01/observation.csv.gz",
+            "bucket/2025-01-01/artifacts/omop_etl/"
+        ),
+        (
+            "test-bucket/2025-10-04/condition_occurrence.parquet",
+            "test-bucket/2025-10-04/artifacts/omop_etl/"
+        ),
+    ]
+)
+def test_get_omop_etl_destination_path(gcs_path, expected_etl_path):
+    assert utils.get_omop_etl_destination_path(gcs_path) == expected_etl_path
+
+
+@pytest.mark.parametrize(
+    "column_name,expected",
+    [
+        ("Person_Id", "person_id"),
+        ("OBSERVATION_ID", "observation_id"),
+        ("  care_site_id  ", "care_site_id"),
+        ("visit-occurrence-id", "visitoccurrenceid"),
+        ("drug@exposure#id", "drugexposureid"),
+        ("measurement_123", "measurement_123"),
+        ("column name with spaces", "columnnamewithspaces"),
+        ('"offset"', "offset"),
+        ("provider_ID", "provider_id"),
+        ("Mix3d_CaSe_123", "mix3d_case_123"),
+        ("column.with.dots", "columnwithdots"),
+        ("column'with'quotes", "columnwithquotes"),
+    ]
+)
+def test_clean_column_name_for_sql(column_name, expected):
+    assert utils.clean_column_name_for_sql(column_name) == expected
+
+
+@pytest.mark.parametrize(
+    "column_name,column_type,expected_value",
+    [
+        # Concept ID columns always return '0' regardless of type
+        ("person_concept_id", "INTEGER", "'0'"),
+        ("drug_concept_id", "BIGINT", "'0'"),
+        ("measurement_concept_id", "VARCHAR", "'0'"),
+        ("visit_concept_id", "TIMESTAMP", "'0'"),
+
+        # Non-concept_id columns use type-specific defaults from constants.DEFAULT_COLUMN_VALUES
+        ("provider_name", "VARCHAR", "''"),
+        ("visit_date", "DATE", "'1970-01-01'"),
+        ("person_id", "BIGINT", "'-1'"),
+        ("measurement_value", "DOUBLE", "'-1.0'"),
+        ("birth_datetime", "TIMESTAMP", "'1901-01-01 00:00:00'"),
+
+        # Test with different column names using same types
+        ("care_site_id", "BIGINT", "'-1'"),
+        ("note_date", "DATE", "'1970-01-01'"),
+    ]
+)
+def test_get_placeholder_value(column_name, column_type, expected_value):
+    assert utils.get_placeholder_value(column_name, column_type) == expected_value
