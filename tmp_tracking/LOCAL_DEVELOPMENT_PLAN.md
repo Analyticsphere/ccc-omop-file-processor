@@ -616,7 +616,26 @@ Expected: {"status": "healthy", "file_list": ["person.csv", ...]}
     ```
   - **Notes:** Works perfectly! Lists all 4 CSV files from mounted Synthea data. Uses refactored `list_gcs_files()` which now calls `storage.list_files()`.
 
-**Test 4: Create Optimized Vocabulary**
+**Test 4: Process Incoming File**
+```json
+POST http://localhost:8080/process_incoming_file
+{
+  "file_type": ".csv",
+  "file_path": "synthea_53/2025-01-01/person.csv"
+}
+```
+Expected: Converts CSV to Parquet
+- [x] Status: ✅ **PASSED** (2025-12-05)
+  - **Response:** `Converted file to Parquet`
+  - **Output File:** `/data/synthea_53/2025-01-01/artifacts/converted_files/person.parquet`
+  - **File Size:** 11K (110 rows)
+  - **Verified:** Parquet file is valid and readable by DuckDB
+  - **Code Changes:**
+    - Fixed `utils.create_duckdb_connection()` to use `DUCKDB_TEMP_DIR` env var
+    - Fixed `storage.get_uri()` to convert relative paths to absolute for local backend
+    - Updated comments to be cloud-agnostic
+
+**Test 5: Create Optimized Vocabulary**
 ```json
 POST http://localhost:8080/create_optimized_vocab
 {
@@ -905,9 +924,9 @@ Verification:
 - ✅ Complete
 - ❌ Blocked
 
-### Endpoints Tested: 3/18
+### Endpoints Tested: 4/18
 
-**Core (Priority 1):** 2/11 ✅
+**Core (Priority 1):** 3/11 ✅
 **Loading (Priority 2):** 0/5 ✅
 **Utilities (Priority 3):** 1/2 ✅
 

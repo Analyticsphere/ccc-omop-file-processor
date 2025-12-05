@@ -6,26 +6,31 @@ from typing import List
 
 class StorageBackend:
     """
-    Storage backend abstraction for handling different storage systems (GCS, Local).
+    Storage backend abstraction for handling different storage systems (cloud or local).
 
     This module provides a simple abstraction layer that allows the codebase to work with
-    different storage backends by configuring a single environment variable.
+    different storage backends by configuring environment variables.
 
     Usage:
         from core.storage_backend import storage
 
         # Add storage scheme to path for DuckDB, etc.
         uri = storage.get_uri("bucket/path/file.parquet")
-        # Returns: "gs://bucket/path/file.parquet" (default GCS)
+        # GCS backend returns: "gs://bucket/path/file.parquet"
+        # Local backend returns: "file:///data/bucket/path/file.parquet"
 
         # Remove storage scheme from path for parsing
         path = storage.strip_scheme("gs://bucket/path/file.parquet")
         # Returns: "bucket/path/file.parquet"
 
     Configuration:
-        Set the STORAGE_BACKEND environment variable to one of:
-        - 'gcs' (default): Google Cloud Storage (gs://)
-        - 'local': Local filesystem (file://)
+        Environment variables:
+        - STORAGE_BACKEND: Backend type ('gcs' or 'local', default: 'gcs')
+        - DATA_ROOT: Root directory for local storage (default: '/data')
+
+        For local backend, relative paths are resolved to DATA_ROOT:
+        - Input: "synthea_53/file.csv"
+        - Output: "file:///data/synthea_53/file.csv"
     """
 
     # Supported storage backends and their URI schemes
@@ -58,6 +63,12 @@ class StorageBackend:
         """
         # Strip any existing scheme first to normalize
         path = self.strip_scheme(path)
+
+        # For local backend, convert relative paths to absolute paths using DATA_ROOT
+        if self.backend == 'local' and not path.startswith('/'):
+            data_root = os.getenv('DATA_ROOT', '/data')
+            path = f"{data_root}/{path}"
+
         return f"{self.scheme}{path}"
 
     def strip_scheme(self, path: str) -> str:
@@ -100,7 +111,8 @@ class StorageBackend:
 
         # Convert to absolute path if relative
         if not path.startswith('/'):
-            path = f"/data/{path}"
+            data_root = os.getenv('DATA_ROOT', '/data')
+            path = f"{data_root}/{path}"
 
         # Create directory
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
@@ -167,7 +179,8 @@ class StorageBackend:
         """Check if file exists on local filesystem."""
         path = self.strip_scheme(file_path)
         if not path.startswith('/'):
-            path = f"/data/{path}"
+            data_root = os.getenv('DATA_ROOT', '/data')
+            path = f"{data_root}/{path}"
         return os.path.exists(path)
 
     def _file_exists_gcs(self, file_path: str) -> bool:
@@ -208,7 +221,8 @@ class StorageBackend:
 
         path = self.strip_scheme(directory_path)
         if not path.startswith('/'):
-            path = f"/data/{path}"
+            data_root = os.getenv('DATA_ROOT', '/data')
+            path = f"{data_root}/{path}"
 
         if not os.path.exists(path):
             return []

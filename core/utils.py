@@ -30,13 +30,13 @@ logger = logging.getLogger(__name__)
 def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
     """
     Create DuckDB connection with optimized settings for processing OMOP files.
-    Configures memory limits, threading, and GCS filesystem support.
+    Configures memory limits, threading, and filesystem support.
     """
     try:
         random_string = str(uuid.uuid4())
-        
-        # GCS bucket mounted to /mnt/data/ in clouldbuild.yml
-        tmp_dir = f"/mnt/data/"
+
+        # Use configurable temp directory from environment variable
+        tmp_dir = os.getenv('DUCKDB_TEMP_DIR', '/mnt/data/')
         local_db_file = f"{tmp_dir}{random_string}.db"
 
         conn = duckdb.connect(local_db_file)
@@ -52,11 +52,11 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         conn.execute(f"SET threads={constants.DUCKDB_THREADS}")
 
         # Set max size to allow on disk
-        # Unneeded when writing to GCS
         conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
 
-        # Register GCS filesystem to read/write to GCS buckets
-        conn.register_filesystem(filesystem('gcs'))
+        # Register filesystem for cloud storage if using GCS backend
+        if os.getenv('STORAGE_BACKEND', 'gcs') == 'gcs':
+            conn.register_filesystem(filesystem('gcs'))
 
         return conn, local_db_file
     except Exception as e:

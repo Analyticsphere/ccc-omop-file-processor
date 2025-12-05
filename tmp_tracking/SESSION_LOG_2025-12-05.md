@@ -106,10 +106,12 @@ docker stop omop-processor-local && docker rm omop-processor-local
 
 **Phase 1: Environment Setup** ✅ COMPLETE (100%)
 **Phase 2: Storage Abstraction** ✅ COMPLETE (100%)
-**Endpoints Tested:** 3/18 (17%)
+**Phase 4: DuckDB Local FS** ✅ COMPLETE (100%)
+**Endpoints Tested:** 4/18 (22%)
 - ✅ GET /heartbeat
 - ✅ POST /create_artifact_buckets
 - ✅ GET /get_file_list
+- ✅ POST /process_incoming_file
 
 ### Key Learnings
 
@@ -125,10 +127,35 @@ docker stop omop-processor-local && docker rm omop-processor-local
    - **Request:** `?bucket=synthea_53&folder=2025-01-01&file_format=.csv`
    - **Response:** Lists all 4 CSV files:
      - drug_exposure.csv (2.6M)
-     - measurement.csv (12M)
-     - person.csv (19K)
+     - measurement.csv (13M)
+     - person.csv (20K)
      - procedure_occurrence.csv (2.7M)
    - **Notes:** Works with refactored `list_gcs_files()` using storage backend
+
+#### **Session 4: File Processing (DuckDB)**
+1. **Fixed DuckDB Configuration** ✅
+   - Updated `create_duckdb_connection()` to use `DUCKDB_TEMP_DIR` env var
+   - Made GCS filesystem registration conditional (only when STORAGE_BACKEND=gcs)
+   - Files: core/utils.py (lines 30-63)
+
+2. **Fixed Path Resolution** ✅
+   - Updated `storage.get_uri()` to convert relative paths to absolute
+   - For local backend: `synthea_53/file.csv` → `file:///data/synthea_53/file.csv`
+   - Files: core/storage_backend.py (lines 48-66)
+
+3. **Fourth Endpoint Tested** ✅
+   - **Endpoint:** `POST /process_incoming_file`
+   - **Status:** PASSED
+   - **Request:**
+     ```json
+     {
+       "file_type": ".csv",
+       "file_path": "synthea_53/2025-01-01/person.csv"
+     }
+     ```
+   - **Response:** `Converted file to Parquet`
+   - **Output:** person.parquet (11K, 110 rows)
+   - **Verified:** DuckDB can read the output file
 
 ### Next Steps
 

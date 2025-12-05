@@ -84,6 +84,7 @@ All endpoints accessible at `http://localhost:8080`
 - `GET /heartbeat` - Health check
 - `POST /create_artifact_buckets` - Create artifact directory structure
 - `GET /get_file_list` - List files in directory by format
+- `POST /process_incoming_file` - Convert CSV/Parquet to standardized Parquet
 
 ### 🚧 To Be Tested
 - `POST /create_optimized_vocab`
@@ -106,10 +107,14 @@ All endpoints accessible at `http://localhost:8080`
 
 | Variable | Value | Purpose |
 |----------|-------|---------|
-| `STORAGE_BACKEND` | `local` | Use local filesystem instead of GCS |
+| `STORAGE_BACKEND` | `local` | Use local filesystem instead of cloud storage |
+| `DATA_ROOT` | `/data` | Root directory for local file storage (configurable) |
 | `VOCAB_GCS_PATH` | `/data/vocabulary` | Path to OMOP vocabulary files |
 | `BQ_LOGGING_TABLE` | `local_logs` | Mock BigQuery logging |
+| `DUCKDB_TEMP_DIR` | `/data/temp/` | DuckDB temporary directory |
 | `PORT` | `8080` | Internal container port |
+
+**Note:** `DATA_ROOT` allows you to change where files are stored. Default is `/data`, but you can mount volumes anywhere and update this variable.
 
 ## Directory Structure
 
