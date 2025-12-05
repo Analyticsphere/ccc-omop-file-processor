@@ -178,29 +178,68 @@ docker stop omop-processor-local && docker rm omop-processor-local
    - **Verified:** Artifacts contain validation results for table name and column names
      - Example: `Valid column name: person.ethnicity_source_concept_id`
 
+#### **Session 6: Code Refactoring (Cloud-Agnostic Naming)**
+1. **Renamed GCS-Specific Functions** ✅
+   - `get_table_name_from_gcs_path()` → `get_table_name_from_path()`
+   - `get_bucket_and_delivery_date_from_gcs_path()` → `get_bucket_and_delivery_date_from_path()`
+   - `get_report_tmp_artifacts_gcs_path()` → `get_report_tmp_artifacts_path()`
+
+2. **Renamed API Parameters** ✅
+   - validate_file endpoint: `gcs_path` → `storage_path`
+
+3. **Updated Orchestrator** ✅
+   - Updated `ccc-orchestrator/dags/dependencies/ehr/validation.py`
+   - Updated `ccc-orchestrator/dags/ehr_pipeline.py`
+   - Changed parameter name from `gcs_path` to `storage_path` in API calls
+
+4. **Tests Verified** ✅
+   - All 16 unit tests passed
+   - validate_file endpoint works with new parameter name
+
+#### **Session 7: Normalization**
+1. **Sixth Endpoint Tested** ✅
+   - **Endpoint:** `POST /normalize_parquet`
+   - **Status:** PASSED
+   - **Request:**
+     ```json
+     {
+       "file_path": "synthea_53/2025-01-01/person.csv",
+       "omop_version": "5.4",
+       "date_format": "%Y-%m-%d",
+       "datetime_format": "%Y-%m-%d %H:%M:%S"
+     }
+     ```
+   - **Response:** `Normalized Parquet file`
+   - **Output:**
+     - Valid rows: 110 (normalized parquet overwrites original at converted_files/person.parquet, now 8.9K)
+     - Invalid rows: 0 (saved to artifacts/invalid_rows/person.parquet, 559 bytes)
+   - **Verified:** 2 report artifacts created with row counts
+
 ### Progress Update
 
-**Endpoints Tested:** 5/18 (28%)
+**Endpoints Tested:** 6/18 (33%)
 - ✅ GET /heartbeat
 - ✅ POST /create_artifact_buckets
 - ✅ GET /get_file_list
 - ✅ POST /process_incoming_file
 - ✅ POST /validate_file
+- ✅ POST /normalize_parquet
 
 ### Next Steps
 
-1. Test normalize_parquet endpoint
-2. Test upgrade_cdm endpoint
-3. Test harmonize_vocab endpoint (8 steps)
-4. Continue through endpoint checklist
+1. Test upgrade_cdm endpoint
+2. Test harmonize_vocab endpoint (8 steps)
+3. Continue through endpoint checklist
 
 ### Time Spent
 - Environment Setup: ~15 minutes
 - Storage Abstraction: ~30 minutes
 - File Processing & Validation: ~30 minutes
-- Testing & Documentation: ~20 minutes
-- **Total:** ~95 minutes
+- Code Refactoring: ~30 minutes
+- Normalization Testing: ~15 minutes
+- Testing & Documentation: ~25 minutes
+- **Total:** ~145 minutes
 
 ---
 
-**Status:** 5/18 endpoints working, ready to continue! 🚀
+**Status:** 6/18 endpoints working, ready to continue! 🚀

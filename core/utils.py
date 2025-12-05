@@ -145,7 +145,7 @@ def get_bucket_and_delivery_date_from_path(file_path: str) -> Tuple[str, str]:
     bucket_name, delivery_date = file_path.split('/')[:2]
     return bucket_name, delivery_date
 
-def get_columns_from_file(gcs_file_path: str) -> list:
+def get_columns_from_file(file_path: str) -> list:
     """
     Reads file schema from the specified file path using DuckDB
     to introspect its columns. Supports both Parquet and CSV files.
@@ -159,10 +159,10 @@ def get_columns_from_file(gcs_file_path: str) -> list:
         5. Returns a list of the actual column names present in the file.
     """
 
-    gcs_file_path = storage.strip_scheme(gcs_file_path)
+    file_path = storage.strip_scheme(file_path)
     
     # Determine file type by extension
-    is_csv = gcs_file_path.lower().endswith(constants.CSV) | gcs_file_path.lower().endswith(constants.CSV_GZ)
+    is_csv = file_path.lower().endswith(constants.CSV) | file_path.lower().endswith(constants.CSV_GZ)
     
     # Create a unique table name for introspection
     table_name_for_introspection = "temp_introspect_table"
@@ -177,7 +177,7 @@ def get_columns_from_file(gcs_file_path: str) -> list:
             if is_csv:
                 tmp_tbl_sql = f"""
                     CREATE TEMP TABLE {table_name_for_introspection} AS
-                    SELECT * FROM read_csv('{storage.get_uri(gcs_file_path)}',
+                    SELECT * FROM read_csv('{storage.get_uri(file_path)}',
                                           null_padding=True,
                                           ALL_VARCHAR=True,
                                           strict_mode=False,
@@ -188,7 +188,7 @@ def get_columns_from_file(gcs_file_path: str) -> list:
             else:  # Parquet file
                 tmp_tbl_sql = f"""
                     CREATE TEMP TABLE {table_name_for_introspection} AS
-                    SELECT * FROM '{storage.get_uri(gcs_file_path)}'
+                    SELECT * FROM '{storage.get_uri(file_path)}'
                     LIMIT 0
                 """
             
@@ -211,17 +211,17 @@ def get_columns_from_file(gcs_file_path: str) -> list:
         
     return actual_columns
 
-def valid_parquet_file(gcs_file_path: str) -> bool:
+def valid_parquet_file(file_path: str) -> bool:
     """Check if Parquet file exists and can be read by DuckDB."""
     conn, local_db_file = create_duckdb_connection()
 
-    if not parquet_file_exists(gcs_file_path):
+    if not parquet_file_exists(file_path):
         return False
 
     try:
         with conn:
             # If the file is not a valid Parquet file, this will throw an exception
-            conn.execute(f"DESCRIBE SELECT * FROM read_parquet('{storage.get_uri(gcs_file_path)}')")
+            conn.execute(f"DESCRIBE SELECT * FROM read_parquet('{storage.get_uri(file_path)}')")
 
             # If we get to this point, we were able to describe the Parquet file and will assume it's valid
             return True
@@ -231,10 +231,10 @@ def valid_parquet_file(gcs_file_path: str) -> bool:
     finally:
         close_duckdb_connection(conn, local_db_file)
 
-def get_parquet_artifact_location(gcs_file_path: str) -> str:
+def get_parquet_artifact_location(file_path: str) -> str:
     """Get path to processed Parquet artifact in converted_files directory."""
-    file_name = get_table_name_from_path(gcs_file_path)
-    base_directory, delivery_date = get_bucket_and_delivery_date_from_path(gcs_file_path)
+    file_name = get_table_name_from_path(file_path)
+    base_directory, delivery_date = get_bucket_and_delivery_date_from_path(file_path)
     
     # Remove trailing slash if present
     base_directory = base_directory.rstrip('/')
@@ -247,10 +247,10 @@ def get_parquet_artifact_location(gcs_file_path: str) -> str:
 
     return parquet_path
 
-def get_parquet_harmonized_path(gcs_file_path: str) -> str:
+def get_parquet_harmonized_path(file_path: str) -> str:
     """Get path to directory for vocabulary-harmonized Parquet artifacts."""
-    file_name = get_table_name_from_path(gcs_file_path)
-    base_directory, delivery_date = get_bucket_and_delivery_date_from_path(gcs_file_path)
+    file_name = get_table_name_from_path(file_path)
+    base_directory, delivery_date = get_bucket_and_delivery_date_from_path(file_path)
     
     # Remove trailing slash if present
     base_directory = base_directory.rstrip('/')
@@ -260,9 +260,9 @@ def get_parquet_harmonized_path(gcs_file_path: str) -> str:
 
     return parquet_path
 
-def get_omop_etl_destination_path(gcs_file_path: str) -> str:
+def get_omop_etl_destination_path(file_path: str) -> str:
     """Get path to OMOP ETL artifacts directory for transformed tables."""
-    base_directory, delivery_date = get_bucket_and_delivery_date_from_path(gcs_file_path)
+    base_directory, delivery_date = get_bucket_and_delivery_date_from_path(file_path)
     
     # Remove trailing slash if present
     base_directory = base_directory.rstrip('/')
@@ -272,10 +272,10 @@ def get_omop_etl_destination_path(gcs_file_path: str) -> str:
 
     return parquet_path
 
-def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
+def get_invalid_rows_path_from_path(file_path: str) -> str:
     """Get path to invalid rows Parquet file for tables that failed normalization."""
-    table_name = get_table_name_from_path(gcs_file_path).lower()
-    bucket, subfolder = get_bucket_and_delivery_date_from_path(gcs_file_path)
+    table_name = get_table_name_from_path(file_path).lower()
+    bucket, subfolder = get_bucket_and_delivery_date_from_path(file_path)
     invalid_rows_path = f"{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}"
 
     return invalid_rows_path

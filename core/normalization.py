@@ -50,7 +50,7 @@ def get_birth_datetime_sql_expression(datetime_format: str, column_exists_in_fil
         return f"{calculation_expr} AS birth_datetime"
 
 
-def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str, date_format: str, datetime_format: str) -> str:
+def get_normalization_sql_statement(parquet_file_path: str, cdm_version: str, date_format: str, datetime_format: str) -> str:
     """
     Generates a SQL statement that, when executed:
         - Converts data types of columns within Parquet file to OMOP CDM standard
@@ -66,7 +66,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
     # --------------------------------------------------------------------------
     # Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
-    table_name = utils.get_table_name_from_path(parquet_gcs_file_path).lower()
+    table_name = utils.get_table_name_from_path(parquet_file_path).lower()
 
     # --------------------------------------------------------------------------
     # Retrieve the table schema. If not found, return empty string
@@ -82,7 +82,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
     # --------------------------------------------------------------------------
     # Identify which columns actually exist in the Parquet file 
     # --------------------------------------------------------------------------
-    actual_columns = utils.get_columns_from_file(parquet_gcs_file_path)
+    actual_columns = utils.get_columns_from_file(parquet_file_path)
 
     # Get Connect_ID column name, if it exists
     connect_id_column_name = ""
@@ -199,23 +199,23 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
                 CASE 
                     WHEN COALESCE({row_validity_sql}) IS NULL THEN CAST((CAST(hash(CONCAT({row_hash_statement})) AS UBIGINT) % 9223372036854775807) AS BIGINT)
                     ELSE NULL END AS row_hash
-            FROM read_parquet('{storage.get_uri(parquet_gcs_file_path)}')
+            FROM read_parquet('{storage.get_uri(parquet_file_path)}')
         ;
 
         COPY (
             SELECT *
-            FROM read_parquet('{storage.get_uri(parquet_gcs_file_path)}')
+            FROM read_parquet('{storage.get_uri(parquet_file_path)}')
             WHERE CAST((CAST(hash(CONCAT({row_hash_statement})) AS UBIGINT) % 9223372036854775807) AS BIGINT) IN (
                 SELECT row_hash FROM row_check WHERE row_hash IS NOT NULL
             )
-        ) TO '{storage.get_uri(utils.get_invalid_rows_path_from_gcs_path(parquet_gcs_file_path))}' {constants.DUCKDB_FORMAT_STRING}
+        ) TO '{storage.get_uri(utils.get_invalid_rows_path_from_path(parquet_file_path))}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
         COPY (
             SELECT * EXCLUDE (row_hash) {replace_clause}
             FROM row_check
             WHERE row_hash IS NULL
-        ) TO '{storage.get_uri(parquet_gcs_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+        ) TO '{storage.get_uri(parquet_file_path)}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
     """.strip()
@@ -227,15 +227,15 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
     return sql_script
 
 
-def normalize_file(parquet_gcs_file_path: str, cdm_version: str, date_format: str, datetime_format: str) -> None:
+def normalize_file(parquet_file_path: str, cdm_version: str, date_format: str, datetime_format: str) -> None:
     """
     Normalize Parquet file to conform to OMOP CDM schema.
     Applies data type conversions, supplies default values for missing required columns, and separates valid/invalid rows.
     """
-    fix_sql = get_normalization_sql_statement(parquet_gcs_file_path, cdm_version, date_format, datetime_format)
+    fix_sql = get_normalization_sql_statement(parquet_file_path, cdm_version, date_format, datetime_format)
 
     fix_sql_no_return = fix_sql.replace('\n', ' ').replace('  ', ' ')
-    print(f"Normalizing Parquet file {storage.get_uri(parquet_gcs_file_path)} with SQL: {fix_sql_no_return}")
+    print(f"Normalizing Parquet file {storage.get_uri(parquet_file_path)} with SQL: {fix_sql_no_return}")
 
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM
@@ -246,21 +246,21 @@ def normalize_file(parquet_gcs_file_path: str, cdm_version: str, date_format: st
             with conn:
                 conn.execute(fix_sql)
                 # Get counts of valid/invalid rows for OMOP files
-                create_row_count_artifacts(parquet_gcs_file_path, cdm_version, conn)
+                create_row_count_artifacts(parquet_file_path, cdm_version, conn)
         except Exception as e:
-            raise Exception(f"Unable to normalize Parquet file {parquet_gcs_file_path}: {e}") from e
+            raise Exception(f"Unable to normalize Parquet file {parquet_file_path}: {e}") from e
         finally:
             utils.close_duckdb_connection(conn, local_db_file)
 
 
-def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckdb.DuckDBPyConnection) -> None:
+def create_row_count_artifacts(file_path: str, cdm_version: str, conn: duckdb.DuckDBPyConnection) -> None:
     """Create report artifacts with row counts for valid and invalid rows after normalization."""
-    table_name = utils.get_table_name_from_path(gcs_file_path)
+    table_name = utils.get_table_name_from_path(file_path)
     table_concept_id = utils.get_cdm_schema(cdm_version)[table_name]['concept_id']
-    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(gcs_file_path)
+    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)
 
-    valid_rows_file = (utils.get_parquet_artifact_location(gcs_file_path), 'Valid row count')
-    invalid_rows_file = (utils.get_invalid_rows_path_from_gcs_path(gcs_file_path),  'Invalid row count')
+    valid_rows_file = (utils.get_parquet_artifact_location(file_path), 'Valid row count')
+    invalid_rows_file = (utils.get_invalid_rows_path_from_path(file_path),  'Invalid row count')
 
     files = [valid_rows_file, invalid_rows_file]
 
