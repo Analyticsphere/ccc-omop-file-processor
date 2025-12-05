@@ -131,7 +131,7 @@ class StorageBackend:
         from core import utils
 
         # Parse bucket and path
-        bucket_name, _ = utils.get_bucket_and_delivery_date_from_gcs_path(directory_path)
+        bucket_name, _ = utils.get_bucket_and_delivery_date_from_path(directory_path)
         blob_name = '/'.join(directory_path.split('/')[1:])
 
         storage_client = gcs_storage.Client()
@@ -188,7 +188,7 @@ class StorageBackend:
         from core import utils
 
         path_without_prefix = self.strip_scheme(file_path)
-        bucket_name, _ = utils.get_bucket_and_delivery_date_from_gcs_path(path_without_prefix)
+        bucket_name, _ = utils.get_bucket_and_delivery_date_from_path(path_without_prefix)
         blob_path = '/'.join(path_without_prefix.split('/')[1:])
 
         storage_client = gcs_storage.Client()

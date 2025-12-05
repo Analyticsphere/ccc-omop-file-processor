@@ -167,23 +167,23 @@ def validate_file() -> tuple[str, int]:
         file_path: Optional[str] = data.get('file_path')
         omop_version: Optional[str] = data.get('omop_version')
         delivery_date: Optional[str] = data.get('delivery_date')
-        gcs_path: Optional[str] = data.get('gcs_path')
-        
+        storage_path: Optional[str] = data.get('storage_path')
+
         # Validate required parameters
-        if not all([file_path, omop_version, delivery_date, gcs_path]):
-            return "Missing a required parameter to 'validate_file' endpoint. Required: file_path, omop_version, delivery_date, gcs_path", 400
+        if not all([file_path, omop_version, delivery_date, storage_path]):
+            return "Missing a required parameter to 'validate_file' endpoint. Required: file_path, omop_version, delivery_date, storage_path", 400
 
         # At this point we know these are not None
         assert file_path is not None
         assert omop_version is not None
         assert delivery_date is not None
-        assert gcs_path is not None
-        
+        assert storage_path is not None
+
         file_validation.validate_file(
-            file_path=file_path, 
-            omop_version=omop_version, 
-            delivery_date=delivery_date, 
-            gcs_path=gcs_path
+            file_path=file_path,
+            omop_version=omop_version,
+            delivery_date=delivery_date,
+            storage_path=storage_path
         )
         utils.logger.info(f"Validation successful for {file_path}")
 

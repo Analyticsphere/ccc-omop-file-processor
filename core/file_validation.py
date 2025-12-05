@@ -2,7 +2,7 @@ import core.helpers.report_artifact as report_artifact
 import core.utils as utils
 
 
-def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> bool:
+def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: str, storage_path: str) -> bool:
     """
     Validates whether the filename (without extension) matches one of the
     OMOP CDM tables defined in the schema.json file.
@@ -15,7 +15,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
         valid_table_names = schema.keys()
 
         # Get the base name of the file (without extension)
-        table_name = utils.get_table_name_from_gcs_path(file_path)
+        table_name = utils.get_table_name_from_path(file_path)
 
         # Check if the filename matches any of the table keys in the JSON
         is_valid_table_name = table_name in valid_table_names
@@ -23,7 +23,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
             ra = report_artifact.ReportArtifact(
                 concept_id=schema[table_name]['concept_id'],
                 delivery_date=delivery_date,
-                artifact_bucket=gcs_path,
+                artifact_bucket=storage_path,
                 name=f"Valid table name: {table_name}",
                 value_as_concept_id=None,
                 value_as_number=None,
@@ -33,7 +33,7 @@ def validate_cdm_table_name(file_path: str, omop_version: str, delivery_date: st
             ra = report_artifact.ReportArtifact(
                 concept_id=None,
                 delivery_date=delivery_date,
-                artifact_bucket=gcs_path,
+                artifact_bucket=storage_path,
                 name=f"Invalid table name: {table_name}",
                 value_as_concept_id=None,
                 value_as_number=None,
@@ -52,8 +52,8 @@ def validate_cdm_table_columns(file_path: str, omop_version: str) -> None:
     and that there are no columns in the table schema that are absent in the parquet file.
     """
     try:
-        bucket_name, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)
-        table_name = utils.get_table_name_from_gcs_path(file_path)
+        bucket_name, delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)
+        table_name = utils.get_table_name_from_path(file_path)
         schema = utils.get_table_schema(table_name=table_name, cdm_version=omop_version)
         
         parquet_artifact_location = utils.get_parquet_artifact_location(file_path)
@@ -110,12 +110,12 @@ def validate_cdm_table_columns(file_path: str, omop_version: str) -> None:
     except Exception as e:
         raise Exception(f"Unexpected error validating columns for file {file_path}: {str(e)}") from e
 
-def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_path: str) -> None:
+def validate_file(file_path: str, omop_version: str, delivery_date: str, storage_path: str) -> None:
     """
     Validates a file's name and schema against the OMOP standard.
 
     Args:
-        file_path (str): Path to the local file or GCS file to validate.
+        file_path (str): Path to file to validate.
         omop_version (str): Version of the OMOP CDM standard.
 
     Returns:
@@ -124,7 +124,7 @@ def validate_file(file_path: str, omop_version: str, delivery_date: str, gcs_pat
     utils.logger.info(f"Validating schema of {file_path} against OMOP v{omop_version}")
     
     try:
-        valid_table_name = validate_cdm_table_name(file_path, omop_version, delivery_date, gcs_path)
+        valid_table_name = validate_cdm_table_name(file_path, omop_version, delivery_date, storage_path)
         # If it's not a valid table name, it does not have a schema to validate
         if valid_table_name:
             validate_cdm_table_columns(file_path, omop_version)    

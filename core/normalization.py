@@ -66,7 +66,7 @@ def get_normalization_sql_statement(parquet_gcs_file_path: str, cdm_version: str
     # --------------------------------------------------------------------------
     # Parse out table name and bucket/subfolder info
     # --------------------------------------------------------------------------
-    table_name = utils.get_table_name_from_gcs_path(parquet_gcs_file_path).lower()
+    table_name = utils.get_table_name_from_path(parquet_gcs_file_path).lower()
 
     # --------------------------------------------------------------------------
     # Retrieve the table schema. If not found, return empty string
@@ -255,9 +255,9 @@ def normalize_file(parquet_gcs_file_path: str, cdm_version: str, date_format: st
 
 def create_row_count_artifacts(gcs_file_path: str, cdm_version: str, conn: duckdb.DuckDBPyConnection) -> None:
     """Create report artifacts with row counts for valid and invalid rows after normalization."""
-    table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
+    table_name = utils.get_table_name_from_path(gcs_file_path)
     table_concept_id = utils.get_cdm_schema(cdm_version)[table_name]['concept_id']
-    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(gcs_file_path)
 
     valid_rows_file = (utils.get_parquet_artifact_location(gcs_file_path), 'Valid row count')
     invalid_rows_file = (utils.get_invalid_rows_path_from_gcs_path(gcs_file_path),  'Invalid row count')

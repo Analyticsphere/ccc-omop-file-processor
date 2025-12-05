@@ -85,11 +85,10 @@ All endpoints accessible at `http://localhost:8080`
 - `POST /create_artifact_buckets` - Create artifact directory structure
 - `GET /get_file_list` - List files in directory by format
 - `POST /process_incoming_file` - Convert CSV/Parquet to standardized Parquet
+- `POST /validate_file` - Validate file against OMOP schema
 
 ### 🚧 To Be Tested
 - `POST /create_optimized_vocab`
-- `POST /process_incoming_file`
-- `POST /validate_file`
 - `POST /normalize_parquet`
 - `POST /upgrade_cdm`
 - `POST /harmonize_vocab`

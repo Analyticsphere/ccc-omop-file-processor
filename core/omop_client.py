@@ -19,7 +19,7 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
     """
 
     normalized_file_path = utils.get_parquet_artifact_location(gcs_file_path)
-    table_name = utils.get_table_name_from_gcs_path(gcs_file_path)
+    table_name = utils.get_table_name_from_path(gcs_file_path)
 
     if cdm_version == target_omop_version:
         utils.logger.info(f"CDM upgrade not needed for file {gcs_file_path}")

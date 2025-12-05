@@ -157,18 +157,50 @@ docker stop omop-processor-local && docker rm omop-processor-local
    - **Output:** person.parquet (11K, 110 rows)
    - **Verified:** DuckDB can read the output file
 
+#### **Session 5: File Validation**
+1. **Fifth Endpoint Tested** ✅
+   - **Endpoint:** `POST /validate_file`
+   - **Status:** PASSED
+   - **Initial Issue:** Path construction error with duplicate delivery_date
+     - Passed `gcs_path` as `"synthea_53/2025-01-01"` but should be `"synthea_53"`
+     - Function `get_report_tmp_artifacts_gcs_path()` expects bucket name only
+   - **Request:**
+     ```json
+     {
+       "file_path": "synthea_53/2025-01-01/person.csv",
+       "omop_version": "5.4",
+       "delivery_date": "2025-01-01",
+       "gcs_path": "synthea_53"
+     }
+     ```
+   - **Response:** `File successfully validated`
+   - **Output:** 20 validation report artifacts created
+   - **Verified:** Artifacts contain validation results for table name and column names
+     - Example: `Valid column name: person.ethnicity_source_concept_id`
+
+### Progress Update
+
+**Endpoints Tested:** 5/18 (28%)
+- ✅ GET /heartbeat
+- ✅ POST /create_artifact_buckets
+- ✅ GET /get_file_list
+- ✅ POST /process_incoming_file
+- ✅ POST /validate_file
+
 ### Next Steps
 
-1. Test file processing endpoints (process_incoming_file, validate_file)
-2. Test normalization endpoint
-3. Continue through endpoint checklist
+1. Test normalize_parquet endpoint
+2. Test upgrade_cdm endpoint
+3. Test harmonize_vocab endpoint (8 steps)
+4. Continue through endpoint checklist
 
 ### Time Spent
 - Environment Setup: ~15 minutes
 - Storage Abstraction: ~30 minutes
-- Testing & Documentation: ~15 minutes
-- **Total:** ~60 minutes
+- File Processing & Validation: ~30 minutes
+- Testing & Documentation: ~20 minutes
+- **Total:** ~95 minutes
 
 ---
 
-**Status:** 2/18 endpoints working, ready to continue! 🚀
+**Status:** 5/18 endpoints working, ready to continue! 🚀

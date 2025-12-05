@@ -90,12 +90,12 @@ def execute_duckdb_sql(sql: str, error_msg: str) -> None:
     finally:
         close_duckdb_connection(conn, local_db_file)
 
-def get_table_name_from_gcs_path(gcs_file_path: str) -> str:
+def get_table_name_from_path(file_path: str) -> str:
     """
     Extract table name from file path by removing directory and extension.
     Example: synthea53/2024-12-31/care_site.parquet -> care_site
     """
-    file_name = gcs_file_path.split('/')[-1].lower()
+    file_name = file_path.split('/')[-1].lower()
 
     for ext in constants.FILE_EXTENSIONS:
         file_name = file_name.replace(ext, '')
@@ -136,13 +136,13 @@ def get_table_schema(table_name: str, cdm_version: str) -> dict:
     except Exception as e:
         raise Exception(f"Unexpected error getting table {table_name} schema: {str(e)}")
     
-def get_bucket_and_delivery_date_from_gcs_path(gcs_file_path: str) -> Tuple[str, str]:
+def get_bucket_and_delivery_date_from_path(file_path: str) -> Tuple[str, str]:
     """
     Extract bucket name and delivery date from file path.
     Example: synthea53/2024-12-31/care_site.parquet -> (synthea53, 2024-12-31)
     """
-    gcs_file_path = storage.strip_scheme(gcs_file_path)
-    bucket_name, delivery_date = gcs_file_path.split('/')[:2]
+    file_path = storage.strip_scheme(file_path)
+    bucket_name, delivery_date = file_path.split('/')[:2]
     return bucket_name, delivery_date
 
 def get_columns_from_file(gcs_file_path: str) -> list:
@@ -233,8 +233,8 @@ def valid_parquet_file(gcs_file_path: str) -> bool:
 
 def get_parquet_artifact_location(gcs_file_path: str) -> str:
     """Get path to processed Parquet artifact in converted_files directory."""
-    file_name = get_table_name_from_gcs_path(gcs_file_path)
-    base_directory, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+    file_name = get_table_name_from_path(gcs_file_path)
+    base_directory, delivery_date = get_bucket_and_delivery_date_from_path(gcs_file_path)
     
     # Remove trailing slash if present
     base_directory = base_directory.rstrip('/')
@@ -249,8 +249,8 @@ def get_parquet_artifact_location(gcs_file_path: str) -> str:
 
 def get_parquet_harmonized_path(gcs_file_path: str) -> str:
     """Get path to directory for vocabulary-harmonized Parquet artifacts."""
-    file_name = get_table_name_from_gcs_path(gcs_file_path)
-    base_directory, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+    file_name = get_table_name_from_path(gcs_file_path)
+    base_directory, delivery_date = get_bucket_and_delivery_date_from_path(gcs_file_path)
     
     # Remove trailing slash if present
     base_directory = base_directory.rstrip('/')
@@ -262,7 +262,7 @@ def get_parquet_harmonized_path(gcs_file_path: str) -> str:
 
 def get_omop_etl_destination_path(gcs_file_path: str) -> str:
     """Get path to OMOP ETL artifacts directory for transformed tables."""
-    base_directory, delivery_date = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+    base_directory, delivery_date = get_bucket_and_delivery_date_from_path(gcs_file_path)
     
     # Remove trailing slash if present
     base_directory = base_directory.rstrip('/')
@@ -274,8 +274,8 @@ def get_omop_etl_destination_path(gcs_file_path: str) -> str:
 
 def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
     """Get path to invalid rows Parquet file for tables that failed normalization."""
-    table_name = get_table_name_from_gcs_path(gcs_file_path).lower()
-    bucket, subfolder = get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
+    table_name = get_table_name_from_path(gcs_file_path).lower()
+    bucket, subfolder = get_bucket_and_delivery_date_from_path(gcs_file_path)
     invalid_rows_path = f"{bucket}/{subfolder}/{constants.ArtifactPaths.INVALID_ROWS.value}{table_name}{constants.PARQUET}"
 
     return invalid_rows_path
@@ -425,13 +425,13 @@ def generate_report(report_data: dict) -> None:
         finally:
             close_duckdb_connection(conn, local_db_file)
 
-def get_report_tmp_artifacts_gcs_path(bucket: str, delivery_date: str) -> str:
+def get_report_tmp_artifacts_path(bucket: str, delivery_date: str) -> str:
     """
     Returns the path to the temporary report artifacts directory.
 
-    NOTE: This function now returns the path WITHOUT storage scheme prefix (e.g., gs://),
+    NOTE: This function returns the path WITHOUT storage scheme prefix,
     consistent with all other path utility functions. Callers should use storage.get_uri()
-    if they need the full URI.
+    if they need the full URI with scheme.
     """
     report_tmp_dir = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
     return report_tmp_dir

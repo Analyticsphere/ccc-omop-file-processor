@@ -20,8 +20,8 @@ from core.storage_backend import storage
         ("bucket/folder/observation.csv.gz", "observation"),
     ]
 )
-def test_get_table_name_from_gcs_path(gcs_path, expected):
-    assert utils.get_table_name_from_gcs_path(gcs_path) == expected
+def test_get_table_name_from_path(gcs_path, expected):
+    assert utils.get_table_name_from_path(gcs_path) == expected
 
 
 @pytest.mark.parametrize(
@@ -46,8 +46,8 @@ def test_get_cdm_version_concept_id(cdm_version, expected_concept_id):
         ("test-bucket", "2025-10-04", "test-bucket/2025-10-04/artifacts/delivery_report/tmp/"),
     ]
 )
-def test_get_report_tmp_artifacts_gcs_path(bucket, delivery_date, expected_path):
-    assert utils.get_report_tmp_artifacts_gcs_path(bucket, delivery_date) == expected_path
+def test_get_report_tmp_artifacts_path(bucket, delivery_date, expected_path):
+    assert utils.get_report_tmp_artifacts_path(bucket, delivery_date) == expected_path
 
 
 @pytest.mark.parametrize(
@@ -60,8 +60,8 @@ def test_get_report_tmp_artifacts_gcs_path(bucket, delivery_date, expected_path)
         ("bucket/2025-01-01/observation.csv.gz", "bucket", "2025-01-01"),
     ]
 )
-def test_get_bucket_and_delivery_date_from_gcs_path(gcs_path, expected_bucket, expected_date):
-    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_path)
+def test_get_bucket_and_delivery_date_from_path(gcs_path, expected_bucket, expected_date):
+    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(gcs_path)
     assert bucket == expected_bucket
     assert delivery_date == expected_date
 

@@ -24,9 +24,9 @@ class VocabHarmonizer:
         self.site = site
         self.vocab_version = vocab_version
         self.vocab_gcs_bucket = vocab_gcs_bucket
-        self.source_table_name = utils.get_table_name_from_gcs_path(file_path)
-        self.bucket = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)[0]
-        self.delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(file_path)[1]
+        self.source_table_name = utils.get_table_name_from_path(file_path)
+        self.bucket = utils.get_bucket_and_delivery_date_from_path(file_path)[0]
+        self.delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)[1]
         self.source_parquet_path = utils.get_parquet_artifact_location(file_path)
         self.target_parquet_path = utils.get_parquet_harmonized_path(file_path)
         self.project_id = project_id
@@ -538,7 +538,7 @@ class VocabHarmonizer:
         
         # Get the OMOP ETL directory path
         etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
-        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_gcs_path(etl_base_path)
+        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
         etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
         gcs_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
         
@@ -573,7 +573,7 @@ class VocabHarmonizer:
         
         # Get the OMOP ETL directory path
         etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
-        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_gcs_path(etl_base_path)
+        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
         etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
         gcs_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
         
@@ -784,7 +784,7 @@ class VocabHarmonizer:
 
         # Get the OMOP ETL directory path
         etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
-        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_gcs_path(etl_base_path)
+        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
         etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
         gcs_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
 
