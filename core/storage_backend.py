@@ -260,6 +260,45 @@ class StorageBackend:
 
         return files
 
+    def delete_file(self, file_path: str) -> None:
+        """
+        Delete a file from the configured storage backend.
+
+        Args:
+            file_path: Path to file (without storage scheme)
+        """
+        if self.backend == 'local':
+            self._delete_file_local(file_path)
+        elif self.backend == 'gcs':
+            self._delete_file_gcs(file_path)
+        else:
+            raise ValueError(f"Unsupported storage backend: {self.backend}")
+
+    def _delete_file_local(self, file_path: str) -> None:
+        """Delete file from local filesystem."""
+        path = self.strip_scheme(file_path)
+        if not path.startswith('/'):
+            data_root = os.getenv('DATA_ROOT', '/data')
+            path = f"{data_root}/{path}"
+
+        if os.path.exists(path):
+            os.remove(path)
+
+    def _delete_file_gcs(self, file_path: str) -> None:
+        """Delete file from GCS."""
+        from core import utils
+
+        path_without_prefix = self.strip_scheme(file_path)
+        bucket_name = path_without_prefix.split('/')[0]
+        blob_path = '/'.join(path_without_prefix.split('/')[1:])
+
+        storage_client = gcs_storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+
+        if blob.exists():
+            blob.delete()
+
 
 # Global storage backend instance
 # Configured via STORAGE_BACKEND environment variable (defaults to 'gcs')

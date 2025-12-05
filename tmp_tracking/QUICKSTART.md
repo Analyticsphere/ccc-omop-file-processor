@@ -87,10 +87,10 @@ All endpoints accessible at `http://localhost:8080`
 - `POST /process_incoming_file` - Convert CSV/Parquet to standardized Parquet
 - `POST /validate_file` - Validate file against OMOP schema
 - `POST /normalize_parquet` - Normalize parquet to OMOP CDM schema with type conversions
+- `POST /upgrade_cdm` - Upgrade OMOP CDM file from one version to another
 
 ### 🚧 To Be Tested
 - `POST /create_optimized_vocab`
-- `POST /upgrade_cdm`
 - `POST /harmonize_vocab`
 - `POST /generate_derived_tables_from_harmonized`
 - `POST /generate_delivery_report`

@@ -215,31 +215,72 @@ docker stop omop-processor-local && docker rm omop-processor-local
      - Invalid rows: 0 (saved to artifacts/invalid_rows/person.parquet, 559 bytes)
    - **Verified:** 2 report artifacts created with row counts
 
+#### **Session 8: Additional Refactoring (Normalization Code)**
+1. **Renamed Function** ✅
+   - `get_invalid_rows_path_from_gcs_path()` → `get_invalid_rows_path_from_path()`
+
+2. **Renamed Parameters** ✅
+   - `parquet_gcs_file_path` → `parquet_file_path` in normalization.py
+   - `gcs_file_path` → `file_path` in normalization.py and utils.py
+
+3. **Files Updated** ✅
+   - core/normalization.py - All GCS parameter references removed
+   - core/utils.py - Multiple utility functions updated
+
+4. **Tests Verified** ✅
+   - Rebuilt Docker image
+   - Re-tested normalize_parquet endpoint
+   - All 110 rows processed correctly
+
+#### **Session 9: CDM Upgrade**
+1. **Seventh Endpoint Tested** ✅
+   - **Endpoint:** `POST /upgrade_cdm`
+   - **Status:** PASSED
+   - **Request:**
+     ```json
+     {
+       "file_path": "synthea_53/2025-01-01/person.csv",
+       "omop_version": "5.3",
+       "target_omop_version": "5.4"
+     }
+     ```
+   - **Response:** `Upgraded file`
+   - **Output:** Row count maintained at 110
+   - **Note:** Person table has no changes between CDM 5.3 and 5.4
+
+2. **Refactored Upgrade Code** ✅
+   - Renamed `gcs_file_path` → `file_path` in omop_client.py
+   - Replaced `gcp_services.delete_gcs_file()` → `storage.delete_file()`
+   - Added `delete_file()` method to StorageBackend class
+     - Supports both local and GCS backends
+     - Handles path resolution with DATA_ROOT
+
 ### Progress Update
 
-**Endpoints Tested:** 6/18 (33%)
+**Endpoints Tested:** 7/18 (39%)
 - ✅ GET /heartbeat
 - ✅ POST /create_artifact_buckets
 - ✅ GET /get_file_list
 - ✅ POST /process_incoming_file
 - ✅ POST /validate_file
 - ✅ POST /normalize_parquet
+- ✅ POST /upgrade_cdm
 
 ### Next Steps
 
-1. Test upgrade_cdm endpoint
-2. Test harmonize_vocab endpoint (8 steps)
-3. Continue through endpoint checklist
+1. Test harmonize_vocab endpoint (8 steps)
+2. Continue through endpoint checklist
 
 ### Time Spent
 - Environment Setup: ~15 minutes
 - Storage Abstraction: ~30 minutes
 - File Processing & Validation: ~30 minutes
-- Code Refactoring: ~30 minutes
-- Normalization Testing: ~15 minutes
-- Testing & Documentation: ~25 minutes
-- **Total:** ~145 minutes
+- Code Refactoring (Functions): ~30 minutes
+- Code Refactoring (Normalization): ~20 minutes
+- CDM Upgrade & Refactoring: ~25 minutes
+- Testing & Documentation: ~30 minutes
+- **Total:** ~180 minutes
 
 ---
 
-**Status:** 6/18 endpoints working, ready to continue! 🚀
+**Status:** 7/18 endpoints working, ready to continue! 🚀

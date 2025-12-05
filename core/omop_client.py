@@ -7,7 +7,7 @@ import core.utils as utils
 from core.storage_backend import storage
 
 
-def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str) -> None:
+def upgrade_file(file_path: str, cdm_version: str, target_omop_version: str) -> None:
     """
     Upgrades an OMOP CDM table file from one version to another by applying version-specific transformations.
     Currently supports upgrading from CDM v5.3 to v5.4.
@@ -18,16 +18,16 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
     3. Table changed and overwritten (SQL upgrade script is applied to transform the data)
     """
 
-    normalized_file_path = utils.get_parquet_artifact_location(gcs_file_path)
-    table_name = utils.get_table_name_from_path(gcs_file_path)
+    normalized_file_path = utils.get_parquet_artifact_location(file_path)
+    table_name = utils.get_table_name_from_path(file_path)
 
     if cdm_version == target_omop_version:
-        utils.logger.info(f"CDM upgrade not needed for file {gcs_file_path}")
+        utils.logger.info(f"CDM upgrade not needed for file {file_path}")
         return
     elif cdm_version == constants.CDM_v53 and target_omop_version == constants.CDM_v54:
         if table_name in constants.CDM_53_TO_54:
             if constants.CDM_53_TO_54[table_name] == constants.REMOVED:
-                gcp_services.delete_gcs_file(normalized_file_path)
+                storage.delete_file(normalized_file_path)
             elif constants.CDM_53_TO_54[table_name] == constants.CHANGED:
                 try:
                     upgrade_file_path = f"{constants.CDM_UPGRADE_SCRIPT_PATH}{cdm_version}_to_{target_omop_version}/{table_name}.sql"
@@ -40,12 +40,12 @@ def upgrade_file(gcs_file_path: str, cdm_version: str, target_omop_version: str)
                             FROM read_parquet('{storage.get_uri(normalized_file_path)}')
                         ) TO '{storage.get_uri(normalized_file_path)}' {constants.DUCKDB_FORMAT_STRING}
                     """
-                    utils.execute_duckdb_sql(select_statement, f"Unable to upgrade file {gcs_file_path}:")
+                    utils.execute_duckdb_sql(select_statement, f"Unable to upgrade file {file_path}:")
 
                 except Exception as e:
                     raise Exception(f"Unable to open SQL upgrade file {upgrade_file_path}: {e}") from e
         else:
-            utils.logger.info(f"No changes in {gcs_file_path} when upgrading from 5.3 to 5.4")
+            utils.logger.info(f"No changes in {file_path} when upgrading from 5.3 to 5.4")
     else:
         raise Exception(f"OMOP CDM version {cdm_version} not supported")
 
