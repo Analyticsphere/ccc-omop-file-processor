@@ -139,48 +139,88 @@ gcsfs==2025.3.0               # GCS filesystem (TO BE REPLACED)
 
 ## Implementation Strategy
 
-### Phase 1: Environment Setup ✅
+### Phase 1: Environment Setup ✅ **COMPLETE**
 **Goal:** Get Docker building and running locally with basic configuration
 
-**Tasks:**
-- [ ] Review current Dockerfile
-- [ ] Create local environment variables file
-- [ ] Build Docker image locally
-- [ ] Run container and test `/heartbeat` endpoint
-- [ ] Set up local file storage directory structure
+**Status:** ✅ Complete (2025-12-05)
 
-**Environment Variables Needed:**
+**Tasks Completed:**
+- [x] Review current Dockerfile (no changes needed!)
+- [x] Build Docker image locally
+- [x] Run container with docker run command and environment variables
+- [x] Test `/heartbeat` endpoint
+- [x] Set up local file storage directory structure
+
+**What We Did:**
+
+1. **Created Local Directory Structure**
+   ```bash
+   /Users/frankenbergerea/Development/ccc-omop-file-processor/local-data/
+   ├── temp/           # DuckDB temp files
+   ├── logs/           # Pipeline logs
+   ├── vocabulary/     # OMOP vocabulary files (empty, to be populated)
+   └── deliveries/     # Test data files (empty, to be populated)
+   ```
+
+2. **Built Docker Image**
+   ```bash
+   docker build -t omop-processor:local .
+   ```
+   - ✅ Build successful (used cached layers from previous builds)
+   - Image size: ~500MB
+   - Base: python:3.11-slim-bookworm
+
+3. **Started Container**
+   ```bash
+   docker run -d \
+     --name omop-processor-local \
+     -p 8080:8080 \
+     -v /Users/frankenbergerea/Development/ccc-omop-file-processor/local-data:/data \
+     -e STORAGE_BACKEND=local \
+     -e VOCAB_GCS_PATH=/data/vocabulary \
+     -e BQ_LOGGING_TABLE=local_logs \
+     -e PORT=8080 \
+     omop-processor:local
+   ```
+   - ✅ Container started successfully
+   - Container name: omop-processor-local
+   - Accessible at: http://localhost:8080
+   - Volume mounted: ./local-data → /data
+   - Environment variables set inline
+
+4. **Tested Heartbeat Endpoint**
+   ```bash
+   curl http://localhost:8080/heartbeat
+   ```
+   - ✅ Response received successfully
+   - Status: healthy
+   - Service: omop-file-processor
+
+**Environment Variables Used:**
 ```bash
 STORAGE_BACKEND=local              # Switch to local filesystem
 BQ_LOGGING_TABLE=local_logs        # Mock BigQuery logging
 VOCAB_GCS_PATH=/data/vocabulary    # Local vocab path
-PORT=8080                          # API port
+PORT=8080                          # API port (internal)
+DUCKDB_TEMP_DIR=/data/temp/        # DuckDB temp directory
 ```
 
-**Local Directory Structure:**
-```
-/Users/frankenbergerea/Development/ccc-omop-local-data/
-├── vocabulary/
-│   └── v5.0 29-FEB-24/         # OMOP vocabulary files
-├── deliveries/
-│   └── test_site/
-│       └── 2025-12-05/         # Delivery date format
-│           ├── person.csv
-│           ├── condition_occurrence.csv
-│           └── artifacts/      # Generated artifacts
-└── logs/
-    └── pipeline_logs.json      # Local pipeline logs
-```
-
-**Expected Issues:**
-- GCS-specific environment variables in cloudbuild.yaml
-- DuckDB temp directory configuration
-- GCS filesystem registration in DuckDB
+**Issues Encountered & Resolved:**
+1. **Port Conflict (ISSUE-005):** Port 8080 already in use by old container
+   - Solution: Stopped and removed old container, now using port 8080
+   - Result: ✅ Container started successfully on port 8080
 
 **Success Criteria:**
 - ✅ Docker image builds without errors
 - ✅ Container starts and listens on port 8080
-- ✅ `/heartbeat` endpoint returns 200 OK
+- ✅ `/heartbeat` endpoint returns 200 OK with correct JSON response
+
+**Key Insight:**
+The heartbeat endpoint works perfectly without any cloud dependencies! This is because it only:
+- Returns a simple JSON response
+- Uses constants.SERVICE_NAME (hardcoded string)
+- Calls datetime.utcnow() (standard library)
+- No GCS or BigQuery operations required
 
 ---
 
@@ -507,7 +547,9 @@ services:
 GET http://localhost:8080/heartbeat
 Expected: {"status": "healthy", "timestamp": "...", "service": "omop-file-processor"}
 ```
-- [ ] Status: ⏳ Not Started | ✅ Passed | ❌ Failed
+- [x] Status: ✅ **PASSED** (2025-12-05)
+  - **Response:** `{"service": "omop-file-processor", "status": "healthy", "timestamp": "2025-12-05T20:56:37.120856"}`
+  - **Notes:** Works perfectly without any cloud dependencies! Container running on standard port 8080.
 
 **Test 2: Create Artifact Buckets**
 ```json
@@ -761,24 +803,55 @@ Files to Change:
 
 #### **Issues Found During Testing**
 
-*(Will be populated as we test)*
+**ISSUE-005: Port 8080 Already Allocated**
+Status: 🟢 Resolved
+Priority: 💡 Low
+Found: 2025-12-05
+Resolved: 2025-12-05
+
+Description:
+Docker container failed to start because port 8080 was already in use by an old container from a previous session.
+
+Error Message:
+```
+Error response from daemon: failed to set up container networking:
+Bind for 0.0.0.0:8080 failed: port is already allocated
+```
+
+Root Cause:
+Old container named "omop-processor" was still running and using port 8080.
+
+Solution:
+Stopped and removed the old container:
+```bash
+docker stop omop-processor && docker rm omop-processor
+```
+
+Then started new container on port 8080:
+```bash
+docker run -d --name omop-processor-local -p 8080:8080 ...
+```
+
+Verification:
+✅ Container started successfully
+✅ Heartbeat endpoint accessible at http://localhost:8080/heartbeat
 
 ---
 
 ## Progress Tracking
 
-### Overall Status: 🟡 Planning Phase
+### Overall Status: 🟡 Implementation Phase - Heartbeat Working! 🎉
 
 | Phase | Status | Progress | Notes |
 |-------|--------|----------|-------|
-| 1. Environment Setup | ⏳ Not Started | 0% | |
+| 1. Environment Setup | ✅ Complete | 100% | Docker running on port 8080, heartbeat working! |
 | 2. Storage Abstraction | ⏳ Not Started | 0% | storage_backend.py exists but incomplete |
 | 3. BigQuery Mocking | ⏳ Not Started | 0% | |
 | 4. DuckDB Local FS | ⏳ Not Started | 0% | |
 | 5. Vocabulary Mgmt | ⏳ Not Started | 0% | Need to download vocab files |
 | 6. Dockerfile Updates | ⏳ Not Started | 0% | |
-| 7. Endpoint Testing | ⏳ Not Started | 0% | |
-| 8. Issue Resolution | ⏳ Not Started | 0% | |
+| 7. Endpoint Testing | 🟡 In Progress | 6% | 1/18 endpoints tested (heartbeat) |
+| 8. Issue Resolution | 🟡 In Progress | 0% | 1 issue resolved (port conflict) |
 
 **Legend:**
 - ⏳ Not Started
@@ -786,9 +859,9 @@ Files to Change:
 - ✅ Complete
 - ❌ Blocked
 
-### Endpoints Tested: 0/18
+### Endpoints Tested: 1/18
 
-**Core (Priority 1):** 0/11 ✅
+**Core (Priority 1):** 1/11 ✅
 **Loading (Priority 2):** 0/5 ✅
 **Utilities (Priority 3):** 0/2 ✅
 
