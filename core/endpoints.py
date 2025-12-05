@@ -108,7 +108,7 @@ def get_log_row() -> tuple[Any, int]:
 
 @app.route('/get_file_list', methods=['GET'])
 def get_files() -> tuple[Any, int]:
-    """List files in GCS directory matching specified format."""
+    """List files in directory matching specified format."""
     bucket: Optional[str] = request.args.get('bucket')
     folder: Optional[str] = request.args.get('folder')
     file_format: Optional[str] = request.args.get('file_format')

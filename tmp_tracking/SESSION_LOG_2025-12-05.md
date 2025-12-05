@@ -106,9 +106,10 @@ docker stop omop-processor-local && docker rm omop-processor-local
 
 **Phase 1: Environment Setup** ✅ COMPLETE (100%)
 **Phase 2: Storage Abstraction** ✅ COMPLETE (100%)
-**Endpoints Tested:** 2/18 (11%)
+**Endpoints Tested:** 3/18 (17%)
 - ✅ GET /heartbeat
 - ✅ POST /create_artifact_buckets
+- ✅ GET /get_file_list
 
 ### Key Learnings
 
@@ -117,10 +118,22 @@ docker stop omop-processor-local && docker rm omop-processor-local
 3. **Cloud-agnostic language** - Remove GCS/BigQuery references from comments
 4. **No legacy mentions** - Don't use "deprecated", "legacy", or similar terms
 
+#### **Session 3: Testing File List**
+1. **Third Endpoint Tested** ✅
+   - **Endpoint:** `GET /get_file_list`
+   - **Status:** PASSED
+   - **Request:** `?bucket=synthea_53&folder=2025-01-01&file_format=.csv`
+   - **Response:** Lists all 4 CSV files:
+     - drug_exposure.csv (2.6M)
+     - measurement.csv (12M)
+     - person.csv (19K)
+     - procedure_occurrence.csv (2.7M)
+   - **Notes:** Works with refactored `list_gcs_files()` using storage backend
+
 ### Next Steps
 
-1. Test `GET /get_file_list` endpoint (needs list_files abstraction)
-2. Test file processing endpoints
+1. Test file processing endpoints (process_incoming_file, validate_file)
+2. Test normalization endpoint
 3. Continue through endpoint checklist
 
 ### Time Spent

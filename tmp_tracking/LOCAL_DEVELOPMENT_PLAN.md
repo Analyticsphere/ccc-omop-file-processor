@@ -597,10 +597,24 @@ Expected: Creates `artifacts/` directory structure
 
 **Test 3: Get File List**
 ```bash
-GET http://localhost:8080/get_file_list?bucket=test_site&folder=2025-12-05&file_format=.csv
+GET http://localhost:8080/get_file_list?bucket=synthea_53&folder=2025-01-01&file_format=.csv
 Expected: {"status": "healthy", "file_list": ["person.csv", ...]}
 ```
-- [ ] Status: ⏳ Not Started | ✅ Passed | ❌ Failed
+- [x] Status: ✅ **PASSED** (2025-12-05)
+  - **Response:**
+    ```json
+    {
+      "file_list": [
+        "drug_exposure.csv",
+        "measurement.csv",
+        "person.csv",
+        "procedure_occurrence.csv"
+      ],
+      "service": "omop-file-processor",
+      "status": "healthy"
+    }
+    ```
+  - **Notes:** Works perfectly! Lists all 4 CSV files from mounted Synthea data. Uses refactored `list_gcs_files()` which now calls `storage.list_files()`.
 
 **Test 4: Create Optimized Vocabulary**
 ```json
@@ -891,11 +905,11 @@ Verification:
 - ✅ Complete
 - ❌ Blocked
 
-### Endpoints Tested: 2/18
+### Endpoints Tested: 3/18
 
 **Core (Priority 1):** 2/11 ✅
 **Loading (Priority 2):** 0/5 ✅
-**Utilities (Priority 3):** 0/2 ✅
+**Utilities (Priority 3):** 1/2 ✅
 
 ---
 
