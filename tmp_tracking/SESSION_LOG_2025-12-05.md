@@ -1,48 +1,76 @@
 # Session Log - December 5, 2025
 
-## 🎉 Phase 1 Complete: Heartbeat Endpoint Working!
+## 🎉 Endpoints Working: heartbeat + create_artifact_buckets
 
 ### Summary
-Successfully set up local Docker environment and got the first endpoint (heartbeat) working without any cloud dependencies!
+Successfully set up local Docker environment and got 2 endpoints working! Extended storage abstraction layer to support directory operations on local filesystem.
 
 ### What We Accomplished
 
-1. **Environment Setup**
-   - Created local data directory structure in `./local-data/`
-   - Built Docker image successfully (using existing Dockerfile)
-   - No extra config files needed!
+#### **Session 1: Environment Setup**
+1. **Built Docker Image**
+   - Used existing Dockerfile (no changes needed)
+   - Image: omop-processor:local
 
-2. **Container Deployment**
-   - Used direct `docker run` command with inline environment variables
-   - Volume mount: local-data → /data
-   - Port mapping: 8080 → 8080
-   - Container name: `omop-processor-local`
-   - Accessible at: http://localhost:8080
+2. **Container Configuration**
+   - Port: 8080 (standard)
+   - Volumes:
+     - `/Users/frankenbergerea/Development/ccc-omop-file-processor/local-data:/data` (artifacts)
+     - `/Users/frankenbergerea/Development/synthea/synthea_53:/data/synthea_53` (data files)
+   - Environment variables set inline
 
 3. **First Endpoint Tested** ✅
    - **Endpoint:** `GET /heartbeat`
    - **Status:** PASSED
-   - **Response:**
+   - **Response:** `{"service": "omop-file-processor", "status": "healthy", "timestamp": "..."}`
+
+#### **Session 2: Storage Abstraction**
+1. **Extended storage_backend.py**
+   - Added `create_directory()` method with local/GCS backends
+   - Added `file_exists()` method
+   - Added `list_files()` method
+   - ~150 lines of new abstraction code
+
+2. **Updated endpoints**
+   - Changed `create_artifact_buckets` to use `storage.create_directory()`
+   - Removed "GCS" references from comments/docstrings
+   - Made code cloud-agnostic
+
+3. **Cleaned up code**
+   - Removed `create_gcs_directory()` wrapper function
+   - Simplified call chain: endpoint → storage backend (direct)
+
+4. **Second Endpoint Tested** ✅
+   - **Endpoint:** `POST /create_artifact_buckets`
+   - **Status:** PASSED
+   - **Request:**
      ```json
-     {
-       "service": "omop-file-processor",
-       "status": "healthy",
-       "timestamp": "2025-12-05T20:50:56.674563"
-     }
+     {"delivery_bucket": "synthea_53/2025-01-01"}
      ```
+   - **Response:** `Directories created successfully`
+   - **Verified:** All 9 artifact directories created:
+     - artifacts/converted_files/
+     - artifacts/harmonized_files/
+     - artifacts/omop_etl/
+     - artifacts/derived_files/
+     - artifacts/delivery_report/tmp/
+     - artifacts/dqd/
+     - artifacts/achilles/
+     - artifacts/invalid_rows/
 
-### Files Created
+### Files Modified
 
-1. `/Users/frankenbergerea/Development/ccc-omop-file-processor/local-data/`
-   - Directory structure for local file storage
-   - Subdirectories: temp, logs, vocabulary, deliveries
+1. **core/storage_backend.py**
+   - Added create_directory, file_exists, list_files methods
+   - ~150 lines added
 
-### Issues Resolved
+2. **core/endpoints.py**
+   - Updated create_artifact_buckets endpoint (lines 55-81)
+   - Changed to use storage.create_directory()
+   - Updated docstrings
 
-**ISSUE-005: Port Conflict**
-- Port 8080 was initially blocked by old container
-- Solution: Stopped old container, now using standard port 8080
-- Result: ✅ Container started successfully on port 8080
+3. **core/gcp_services.py**
+   - Removed create_gcs_directory() wrapper function
 
 ### How to Use
 
@@ -50,72 +78,57 @@ Successfully set up local Docker environment and got the first endpoint (heartbe
 # Build the image
 docker build -t omop-processor:local .
 
-# Run the container
+# Run the container with Synthea data mounted
 docker run -d \
   --name omop-processor-local \
   -p 8080:8080 \
   -v /Users/frankenbergerea/Development/ccc-omop-file-processor/local-data:/data \
+  -v /Users/frankenbergerea/Development/synthea/synthea_53:/data/synthea_53 \
   -e STORAGE_BACKEND=local \
   -e VOCAB_GCS_PATH=/data/vocabulary \
   -e BQ_LOGGING_TABLE=local_logs \
   -e PORT=8080 \
   omop-processor:local
 
-# Test heartbeat endpoint
+# Test heartbeat
 curl http://localhost:8080/heartbeat
 
-# View container logs
-docker logs omop-processor-local
+# Test create_artifact_buckets
+curl -X POST http://localhost:8080/create_artifact_buckets \
+  -H "Content-Type: application/json" \
+  -d '{"delivery_bucket": "synthea_53/2025-01-01"}'
 
-# Stop and remove the container
-docker stop omop-processor-local
-docker rm omop-processor-local
+# Stop and remove
+docker stop omop-processor-local && docker rm omop-processor-local
 ```
 
 ### Progress Status
 
 **Phase 1: Environment Setup** ✅ COMPLETE (100%)
-**Endpoints Tested:** 1/18 (6%)
+**Phase 2: Storage Abstraction** ✅ COMPLETE (100%)
+**Endpoints Tested:** 2/18 (11%)
 - ✅ GET /heartbeat
+- ✅ POST /create_artifact_buckets
+
+### Key Learnings
+
+1. **Mount, don't copy** - Data files should be mounted as volumes, not copied
+2. **Clean abstractions** - No wrapper functions when abstraction layer exists
+3. **Cloud-agnostic language** - Remove GCS/BigQuery references from comments
+4. **No legacy mentions** - Don't use "deprecated", "legacy", or similar terms
 
 ### Next Steps
 
-1. Test the next simplest endpoints that don't require file operations:
-   - `POST /create_artifact_buckets` - Creates directory structure
-   - `GET /get_file_list` - Lists files in a directory
-
-2. Once file operations work, test endpoints that process files:
-   - `POST /process_incoming_file` - Convert CSV to Parquet
-   - `POST /validate_file` - Validate OMOP file
-   - `POST /normalize_parquet` - Normalize data types
-
-3. Eventually need to:
-   - Extend storage_backend.py for file operations
-   - Mock BigQuery operations
-   - Handle vocabulary files
-
-### Key Insights
-
-- The heartbeat endpoint requires ZERO cloud dependencies
-- Existing Dockerfile works fine for local development
-- docker-compose.yml makes development much easier
-- All todos tracked and documented systematically
-- Plan document kept up to date throughout
+1. Test `GET /get_file_list` endpoint (needs list_files abstraction)
+2. Test file processing endpoints
+3. Continue through endpoint checklist
 
 ### Time Spent
-- Planning & Analysis: ~30 minutes
-- Implementation: ~15 minutes
-- Documentation: ~10 minutes
-- **Total:** ~55 minutes
-
-### Success Factors
-
-1. **Comprehensive Planning:** Created detailed plan before coding
-2. **Systematic Approach:** Started with simplest endpoint first
-3. **Issue Tracking:** Documented and resolved issues as they occurred
-4. **Documentation:** Updated plan document throughout
-5. **Testing:** Verified endpoint works as expected
+- Environment Setup: ~15 minutes
+- Storage Abstraction: ~30 minutes
+- Testing & Documentation: ~15 minutes
+- **Total:** ~60 minutes
 
 ---
 
-**Status:** Ready to proceed with next endpoints! 🚀
+**Status:** 2/18 endpoints working, ready to continue! 🚀

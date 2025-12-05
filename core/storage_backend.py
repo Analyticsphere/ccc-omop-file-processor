@@ -1,4 +1,7 @@
 import os
+import pathlib
+from google.cloud import storage as gcs_storage
+from typing import List
 
 
 class StorageBackend:
@@ -71,6 +74,177 @@ class StorageBackend:
             if path.startswith(scheme):
                 return path[len(scheme):]
         return path
+
+    def create_directory(self, directory_path: str, delete_existing_files: bool = True) -> None:
+        """
+        Create a directory in the configured storage backend.
+
+        For local filesystem: Creates directory using os.makedirs
+        For GCS: Creates directory by uploading empty blob marker
+
+        Args:
+            directory_path: Path to directory (without storage scheme)
+            delete_existing_files: If True, delete existing files in directory first
+        """
+        if self.backend == 'local':
+            self._create_local_directory(directory_path, delete_existing_files)
+        elif self.backend == 'gcs':
+            self._create_gcs_directory(directory_path, delete_existing_files)
+        else:
+            raise ValueError(f"Unsupported storage backend: {self.backend}")
+
+    def _create_local_directory(self, directory_path: str, delete_existing_files: bool) -> None:
+        """Create directory on local filesystem."""
+        # Strip any scheme prefix
+        path = self.strip_scheme(directory_path)
+
+        # Convert to absolute path if relative
+        if not path.startswith('/'):
+            path = f"/data/{path}"
+
+        # Create directory
+        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+
+        # Delete existing files if requested
+        if delete_existing_files and os.path.exists(path):
+            for item in pathlib.Path(path).iterdir():
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    import shutil
+                    shutil.rmtree(item)
+
+    def _create_gcs_directory(self, directory_path: str, delete_existing_files: bool) -> None:
+        """Create directory in GCS."""
+        from core import utils
+
+        # Parse bucket and path
+        bucket_name, _ = utils.get_bucket_and_delivery_date_from_gcs_path(directory_path)
+        blob_name = '/'.join(directory_path.split('/')[1:])
+
+        storage_client = gcs_storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+
+        try:
+            # Check if directory exists and has files
+            blobs = bucket.list_blobs(prefix=blob_name)
+
+            if delete_existing_files:
+                # Delete any existing files in the directory
+                for blob in blobs:
+                    try:
+                        bucket.blob(blob.name).delete()
+                    except Exception as e:
+                        import logging
+                        logging.error(f"Failed to delete file {blob.name}: {e}")
+
+            # Create the directory marker
+            blob = bucket.blob(blob_name)
+            if not blob.exists():
+                blob.upload_from_string('')
+
+        except Exception as e:
+            raise Exception(f"Unable to create artifact directories in storage path {directory_path}: {e}") from e
+
+    def file_exists(self, file_path: str) -> bool:
+        """
+        Check if a file exists in the configured storage backend.
+
+        Args:
+            file_path: Path to file (without storage scheme)
+
+        Returns:
+            True if file exists, False otherwise
+        """
+        if self.backend == 'local':
+            return self._file_exists_local(file_path)
+        elif self.backend == 'gcs':
+            return self._file_exists_gcs(file_path)
+        else:
+            raise ValueError(f"Unsupported storage backend: {self.backend}")
+
+    def _file_exists_local(self, file_path: str) -> bool:
+        """Check if file exists on local filesystem."""
+        path = self.strip_scheme(file_path)
+        if not path.startswith('/'):
+            path = f"/data/{path}"
+        return os.path.exists(path)
+
+    def _file_exists_gcs(self, file_path: str) -> bool:
+        """Check if file exists in GCS."""
+        from core import utils
+
+        path_without_prefix = self.strip_scheme(file_path)
+        bucket_name, _ = utils.get_bucket_and_delivery_date_from_gcs_path(path_without_prefix)
+        blob_path = '/'.join(path_without_prefix.split('/')[1:])
+
+        storage_client = gcs_storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+
+        return blob.exists()
+
+    def list_files(self, directory_path: str, pattern: str = None) -> List[str]:
+        """
+        List files in a directory.
+
+        Args:
+            directory_path: Path to directory (without storage scheme)
+            pattern: Optional glob pattern to filter files
+
+        Returns:
+            List of file names (not full paths)
+        """
+        if self.backend == 'local':
+            return self._list_files_local(directory_path, pattern)
+        elif self.backend == 'gcs':
+            return self._list_files_gcs(directory_path, pattern)
+        else:
+            raise ValueError(f"Unsupported storage backend: {self.backend}")
+
+    def _list_files_local(self, directory_path: str, pattern: str = None) -> List[str]:
+        """List files on local filesystem."""
+        import glob
+
+        path = self.strip_scheme(directory_path)
+        if not path.startswith('/'):
+            path = f"/data/{path}"
+
+        if not os.path.exists(path):
+            return []
+
+        if pattern:
+            search_path = os.path.join(path, pattern)
+            files = [os.path.basename(f) for f in glob.glob(search_path) if os.path.isfile(f)]
+        else:
+            files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+
+        return files
+
+    def _list_files_gcs(self, directory_path: str, pattern: str = None) -> List[str]:
+        """List files in GCS."""
+        from core import utils
+
+        path_without_prefix = self.strip_scheme(directory_path)
+        bucket_name = path_without_prefix.split('/')[0]
+        folder_path = '/'.join(path_without_prefix.split('/')[1:])
+
+        if not folder_path.endswith('/'):
+            folder_path += '/'
+
+        storage_client = gcs_storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blobs = bucket.list_blobs(prefix=folder_path, delimiter='/')
+
+        files = []
+        for blob in blobs:
+            if blob.name != folder_path:  # Skip directory marker
+                file_name = blob.name.replace(folder_path, '')
+                if '/' not in file_name:  # Only files, not subdirectories
+                    if pattern is None or file_name.endswith(pattern.replace('*', '')):
+                        files.append(file_name)
+
+        return files
 
 
 # Global storage backend instance

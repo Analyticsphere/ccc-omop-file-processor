@@ -82,6 +82,7 @@ All endpoints accessible at `http://localhost:8080`
 
 ### ✅ Working Endpoints
 - `GET /heartbeat` - Health check
+- `POST /create_artifact_buckets` - Create artifact directory structure
 
 ### 🚧 To Be Tested
 - `POST /create_optimized_vocab`

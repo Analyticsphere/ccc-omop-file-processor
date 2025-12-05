@@ -282,23 +282,10 @@ def get_invalid_rows_path_from_gcs_path(gcs_file_path: str) -> str:
 
 def parquet_file_exists(file_path: str) -> bool:
     """
-    Check if a Parquet file exists in Google Cloud Storage.
+    Check if a Parquet file exists in the configured storage backend.
     """
-    # Strip storage scheme prefix if it exists
-    gcs_path = storage.strip_scheme(file_path)
-    
-    # Parse bucket and blob name
-    path_parts = gcs_path.split('/')
-    bucket_name = path_parts[0]
-    blob_name = '/'.join(path_parts[1:])
-    
     try:
-        # Initialize storage client with default credentials
-        storage_client = gcs_storage.Client()
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(blob_name)
-        
-        return blob.exists()
+        return storage.file_exists(file_path)
     except Exception as e:
         logger.error(f"Error checking Parquet file existence: {e}")
         return False
@@ -384,38 +371,19 @@ def create_final_report_artifacts(report_data: dict) -> None:
 
 def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
     """
-    Lists files within a specific folder in a GCS bucket (non-recursively).
+    Lists files within a specific folder (non-recursively).
     """
     try:
-        # Initialize the GCS client
-        storage_client = gcs_storage.Client()
+        # Construct the directory path
+        directory_path = f"{bucket_name}/{folder_prefix}" if folder_prefix else bucket_name
 
-        # Get the bucket
-        bucket = storage_client.bucket(bucket_name)
-
-        # Verify bucket exists
-        if not bucket.exists():
-            raise Exception(f"Bucket {bucket_name} does not exist")
-
-        # Ensure folder_prefix ends with '/' for consistent path handling
-        if folder_prefix and not folder_prefix.endswith('/'):
-            folder_prefix += '/'
-
-        # List all blobs with the prefix
-        blobs = bucket.list_blobs(prefix=folder_prefix, delimiter='/')
-
-        # Get only the files in this directory level (not in subdirectories)
-        # Files must be of specific type
-        files = [
-            os.path.basename(blob.name)
-            for blob in blobs
-            if blob.name != folder_prefix and blob.name.lower().endswith(file_format)
-        ]
+        # Use storage backend to list files with pattern
+        files = storage.list_files(directory_path, pattern=f"*{file_format}")
 
         return files
 
     except Exception as e:
-        raise Exception(f"Error listing files in GCS: {str(e)}")
+        raise Exception(f"Error listing files: {str(e)}")
 
 def generate_report(report_data: dict) -> None:
     """

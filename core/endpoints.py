@@ -54,14 +54,14 @@ def create_optimized_vocab() -> tuple[str, int]:
 
 @app.route('/create_artifact_buckets', methods=['POST'])
 def create_artifact_buckets() -> tuple[str, int]:
-    """Create GCS directories for storing processing artifacts (converted files, reports, etc.)."""
+    """Create directories for storing processing artifacts (converted files, reports, etc.)."""
     data: dict[str, Any] = request.get_json() or {}
     delivery_bucket: Optional[str] = data.get('delivery_bucket')
 
     if not delivery_bucket:
         return "Missing required parameter to 'create_artifact_buckets' endpoint: delivery_bucket", 400
 
-    utils.logger.info(f"Creating artifact buckets in {storage.get_uri(delivery_bucket)}")
+    utils.logger.info(f"Creating artifact directories in {storage.get_uri(delivery_bucket)}")
 
     directories: list[str] = []
 
@@ -70,15 +70,15 @@ def create_artifact_buckets() -> tuple[str, int]:
         for path in constants.ArtifactPaths:
             full_path = f"{delivery_bucket}/{path.value}"
             directories.append(full_path)
-        
-        # Create the actual GCS directories
+
+        # Create the artifact directories
         for directory in directories:
-            gcp_services.create_gcs_directory(directory)
-        
+            storage.create_directory(directory)
+
         return "Directories created successfully", 200
     except Exception as e:
-        utils.logger.error(f"Unable to create artifact buckets: {str(e)}")
-        return f"Unable to create artifact buckets: {str(e)}", 500
+        utils.logger.error(f"Unable to create artifact directories: {str(e)}")
+        return f"Unable to create artifact directories: {str(e)}", 500
 
 
 @app.route('/get_log_row', methods=['GET'])
