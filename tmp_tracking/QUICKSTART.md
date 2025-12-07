@@ -24,7 +24,7 @@ docker run -d \
   -p 8080:8080 \
   -v /Users/frankenbergerea/Development/ccc-omop-file-processor/local-data:/data \
   -e STORAGE_BACKEND=local \
-  -e VOCAB_GCS_PATH=/data/vocabulary \
+  -e OMOP_VOCAB_PATH=/data/vocabulary \
   -e BQ_LOGGING_TABLE=local_logs \
   -e PORT=8080 \
   omop-processor:local
@@ -90,9 +90,9 @@ All endpoints accessible at `http://localhost:8080`
 - `POST /upgrade_cdm` - Upgrade OMOP CDM file from one version to another
 - `POST /create_optimized_vocab` - Convert vocabulary CSV files to optimized Parquet format
 - `POST /harmonize_vocab` - Multi-step vocabulary harmonization (8 steps: source_target, target_remap, target_replacement, domain_check, omop_etl, consolidate_etl, discover_tables_for_dedup, deduplicate_single_table)
+- `POST /generate_derived_tables_from_harmonized` - Generate derived tables (drug_era, condition_era, observation_period) from harmonized data
 
 ### 🚧 To Be Tested
-- `POST /generate_derived_tables_from_harmonized`
 - `POST /generate_delivery_report`
 - And more...
 
@@ -108,7 +108,7 @@ All endpoints accessible at `http://localhost:8080`
 |----------|-------|---------|
 | `STORAGE_BACKEND` | `local` | Use local filesystem instead of cloud storage |
 | `DATA_ROOT` | `/data` | Root directory for local file storage (configurable) |
-| `VOCAB_PATH` | `/data/vocabulary` | Path to OMOP vocabulary files |
+| `OMOP_VOCAB_PATH` | `/data/vocabulary` | Path to OMOP vocabulary files |
 | `BQ_LOGGING_TABLE` | `local_logs` | Mock BigQuery logging |
 | `DUCKDB_TEMP_DIR` | `/data/temp/` | DuckDB temporary directory |
 | `PORT` | `8080` | Internal container port |

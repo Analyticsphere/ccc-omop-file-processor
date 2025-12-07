@@ -302,7 +302,7 @@ def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_
         select_statement = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_path)
 
         # Output to derived_files directory
-        parquet_gcs_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}{table_name}{constants.PARQUET}")
+        parquet_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}{table_name}{constants.PARQUET}")
 
         # Generate and execute final SQL
         sql_statement = f"""
@@ -310,17 +310,17 @@ def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_
 
             COPY (
                 {select_statement}
-            ) TO '{parquet_gcs_path}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO '{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
         """
         utils.execute_duckdb_sql(sql_statement, f"Unable to execute SQL to generate {table_name}")
 
-        utils.logger.info(f"Successfully generated derived table {table_name} from harmonized data to {parquet_gcs_path}")
+        utils.logger.info(f"Successfully generated derived table {table_name} from harmonized data to {parquet_path}")
 
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data from harmonized files: {str(e)}") from e
 
 def load_vocabulary_table(vocab_version: str, vocab_path: str, table_file_name: str, project_id: str, dataset_id: str) -> None:
-    """Load vocabulary Parquet file from GCS to BigQuery table."""
+    """Load vocabulary Parquet file to BigQuery table."""
     vocab_parquet_path = storage.get_uri(f"{vocab_path}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{table_file_name}{constants.PARQUET}")
 
     if utils.parquet_file_exists(vocab_parquet_path) and utils.valid_parquet_file(vocab_parquet_path):

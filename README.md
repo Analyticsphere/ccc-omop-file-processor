@@ -50,7 +50,7 @@ Set these variables in the Cloud Build trigger configuration:
 
 - **`_IMAGE_NAME`**: Container image name (default: `ccc-omop-file-processor`)
 - **`_SERVICE_ACCOUNT`**: Service account email (format: `service-account@project-id.iam.gserviceaccount.com`)
-- **`_TMP_GCS_BUCKET`**: GCS bucket used for temporarily processing files
+- **`_TMP_DIRECTORY`**: GCS bucket used for temporarily processing files
 - **`_BQ_LOGGING_TABLE`**: Table used to store pipeline execution status in BigQuery. Specify a fully qualified table path (i.e. `project_name.dataset_name.table_name`). The pipeline will create the specified table if it does not already exist.
 - **`_VOCAB_GCS_PATH`**: GCS bucket containing OMOP vocabulary files downloaded from Athena
 
@@ -71,7 +71,7 @@ Adjust these settings in the `constants.py` file to match resouce allocations:
 
 1. **Set up GCS buckets** for your data files
    - Create a main bucket for data files
-   - Ensure the `_TMP_GCS_BUCKET` exists for temporary processing
+   - Ensure the `_TMP_DIRECTORY` exists for temporary processing
    - Download vocabulary files from [Athena](https://athena.ohdsi.org/search-terms/start) and upload them to a folder in the GCS bucket `_VOCAB_GCS_PATH`.
 
 2. **Deploy the service**

@@ -345,22 +345,20 @@ def generate_derived_tables_from_harmonized() -> tuple[str, int]:
     """
     Generate derived tables from HARMONIZED data (post-vocabulary harmonization).
 
-    This endpoint should be called AFTER vocabulary harmonization is complete but
-    BEFORE loading to BigQuery. It reads from harmonized Parquet files in the
-    omop_etl directory and writes to the derived_files directory.
-
-    The derived tables will be loaded to BigQuery in a separate step.
+    This endpoint should be called AFTER vocabulary harmonization is complete.
+    It reads from harmonized Parquet files in the omop_etl directory and writes
+    to the derived_files directory.
     """
     data: dict[str, Any] = request.get_json() or {}
     site: Optional[str] = data.get('site')
-    site_bucket: Optional[str] = data.get('gcs_bucket')
+    site_bucket: Optional[str] = data.get('site_bucket')
     delivery_date: Optional[str] = data.get('delivery_date')
     table_name: Optional[str] = data.get('table_name')
     vocab_version: Optional[str] = data.get('vocab_version')
-    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
+    vocab_path: str = constants.VOCAB_PATH
 
-    if not all([site, delivery_date, table_name, vocab_version, vocab_gcs_bucket, site_bucket]):
-        return "Missing a required parameter to 'generate_derived_tables_from_harmonized' endpoint. Required: site, delivery_date, table_name, vocab_version, vocab_gcs_bucket, site_bucket", 400
+    if not all([site, delivery_date, table_name, vocab_version, vocab_path, site_bucket]):
+        return "Missing a required parameter to 'generate_derived_tables_from_harmonized' endpoint. Required: site, delivery_date, table_name, vocab_version, vocab_path, site_bucket", 400
 
     try:
         # At this point we know these are not None
@@ -371,7 +369,7 @@ def generate_derived_tables_from_harmonized() -> tuple[str, int]:
         assert vocab_version is not None
 
         utils.logger.info(f"Generating derived table {table_name} from harmonized data for {delivery_date} delivery from {site}")
-        omop_client.generate_derived_data_from_harmonized(site, site_bucket, delivery_date, table_name, vocab_version, vocab_gcs_bucket)
+        omop_client.generate_derived_data_from_harmonized(site, site_bucket, delivery_date, table_name, vocab_version, vocab_path)
         return "Created derived table from harmonized data", 200
     except Exception as e:
         utils.logger.error(f"Unable to create derived table from harmonized data: {str(e)}")
