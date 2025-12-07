@@ -283,4 +283,88 @@ docker stop omop-processor-local && docker rm omop-processor-local
 
 ---
 
-**Status:** 7/18 endpoints working, ready to continue! 🚀
+## Session 10: Vocabulary Processing (create_optimized_vocab endpoint)
+
+**Date:** 2025-12-07
+**Duration:** ~30 minutes
+**Goal:** Test and validate create_optimized_vocab endpoint for vocabulary file processing
+
+### Changes Made
+
+1. **Code Refactoring** (core/omop_client.py)
+   - Fixed path duplication bug in `create_optimized_vocab_file()` function
+   - Moved `optimized_file_path` calculation before vocab_path modification
+   - Changed line 108-109 order to prevent double vocab_version in path
+
+2. **Vocabulary Setup**
+   - Mounted vocabulary directory: ~/Development/synthea/v5.0 27-AUG-25
+   - Created optimized directory: `/data/vocab_root/v5.0 27-AUG-25/optimized/`
+   - Updated Docker run command with vocab volume mount
+
+3. **Testing**
+   - Successfully converted all vocabulary CSV files to Parquet
+   - Generated optimized vocabulary file (40MB, 10M+ rows)
+   - Verified files are readable with DuckDB
+
+4. **Documentation Updates**
+   - Updated QUICKSTART.md: moved create_optimized_vocab to working endpoints
+   - Updated endpoint name: create_artifact_buckets → create_artifact_directories
+   - Updated environment variable: VOCAB_GCS_PATH → VOCAB_PATH
+
+### Files Modified
+- `core/omop_client.py` - Fixed path duplication bug
+- `tmp_tracking/QUICKSTART.md` - Updated working endpoints list
+
+### Verification Results
+```
+Vocabulary Files Created:
+- concept.parquet (166M, 9.9M rows)
+- concept_ancestor.parquet (469M)
+- concept_class.parquet (8.8K)
+- concept_relationship.parquet (220M)
+- concept_synonym.parquet (86M)
+- domain.parquet (1.6K)
+- drug_strength.parquet (23M)
+- relationship.parquet (19K)
+- vocabulary.parquet (8.6K)
+- optimized_vocab_file.parquet (40M, 10M rows)
+```
+
+### Docker Command
+```bash
+docker run -d --name omop-processor-local -p 8080:8080 \
+  -v /Users/frankenbergerea/Development/ccc-omop-file-processor/local-data:/data \
+  -v /Users/frankenbergerea/Development/synthea/synthea_53:/data/synthea_53 \
+  -v /Users/frankenbergerea/Development/synthea:/data/vocab_root \
+  -e STORAGE_BACKEND=local \
+  -e DATA_ROOT=/data \
+  -e VOCAB_PATH=/data/vocab_root \
+  -e BQ_LOGGING_TABLE=local_logs \
+  -e DUCKDB_TEMP_DIR=/data/temp/ \
+  -e PORT=8080 \
+  omop-processor:local
+```
+
+### API Call
+```bash
+curl -X POST http://localhost:8080/create_optimized_vocab \
+  -H "Content-Type: application/json" \
+  -d '{"vocab_version": "v5.0 27-AUG-25"}'
+```
+
+### Key Insights
+- Path construction requires careful ordering when modifying variables
+- Vocabulary processing is CPU/memory intensive (took ~2 minutes)
+- DuckDB handles large parquet files efficiently
+- Optimized vocab file combines concept and concept_relationship tables
+
+### Time Breakdown
+- Debugging path issue: ~10 minutes
+- Creating optimized directory: ~5 minutes
+- Testing & verification: ~10 minutes
+- Documentation updates: ~5 minutes
+- **Total:** ~30 minutes
+
+---
+
+**Status:** 8/18 endpoints working, ready to continue! 🚀

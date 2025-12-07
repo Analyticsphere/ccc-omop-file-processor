@@ -8,7 +8,7 @@ DUCKDB_THREADS = "2"
 
 SERVICE_NAME = "omop-file-processor"
 BQ_LOGGING_TABLE = os.getenv('BQ_LOGGING_TABLE', 'NO _BQ_LOGGING_TABLE DEFINED')
-VOCAB_GCS_PATH = os.getenv('VOCAB_GCS_PATH', 'NO _VOCAB_GCS_PATH DEFINED')
+VOCAB_PATH = os.getenv('VOCAB_PATH', os.getenv('VOCAB_GCS_PATH', 'NO _VOCAB_PATH DEFINED'))
 
 PARQUET = ".parquet"
 CSV_GZ = ".csv.gz"

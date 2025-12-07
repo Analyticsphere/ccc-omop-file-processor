@@ -34,17 +34,17 @@ def create_optimized_vocab() -> tuple[str, int]:
     """Convert vocabulary CSV files to Parquet and create optimized vocabulary lookup file."""
     data: dict[str, Any] = request.get_json() or {}
     vocab_version: Optional[str] = data.get('vocab_version')
-    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
+    vocab_path: str = constants.VOCAB_PATH
 
-    if not all([vocab_version, vocab_gcs_bucket]):
-        return "Missing a required parameter to 'create_optimized_vocab' endpoint. Required: vocab_version, vocab_gcs_bucket", 400
+    if not all([vocab_version, vocab_path]):
+        return "Missing a required parameter to 'create_optimized_vocab' endpoint. Required: vocab_version, vocab_path", 400
 
     try:
         # At this point, we know vocab_version is not None
         assert vocab_version is not None
-        
-        omop_client.convert_vocab_to_parquet(vocab_version, vocab_gcs_bucket)
-        omop_client.create_optimized_vocab_file(vocab_version, vocab_gcs_bucket)
+
+        omop_client.convert_vocab_to_parquet(vocab_version, vocab_path)
+        omop_client.create_optimized_vocab_file(vocab_version, vocab_path)
 
         return "Created optimized vocabulary files", 200
     except Exception as e:

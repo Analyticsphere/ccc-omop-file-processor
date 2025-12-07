@@ -1,4 +1,8 @@
 **/.DS_Store
+local-data
+**/local-data
+*claude*
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

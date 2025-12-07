@@ -49,14 +49,14 @@ def upgrade_file(file_path: str, cdm_version: str, target_omop_version: str) -> 
     else:
         raise Exception(f"OMOP CDM version {cdm_version} not supported")
 
-def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
+def convert_vocab_to_parquet(vocab_version: str, vocab_path: str) -> None:
     """
     Convert CSV vocabulary files from Athena to Parquet format
     """
-    vocab_root_path = f"{vocab_gcs_bucket}/{vocab_version}/"
-    # Confirm desired vocabulary version exists in GCS
-    if gcp_services.vocab_gcs_path_exists(vocab_root_path):
-        vocab_files = utils.list_gcs_files(vocab_gcs_bucket, vocab_version, constants.CSV)
+    vocab_root_path = f"{vocab_path}/{vocab_version}/"
+    # Confirm desired vocabulary version exists
+    vocab_files = utils.list_files(vocab_path, vocab_version, constants.CSV)
+    if vocab_files:
         for vocab_file in vocab_files:
             vocab_file_name = vocab_file.replace(constants.CSV, '').lower()
             parquet_file_path = f"{vocab_root_path}{constants.OPTIMIZED_VOCAB_FOLDER}/{vocab_file_name}{constants.PARQUET}"
@@ -98,22 +98,23 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_gcs_bucket: str) -> None:
                 finally:
                     utils.close_duckdb_connection(conn, local_db_file)
     else:
-        raise Exception(f"Vocabulary GCS path {vocab_root_path} not found")
+        raise Exception(f"Vocabulary path {vocab_root_path} not found")
 
-def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> None:
+def create_optimized_vocab_file(vocab_version: str, vocab_path: str) -> None:
     """
     Create optimized vocabulary file by denormalizing concept and concept_relationship tables.
     Combines concept IDs with their mapping/replacement relationships into a single table/file for efficient lookups.
     """
-    vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/"
-    optimized_file_path = utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket)
+    optimized_file_path = utils.get_optimized_vocab_file_path(vocab_version, vocab_path)
+    vocab_path = f"{vocab_path}/{vocab_version}/"
 
     # Create the optimized vocabulary file if it doesn't exist
     if not utils.parquet_file_exists(optimized_file_path):
         # Ensure exisiting vocab file can be read
         if not utils.valid_parquet_file(optimized_file_path):
-            # Ensure vocabulary version actually exists
-            if gcp_services.vocab_gcs_path_exists(vocab_path):
+            # Ensure vocabulary version actually exists by checking if concept file exists
+            concept_check_path = f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}"
+            if storage.file_exists(concept_check_path):
                 # Build paths for read_parquet statements
                 concept_path = storage.get_uri(f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept{constants.PARQUET}")
                 concept_relationship_path = storage.get_uri(f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept_relationship{constants.PARQUET}")
@@ -139,7 +140,7 @@ def create_optimized_vocab_file(vocab_version: str, vocab_gcs_bucket: str) -> No
                 utils.execute_duckdb_sql(transform_query, "Unable to create optimized vocab file")
 
             else:
-                raise Exception(f"Vocabulary GCS bucket {vocab_path} not found")
+                raise Exception(f"Vocabulary path {vocab_path} not found")
 
 def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
     """Create OMOP CDM tables in BigQuery dataset using DDL scripts for specified CDM version."""
@@ -231,7 +232,7 @@ def populate_cdm_source(cdm_source_data: dict) -> None:
         }
         raise Exception(f"Unable to add pipeline log record: {error_details}") from e
 
-def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_date: str, table_name: str, vocab_version: str, vocab_gcs_bucket: str) -> None:
+def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_date: str, table_name: str, vocab_version: str, vocab_path: str) -> None:
     """
     Execute SQL scripts to generate derived data table Parquet files from HARMONIZED data.
 
@@ -291,14 +292,14 @@ def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_
             create_statement_path = f"{constants.DERIVED_TABLE_SCRIPT_PATH}{sql_script_name}_create.sql"
             with open(create_statement_path, 'r') as f:
                 create_statement_raw = f.read()
-            create_statement = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, create_statement_raw, vocab_version, vocab_gcs_bucket)
+            create_statement = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, create_statement_raw, vocab_version, vocab_path)
 
         sql_path = f"{constants.DERIVED_TABLE_SCRIPT_PATH}{sql_script_name}.sql"
         with open(sql_path, 'r') as f:
             select_statement_raw = f.read()
 
         # Add table locations using harmonized file paths
-        select_statement = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_gcs_bucket)
+        select_statement = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_path)
 
         # Output to derived_files directory
         parquet_gcs_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}{table_name}{constants.PARQUET}")
@@ -318,9 +319,9 @@ def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_
     except Exception as e:
         raise Exception(f"Unable to generate {table_name} derived data from harmonized files: {str(e)}") from e
 
-def load_vocabulary_table(vocab_version: str, vocab_gcs_bucket: str, table_file_name: str, project_id: str, dataset_id: str) -> None:
+def load_vocabulary_table(vocab_version: str, vocab_path: str, table_file_name: str, project_id: str, dataset_id: str) -> None:
     """Load vocabulary Parquet file from GCS to BigQuery table."""
-    vocab_parquet_path = storage.get_uri(f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{table_file_name}{constants.PARQUET}")
+    vocab_parquet_path = storage.get_uri(f"{vocab_path}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{table_file_name}{constants.PARQUET}")
 
     if utils.parquet_file_exists(vocab_parquet_path) and utils.valid_parquet_file(vocab_parquet_path):
         gcp_services.load_parquet_to_bigquery(vocab_parquet_path, project_id, dataset_id, table_file_name, constants.BQWriteTypes.SPECIFIC_FILE)

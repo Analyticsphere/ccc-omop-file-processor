@@ -290,9 +290,9 @@ def parquet_file_exists(file_path: str) -> bool:
         logger.error(f"Error checking Parquet file existence: {e}")
         return False
 
-def get_optimized_vocab_file_path(vocab_version: str, vocab_gcs_bucket: str) -> str:
+def get_optimized_vocab_file_path(vocab_version: str, vocab_path: str) -> str:
     """Get path to optimized vocabulary Parquet file."""
-    optimized_vocab_path = f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{constants.OPTIMIZED_VOCAB_FILE_NAME}"
+    optimized_vocab_path = f"{vocab_path}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{constants.OPTIMIZED_VOCAB_FILE_NAME}"
     return optimized_vocab_path
 
 def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:

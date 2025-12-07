@@ -82,15 +82,15 @@ All endpoints accessible at `http://localhost:8080`
 
 ### ✅ Working Endpoints
 - `GET /heartbeat` - Health check
-- `POST /create_artifact_buckets` - Create artifact directory structure
+- `POST /create_artifact_directories` - Create artifact directory structure
 - `GET /get_file_list` - List files in directory by format
 - `POST /process_incoming_file` - Convert CSV/Parquet to standardized Parquet
 - `POST /validate_file` - Validate file against OMOP schema
 - `POST /normalize_parquet` - Normalize parquet to OMOP CDM schema with type conversions
 - `POST /upgrade_cdm` - Upgrade OMOP CDM file from one version to another
+- `POST /create_optimized_vocab` - Convert vocabulary CSV files to optimized Parquet format
 
 ### 🚧 To Be Tested
-- `POST /create_optimized_vocab`
 - `POST /harmonize_vocab`
 - `POST /generate_derived_tables_from_harmonized`
 - `POST /generate_delivery_report`
@@ -108,7 +108,7 @@ All endpoints accessible at `http://localhost:8080`
 |----------|-------|---------|
 | `STORAGE_BACKEND` | `local` | Use local filesystem instead of cloud storage |
 | `DATA_ROOT` | `/data` | Root directory for local file storage (configurable) |
-| `VOCAB_GCS_PATH` | `/data/vocabulary` | Path to OMOP vocabulary files |
+| `VOCAB_PATH` | `/data/vocabulary` | Path to OMOP vocabulary files |
 | `BQ_LOGGING_TABLE` | `local_logs` | Mock BigQuery logging |
 | `DUCKDB_TEMP_DIR` | `/data/temp/` | DuckDB temporary directory |
 | `PORT` | `8080` | Internal container port |
