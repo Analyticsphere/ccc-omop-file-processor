@@ -369,7 +369,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
         )
         ra.save_artifact()
 
-def list_gcs_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
+def list_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[str]:
     """
     Lists files within a specific folder (non-recursively).
     """
@@ -397,7 +397,7 @@ def generate_report(report_data: dict) -> None:
     delivery_date = report_data["delivery_date"]
 
     report_tmp_dir = f"{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
-    tmp_files = list_gcs_files(gcs_bucket, report_tmp_dir, constants.PARQUET)
+    tmp_files = list_files(gcs_bucket, report_tmp_dir, constants.PARQUET)
 
     if len(tmp_files) > 0:
         conn, local_db_file = create_duckdb_connection()

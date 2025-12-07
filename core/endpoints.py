@@ -52,14 +52,14 @@ def create_optimized_vocab() -> tuple[str, int]:
         return f"Error creating optimized vocabulary: {str(e)}", 500
 
 
-@app.route('/create_artifact_buckets', methods=['POST'])
-def create_artifact_buckets() -> tuple[str, int]:
+@app.route('/create_artifact_directories', methods=['POST'])
+def create_artifact_directories() -> tuple[str, int]:
     """Create directories for storing processing artifacts (converted files, reports, etc.)."""
     data: dict[str, Any] = request.get_json() or {}
     delivery_bucket: Optional[str] = data.get('delivery_bucket')
 
     if not delivery_bucket:
-        return "Missing required parameter to 'create_artifact_buckets' endpoint: delivery_bucket", 400
+        return "Missing required parameter to 'create_artifact_directories' endpoint: delivery_bucket", 400
 
     utils.logger.info(f"Creating artifact directories in {storage.get_uri(delivery_bucket)}")
 
@@ -123,7 +123,7 @@ def get_files() -> tuple[Any, int]:
         assert folder is not None
         assert file_format is not None
         
-        file_list: list[str] = utils.list_gcs_files(bucket, folder, file_format)
+        file_list: list[str] = utils.list_files(bucket, folder, file_format)
 
         return jsonify({
             'status': 'healthy',

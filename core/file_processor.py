@@ -3,29 +3,29 @@ import core.utils as utils
 from core.storage_backend import storage
 
 
-def process_incoming_file(file_type: str, gcs_file_path: str) -> None:
+def process_incoming_file(file_type: str, file_path: str) -> None:
     """
     Process incoming OMOP file by routing to appropriate converter based on file type.
     Converts .csv/.csv.gz/.parquet files to standardized Parquet, or processes existing Parquet files.
     """
     if file_type in [constants.CSV, constants.CSV_GZ]:
-        csv_to_parquet(gcs_file_path)
+        csv_to_parquet(file_path)
     elif file_type == constants.PARQUET:
-        process_incoming_parquet(gcs_file_path)
+        process_incoming_parquet(file_path)
     else:
-        raise Exception(f"Invalid source file format in file {gcs_file_path}: {file_type}")
+        raise Exception(f"Invalid source file format in file {file_path}: {file_type}")
 
-def process_incoming_parquet(gcs_file_path: str) -> None:
+def process_incoming_parquet(file_path: str) -> None:
     """
-    - Validates that the Parquet file at gcs_file_path in GCS is readable by DuckDB.
-    - Copies incoming Parquet file to artifact GCS directory, ensuring:
+    - Validates that the Parquet file at file_path is readable by DuckDB.
+    - Copies incoming Parquet file to artifact directory, ensuring:
        - The output file name is all lowercase
        - All column names within the Parquet file are all lowercase.
        - All column types are converted to VARCHAR (if not alredy)
     """
-    if utils.valid_parquet_file(gcs_file_path):
+    if utils.valid_parquet_file(file_path):
         # Get columns from parquet file
-        parquet_columns = utils.get_columns_from_file(gcs_file_path)
+        parquet_columns = utils.get_columns_from_file(file_path)
         select_list = []
 
         # Handle offset column in note_nlp
@@ -43,19 +43,19 @@ def process_incoming_parquet(gcs_file_path: str) -> None:
         copy_sql = f"""
             COPY (
                 SELECT {select_clause}
-                FROM read_parquet('{storage.get_uri(gcs_file_path)}')
+                FROM read_parquet('{storage.get_uri(file_path)}')
             )
-            TO '{storage.get_uri(utils.get_parquet_artifact_location(gcs_file_path))}' {constants.DUCKDB_FORMAT_STRING}
+            TO '{storage.get_uri(utils.get_parquet_artifact_location(file_path))}' {constants.DUCKDB_FORMAT_STRING}
         """
 
-        utils.execute_duckdb_sql(copy_sql, f"Unable to process incoming Parquet file {gcs_file_path}:")
+        utils.execute_duckdb_sql(copy_sql, f"Unable to process incoming Parquet file {file_path}:")
 
     else:
-        raise Exception(f"Invalid Parquet file at {gcs_file_path}")
+        raise Exception(f"Invalid Parquet file at {file_path}")
 
-def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: list = []) -> None:
+def csv_to_parquet(file_path: str, retry: bool = False, conversion_options: list = []) -> None:
     """
-    Converts a CSV file in GCS to Parquet format using DuckDB.
+    Converts a CSV file to Parquet format using DuckDB.
     On first attempt, uses strict and more performant parsing settings.
     On failure, retries with more permissive settings to handle malformed rows.
     On subsequent failure, an exception is raised.
@@ -64,9 +64,9 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
 
     try:
         with conn:
-            parquet_path = utils.get_parquet_artifact_location(gcs_file_path)
+            parquet_path = utils.get_parquet_artifact_location(file_path)
 
-            csv_column_names = utils.get_columns_from_file(gcs_file_path)
+            csv_column_names = utils.get_columns_from_file(file_path)
 
             select_list = []
             for column in csv_column_names:
@@ -92,7 +92,7 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             convert_statement = f"""
                 COPY (
                     SELECT {select_clause}
-                    FROM read_csv('{storage.get_uri(gcs_file_path)}',
+                    FROM read_csv('{storage.get_uri(file_path)}',
                         null_padding=True, ALL_VARCHAR=True, strict_mode=False {format_list(conversion_options)})
                 ) TO '{storage.get_uri(parquet_path)}' {constants.DUCKDB_FORMAT_STRING}
             """
@@ -100,17 +100,17 @@ def csv_to_parquet(gcs_file_path: str, retry: bool = False, conversion_options: 
             conn.execute(convert_statement)
     except Exception as e:
         if not retry:
-            retry_ignoring_errors(gcs_file_path)
+            retry_ignoring_errors(file_path)
         else:
-            raise Exception(f"Unable to convert CSV file to Parquet {storage.get_uri(gcs_file_path)}: {e}") from e    
+            raise Exception(f"Unable to convert CSV file to Parquet {storage.get_uri(file_path)}: {e}") from e    
     finally:
         utils.close_duckdb_connection(conn, local_db_file)
 
-def retry_ignoring_errors(gcs_file_path: str) -> None:
+def retry_ignoring_errors(file_path: str) -> None:
     """
     Retry converting CSV to Parquet with more permissive settings.
     """
-    csv_to_parquet(gcs_file_path, True, ['store_rejects=True, ignore_errors=True, parallel=False'])
+    csv_to_parquet(file_path, True, ['store_rejects=True, ignore_errors=True, parallel=False'])
 
 def format_list(items: list) -> str:
     """Format list as comma-separated string with leading comma, or empty string if list is empty."""
