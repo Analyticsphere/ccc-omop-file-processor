@@ -60,51 +60,46 @@ def csv_to_parquet(file_path: str, retry: bool = False, conversion_options: list
     On failure, retries with more permissive settings to handle malformed rows.
     On subsequent failure, an exception is raised.
     """
-    conn, local_db_file = utils.create_duckdb_connection()
+    parquet_path = utils.get_parquet_artifact_location(file_path)
+
+    csv_column_names = utils.get_columns_from_file(file_path)
+
+    select_list = []
+    for column in csv_column_names:
+        # Use the utility function to clean column names for the alias
+        column_alias = utils.clean_column_name_for_sql(column)
+
+        # Special handling for offset column in note_nlp
+        if column.lower() not in ['offset', '"offset"', "'offset'"]:
+            select_list.append(f"""
+                "{column}" AS {column_alias}
+            """)
+        else:
+            select_list.append(f"{column} AS {column_alias}")
+    # Build final select statement
+    select_clause = ", ".join(select_list)
+
+    # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
+    # Special handling required to prevent parsing error
+    # Re-add double quotes to offset column prevent DuckDB from returning parsing error
+    select_clause = select_clause.replace('offset', '"offset"')
+
+    # Convert CSV to Parquet
+    convert_statement = f"""
+        COPY (
+            SELECT {select_clause}
+            FROM read_csv('{storage.get_uri(file_path)}',
+                null_padding=True, ALL_VARCHAR=True, strict_mode=False {format_list(conversion_options)})
+        ) TO '{storage.get_uri(parquet_path)}' {constants.DUCKDB_FORMAT_STRING}
+    """
 
     try:
-        with conn:
-            parquet_path = utils.get_parquet_artifact_location(file_path)
-
-            csv_column_names = utils.get_columns_from_file(file_path)
-
-            select_list = []
-            for column in csv_column_names:
-                # Use the utility function to clean column names for the alias
-                column_alias = utils.clean_column_name_for_sql(column)
-
-                # Special handling for offset column in note_nlp
-                if column.lower() not in ['offset', '"offset"', "'offset'"]:
-                    select_list.append(f"""
-                        "{column}" AS {column_alias}
-                    """)
-                else:
-                    select_list.append(f"{column} AS {column_alias}")
-            # Build final select statement    
-            select_clause = ", ".join(select_list)
-
-            # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
-            # Special handling required to prevent parsing error
-            # Re-add double quotes to offset column prevent DuckDB from returning parsing error
-            select_clause = select_clause.replace('offset', '"offset"')
-
-            # Convert CSV to Parquet
-            convert_statement = f"""
-                COPY (
-                    SELECT {select_clause}
-                    FROM read_csv('{storage.get_uri(file_path)}',
-                        null_padding=True, ALL_VARCHAR=True, strict_mode=False {format_list(conversion_options)})
-                ) TO '{storage.get_uri(parquet_path)}' {constants.DUCKDB_FORMAT_STRING}
-            """
-
-            conn.execute(convert_statement)
+        utils.execute_duckdb_sql(convert_statement, f"Unable to convert CSV file to Parquet {storage.get_uri(file_path)}")
     except Exception as e:
         if not retry:
             retry_ignoring_errors(file_path)
         else:
-            raise Exception(f"Unable to convert CSV file to Parquet {storage.get_uri(file_path)}: {e}") from e    
-    finally:
-        utils.close_duckdb_connection(conn, local_db_file)
+            raise
 
 def retry_ignoring_errors(file_path: str) -> None:
     """

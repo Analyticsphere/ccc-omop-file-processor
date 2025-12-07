@@ -26,6 +26,7 @@ docker run -d \
   -e STORAGE_BACKEND=local \
   -e OMOP_VOCAB_PATH=/data/vocabulary \
   -e BQ_LOGGING_TABLE=local_logs \
+  -e DUCKDB_TEMP_DIR=/data/temp/ \
   -e PORT=8080 \
   omop-processor:local
 ```
@@ -91,9 +92,9 @@ All endpoints accessible at `http://localhost:8080`
 - `POST /create_optimized_vocab` - Convert vocabulary CSV files to optimized Parquet format
 - `POST /harmonize_vocab` - Multi-step vocabulary harmonization (8 steps: source_target, target_remap, target_replacement, domain_check, omop_etl, consolidate_etl, discover_tables_for_dedup, deduplicate_single_table)
 - `POST /generate_derived_tables_from_harmonized` - Generate derived tables (drug_era, condition_era, observation_period) from harmonized data
+- `POST /generate_delivery_report` - Generate final delivery report CSV consolidating all metadata artifacts
 
 ### 🚧 To Be Tested
-- `POST /generate_delivery_report`
 - And more...
 
 ## Postman Testing

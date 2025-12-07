@@ -80,6 +80,8 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str)
 
 def execute_duckdb_sql(sql: str, error_msg: str) -> None:
     """Execute SQL statement using DuckDB with automatic connection management."""
+    conn = None
+    local_db_file = None
     try:
         conn, local_db_file = create_duckdb_connection()
 
@@ -88,7 +90,8 @@ def execute_duckdb_sql(sql: str, error_msg: str) -> None:
     except Exception as e:
         raise Exception(f"{error_msg}: {str(e)}") from e
     finally:
-        close_duckdb_connection(conn, local_db_file)
+        if conn is not None:
+            close_duckdb_connection(conn, local_db_file)
 
 def get_table_name_from_path(file_path: str) -> str:
     """
@@ -167,8 +170,10 @@ def get_columns_from_file(file_path: str) -> list:
     # Create a unique table name for introspection
     table_name_for_introspection = "temp_introspect_table"
 
-    conn, local_db_file = create_duckdb_connection()
+    conn = None
+    local_db_file = None
     try:
+        conn, local_db_file = create_duckdb_connection()
         with conn:
             # Drop any existing temp table with the same name
             conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
@@ -191,7 +196,7 @@ def get_columns_from_file(file_path: str) -> list:
                     SELECT * FROM '{storage.get_uri(file_path)}'
                     LIMIT 0
                 """
-            
+
             conn.execute(tmp_tbl_sql)
 
             # Retrieve column metadata from DuckDB
@@ -207,18 +212,20 @@ def get_columns_from_file(file_path: str) -> list:
     except Exception as e:
         raise Exception(f"Unable to get column list from {'CSV' if is_csv else 'Parquet'} file: {e}") from e
     finally:
-        close_duckdb_connection(conn, local_db_file)
+        if conn is not None:
+            close_duckdb_connection(conn, local_db_file)
         
     return actual_columns
 
 def valid_parquet_file(file_path: str) -> bool:
     """Check if Parquet file exists and can be read by DuckDB."""
-    conn, local_db_file = create_duckdb_connection()
-
     if not parquet_file_exists(file_path):
         return False
 
+    conn = None
+    local_db_file = None
     try:
+        conn, local_db_file = create_duckdb_connection()
         with conn:
             # If the file is not a valid Parquet file, this will throw an exception
             conn.execute(f"DESCRIBE SELECT * FROM read_parquet('{storage.get_uri(file_path)}')")
@@ -229,7 +236,8 @@ def valid_parquet_file(file_path: str) -> bool:
         logger.error(f"Unable to validate Parquet file: {e}")
         return False
     finally:
-        close_duckdb_connection(conn, local_db_file)
+        if conn is not None:
+            close_duckdb_connection(conn, local_db_file)
 
 def get_parquet_artifact_location(file_path: str) -> str:
     """Get path to processed Parquet artifact in converted_files directory."""
@@ -300,8 +308,10 @@ def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
     vocabulary_parquet_file = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}vocabulary{constants.PARQUET}"
 
     if parquet_file_exists(vocabulary_parquet_file):
-        conn, local_db_file = create_duckdb_connection()
+        conn = None
+        local_db_file = None
         try:
+            conn, local_db_file = create_duckdb_connection()
             with conn:
                 vocab_version_query = f"""
                     SELECT vocabulary_version
@@ -316,7 +326,8 @@ def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
             logger.error(f"Unable to upgrade file: {e}")
             return "Unknown vocabulary version"
         finally:
-            close_duckdb_connection(conn, local_db_file)
+            if conn is not None:
+                close_duckdb_connection(conn, local_db_file)
     else:
         return "No vocabulary file provided"
 
@@ -331,7 +342,7 @@ def get_cdm_version_concept_id(cdm_version: str) -> int:
 
 def create_final_report_artifacts(report_data: dict) -> None:
     """Create report artifacts with delivery and processing metadata."""
-    gcs_bucket = report_data["gcs_bucket"]
+    site_bucket = report_data["site_bucket"]
     delivery_date = report_data["delivery_date"]
 
     # Create tuples to represent a value to add to delivery report, and what that value describes
@@ -339,7 +350,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
     site_display_name = (report_data["site_display_name"], constants.SITE_DISPLAY_NAME_REPORT_NAME)
     file_delivery_format = (report_data["file_delivery_format"], constants.FILE_DELIVERY_FORMAT_REPORT_NAME)
     delivered_cdm_version = (report_data["delivered_cdm_version"], constants.DELIVERED_CDM_VERSION_REPORT_NAME)
-    delivered_vocab_version = (get_delivery_vocabulary_version(gcs_bucket, delivery_date), constants.DELIVERED_VOCABULARY_VERSION_REPORT_NAME)
+    delivered_vocab_version = (get_delivery_vocabulary_version(site_bucket, delivery_date), constants.DELIVERED_VOCABULARY_VERSION_REPORT_NAME)
     target_vocabulary_version = (report_data["target_vocabulary_version"], constants.TARGET_VOCABULARY_VERSION_REPORT_NAME)
     target_cdm_version = (report_data["target_cdm_version"], constants.TARGET_CDM_VERSION_REPORT_NAME)
     target_cdm_version = (report_data["target_cdm_version"], constants.TARGET_CDM_VERSION_REPORT_NAME)
@@ -360,7 +371,7 @@ def create_final_report_artifacts(report_data: dict) -> None:
 
         ra = report_artifact.ReportArtifact(
             delivery_date=delivery_date,
-            artifact_bucket=gcs_bucket,
+            artifact_bucket=site_bucket,
             concept_id=0,
             name=f"{reporting_item}",
             value_as_string=value,
@@ -393,37 +404,30 @@ def generate_report(report_data: dict) -> None:
     create_final_report_artifacts(report_data)
 
     site = report_data["site"]
-    gcs_bucket = report_data["gcs_bucket"]
+    site_bucket = report_data["site_bucket"]
     delivery_date = report_data["delivery_date"]
 
     report_tmp_dir = f"{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
-    tmp_files = list_files(gcs_bucket, report_tmp_dir, constants.PARQUET)
+    tmp_files = list_files(site_bucket, report_tmp_dir, constants.PARQUET)
 
     if len(tmp_files) > 0:
-        conn, local_db_file = create_duckdb_connection()
-        # Increase max_expression_depth in case there are many report artifacts
-        conn.execute("SET max_expression_depth TO 1000000")
-
         # Build UNION ALL SELECT statement to join together files
-        file_paths = [storage.get_uri(f"{gcs_bucket}/{report_tmp_dir}{file}") for file in tmp_files]
+        file_paths = [storage.get_uri(f"{site_bucket}/{report_tmp_dir}{file}") for file in tmp_files]
         select_statement = " UNION ALL ".join([f"SELECT * FROM read_parquet('{path}')" for path in file_paths])
 
-        try:
-            with conn:
-                output_path = storage.get_uri(f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}")
-                join_files_query = f"""
-                    COPY (
-                        {select_statement}
-                    ) TO
-                        '{output_path}'
-                        (HEADER, DELIMITER ',')
-                """ 
-                conn.execute(join_files_query)
-        except Exception as e:
-            logger.error(f"Unable to merge reporting artifacts: {e}")
-            raise Exception(f"Unable to merge reporting artifacts: {e}") from e
-        finally:
-            close_duckdb_connection(conn, local_db_file)
+        output_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}")
+
+        # Combine SET command and COPY statement into single SQL execution
+        # SET must be on same connection as COPY to apply to that query
+        join_files_query = f"""
+            SET max_expression_depth TO 1000000;
+
+            COPY (
+                {select_statement}
+            ) TO '{output_path}' (HEADER, DELIMITER ',');
+        """
+
+        execute_duckdb_sql(join_files_query, "Unable to merge reporting artifacts")
 
 def get_report_tmp_artifacts_path(bucket: str, delivery_date: str) -> str:
     """
@@ -449,7 +453,7 @@ def get_primary_key_column(table_name: str, cdm_version: str) -> str:
     # For tables with no primary key, return ""
     return ""
 
-def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
+def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_path: str) -> str:
     """
     Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
     """
@@ -461,10 +465,10 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
 
     # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
     for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
-        vocab_table_path = storage.get_uri(f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}")
+        vocab_table_path = storage.get_uri(f"{vocab_path}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}")
         replacement_result = replacement_result.replace(placeholder, vocab_table_path)
 
-    # Add site name 
+    # Add site name
     replacement_result = replacement_result.replace(constants.SITE_PLACEHOLDER_STRING, site)
 
     # Add current date
@@ -472,7 +476,7 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
 
     return replacement_result
 
-def placeholder_to_harmonized_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_gcs_bucket: str) -> str:
+def placeholder_to_harmonized_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_path: str) -> str:
     """
     Replaces clinical data table placeholder strings in SQL scripts with paths to the appropriate parquet files.
 
@@ -498,7 +502,7 @@ def placeholder_to_harmonized_file_path(site: str, site_bucket: str, delivery_da
 
     # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
     for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
-        vocab_table_path = storage.get_uri(f"{vocab_gcs_bucket}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}")
+        vocab_table_path = storage.get_uri(f"{vocab_path}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}")
         replacement_result = replacement_result.replace(placeholder, vocab_table_path)
 
     # Add site name

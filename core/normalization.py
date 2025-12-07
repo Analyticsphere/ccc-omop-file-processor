@@ -234,27 +234,21 @@ def normalize_file(parquet_file_path: str, cdm_version: str, date_format: str, d
     """
     fix_sql = get_normalization_sql_statement(parquet_file_path, cdm_version, date_format, datetime_format)
 
-    fix_sql_no_return = fix_sql.replace('\n', ' ').replace('  ', ' ')
-    print(f"Normalizing Parquet file {storage.get_uri(parquet_file_path)} with SQL: {fix_sql_no_return}")
-
     # Only run the fix SQL statement if it exists
     # Statement will exist only for tables/files in OMOP CDM
     if fix_sql and len(fix_sql) > 1:
-        conn, local_db_file = utils.create_duckdb_connection()
+        # Execute normalization SQL (writes files to disk)
+        utils.execute_duckdb_sql(fix_sql, f"Unable to normalize Parquet file {parquet_file_path}")
 
-        try:
-            with conn:
-                conn.execute(fix_sql)
-                # Get counts of valid/invalid rows for OMOP files
-                create_row_count_artifacts(parquet_file_path, cdm_version, conn)
-        except Exception as e:
-            raise Exception(f"Unable to normalize Parquet file {parquet_file_path}: {e}") from e
-        finally:
-            utils.close_duckdb_connection(conn, local_db_file)
+        # Create row count artifacts (reads files from disk - independent operation)
+        create_row_count_artifacts(parquet_file_path, cdm_version)
 
 
-def create_row_count_artifacts(file_path: str, cdm_version: str, conn: duckdb.DuckDBPyConnection) -> None:
-    """Create report artifacts with row counts for valid and invalid rows after normalization."""
+def create_row_count_artifacts(file_path: str, cdm_version: str) -> None:
+    """
+    Create report artifacts with row counts for valid and invalid rows after normalization.
+    Reads the normalized parquet files from disk and counts rows.
+    """
     table_name = utils.get_table_name_from_path(file_path)
     table_concept_id = utils.get_cdm_schema(cdm_version)[table_name]['concept_id']
     bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)
@@ -264,22 +258,33 @@ def create_row_count_artifacts(file_path: str, cdm_version: str, conn: duckdb.Du
 
     files = [valid_rows_file, invalid_rows_file]
 
-    for file in files:
-        file_path, count_type = file
+    # Create connection for counting rows
+    conn = None
+    local_db_file = None
+    try:
+        conn, local_db_file = utils.create_duckdb_connection()
+        with conn:
+            for file in files:
+                file_path, count_type = file
 
-        count_query = f"""
-            SELECT COUNT(*) FROM read_parquet('{storage.get_uri(file_path)}')
-        """
-        result_row = conn.execute(count_query).fetchone()
-        result = result_row[0] if result_row else 0
+                count_query = f"""
+                    SELECT COUNT(*) FROM read_parquet('{storage.get_uri(file_path)}')
+                """
+                result_row = conn.execute(count_query).fetchone()
+                result = result_row[0] if result_row else 0
 
-        ra = report_artifact.ReportArtifact(
-            delivery_date=delivery_date,
-            artifact_bucket=bucket,
-            concept_id=table_concept_id,
-            name=f"{count_type}: {table_name}",
-            value_as_string=None,
-            value_as_concept_id=None,
-            value_as_number=result
-        )
-        ra.save_artifact()
+                ra = report_artifact.ReportArtifact(
+                    delivery_date=delivery_date,
+                    artifact_bucket=bucket,
+                    concept_id=table_concept_id,
+                    name=f"{count_type}: {table_name}",
+                    value_as_string=None,
+                    value_as_concept_id=None,
+                    value_as_number=result
+                )
+                ra.save_artifact()
+    except Exception as e:
+        raise Exception(f"Unable to create row count artifacts: {e}") from e
+    finally:
+        if conn is not None:
+            utils.close_duckdb_connection(conn, local_db_file)

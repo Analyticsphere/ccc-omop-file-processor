@@ -64,8 +64,6 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_path: str) -> None:
 
             # Continue only if the vocabulary file has not been created or is not valid
             if not utils.parquet_file_exists(parquet_file_path) or not utils.valid_parquet_file(parquet_file_path):
-                conn, local_db_file = utils.create_duckdb_connection()
-                
                 # Get column names
                 csv_columns = utils.get_columns_from_file(csv_file_path)
 
@@ -81,22 +79,15 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_path: str) -> None:
                         select_columns.append(f'"{col}"')
 
                 select_statement = ', '.join(select_columns)
-                
-                
+
                 # Execute the COPY command to convert CSV to Parquet with columns in the correct order
-                try:
-                    convert_query = f"""
+                convert_query = f"""
                     COPY (
                         SELECT {select_statement}
                         FROM read_csv('{storage.get_uri(csv_file_path)}', delim='\t',strict_mode=False)
                     ) TO '{storage.get_uri(parquet_file_path)}' {constants.DUCKDB_FORMAT_STRING};
-                    """
-                    with conn:
-                        conn.execute(convert_query)
-                except Exception as e:
-                    raise Exception(f"Unable to convert vocabulary CSV to Parquet: {e}") from e
-                finally:
-                    utils.close_duckdb_connection(conn, local_db_file)
+                """
+                utils.execute_duckdb_sql(convert_query, "Unable to convert vocabulary CSV to Parquet")
     else:
         raise Exception(f"Vocabulary path {vocab_root_path} not found")
 

@@ -501,22 +501,25 @@ class VocabHarmonizer:
         # Find all target tables in the source file
         # Each of the target tables will be transformed to its own Parquet file with the appropriate structure
         # That Parquet file will then be loaded to BQ
-        conn, local_db_file = utils.create_duckdb_connection()
+        conn = None
+        local_db_file = None
         try:
+            conn, local_db_file = utils.create_duckdb_connection()
             with conn:
                 parquet_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
                 target_tables = f"""
                     SELECT DISTINCT target_table FROM read_parquet('{parquet_path}')
                 """
-                        
+
                 target_tables_list = conn.execute(target_tables).fetch_df()['target_table'].tolist()
-                
+
                 # Generate table transition report before transformation
                 self.generate_table_transition_report(conn)
         except Exception as e:
             raise Exception(f"Unable to get target tables from Parquet file {self.file_path}: {e}") from e
         finally:
-            utils.close_duckdb_connection(conn, local_db_file)
+            if conn is not None:
+                utils.close_duckdb_connection(conn, local_db_file)
 
         # Create a new Parquet file for each target table with the appropriate structure
         for target_table in target_tables_list:
@@ -619,22 +622,13 @@ class VocabHarmonizer:
         consolidated_file_path = storage.get_uri(f"{bucket_name}/{table_dir}{table_name}{constants.PARQUET}")
                 
         # Combine all parquet files into one
-        conn, local_db_file = utils.create_duckdb_connection()
-        
-        try:
-            with conn:
-                combine_sql = f"""
-                    COPY (
-                        SELECT * FROM read_parquet('{source_parquet_pattern}')
-                    ) TO '{consolidated_file_path}' {constants.DUCKDB_FORMAT_STRING}
-                """
-                conn.execute(combine_sql)
-                utils.logger.info(f"Successfully consolidated {table_name}")
-                
-        except Exception as e:
-            raise Exception(f"Unable to consolidate files for table {table_name}: {str(e)}") from e
-        finally:
-            utils.close_duckdb_connection(conn, local_db_file)
+        combine_sql = f"""
+            COPY (
+                SELECT * FROM read_parquet('{source_parquet_pattern}')
+            ) TO '{consolidated_file_path}' {constants.DUCKDB_FORMAT_STRING}
+        """
+        utils.execute_duckdb_sql(combine_sql, f"Unable to consolidate files for table {table_name}")
+        utils.logger.info(f"Successfully consolidated {table_name}")
 
     def _deduplicate_primary_keys(self, file_path: str, table_name: str) -> None:
         """
@@ -668,10 +662,11 @@ class VocabHarmonizer:
             return
         
         primary_key_type = target_columns_dict[primary_key_column]['type']
-        
-        conn, local_db_file = utils.create_duckdb_connection()
-        
+
+        conn = None
+        local_db_file = None
         try:
+            conn, local_db_file = utils.create_duckdb_connection()
             with conn:
                 # Check if duplicates exist
                 utils.logger.info(f"Checking for duplicate primary keys in {table_name}...")
@@ -764,7 +759,8 @@ class VocabHarmonizer:
         except Exception as e:
             raise Exception(f"Unable to deduplicate primary keys for table {table_name}: {str(e)}") from e
         finally:
-            utils.close_duckdb_connection(conn, local_db_file)
+            if conn is not None:
+                utils.close_duckdb_connection(conn, local_db_file)
 
     def discover_tables_for_deduplication(self) -> list[dict]:
         """
