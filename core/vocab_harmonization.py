@@ -12,10 +12,10 @@ from core.storage_backend import storage
 class VocabHarmonizer:
     """
     A class for harmonizing OMOP parquet files according to specified vocabulary version.
-    Handles the entire process from reading parquet files to generating SQL and saving the harmonized output to BQ.
+    Handles the entire process from reading parquet files to generating SQL and saving harmonized output.
     """
-    
-    def __init__(self, file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_gcs_bucket: str, project_id: str, dataset_id: str):
+
+    def __init__(self, file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_path: str, project_id: str, dataset_id: str):
         """
         Initialize a VocabHarmonizer with common parameters needed across all operations.
         """
@@ -23,7 +23,7 @@ class VocabHarmonizer:
         self.cdm_version = cdm_version
         self.site = site
         self.vocab_version = vocab_version
-        self.vocab_gcs_bucket = vocab_gcs_bucket
+        self.vocab_path = vocab_path
         self.source_table_name = utils.get_table_name_from_path(file_path)
         self.bucket = utils.get_bucket_and_delivery_date_from_path(file_path)[0]
         self.delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)[1]
@@ -177,12 +177,12 @@ class VocabHarmonizer:
         """
 
         final_cte = utils.placeholder_to_file_path(
-            self.site, 
-            self.bucket, 
-            self.delivery_date, 
-            cte_with_placeholders, 
-            self.vocab_version, 
-            self.vocab_gcs_bucket
+            self.site,
+            self.bucket,
+            self.delivery_date,
+            cte_with_placeholders,
+            self.vocab_version,
+            self.vocab_path
         )
 
         output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}")
@@ -330,12 +330,12 @@ class VocabHarmonizer:
         """
 
         final_cte = utils.placeholder_to_file_path(
-            self.site, 
-            self.bucket, 
-            self.delivery_date, 
-            cte_with_placeholders, 
-            self.vocab_version, 
-            self.vocab_gcs_bucket
+            self.site,
+            self.bucket,
+            self.delivery_date,
+            cte_with_placeholders,
+            self.vocab_version,
+            self.vocab_path
         )
 
         output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_{table_name}{constants.PARQUET}")
@@ -440,7 +440,7 @@ class VocabHarmonizer:
             self.delivery_date,
             sql_statement,
             self.vocab_version,
-            self.vocab_gcs_bucket
+            self.vocab_path
         )
 
         utils.execute_duckdb_sql(final_sql_statement, f"Unable to perform domain check against {self.source_table_name}")
@@ -540,12 +540,12 @@ class VocabHarmonizer:
         etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
         bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
         etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        gcs_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
-        
-        utils.logger.info(f"Looking for table directories in {gcs_path}")
-        
-        # Get list of table subdirectories using existing utility
-        subdirectories = gcp_services.list_gcs_subdirectories(gcs_path)
+        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
+
+        utils.logger.info(f"Looking for table directories in {storage_path}")
+
+        # Get list of table subdirectories
+        subdirectories = storage.list_subdirectories(storage_path)
         
         # Extract just the table names from the full paths
         table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
@@ -575,12 +575,12 @@ class VocabHarmonizer:
         etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
         bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
         etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        gcs_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
-        
-        utils.logger.info(f"Looking for table directories in {gcs_path}")
-        
-        # Get list of table subdirectories using existing utility
-        subdirectories = gcp_services.list_gcs_subdirectories(gcs_path)
+        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
+
+        utils.logger.info(f"Looking for table directories in {storage_path}")
+
+        # Get list of table subdirectories
+        subdirectories = storage.list_subdirectories(storage_path)
         
         # Extract just the table names from the full paths
         table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
@@ -605,10 +605,10 @@ class VocabHarmonizer:
     def _process_single_table(self, bucket_name: str, etl_folder: str, table_name: str) -> None:
         """
         Combine all parquet files for a single table into one consolidated file.
-        
+
         Args:
-            bucket_name: GCS bucket name
-            etl_folder: Path to the ETL folder within the bucket
+            bucket_name: Storage bucket/directory name
+            etl_folder: Path to the ETL folder within the storage location
             table_name: Name of the OMOP table to consolidate
         """
         utils.logger.info(f"Consolidating files for table: {table_name}")
@@ -753,8 +753,8 @@ class VocabHarmonizer:
                 # Cleanup temporary files
                 utils.logger.info(f"Cleaning up temporary files for {table_name}...")
                 try:
-                    gcp_services.delete_gcs_file(tmp_non_dup)
-                    gcp_services.delete_gcs_file(tmp_dup_fixed)
+                    storage.delete_file(tmp_non_dup)
+                    storage.delete_file(tmp_dup_fixed)
                     utils.logger.info(f"Successfully cleaned up temporary files for {table_name}")
                 except Exception as cleanup_error:
                     utils.logger.warning(f"Failed to clean up temporary files for {table_name}: {str(cleanup_error)}")
@@ -776,7 +776,7 @@ class VocabHarmonizer:
                 - site: Site identifier
                 - delivery_date: Delivery date
                 - table_name: Name of the OMOP table
-                - bucket_name: GCS bucket name
+                - bucket_name: Storage bucket/directory name
                 - etl_folder: Path to ETL folder
                 - file_path: Full path to the consolidated parquet file
         """
@@ -786,12 +786,12 @@ class VocabHarmonizer:
         etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
         bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
         etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        gcs_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
+        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
 
-        utils.logger.info(f"Looking for table directories in {gcs_path}")
+        utils.logger.info(f"Looking for table directories in {storage_path}")
 
         # Get list of table subdirectories
-        subdirectories = gcp_services.list_gcs_subdirectories(gcs_path)
+        subdirectories = storage.list_subdirectories(storage_path)
 
         # Extract table names from the full paths
         table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]

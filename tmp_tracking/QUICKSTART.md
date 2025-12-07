@@ -89,9 +89,9 @@ All endpoints accessible at `http://localhost:8080`
 - `POST /normalize_parquet` - Normalize parquet to OMOP CDM schema with type conversions
 - `POST /upgrade_cdm` - Upgrade OMOP CDM file from one version to another
 - `POST /create_optimized_vocab` - Convert vocabulary CSV files to optimized Parquet format
+- `POST /harmonize_vocab` - Multi-step vocabulary harmonization (8 steps: source_target, target_remap, target_replacement, domain_check, omop_etl, consolidate_etl, discover_tables_for_dedup, deduplicate_single_table)
 
 ### 🚧 To Be Tested
-- `POST /harmonize_vocab`
 - `POST /generate_derived_tables_from_harmonized`
 - `POST /generate_delivery_report`
 - And more...

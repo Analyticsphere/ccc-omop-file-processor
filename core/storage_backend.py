@@ -299,6 +299,83 @@ class StorageBackend:
         if blob.exists():
             blob.delete()
 
+    def list_subdirectories(self, directory_path: str) -> List[str]:
+        """
+        List all subdirectories within a given directory path.
+
+        Returns a list of subdirectory paths (with trailing slashes).
+        """
+        if self.backend == 'local':
+            return self._list_subdirectories_local(directory_path)
+        elif self.backend == 'gcs':
+            return self._list_subdirectories_gcs(directory_path)
+        else:
+            raise ValueError(f"Unsupported storage backend: {self.backend}")
+
+    def _list_subdirectories_local(self, directory_path: str) -> List[str]:
+        """List subdirectories in local filesystem."""
+        import os
+        from core import utils
+
+        # Remove scheme and resolve to absolute path
+        path_without_prefix = self.strip_scheme(directory_path)
+        if not path_without_prefix.startswith('/'):
+            data_root = os.getenv('DATA_ROOT', '/data')
+            path_without_prefix = f"{data_root}/{path_without_prefix}"
+
+        utils.logger.info(f"Listing subdirectories in local path: {path_without_prefix}")
+
+        if not os.path.exists(path_without_prefix):
+            utils.logger.warning(f"Directory does not exist: {path_without_prefix}")
+            return []
+
+        subdirectories = []
+        for item in os.listdir(path_without_prefix):
+            item_path = os.path.join(path_without_prefix, item)
+            if os.path.isdir(item_path):
+                # Return relative paths with trailing slashes to match GCS behavior
+                subdirectories.append(f"{item}/")
+
+        utils.logger.info(f"Found {len(subdirectories)} subdirectories")
+        return subdirectories
+
+    def _list_subdirectories_gcs(self, directory_path: str) -> List[str]:
+        """List subdirectories in GCS."""
+        from core import utils
+
+        # Split the path into bucket name and prefix
+        path_without_prefix = self.strip_scheme(directory_path)
+        parts = path_without_prefix.split('/', 1)
+        bucket_name = parts[0]
+        prefix = parts[1] if len(parts) > 1 else ''
+
+        utils.logger.info(f"Listing subdirectories in bucket {bucket_name} with prefix: {prefix}")
+
+        # Initialize the client
+        storage_client = gcs_storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+
+        # List blobs with the specified prefix and delimiter
+        blobs = bucket.list_blobs(prefix=prefix, delimiter='/')
+
+        # Extract subdirectory names
+        subdirectories = set()
+        for page in blobs.pages:
+            subdirectories.update(page.prefixes)
+
+        # Convert to list and extract just the subdirectory name (not full path)
+        result = []
+        for subdir in sorted(subdirectories):
+            # Extract just the last part of the path after the prefix
+            if prefix:
+                relative_path = subdir.replace(prefix, '', 1).lstrip('/')
+            else:
+                relative_path = subdir
+            result.append(relative_path)
+
+        utils.logger.info(f"Found {len(result)} subdirectories")
+        return result
+
 
 # Global storage backend instance
 # Configured via STORAGE_BACKEND environment variable (defaults to 'gcs')

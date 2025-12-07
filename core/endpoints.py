@@ -282,15 +282,15 @@ def harmonize_vocab() -> tuple[Any, int]:
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     vocab_version: Optional[str] = data.get('vocab_version')
-    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
+    vocab_path: str = constants.VOCAB_PATH
     omop_version: Optional[str] = data.get('omop_version')
     site: Optional[str] = data.get('site')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
     step: Optional[str] = data.get('step')
 
-    if not all([file_path, vocab_version, vocab_gcs_bucket, omop_version, site, project_id, dataset_id, step]):
-        return "Missing a required parameter to 'harmonize_vocab' endpoint. Required: file_path, vocab_version, vocab_gcs_bucket, omop_version, site, project_id, dataset_id, step", 400
+    if not all([file_path, vocab_version, vocab_path, omop_version, site, project_id, dataset_id, step]):
+        return "Missing a required parameter to 'harmonize_vocab' endpoint. Required: file_path, vocab_version, vocab_path, omop_version, site, project_id, dataset_id, step", 400
 
     try:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}, step: {step}")
@@ -310,7 +310,7 @@ def harmonize_vocab() -> tuple[Any, int]:
             cdm_version=omop_version,
             site=site,
             vocab_version=vocab_version,
-            vocab_gcs_bucket=vocab_gcs_bucket,
+            vocab_path=vocab_path,
             project_id=project_id,
             dataset_id=dataset_id
         )
