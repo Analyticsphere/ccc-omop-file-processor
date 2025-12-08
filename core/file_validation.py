@@ -1,3 +1,5 @@
+from typing import Any, Optional
+
 import core.helpers.report_artifact as report_artifact
 import core.utils as utils
 
@@ -34,8 +36,8 @@ class FileValidator:
         self.bucket_name, _ = utils.get_bucket_and_delivery_date_from_path(file_path)
 
         # Loaded on demand
-        self._cdm_schema = None
-        self._table_schema = None
+        self._cdm_schema: Optional[dict[Any, Any]] = None
+        self._table_schema: Optional[dict[Any, Any]] = None
 
     def validate(self) -> None:
         """
@@ -144,13 +146,13 @@ class FileValidator:
         except Exception as e:
             raise Exception(f"Error validating columns for {self.file_path}: {str(e)}") from e
 
-    def _get_cdm_schema(self) -> dict:
+    def _get_cdm_schema(self) -> dict[Any, Any]:
         """Get CDM schema, caching for reuse."""
         if self._cdm_schema is None:
             self._cdm_schema = utils.get_cdm_schema(cdm_version=self.omop_version)
         return self._cdm_schema
 
-    def _get_table_schema(self) -> dict:
+    def _get_table_schema(self) -> dict[Any, Any]:
         """Get table-specific schema, caching for reuse."""
         if self._table_schema is None:
             self._table_schema = utils.get_table_schema(

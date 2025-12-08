@@ -1,3 +1,5 @@
+from typing import Any, Optional
+
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
 import core.utils as utils
@@ -36,8 +38,8 @@ class Normalizer:
         self.bucket, self.delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)
 
         # Loaded on demand
-        self._schema = None
-        self._actual_columns = None
+        self._schema: Optional[dict[Any, Any]] = None
+        self._actual_columns: Optional[list[Any]] = None
 
     def normalize(self) -> None:
         """
@@ -307,13 +309,13 @@ class Normalizer:
         except Exception as e:
             raise Exception(f"Unable to create row count artifacts: {e}") from e
 
-    def _get_schema(self) -> dict:
+    def _get_schema(self) -> dict[Any, Any]:
         """Get table schema, caching for reuse."""
         if self._schema is None:
             self._schema = utils.get_table_schema(self.table_name, self.cdm_version)
         return self._schema
 
-    def _get_actual_columns(self) -> list:
+    def _get_actual_columns(self) -> list[Any]:
         """Get actual columns from file, caching for reuse."""
         if self._actual_columns is None:
             self._actual_columns = utils.get_columns_from_file(self.file_path)

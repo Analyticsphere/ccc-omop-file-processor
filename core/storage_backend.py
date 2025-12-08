@@ -1,8 +1,8 @@
 import os
 import pathlib
-from typing import List
+from typing import List, Optional
 
-from google.cloud import storage as gcs_storage
+from google.cloud import storage as gcs_storage  # type: ignore
 
 
 class StorageBackend:
@@ -186,7 +186,7 @@ class StorageBackend:
 
         return blob.exists()
 
-    def list_files(self, directory_path: str, pattern: str = None) -> List[str]:
+    def list_files(self, directory_path: str, pattern: Optional[str] = None) -> List[str]:
         """
         List files in a directory.
 
@@ -204,7 +204,7 @@ class StorageBackend:
         else:
             raise ValueError(f"Unsupported storage backend: {self.backend}")
 
-    def _list_files_local(self, directory_path: str, pattern: str = None) -> List[str]:
+    def _list_files_local(self, directory_path: str, pattern: Optional[str] = None) -> List[str]:
         """List files on local filesystem."""
         import glob
 
@@ -224,7 +224,7 @@ class StorageBackend:
 
         return files
 
-    def _list_files_gcs(self, directory_path: str, pattern: str = None) -> List[str]:
+    def _list_files_gcs(self, directory_path: str, pattern: Optional[str] = None) -> List[str]:
         """List files in GCS."""
         from core import utils
 

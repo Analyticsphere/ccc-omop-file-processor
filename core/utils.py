@@ -6,13 +6,14 @@ import re
 import sys
 import uuid
 from datetime import datetime
-from typing import Tuple
+from typing import Optional, Tuple
 
 import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
 
 import core.constants as constants
 import core.omop_client as omop_client
+import core.vocab_manager as vocab_manager
 from core.storage_backend import storage
 
 """
@@ -61,14 +62,14 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
     except Exception as e:
         raise Exception(f"Unable to create DuckDB instance: {e}") from e
 
-def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str) -> None:
+def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: Optional[str]) -> None:
     """Close DuckDB connection, remove temporary files, and free memory."""
     try:
         # Close the DuckDB connection
         conn.close()
 
         # Remove the local database file if it exists
-        if os.path.exists(local_db_file):
+        if local_db_file and os.path.exists(local_db_file):
             os.remove(local_db_file)
 
     except Exception as e:
@@ -325,7 +326,7 @@ def get_delivery_vocabulary_version(bucket: str, delivery_date: str) -> str:
     if parquet_file_exists(vocabulary_parquet_file):
         try:
             # Generate SQL to query vocabulary version
-            vocab_version_query = omop_client.generate_vocab_version_query_sql(storage.get_uri(vocabulary_parquet_file))
+            vocab_version_query = vocab_manager.VocabularyManager.generate_vocab_version_query_sql(storage.get_uri(vocabulary_parquet_file))
             result = execute_duckdb_sql(vocab_version_query, "Unable to query vocabulary version", return_results=True)
             if result and len(result) > 0:
                 return result[0][0]
