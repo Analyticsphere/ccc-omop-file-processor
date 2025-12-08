@@ -76,7 +76,7 @@ def get_bq_log_row(site: str, date_to_check: str) -> list:
     """Retrieve pipeline log entries from BigQuery for specified site and delivery date."""
     client = bigquery.Client()
 
-    # Check if the table exists. If it doesn't, return an empty list.
+    # Check if the logging table exists. If it doesn't, return an empty list.
     try:
         client.get_table(constants.BQ_LOGGING_TABLE)
     except NotFound:
@@ -231,7 +231,7 @@ def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_
         dataset_id: BigQuery dataset ID
         
     Returns:
-        Dictionary with 'loaded' and 'skipped' keys, each containing a list of table names
+        Dictionary with 'loaded' keys a list of table names
         
     Raises:
         Exception: If no table directories are found or if there's an error during processing
@@ -297,7 +297,7 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
         dataset_id: BigQuery dataset ID
 
     Returns:
-        Dictionary with 'loaded' and 'skipped' keys, each containing a list of table names
+        Dictionary with 'loaded' keys containing a list of table names
 
     Raises:
         Exception: If there's an error during processing
