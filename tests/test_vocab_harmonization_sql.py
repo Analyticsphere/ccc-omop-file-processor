@@ -114,3 +114,88 @@ class TestGenerateDomainTableCheckSql:
 
         expected = load_reference_sql("generate_domain_table_check_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateCheckDuplicatesSql:
+    """Tests for generate_check_duplicates_sql()."""
+
+    def test_standard_check_duplicates(self):
+        """Test SQL generation for checking duplicate primary keys."""
+        result = VocabHarmonizer.generate_check_duplicates_sql(
+            file_path='gs://bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet',
+            primary_key_column='condition_occurrence_id'
+        )
+
+        expected = load_reference_sql("generate_check_duplicates_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateCreateDuplicateKeysTableSql:
+    """Tests for generate_create_duplicate_keys_table_sql()."""
+
+    def test_standard_create_temp_table(self):
+        """Test SQL generation for creating temp table with duplicate keys."""
+        result = VocabHarmonizer.generate_create_duplicate_keys_table_sql(
+            file_path='gs://bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet',
+            primary_key_column='condition_occurrence_id'
+        )
+
+        expected = load_reference_sql("generate_create_duplicate_keys_table_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateCountDuplicatesSql:
+    """Tests for generate_count_duplicates_sql()."""
+
+    def test_standard_count_duplicates(self):
+        """Test SQL generation for counting duplicate keys in temp table."""
+        result = VocabHarmonizer.generate_count_duplicates_sql()
+
+        expected = load_reference_sql("generate_count_duplicates_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateWriteNonDuplicatesSql:
+    """Tests for generate_write_non_duplicates_sql()."""
+
+    def test_standard_write_non_duplicates(self):
+        """Test SQL generation for writing non-duplicate rows to temp file."""
+        result = VocabHarmonizer.generate_write_non_duplicates_sql(
+            file_path='gs://bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet',
+            primary_key_column='condition_occurrence_id',
+            tmp_output_path='gs://bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/tmp/tmp_non_dup_abc123.parquet'
+        )
+
+        expected = load_reference_sql("generate_write_non_duplicates_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateFixDuplicatesSql:
+    """Tests for generate_fix_duplicates_sql()."""
+
+    def test_standard_fix_duplicates(self):
+        """Test SQL generation for fixing duplicate primary keys with hash-based generation."""
+        result = VocabHarmonizer.generate_fix_duplicates_sql(
+            file_path='gs://bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet',
+            primary_key_column='condition_occurrence_id',
+            primary_key_type='BIGINT',
+            tmp_output_path='gs://bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/tmp/tmp_dup_fixed_abc123.parquet'
+        )
+
+        expected = load_reference_sql("generate_fix_duplicates_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateMergeDeduplicatedSql:
+    """Tests for generate_merge_deduplicated_sql()."""
+
+    def test_standard_merge_deduplicated(self):
+        """Test SQL generation for merging non-duplicate and fixed duplicate rows."""
+        result = VocabHarmonizer.generate_merge_deduplicated_sql(
+            tmp_non_dup_path='gs://bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/tmp/tmp_non_dup_abc123.parquet',
+            tmp_dup_fixed_path='gs://bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/tmp/tmp_dup_fixed_abc123.parquet',
+            output_path='gs://bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet'
+        )
+
+        expected = load_reference_sql("generate_merge_deduplicated_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)

@@ -764,11 +764,153 @@ class VocabHarmonizer:
         utils.execute_duckdb_sql(combine_sql, f"Unable to consolidate files for table {table_name}")
         utils.logger.info(f"Successfully consolidated {table_name}")
 
+    @staticmethod
+    def generate_check_duplicates_sql(file_path: str, primary_key_column: str) -> str:
+        """
+        Generate SQL to check for duplicate primary keys in a parquet file.
+
+        Args:
+            file_path: Full path to the parquet file
+            primary_key_column: Name of the primary key column
+
+        Returns:
+            SQL that groups by primary key and returns any keys with count > 1
+        """
+        return f"""
+            SELECT
+                {primary_key_column},
+                COUNT(*) as dup_count
+            FROM read_parquet('{file_path}')
+            GROUP BY {primary_key_column}
+            HAVING COUNT(*) > 1
+            LIMIT 1
+        """
+
+    @staticmethod
+    def generate_create_duplicate_keys_table_sql(file_path: str, primary_key_column: str) -> str:
+        """
+        Generate SQL to create a temp table containing all duplicate primary keys.
+
+        Args:
+            file_path: Full path to the parquet file
+            primary_key_column: Name of the primary key column
+
+        Returns:
+            SQL that creates a temp table named 'duplicate_keys' with all duplicate keys
+        """
+        return f"""
+            CREATE TEMP TABLE duplicate_keys AS
+            SELECT {primary_key_column}
+            FROM read_parquet('{file_path}')
+            GROUP BY {primary_key_column}
+            HAVING COUNT(*) > 1
+        """
+
+    @staticmethod
+    def generate_count_duplicates_sql() -> str:
+        """
+        Generate SQL to count the number of duplicate keys in the temp table.
+
+        Returns:
+            SQL that counts rows in the duplicate_keys temp table
+        """
+        return "SELECT COUNT(*) FROM duplicate_keys"
+
+    @staticmethod
+    def generate_write_non_duplicates_sql(
+        file_path: str,
+        primary_key_column: str,
+        tmp_output_path: str
+    ) -> str:
+        """
+        Generate SQL to write all non-duplicate rows to a temporary file.
+
+        Args:
+            file_path: Full path to the source parquet file
+            primary_key_column: Name of the primary key column
+            tmp_output_path: Path where non-duplicate rows should be written
+
+        Returns:
+            SQL COPY statement that writes non-duplicate rows to temp file
+        """
+        return f"""
+            COPY (
+                SELECT *
+                FROM read_parquet('{file_path}')
+                WHERE {primary_key_column} NOT IN (SELECT {primary_key_column} FROM duplicate_keys)
+            ) TO '{tmp_output_path}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+    @staticmethod
+    def generate_fix_duplicates_sql(
+        file_path: str,
+        primary_key_column: str,
+        primary_key_type: str,
+        tmp_output_path: str
+    ) -> str:
+        """
+        Generate SQL to fix duplicate primary keys using hash-based key generation.
+
+        For rows with duplicate keys:
+        - First occurrence keeps original key
+        - Subsequent occurrences get new hash-based keys
+
+        Args:
+            file_path: Full path to the source parquet file
+            primary_key_column: Name of the primary key column
+            primary_key_type: Data type of the primary key (e.g., 'BIGINT', 'INTEGER')
+            tmp_output_path: Path where fixed duplicate rows should be written
+
+        Returns:
+            SQL COPY statement that writes duplicate rows with regenerated keys
+        """
+        return f"""
+            COPY (
+                SELECT
+                    CASE
+                        WHEN row_num = 1 THEN {primary_key_column}
+                        ELSE CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(row_num AS VARCHAR))) % 9223372036854775807 AS {primary_key_type})
+                    END AS {primary_key_column},
+                    * EXCLUDE ({primary_key_column}, row_num)
+                FROM (
+                    SELECT *,
+                        ROW_NUMBER() OVER (PARTITION BY {primary_key_column} ORDER BY (SELECT 1)) as row_num
+                    FROM read_parquet('{file_path}')
+                    WHERE {primary_key_column} IN (SELECT {primary_key_column} FROM duplicate_keys)
+                )
+            ) TO '{tmp_output_path}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+    @staticmethod
+    def generate_merge_deduplicated_sql(
+        tmp_non_dup_path: str,
+        tmp_dup_fixed_path: str,
+        output_path: str
+    ) -> str:
+        """
+        Generate SQL to merge non-duplicate and fixed duplicate rows into final output.
+
+        Args:
+            tmp_non_dup_path: Path to temp file with non-duplicate rows
+            tmp_dup_fixed_path: Path to temp file with fixed duplicate rows
+            output_path: Final output path (overwrites original file)
+
+        Returns:
+            SQL COPY statement that combines both temp files with UNION ALL
+        """
+        return f"""
+            COPY (
+                SELECT * FROM read_parquet('{tmp_non_dup_path}')
+                UNION ALL
+                SELECT * FROM read_parquet('{tmp_dup_fixed_path}')
+            ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
     def _deduplicate_primary_keys(self, file_path: str, table_name: str) -> None:
         """
         Check for and fix duplicate primary keys in a consolidated parquet file.
         Only applies to tables with surrogate keys.
-        
+
         Args:
             file_path: Path to the consolidated parquet file
             table_name: Name of the OMOP table
@@ -804,33 +946,21 @@ class VocabHarmonizer:
             with conn:
                 # Check if duplicates exist
                 utils.logger.info(f"Checking for duplicate primary keys in {table_name}...")
-                check_sql = f"""
-                    SELECT 
-                        {primary_key_column}, 
-                        COUNT(*) as dup_count
-                    FROM read_parquet('{file_path}')
-                    GROUP BY {primary_key_column}
-                    HAVING COUNT(*) > 1
-                    LIMIT 1
-                """
+                check_sql = VocabHarmonizer.generate_check_duplicates_sql(file_path, primary_key_column)
                 duplicates = conn.execute(check_sql).fetchall()
-                
+
                 if not duplicates:
                     utils.logger.info(f"No duplicate primary keys found in {table_name}")
                     return
-                
-                utils.logger.info(f"Found duplicate primary keys in {table_name}. Fixing...")
-                
-                # Create temp table with duplicate keys only
-                conn.execute(f"""
-                    CREATE TEMP TABLE duplicate_keys AS
-                    SELECT {primary_key_column}
-                    FROM read_parquet('{file_path}')
-                    GROUP BY {primary_key_column}
-                    HAVING COUNT(*) > 1
-                """)
 
-                dup_count_result = conn.execute("SELECT COUNT(*) FROM duplicate_keys").fetchone()
+                utils.logger.info(f"Found duplicate primary keys in {table_name}. Fixing...")
+
+                # Create temp table with duplicate keys only
+                create_temp_table_sql = VocabHarmonizer.generate_create_duplicate_keys_table_sql(file_path, primary_key_column)
+                conn.execute(create_temp_table_sql)
+
+                count_sql = VocabHarmonizer.generate_count_duplicates_sql()
+                dup_count_result = conn.execute(count_sql).fetchone()
                 dup_count = dup_count_result[0] if dup_count_result else 0
                 utils.logger.info(f"Found {dup_count} unique keys in {table_name} with duplicates")
                 
@@ -842,42 +972,24 @@ class VocabHarmonizer:
                 
                 # Pass 1: Write non-duplicate rows
                 utils.logger.info(f"Processing non-duplicate rows in in {table_name}...")
-                conn.execute(f"""
-                    COPY (
-                        SELECT *
-                        FROM read_parquet('{file_path}')
-                        WHERE {primary_key_column} NOT IN (SELECT {primary_key_column} FROM duplicate_keys)
-                    ) TO '{tmp_non_dup}' {constants.DUCKDB_FORMAT_STRING}
-                """)
-                
+                write_non_dup_sql = VocabHarmonizer.generate_write_non_duplicates_sql(
+                    file_path, primary_key_column, tmp_non_dup
+                )
+                conn.execute(write_non_dup_sql)
+
                 # Pass 2: Fix duplicate rows
                 utils.logger.info(f"Processing duplicate rows with fixes in {table_name}...")
-                conn.execute(f"""
-                    COPY (
-                        SELECT 
-                            CASE 
-                                WHEN row_num = 1 THEN {primary_key_column}
-                                ELSE CAST(hash(CONCAT(CAST({primary_key_column} AS VARCHAR), CAST(row_num AS VARCHAR))) % 9223372036854775807 AS {primary_key_type})
-                            END AS {primary_key_column},
-                            * EXCLUDE ({primary_key_column}, row_num)
-                        FROM (
-                            SELECT *,
-                                ROW_NUMBER() OVER (PARTITION BY {primary_key_column} ORDER BY (SELECT 1)) as row_num
-                            FROM read_parquet('{file_path}')
-                            WHERE {primary_key_column} IN (SELECT {primary_key_column} FROM duplicate_keys)
-                        )
-                    ) TO '{tmp_dup_fixed}' {constants.DUCKDB_FORMAT_STRING}
-                """)
-                
+                fix_dup_sql = VocabHarmonizer.generate_fix_duplicates_sql(
+                    file_path, primary_key_column, primary_key_type, tmp_dup_fixed
+                )
+                conn.execute(fix_dup_sql)
+
                 # Combine both temp files and overwrite original
                 utils.logger.info(f"Merging non-duplicate and fixed duplicate rows in {table_name}...")
-                conn.execute(f"""
-                    COPY (
-                        SELECT * FROM read_parquet('{tmp_non_dup}')
-                        UNION ALL
-                        SELECT * FROM read_parquet('{tmp_dup_fixed}')
-                    ) TO '{file_path}' {constants.DUCKDB_FORMAT_STRING}
-                """)
+                merge_sql = VocabHarmonizer.generate_merge_deduplicated_sql(
+                    tmp_non_dup, tmp_dup_fixed, file_path
+                )
+                conn.execute(merge_sql)
                 
                 # Cleanup temporary files
                 utils.logger.info(f"Cleaning up temporary files for {table_name}...")
