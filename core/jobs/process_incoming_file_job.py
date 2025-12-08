@@ -61,7 +61,7 @@ def main():
         utils.logger.info(f"Processing file: {env_values['FILE_PATH']}")
         file_processor.process_incoming_file(
             file_type=env_values['FILE_TYPE'],
-            gcs_file_path=env_values['FILE_PATH']
+            file_path=env_values['FILE_PATH']
         )
 
         utils.logger.info("=" * 80)
