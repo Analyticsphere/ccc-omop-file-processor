@@ -18,12 +18,10 @@ class FileProcessor:
 
         Args:
             file_path: Path to file to process
-            file_type: Type of file (CSV, CSV_GZ, or PARQUET)
+            file_type: Type of file (.csv, .parquet, etc.)
         """
         self.file_path = file_path
         self.file_type = file_type
-
-        # Derived attributes computed once
         self.output_path = utils.get_parquet_artifact_location(file_path)
         self.table_name = utils.get_table_name_from_path(file_path)
 
@@ -33,9 +31,6 @@ class FileProcessor:
 
         Returns:
             Path to processed output file
-
-        Raises:
-            Exception: If file type is invalid or processing fails
         """
         if self.file_type in [constants.CSV, constants.CSV_GZ]:
             return self._process_csv()
@@ -52,12 +47,6 @@ class FileProcessor:
         - Lowercase file name
         - Lowercase column names
         - VARCHAR column types
-
-        Returns:
-            Path to processed output file
-
-        Raises:
-            Exception: If Parquet file is invalid or processing fails
         """
         if not utils.valid_parquet_file(self.file_path):
             raise Exception(f"Invalid Parquet file at {self.file_path}")
@@ -84,12 +73,6 @@ class FileProcessor:
         Args:
             retry: Whether this is a retry attempt
             conversion_options: Additional DuckDB CSV read options
-
-        Returns:
-            Path to processed output file
-
-        Raises:
-            Exception: If conversion fails on retry
         """
         # Get column names from CSV
         csv_column_names = utils.get_columns_from_file(self.file_path)
@@ -107,7 +90,7 @@ class FileProcessor:
             )
         except Exception as e:
             if not retry:
-                # Retry with more permissive settings
+                # On error on first attempt, retry with more permissive settings
                 return self._process_csv(
                     retry=True,
                     conversion_options=['store_rejects=True, ignore_errors=True, parallel=False']
@@ -130,9 +113,6 @@ class FileProcessor:
         Args:
             file_path: Path to the input Parquet file
             parquet_columns: List of column names from the Parquet file
-
-        Returns:
-            SQL string for processing the Parquet file
         """
         select_list = []
 
@@ -149,13 +129,15 @@ class FileProcessor:
 
         select_clause = ", ".join(select_list)
 
-        return f"""
+        select_statement = f"""
         COPY (
             SELECT {select_clause}
             FROM read_parquet('{storage.get_uri(file_path)}')
         )
         TO '{storage.get_uri(utils.get_parquet_artifact_location(file_path))}' {constants.DUCKDB_FORMAT_STRING}
-    """
+        """
+
+        return select_statement
 
     @staticmethod
     def generate_csv_to_parquet_sql(file_path: str, csv_column_names: list[str], conversion_options: list = []) -> str:
@@ -171,9 +153,6 @@ class FileProcessor:
             file_path: Path to the input CSV file
             csv_column_names: List of column names from the CSV file
             conversion_options: List of additional DuckDB CSV read options (e.g., ['ignore_errors=True'])
-
-        Returns:
-            SQL string for converting CSV to Parquet
         """
         parquet_path = utils.get_parquet_artifact_location(file_path)
 
@@ -199,13 +178,15 @@ class FileProcessor:
         select_clause = select_clause.replace('offset', '"offset"')
 
         # Generate CSV to Parquet conversion SQL
-        return f"""
+        select_statement = f"""
         COPY (
             SELECT {select_clause}
             FROM read_csv('{storage.get_uri(file_path)}',
                 null_padding=True, ALL_VARCHAR=True, strict_mode=False {FileProcessor.format_list(conversion_options)})
         ) TO '{storage.get_uri(parquet_path)}' {constants.DUCKDB_FORMAT_STRING}
-    """
+        """
+        
+        return select_statement
 
     @staticmethod
     def format_list(items: list) -> str:

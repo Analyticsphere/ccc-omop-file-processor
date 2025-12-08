@@ -8,11 +8,6 @@ class FileValidator:
     """
     Validates OMOP CDM files against schema requirements.
 
-    Performs validation of:
-    - Table name validity
-    - Column presence and correctness
-    - Schema compliance
-
     Creates report artifacts documenting validation results.
     """
 
@@ -45,9 +40,6 @@ class FileValidator:
 
         Validates table name and columns, creating report artifacts
         for each validation result.
-
-        Raises:
-            Exception: If validation encounters errors
         """
         utils.logger.info(f"Validating {self.file_path} against OMOP v{self.omop_version}")
 
@@ -66,9 +58,6 @@ class FileValidator:
 
         Returns:
             True if table name is valid, False otherwise
-
-        Raises:
-            Exception: If validation encounters errors
         """
         try:
             schema = self._get_cdm_schema()
@@ -103,9 +92,6 @@ class FileValidator:
 
         Creates report artifacts for valid columns, invalid columns,
         and missing columns.
-
-        Raises:
-            Exception: If validation encounters errors
         """
         try:
             schema = self._get_table_schema()
