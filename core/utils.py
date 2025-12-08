@@ -84,10 +84,10 @@ def execute_duckdb_sql(sql: str, error_msg: str, return_results: bool = False):
     Args:
         sql: SQL statement to execute
         error_msg: Error message to display if execution fails
-        return_results: If True, returns query result object. If False, returns None. Defaults to False.
+        return_results: If True, returns all query results as a list. If False, returns None. Defaults to False.
 
     Returns:
-        If return_results=True: Query result object from DuckDB (can use fetchone(), fetchall(), etc.)
+        If return_results=True: List of result rows from the query
         If return_results=False: None
     """
     conn = None
@@ -98,7 +98,8 @@ def execute_duckdb_sql(sql: str, error_msg: str, return_results: bool = False):
         with conn:
             result = conn.execute(sql)
             if return_results:
-                return result
+                # Fetch all results before closing connection
+                return result.fetchall()
             return None
     except Exception as e:
         raise Exception(f"{error_msg}: {str(e)}") from e
@@ -326,9 +327,8 @@ def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
             # Generate SQL to query vocabulary version
             vocab_version_query = omop_client.generate_vocab_version_query_sql(storage.get_uri(vocabulary_parquet_file))
             result = execute_duckdb_sql(vocab_version_query, "Unable to query vocabulary version", return_results=True)
-            row = result.fetchone()
-            if row:
-                return row[0]
+            if result and len(result) > 0:
+                return result[0][0]
             return "Unknown vocabulary version"
         except Exception as e:
             logger.error(f"Unable to query vocabulary version: {e}")

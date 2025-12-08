@@ -279,8 +279,7 @@ def create_row_count_artifacts(file_path: str, cdm_version: str) -> None:
             # Generate SQL to count rows
             count_query = generate_row_count_sql(storage.get_uri(file_path))
             result = utils.execute_duckdb_sql(count_query, "Unable to count rows", return_results=True)
-            result_row = result.fetchone()
-            row_count = result_row[0] if result_row else 0
+            row_count = result[0][0] if result else 0
 
             ra = report_artifact.ReportArtifact(
                 delivery_date=delivery_date,
