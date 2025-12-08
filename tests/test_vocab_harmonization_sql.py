@@ -38,8 +38,8 @@ class TestGenerateSourceTargetRemappingSql:
     """Tests for generate_source_target_remapping_sql()."""
 
     def test_standard_condition_occurrence(self):
-        """Test SQL generation for source-to-target remapping with condition_occurrence table."""
-        schema = utils.get_table_schema('condition_occurrence', '5.3')
+        """Test complete SQL generation for source-to-target remapping including COPY statement."""
+        schema = utils.get_table_schema('condition_occurrence', '5.4')
         ordered_omop_columns = list(schema['condition_occurrence']['columns'].keys())
 
         result = VocabHarmonizer.generate_source_target_remapping_sql(
@@ -47,7 +47,13 @@ class TestGenerateSourceTargetRemappingSql:
             ordered_omop_columns=ordered_omop_columns,
             target_concept_id_column='condition_concept_id',
             source_concept_id_column='condition_source_concept_id',
-            primary_key='condition_occurrence_id'
+            primary_key='condition_occurrence_id',
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_source_target_remap.parquet'
         )
 
         expected = load_reference_sql("generate_source_target_remapping_sql_standard.sql")
@@ -58,8 +64,8 @@ class TestGenerateCheckNewTargetsSql:
     """Tests for generate_check_new_targets_sql()."""
 
     def test_target_remap_mode(self):
-        """Test SQL generation for TARGET_REMAP mode (Maps to relationships)."""
-        schema = utils.get_table_schema('condition_occurrence', '5.3')
+        """Test complete SQL generation for TARGET_REMAP mode with COPY and paths."""
+        schema = utils.get_table_schema('condition_occurrence', '5.4')
         ordered_omop_columns = list(schema['condition_occurrence']['columns'].keys())
 
         result = VocabHarmonizer.generate_check_new_targets_sql(
@@ -70,15 +76,21 @@ class TestGenerateCheckNewTargetsSql:
             primary_key_column='condition_occurrence_id',
             vocab_status_string='existing non-standard target remapped to standard code',
             mapping_relationships="'Maps to', 'Maps to value'",
-            existing_files_where_clause=''
+            existing_files_where_clause='',
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_target_remap.parquet'
         )
 
         expected = load_reference_sql("generate_check_new_targets_sql_target_remap.sql")
         assert normalize_sql(result) == normalize_sql(expected)
 
     def test_target_replacement_mode(self):
-        """Test SQL generation for TARGET_REPLACEMENT mode (Concept replaced by relationship)."""
-        schema = utils.get_table_schema('condition_occurrence', '5.3')
+        """Test complete SQL generation for TARGET_REPLACEMENT mode with COPY and paths."""
+        schema = utils.get_table_schema('condition_occurrence', '5.4')
         ordered_omop_columns = list(schema['condition_occurrence']['columns'].keys())
 
         result = VocabHarmonizer.generate_check_new_targets_sql(
@@ -89,7 +101,13 @@ class TestGenerateCheckNewTargetsSql:
             primary_key_column='condition_occurrence_id',
             vocab_status_string='existing non-standard target replaced with standard code',
             mapping_relationships="'Concept replaced by'",
-            existing_files_where_clause=''
+            existing_files_where_clause='',
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_target_replacement.parquet'
         )
 
         expected = load_reference_sql("generate_check_new_targets_sql_target_replacement.sql")
@@ -100,8 +118,8 @@ class TestGenerateDomainTableCheckSql:
     """Tests for generate_domain_table_check_sql()."""
 
     def test_standard_domain_check(self):
-        """Test SQL generation for domain table check."""
-        schema = utils.get_table_schema('condition_occurrence', '5.3')
+        """Test complete SQL generation for domain table check including COPY statement."""
+        schema = utils.get_table_schema('condition_occurrence', '5.4')
         ordered_omop_columns = list(schema['condition_occurrence']['columns'].keys())
 
         result = VocabHarmonizer.generate_domain_table_check_sql(
@@ -109,7 +127,13 @@ class TestGenerateDomainTableCheckSql:
             ordered_omop_columns=ordered_omop_columns,
             target_concept_id_column='tbl.condition_concept_id',
             source_concept_id_column='tbl.condition_source_concept_id',
-            existing_files_where_clause=''
+            existing_files_where_clause='',
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_domain_check.parquet'
         )
 
         expected = load_reference_sql("generate_domain_table_check_sql_standard.sql")
@@ -198,4 +222,18 @@ class TestGenerateMergeDeduplicatedSql:
         )
 
         expected = load_reference_sql("generate_merge_deduplicated_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateConsolidateSingleTableSql:
+    """Tests for generate_consolidate_single_table_sql()."""
+
+    def test_standard_consolidate_sql(self):
+        """Test SQL generation for consolidating multiple parquet files."""
+        result = VocabHarmonizer.generate_consolidate_single_table_sql(
+            source_parquet_pattern='gs://bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/parts/*.parquet',
+            output_path='gs://bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet'
+        )
+
+        expected = load_reference_sql("generate_consolidate_single_table_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
