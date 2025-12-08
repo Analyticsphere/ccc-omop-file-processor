@@ -32,11 +32,8 @@ class Normalizer:
         self.cdm_version = cdm_version
         self.date_format = date_format
         self.datetime_format = datetime_format
-
-        # Derived attributes computed once
         self.table_name = utils.get_table_name_from_path(file_path).lower()
         self.bucket, self.delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)
-
         # Loaded on demand
         self._schema: Optional[dict[Any, Any]] = None
         self._actual_columns: Optional[list[Any]] = None
@@ -68,9 +65,6 @@ class Normalizer:
         - Converts column names to lowercase
         - Ensures consistent column order
         - Sets deterministic composite keys for surrogate primary key tables
-
-        Returns:
-            SQL statement string, or empty string if table not in schema
         """
         # Retrieve table schema
         schema = self._get_schema()
@@ -136,7 +130,7 @@ class Normalizer:
         ) TO '{storage.get_uri(self.file_path)}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
-    """.strip()
+        """.strip()
 
         # Handle note_nlp 'offset' reserved keyword
         sql_script = sql_script.replace('offset', '"offset"')
@@ -278,7 +272,7 @@ class Normalizer:
         """
         Create report artifacts with row counts for valid and invalid rows.
 
-        Reads the normalized parquet files from disk and counts rows in each.
+        Reads the normalized parquet files and counts rows in each.
         Creates two report artifacts: one for valid rows, one for invalid rows.
         """
         table_concept_id = utils.get_cdm_schema(self.cdm_version)[self.table_name]['concept_id']
@@ -310,13 +304,13 @@ class Normalizer:
             raise Exception(f"Unable to create row count artifacts: {e}") from e
 
     def _get_schema(self) -> dict[Any, Any]:
-        """Get table schema, caching for reuse."""
+        """Get table schema for the specified OMOP version"""
         if self._schema is None:
             self._schema = utils.get_table_schema(self.table_name, self.cdm_version)
         return self._schema
 
     def _get_actual_columns(self) -> list[Any]:
-        """Get actual columns from file, caching for reuse."""
+        """Get actual columns from file"""
         if self._actual_columns is None:
             self._actual_columns = utils.get_columns_from_file(self.file_path)
         return self._actual_columns
@@ -393,4 +387,4 @@ class Normalizer:
         """
         return f"""
         SELECT COUNT(*) FROM read_parquet('{parquet_file_path}')
-    """
+        """
