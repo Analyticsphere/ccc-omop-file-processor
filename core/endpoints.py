@@ -180,16 +180,17 @@ def validate_file() -> tuple[str, int]:
         assert delivery_date is not None
         assert storage_path is not None
 
-        file_validation.validate_file(
+        validator = file_validation.FileValidator(
             file_path=file_path,
             omop_version=omop_version,
             delivery_date=delivery_date,
             storage_path=storage_path
         )
-        utils.logger.info(f"Validation successful for {file_path}")
+        validator.validate()
 
+        utils.logger.info(f"Validation successful for {file_path}")
         return "File successfully validated", 200
-        
+
     except Exception as e:
         utils.logger.error(f"Unable to run file validation: {str(e)}")
         return f"Unable to run file validation: {str(e)}", 500
