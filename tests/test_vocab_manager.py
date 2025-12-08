@@ -5,12 +5,12 @@ Tests vocabulary management including CSV to Parquet conversion,
 optimized vocabulary file creation, and BigQuery loading.
 """
 
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from core.vocab_manager import VocabularyManager
 import core.constants as constants
+from core.vocab_manager import VocabularyManager
 
 
 class TestVocabularyManagerInit:

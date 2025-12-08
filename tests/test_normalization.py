@@ -5,12 +5,12 @@ Tests file normalization including data type conversions, default value populati
 valid/invalid row separation, and row count artifact creation.
 """
 
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from core.normalization import Normalizer
 import core.constants as constants
+from core.normalization import Normalizer
 
 
 class TestNormalizerInit:

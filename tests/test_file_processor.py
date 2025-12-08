@@ -5,12 +5,12 @@ Tests file processing including CSV to Parquet conversion, Parquet file
 processing, retry logic, and special handling for reserved keywords.
 """
 
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from core.file_processor import FileProcessor
 import core.constants as constants
+from core.file_processor import FileProcessor
 
 
 class TestFileProcessorInit:

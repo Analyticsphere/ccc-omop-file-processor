@@ -5,7 +5,7 @@ Tests validation of OMOP CDM files including table names, column names,
 and schema compliance.
 """
 
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 

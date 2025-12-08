@@ -5,12 +5,12 @@ Tests OMOP CDM operations including file upgrades, BigQuery table creation,
 cdm_source population, and derived data generation.
 """
 
-from unittest.mock import MagicMock, patch, mock_open, call
+from unittest.mock import MagicMock, call, mock_open, patch
 
 import pytest
 
-from core.omop_client import OMOPClient
 import core.constants as constants
+from core.omop_client import OMOPClient
 
 
 class TestOMOPClientUpgradeFile:

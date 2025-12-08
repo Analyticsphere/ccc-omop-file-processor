@@ -5,13 +5,13 @@ Tests report generation including metadata artifacts creation
 and consolidation of temporary report files.
 """
 
-from unittest.mock import MagicMock, patch, call
 from datetime import datetime
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from core.reporting import ReportGenerator, get_report_tmp_artifacts_path
 import core.constants as constants
+from core.reporting import ReportGenerator, get_report_tmp_artifacts_path
 
 
 class TestReportGeneratorInit:

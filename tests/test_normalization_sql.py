@@ -58,6 +58,7 @@ class TestGenerateNormalizationSql:
         - Natural primary key (person_id) - no surrogate key replacement
         """
         from unittest.mock import patch
+
         import core.utils as utils
 
         # Get columns from actual OMOP CDM schema
@@ -88,6 +89,7 @@ class TestGenerateNormalizationSql:
         - Surrogate key (note_nlp_id) - requires composite key generation
         """
         from unittest.mock import patch
+
         import core.utils as utils
 
         # Get columns from actual OMOP CDM schema
@@ -119,6 +121,7 @@ class TestGenerateNormalizationSql:
         - Large number of optional columns
         """
         from unittest.mock import patch
+
         import core.utils as utils
 
         # Get columns from actual OMOP CDM schema
