@@ -3,49 +3,153 @@ import core.utils as utils
 from core.storage_backend import storage
 
 
-def process_incoming_file(file_type: str, file_path: str) -> None:
+class FileProcessor:
     """
-    Process incoming OMOP file by routing to appropriate converter based on file type.
-    Converts .csv/.csv.gz/.parquet files to standardized Parquet, or processes existing Parquet files.
+    Processes incoming OMOP data files to standardized Parquet format.
+
+    Handles:
+    - CSV to Parquet conversion (with retry logic for malformed data)
+    - Parquet file processing (column name/type standardization)
     """
-    if file_type in [constants.CSV, constants.CSV_GZ]:
-        csv_to_parquet(file_path)
-    elif file_type == constants.PARQUET:
-        process_incoming_parquet(file_path)
-    else:
-        raise Exception(f"Invalid source file format in file {file_path}: {file_type}")
 
-def generate_process_incoming_parquet_sql(file_path: str, parquet_columns: list[str]) -> str:
-    """
-    Generate SQL to process incoming Parquet file.
+    def __init__(self, file_path: str, file_type: str):
+        """
+        Initialize file processor for a specific file.
 
-    Creates SQL that:
-    - Converts all column names to lowercase
-    - Casts all columns to VARCHAR
-    - Handles special 'offset' column for note_nlp table
+        Args:
+            file_path: Path to file to process
+            file_type: Type of file (CSV, CSV_GZ, or PARQUET)
+        """
+        self.file_path = file_path
+        self.file_type = file_type
 
-    Args:
-        file_path: Path to the input Parquet file
-        parquet_columns: List of column names from the Parquet file
+        # Derived attributes computed once
+        self.output_path = utils.get_parquet_artifact_location(file_path)
+        self.table_name = utils.get_table_name_from_path(file_path)
 
-    Returns:
-        SQL string for processing the Parquet file
-    """
-    select_list = []
+    def process(self) -> str:
+        """
+        Process incoming file based on type.
 
-    # Handle offset column in note_nlp
-    # May come in as offset or "offset" and need different handling for each scenario
-    for column in parquet_columns:
-        # Always cast to VARCHAR, handle offset columns specially
-        if column.lower() == '"offset"':
-            select_list.append(f'CAST(""{column}"" AS VARCHAR) AS {column.lower()}')
-        elif column.lower() == 'offset':
-            select_list.append(f'CAST("{column}" AS VARCHAR) AS "{column.lower()}"')
+        Returns:
+            Path to processed output file
+
+        Raises:
+            Exception: If file type is invalid or processing fails
+        """
+        if self.file_type in [constants.CSV, constants.CSV_GZ]:
+            return self._process_csv()
+        elif self.file_type == constants.PARQUET:
+            return self._process_parquet()
         else:
-            select_list.append(f"CAST({column} AS VARCHAR) AS {utils.clean_column_name_for_sql(column)}")
-    select_clause = ", ".join(select_list)
+            raise Exception(f"Invalid source file format in file {self.file_path}: {self.file_type}")
 
-    return f"""
+    def _process_parquet(self) -> str:
+        """
+        Process incoming Parquet file.
+
+        Validates and copies to artifact directory with:
+        - Lowercase file name
+        - Lowercase column names
+        - VARCHAR column types
+
+        Returns:
+            Path to processed output file
+
+        Raises:
+            Exception: If Parquet file is invalid or processing fails
+        """
+        if not utils.valid_parquet_file(self.file_path):
+            raise Exception(f"Invalid Parquet file at {self.file_path}")
+
+        # Get columns from parquet file
+        parquet_columns = utils.get_columns_from_file(self.file_path)
+
+        # Generate and execute SQL
+        copy_sql = self.generate_process_incoming_parquet_sql(self.file_path, parquet_columns)
+        utils.execute_duckdb_sql(
+            copy_sql,
+            f"Unable to process incoming Parquet file {self.file_path}:"
+        )
+
+        return self.output_path
+
+    def _process_csv(self, retry: bool = False, conversion_options: list = []) -> str:
+        """
+        Convert CSV file to Parquet format.
+
+        On first attempt, uses strict parsing settings.
+        On failure, retries with permissive settings for malformed rows.
+
+        Args:
+            retry: Whether this is a retry attempt
+            conversion_options: Additional DuckDB CSV read options
+
+        Returns:
+            Path to processed output file
+
+        Raises:
+            Exception: If conversion fails on retry
+        """
+        # Get column names from CSV
+        csv_column_names = utils.get_columns_from_file(self.file_path)
+
+        # Generate SQL
+        convert_statement = self.generate_csv_to_parquet_sql(
+            self.file_path, csv_column_names, conversion_options
+        )
+
+        # Execute SQL with retry logic
+        try:
+            utils.execute_duckdb_sql(
+                convert_statement,
+                f"Unable to convert CSV file to Parquet {storage.get_uri(self.file_path)}"
+            )
+        except Exception as e:
+            if not retry:
+                # Retry with more permissive settings
+                return self._process_csv(
+                    retry=True,
+                    conversion_options=['store_rejects=True, ignore_errors=True, parallel=False']
+                )
+            else:
+                raise
+
+        return self.output_path
+
+    @staticmethod
+    def generate_process_incoming_parquet_sql(file_path: str, parquet_columns: list[str]) -> str:
+        """
+        Generate SQL to process incoming Parquet file.
+
+        Creates SQL that:
+        - Converts all column names to lowercase
+        - Casts all columns to VARCHAR
+        - Handles special 'offset' column for note_nlp table
+
+        Args:
+            file_path: Path to the input Parquet file
+            parquet_columns: List of column names from the Parquet file
+
+        Returns:
+            SQL string for processing the Parquet file
+        """
+        select_list = []
+
+        # Handle offset column in note_nlp
+        # May come in as offset or "offset" and need different handling for each scenario
+        for column in parquet_columns:
+            # Always cast to VARCHAR, handle offset columns specially
+            if column.lower() == '"offset"':
+                select_list.append(f'CAST(""{column}"" AS VARCHAR) AS {column.lower()}')
+            elif column.lower() == 'offset':
+                select_list.append(f'CAST("{column}" AS VARCHAR) AS "{column.lower()}"')
+            else:
+                select_list.append(f"CAST({column} AS VARCHAR) AS {utils.clean_column_name_for_sql(column)}")
+
+        select_clause = ", ".join(select_list)
+
+        return f"""
         COPY (
             SELECT {select_clause}
             FROM read_parquet('{storage.get_uri(file_path)}')
@@ -53,108 +157,68 @@ def generate_process_incoming_parquet_sql(file_path: str, parquet_columns: list[
         TO '{storage.get_uri(utils.get_parquet_artifact_location(file_path))}' {constants.DUCKDB_FORMAT_STRING}
     """
 
+    @staticmethod
+    def generate_csv_to_parquet_sql(file_path: str, csv_column_names: list[str], conversion_options: list = []) -> str:
+        """
+        Generate SQL to convert CSV file to Parquet format.
 
-def process_incoming_parquet(file_path: str) -> None:
-    """
-    - Validates that the Parquet file at file_path is readable by DuckDB.
-    - Copies incoming Parquet file to artifact directory, ensuring:
-       - The output file name is all lowercase
-       - All column names within the Parquet file are all lowercase.
-       - All column types are converted to VARCHAR (if not alredy)
-    """
-    if utils.valid_parquet_file(file_path):
-        # Get columns from parquet file
-        parquet_columns = utils.get_columns_from_file(file_path)
+        Creates SQL that:
+        - Reads CSV with configurable options
+        - Cleans column names to lowercase
+        - Handles special 'offset' column for note_nlp table
 
-        # Generate SQL
-        copy_sql = generate_process_incoming_parquet_sql(file_path, parquet_columns)
+        Args:
+            file_path: Path to the input CSV file
+            csv_column_names: List of column names from the CSV file
+            conversion_options: List of additional DuckDB CSV read options (e.g., ['ignore_errors=True'])
 
-        # Execute SQL
-        utils.execute_duckdb_sql(copy_sql, f"Unable to process incoming Parquet file {file_path}:")
-    else:
-        raise Exception(f"Invalid Parquet file at {file_path}")
+        Returns:
+            SQL string for converting CSV to Parquet
+        """
+        parquet_path = utils.get_parquet_artifact_location(file_path)
 
-def generate_csv_to_parquet_sql(file_path: str, csv_column_names: list[str], conversion_options: list = []) -> str:
-    """
-    Generate SQL to convert CSV file to Parquet format.
+        select_list = []
+        for column in csv_column_names:
+            # Use the utility function to clean column names for the alias
+            column_alias = utils.clean_column_name_for_sql(column)
 
-    Creates SQL that:
-    - Reads CSV with configurable options
-    - Cleans column names to lowercase
-    - Handles special 'offset' column for note_nlp table
-
-    Args:
-        file_path: Path to the input CSV file
-        csv_column_names: List of column names from the CSV file
-        conversion_options: List of additional DuckDB CSV read options (e.g., ['ignore_errors=True'])
-
-    Returns:
-        SQL string for converting CSV to Parquet
-    """
-    parquet_path = utils.get_parquet_artifact_location(file_path)
-
-    select_list = []
-    for column in csv_column_names:
-        # Use the utility function to clean column names for the alias
-        column_alias = utils.clean_column_name_for_sql(column)
-
-        # Special handling for offset column in note_nlp
-        if column.lower() not in ['offset', '"offset"', "'offset'"]:
-            select_list.append(f"""
+            # Special handling for offset column in note_nlp
+            if column.lower() not in ['offset', '"offset"', "'offset'"]:
+                select_list.append(f"""
                 "{column}" AS {column_alias}
             """)
-        else:
-            select_list.append(f"{column} AS {column_alias}")
+            else:
+                select_list.append(f"{column} AS {column_alias}")
 
-    # Build final select statement
-    select_clause = ", ".join(select_list)
+        # Build final select statement
+        select_clause = ", ".join(select_list)
 
-    # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
-    # Special handling required to prevent parsing error
-    # Re-add double quotes to offset column prevent DuckDB from returning parsing error
-    select_clause = select_clause.replace('offset', '"offset"')
+        # note_nlp has column name 'offset' which is a reserved keyword in DuckDB
+        # Special handling required to prevent parsing error
+        # Re-add double quotes to offset column prevent DuckDB from returning parsing error
+        select_clause = select_clause.replace('offset', '"offset"')
 
-    # Generate CSV to Parquet conversion SQL
-    return f"""
+        # Generate CSV to Parquet conversion SQL
+        return f"""
         COPY (
             SELECT {select_clause}
             FROM read_csv('{storage.get_uri(file_path)}',
-                null_padding=True, ALL_VARCHAR=True, strict_mode=False {format_list(conversion_options)})
+                null_padding=True, ALL_VARCHAR=True, strict_mode=False {FileProcessor.format_list(conversion_options)})
         ) TO '{storage.get_uri(parquet_path)}' {constants.DUCKDB_FORMAT_STRING}
     """
 
+    @staticmethod
+    def format_list(items: list) -> str:
+        """
+        Format list as comma-separated string with leading comma.
 
-def csv_to_parquet(file_path: str, retry: bool = False, conversion_options: list = []) -> None:
-    """
-    Converts a CSV file to Parquet format using DuckDB.
-    On first attempt, uses strict and more performant parsing settings.
-    On failure, retries with more permissive settings to handle malformed rows.
-    On subsequent failure, an exception is raised.
-    """
-    # Get column names from CSV
-    csv_column_names = utils.get_columns_from_file(file_path)
+        Args:
+            items: List of items to format
 
-    # Generate SQL
-    convert_statement = generate_csv_to_parquet_sql(file_path, csv_column_names, conversion_options)
-
-    # Execute SQL
-    try:
-        utils.execute_duckdb_sql(convert_statement, f"Unable to convert CSV file to Parquet {storage.get_uri(file_path)}")
-    except Exception as e:
-        if not retry:
-            retry_ignoring_errors(file_path)
+        Returns:
+            Empty string if list is empty, otherwise comma-prefixed string
+        """
+        if not items:
+            return ''
         else:
-            raise
-
-def retry_ignoring_errors(file_path: str) -> None:
-    """
-    Retry converting CSV to Parquet with more permissive settings.
-    """
-    csv_to_parquet(file_path, True, ['store_rejects=True, ignore_errors=True, parallel=False'])
-
-def format_list(items: list) -> str:
-    """Format list as comma-separated string with leading comma, or empty string if list is empty."""
-    if not items:  # Check if list is empty
-        return ''
-    else:
-        return ',' + ', '.join(items)
+            return ',' + ', '.join(items)

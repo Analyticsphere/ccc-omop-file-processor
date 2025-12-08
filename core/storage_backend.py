@@ -12,18 +12,6 @@ class StorageBackend:
     This module provides a simple abstraction layer that allows the codebase to work with
     different storage backends by configuring environment variables.
 
-    Usage:
-        from core.storage_backend import storage
-
-        # Add storage scheme to path for DuckDB, etc.
-        uri = storage.get_uri("bucket/path/file.parquet")
-        # GCS backend returns: "gs://bucket/path/file.parquet"
-        # Local backend returns: "file:///data/bucket/path/file.parquet"
-
-        # Remove storage scheme from path for parsing
-        path = storage.strip_scheme("gs://bucket/path/file.parquet")
-        # Returns: "bucket/path/file.parquet"
-
     Configuration:
         Environment variables:
         - STORAGE_BACKEND: Backend type ('gcs' or 'local', default: 'gcs')

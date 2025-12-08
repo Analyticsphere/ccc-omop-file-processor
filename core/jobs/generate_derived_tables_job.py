@@ -74,7 +74,7 @@ def main():
     try:
         # Execute derived table generation
         utils.logger.info(f"Generating derived table: {env_values['TABLE_NAME']}")
-        omop_client.generate_derived_data_from_harmonized(
+        omop_client.OMOPClient.generate_derived_data_from_harmonized(
             site=env_values['SITE'],
             site_bucket=env_values['GCS_BUCKET'],
             delivery_date=env_values['DELIVERY_DATE'],

@@ -10,8 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from core.file_processor import (generate_csv_to_parquet_sql,
-                                 generate_process_incoming_parquet_sql)
+from core.file_processor import FileProcessor
 
 # Path to reference SQL files
 REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "file_processor"
@@ -39,7 +38,7 @@ class TestGenerateProcessIncomingParquetSql:
 
     def test_standard_columns(self):
         """Test SQL generation with standard columns."""
-        result = generate_process_incoming_parquet_sql(
+        result = FileProcessor.generate_process_incoming_parquet_sql(
             file_path="synthea53/2025-01-01/person.parquet",
             parquet_columns=["person_id", "gender_concept_id", "year_of_birth", "birth_datetime"]
         )
@@ -49,7 +48,7 @@ class TestGenerateProcessIncomingParquetSql:
 
     def test_offset_column_unquoted(self):
         """Test SQL generation with unquoted offset column (note_nlp table)."""
-        result = generate_process_incoming_parquet_sql(
+        result = FileProcessor.generate_process_incoming_parquet_sql(
             file_path="synthea53/2025-01-01/note_nlp.parquet",
             parquet_columns=["note_nlp_id", "note_id", "offset", "lexical_variant"]
         )
@@ -59,7 +58,7 @@ class TestGenerateProcessIncomingParquetSql:
 
     def test_offset_column_quoted(self):
         """Test SQL generation with quoted offset column."""
-        result = generate_process_incoming_parquet_sql(
+        result = FileProcessor.generate_process_incoming_parquet_sql(
             file_path="synthea53/2025-01-01/note_nlp.parquet",
             parquet_columns=["note_nlp_id", "note_id", '"offset"', "lexical_variant"]
         )
@@ -73,7 +72,7 @@ class TestGenerateCsvToParquetSql:
 
     def test_standard_no_options(self):
         """Test CSV to Parquet SQL generation without conversion options."""
-        result = generate_csv_to_parquet_sql(
+        result = FileProcessor.generate_csv_to_parquet_sql(
             file_path="synthea53/2025-01-01/person.csv",
             csv_column_names=["person_id", "gender_concept_id", "year_of_birth", "birth_datetime"],
             conversion_options=[]
@@ -84,7 +83,7 @@ class TestGenerateCsvToParquetSql:
 
     def test_with_conversion_options(self):
         """Test CSV to Parquet SQL generation with error handling options."""
-        result = generate_csv_to_parquet_sql(
+        result = FileProcessor.generate_csv_to_parquet_sql(
             file_path="synthea53/2025-01-01/measurement.csv",
             csv_column_names=["measurement_id", "person_id", "measurement_concept_id", "measurement_date"],
             conversion_options=['store_rejects=True, ignore_errors=True, parallel=False']
@@ -95,7 +94,7 @@ class TestGenerateCsvToParquetSql:
 
     def test_with_offset_column(self):
         """Test CSV to Parquet SQL generation with offset reserved keyword."""
-        result = generate_csv_to_parquet_sql(
+        result = FileProcessor.generate_csv_to_parquet_sql(
             file_path="synthea53/2025-01-01/note_nlp.csv",
             csv_column_names=["note_nlp_id", "note_id", "offset", "lexical_variant"],
             conversion_options=[]

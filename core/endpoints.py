@@ -14,6 +14,7 @@ import core.omop_client as omop_client
 import core.reporting as reporting
 import core.utils as utils
 import core.vocab_harmonization as vocab_harmonization
+import core.vocab_manager as vocab_manager
 from core.storage_backend import storage
 
 app = Flask(__name__)
@@ -44,8 +45,9 @@ def create_optimized_vocab() -> tuple[str, int]:
         # At this point, we know vocab_version is not None
         assert vocab_version is not None
 
-        omop_client.convert_vocab_to_parquet(vocab_version, vocab_path)
-        omop_client.create_optimized_vocab_file(vocab_version, vocab_path)
+        manager = vocab_manager.VocabularyManager(vocab_version=vocab_version, vocab_path=vocab_path)
+        manager.convert_to_parquet()
+        manager.create_optimized_vocab_file()
 
         return "Created optimized vocabulary files", 200
     except Exception as e:
@@ -150,8 +152,9 @@ def process_file() -> tuple[str, int]:
         # At this point we know these are not None
         assert file_type is not None
         assert file_path is not None
-        
-        file_processor.process_incoming_file(file_type, file_path)    
+
+        processor = file_processor.FileProcessor(file_path=file_path, file_type=file_type)
+        processor.process()
         return "Converted file to Parquet", 200
     except Exception as e:
         utils.logger.error(f"Unable to convert files to Parquet: {str(e)}")
@@ -244,7 +247,7 @@ def cdm_upgrade() -> tuple[str, int]:
         assert target_omop_version is not None
         
         utils.logger.info(f"Attempting to upgrade file {file_path}")
-        omop_client.upgrade_file(file_path, omop_version, target_omop_version)
+        omop_client.OMOPClient.upgrade_file(file_path, omop_version, target_omop_version)
 
         return "Upgraded file", 200
     except Exception as e:
@@ -372,7 +375,7 @@ def generate_derived_tables_from_harmonized() -> tuple[str, int]:
         assert vocab_version is not None
 
         utils.logger.info(f"Generating derived table {table_name} from harmonized data for {delivery_date} delivery from {site}")
-        omop_client.generate_derived_data_from_harmonized(site, site_bucket, delivery_date, table_name, vocab_version, vocab_path)
+        omop_client.OMOPClient.generate_derived_data_from_harmonized(site, site_bucket, delivery_date, table_name, vocab_version, vocab_path)
         return "Created derived table from harmonized data", 200
     except Exception as e:
         utils.logger.error(f"Unable to create derived table from harmonized data: {str(e)}")
@@ -398,7 +401,8 @@ def target_vocab_to_bq() -> tuple[str, int]:
         assert project_id is not None
         assert dataset_id is not None
 
-        omop_client.load_vocabulary_table(vocab_version, vocab_bucket, table_file_name, project_id, dataset_id)
+        manager = vocab_manager.VocabularyManager(vocab_version=vocab_version, vocab_path=vocab_bucket)
+        manager.load_vocabulary_table_to_bq(table_file_name, project_id, dataset_id)
 
         return f"Successfully loaded vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}", 200
     except Exception as e:
@@ -479,7 +483,7 @@ def create_missing_omop_tables() -> tuple[str, int]:
         assert omop_version is not None
         
         utils.logger.info(f"Creating any missing v{omop_version} tables in {project_id}.{dataset_id}")
-        omop_client.create_missing_tables(project_id, dataset_id, omop_version)
+        omop_client.OMOPClient.create_missing_bq_tables(project_id, dataset_id, omop_version)
 
         return "Created missing tables", 200
     except Exception as e:
@@ -497,7 +501,7 @@ def populate_cdm_source_file() -> tuple[str, int]:
 
     try:
         utils.logger.info(f"Checking cdm_source file for {cdm_source_data['source_release_date']} delivery from {cdm_source_data['cdm_source_abbreviation']}")
-        omop_client.populate_cdm_source_file(cdm_source_data)
+        omop_client.OMOPClient.populate_cdm_source_file(cdm_source_data)
 
         return "cdm_source file populated if needed", 200
     except Exception as e:
