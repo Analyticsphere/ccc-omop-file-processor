@@ -1,8 +1,12 @@
+import glob
 import os
 import pathlib
+import shutil
 from typing import List, Optional
 
 from google.cloud import storage as gcs_storage  # type: ignore
+
+from core import utils, constants
 
 
 class StorageBackend:
@@ -21,23 +25,15 @@ class StorageBackend:
         - Input: "synthea_53/file.csv"
         - Output: "file:///data/synthea_53/file.csv"
     """
-
-    # Supported storage backends and their URI schemes
-    BACKENDS = {
-        'gcs': 'gs://',
-        'local': 'file://',
-    }
-
-    def __init__(self, backend: str = 'gcs'):
+    def __init__(self, backend: str = constants.GCS_BACKEND):
         """
         Initialize the storage backend.
 
         Args:
-            backend: The storage backend to use. One of: 'gcs', 'local'
-                    Defaults to 'gcs' if not specified or if an invalid value is provided.
+            backend: The storage backend to use. One of: 'gcs', 'local'. Defaults to 'gcs'
         """
-        self.backend = backend if backend in self.BACKENDS else 'gcs'
-        self.scheme = self.BACKENDS[self.backend]
+        self.backend = backend if backend in constants.BACKENDS else constants.GCS_BACKEND
+        self.scheme = constants.BACKENDS[self.backend]
 
     def get_uri(self, path: str) -> str:
         """
@@ -54,7 +50,7 @@ class StorageBackend:
         path = self.strip_scheme(path)
 
         # For local backend, convert relative paths to absolute paths using DATA_ROOT
-        if self.backend == 'local' and not path.startswith('/'):
+        if self.backend == constants.LOCAL_BACKEND and not path.startswith('/'):
             data_root = os.getenv('DATA_ROOT', '/data')
             path = f"{data_root}/{path}"
 
@@ -70,7 +66,7 @@ class StorageBackend:
         Returns:
             Path without any storage scheme prefix
         """
-        for scheme in self.BACKENDS.values():
+        for scheme in constants.BACKENDS.values():
             if path.startswith(scheme):
                 return path[len(scheme):]
         return path
@@ -86,9 +82,9 @@ class StorageBackend:
             directory_path: Path to directory (without storage scheme)
             delete_existing_files: If True, delete existing files in directory first
         """
-        if self.backend == 'local':
+        if self.backend == constants.LOCAL_BACKEND:
             self._create_local_directory(directory_path, delete_existing_files)
-        elif self.backend == 'gcs':
+        elif self.backend == constants.GCS_BACKEND:
             self._create_gcs_directory(directory_path, delete_existing_files)
         else:
             raise ValueError(f"Unsupported storage backend: {self.backend}")
@@ -112,13 +108,10 @@ class StorageBackend:
                 if item.is_file():
                     item.unlink()
                 elif item.is_dir():
-                    import shutil
                     shutil.rmtree(item)
 
     def _create_gcs_directory(self, directory_path: str, delete_existing_files: bool) -> None:
         """Create directory in GCS."""
-        from core import utils
-
         # Parse bucket and path
         bucket_name, _ = utils.get_bucket_and_delivery_date_from_path(directory_path)
         blob_name = '/'.join(directory_path.split('/')[1:])
@@ -136,8 +129,7 @@ class StorageBackend:
                     try:
                         bucket.blob(blob.name).delete()
                     except Exception as e:
-                        import logging
-                        logging.error(f"Failed to delete file {blob.name}: {e}")
+                        utils.logger.error(f"Failed to delete file {blob.name}: {e}")
 
             # Create the directory marker
             blob = bucket.blob(blob_name)
@@ -157,9 +149,9 @@ class StorageBackend:
         Returns:
             True if file exists, False otherwise
         """
-        if self.backend == 'local':
+        if self.backend == constants.LOCAL_BACKEND:
             return self._file_exists_local(file_path)
-        elif self.backend == 'gcs':
+        elif self.backend == constants.GCS_BACKEND:
             return self._file_exists_gcs(file_path)
         else:
             raise ValueError(f"Unsupported storage backend: {self.backend}")
@@ -174,7 +166,7 @@ class StorageBackend:
 
     def _file_exists_gcs(self, file_path: str) -> bool:
         """Check if file exists in GCS."""
-        from core import utils
+        
 
         path_without_prefix = self.strip_scheme(file_path)
         bucket_name, _ = utils.get_bucket_and_delivery_date_from_path(path_without_prefix)
@@ -197,16 +189,16 @@ class StorageBackend:
         Returns:
             List of file names (not full paths)
         """
-        if self.backend == 'local':
+        if self.backend == constants.LOCAL_BACKEND:
             return self._list_files_local(directory_path, pattern)
-        elif self.backend == 'gcs':
+        elif self.backend == constants.GCS_BACKEND:
             return self._list_files_gcs(directory_path, pattern)
         else:
             raise ValueError(f"Unsupported storage backend: {self.backend}")
 
     def _list_files_local(self, directory_path: str, pattern: Optional[str] = None) -> List[str]:
         """List files on local filesystem."""
-        import glob
+        
 
         path = self.strip_scheme(directory_path)
         if not path.startswith('/'):
@@ -226,7 +218,6 @@ class StorageBackend:
 
     def _list_files_gcs(self, directory_path: str, pattern: Optional[str] = None) -> List[str]:
         """List files in GCS."""
-        from core import utils
 
         path_without_prefix = self.strip_scheme(directory_path)
         bucket_name = path_without_prefix.split('/')[0]
@@ -256,9 +247,9 @@ class StorageBackend:
         Args:
             file_path: Path to file (without storage scheme)
         """
-        if self.backend == 'local':
+        if self.backend == constants.LOCAL_BACKEND:
             self._delete_file_local(file_path)
-        elif self.backend == 'gcs':
+        elif self.backend == constants.GCS_BACKEND:
             self._delete_file_gcs(file_path)
         else:
             raise ValueError(f"Unsupported storage backend: {self.backend}")
@@ -275,8 +266,6 @@ class StorageBackend:
 
     def _delete_file_gcs(self, file_path: str) -> None:
         """Delete file from GCS."""
-        from core import utils
-
         path_without_prefix = self.strip_scheme(file_path)
         bucket_name = path_without_prefix.split('/')[0]
         blob_path = '/'.join(path_without_prefix.split('/')[1:])
@@ -294,18 +283,16 @@ class StorageBackend:
 
         Returns a list of subdirectory paths (with trailing slashes).
         """
-        if self.backend == 'local':
+        if self.backend == constants.LOCAL_BACKEND:
             return self._list_subdirectories_local(directory_path)
-        elif self.backend == 'gcs':
+        elif self.backend == constants.GCS_BACKEND:
             return self._list_subdirectories_gcs(directory_path)
         else:
             raise ValueError(f"Unsupported storage backend: {self.backend}")
 
     def _list_subdirectories_local(self, directory_path: str) -> List[str]:
         """List subdirectories in local filesystem."""
-        import os
 
-        from core import utils
 
         # Remove scheme and resolve to absolute path
         path_without_prefix = self.strip_scheme(directory_path)
@@ -331,8 +318,6 @@ class StorageBackend:
 
     def _list_subdirectories_gcs(self, directory_path: str) -> List[str]:
         """List subdirectories in GCS."""
-        from core import utils
-
         # Split the path into bucket name and prefix
         path_without_prefix = self.strip_scheme(directory_path)
         parts = path_without_prefix.split('/', 1)
@@ -369,4 +354,4 @@ class StorageBackend:
 
 # Global storage backend instance
 # Configured via STORAGE_BACKEND environment variable (defaults to 'gcs')
-storage = StorageBackend(backend=os.getenv('STORAGE_BACKEND', 'gcs'))
+storage = StorageBackend(backend=constants.STORAGE_BACKEND)

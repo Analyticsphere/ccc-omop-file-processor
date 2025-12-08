@@ -21,14 +21,14 @@ class ReportGenerator:
 
         Args:
             report_data: Dictionary containing delivery metadata:
-                - site: Site identifier
-                - site_bucket: Storage bucket for site data
-                - delivery_date: Delivery date string (YYYY-MM-DD)
-                - site_display_name: Human-readable site name
-                - file_delivery_format: Format of delivered files (e.g., .csv, .parquet)
-                - delivered_cdm_version: OMOP CDM version delivered by site
-                - target_vocabulary_version: Target vocabulary version
-                - target_cdm_version: Target OMOP CDM version
+            site: Site identifier
+            site_bucket: Storage bucket for site data
+            delivery_date: Delivery date string (YYYY-MM-DD)
+            site_display_name: Human-readable site name
+            file_delivery_format: Format of delivered files (e.g., .csv, .parquet)
+            delivered_cdm_version: OMOP CDM version delivered by site
+            target_vocabulary_version: Target vocabulary version
+            target_cdm_version: Target OMOP CDM version
         """
         self.site = report_data["site"]
         self.bucket = report_data["site_bucket"]
@@ -38,8 +38,6 @@ class ReportGenerator:
         self.delivered_cdm_version = report_data["delivered_cdm_version"]
         self.target_vocabulary_version = report_data["target_vocabulary_version"]
         self.target_cdm_version = report_data["target_cdm_version"]
-
-        # Derived attributes
         self.tmp_artifacts_path = self._get_tmp_artifacts_path()
         self.output_path = self._get_output_path()
 
@@ -98,8 +96,7 @@ class ReportGenerator:
         """
         Consolidate temporary report files into final CSV.
 
-        Discovers all temporary report parquet files and combines them
-        into a single CSV output using DuckDB UNION ALL.
+        Discovers all temporary report parquet files and combines them into a single CSV file.
         """
         # Find all temporary report files
         report_tmp_dir = f"{self.delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
@@ -141,11 +138,8 @@ class ReportGenerator:
         Args:
             select_statement: UNION ALL query joining multiple parquet files
             output_path: Full path where the consolidated CSV report should be written
-
-        Returns:
-            SQL statement that sets max_expression_depth and exports consolidated data to CSV
         """
-        return f"""
+        consolidation_statement = f"""
             SET max_expression_depth TO 1000000;
 
             COPY (
@@ -153,14 +147,12 @@ class ReportGenerator:
             ) TO '{output_path}' (HEADER, DELIMITER ',');
         """
 
+        return consolidation_statement
+
 
 def get_report_tmp_artifacts_path(bucket: str, delivery_date: str) -> str:
     """
     Returns the path to the temporary report artifacts directory.
-
-    NOTE: This function returns the path WITHOUT storage scheme prefix,
-    consistent with all other path utility functions. Callers should use storage.get_uri()
-    if they need the full URI with scheme.
 
     Args:
         bucket: Storage bucket name
