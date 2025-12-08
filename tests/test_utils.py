@@ -138,11 +138,11 @@ def test_get_parquet_harmonized_path(gcs_path, expected_harmonized_path):
     ]
 )
 def test_get_invalid_rows_path_from_gcs_path(gcs_path, expected_invalid_rows_path):
-    assert utils.get_invalid_rows_path_from_gcs_path(gcs_path) == expected_invalid_rows_path
+    assert utils.get_invalid_rows_path_from_path(gcs_path) == expected_invalid_rows_path
 
 
 @pytest.mark.parametrize(
-    "vocab_version,vocab_gcs_bucket,expected_path",
+    "vocab_version,vocab_path,expected_path",
     [
         (
             "v20240101",
@@ -161,8 +161,8 @@ def test_get_invalid_rows_path_from_gcs_path(gcs_path, expected_invalid_rows_pat
         ),
     ]
 )
-def test_get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket, expected_path):
-    assert utils.get_optimized_vocab_file_path(vocab_version, vocab_gcs_bucket) == expected_path
+def test_get_optimized_vocab_file_path(vocab_version, vocab_path, expected_path):
+    assert utils.get_optimized_vocab_file_path(vocab_version, vocab_path) == expected_path
 
 
 @pytest.mark.parametrize(
@@ -241,7 +241,7 @@ def test_get_placeholder_value(column_name, column_type, expected_value):
 # =============================================================================
 
 @pytest.mark.parametrize(
-    "site,site_bucket,delivery_date,sql_script,vocab_version,vocab_gcs_bucket,expected",
+    "site,site_bucket,delivery_date,sql_script,vocab_version,vocab_path,expected",
     [
         # Test single clinical data placeholder - person
         (
@@ -315,9 +315,9 @@ def test_get_placeholder_value(column_name, column_type, expected_value):
         ),
     ]
 )
-def test_placeholder_to_file_path_without_site_and_date(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_gcs_bucket, expected):
+def test_placeholder_to_file_path_without_site_and_date(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_path, expected):
     """Test placeholder_to_file_path() for clinical and vocabulary table replacements (excluding @SITE and @CURRENT_DATE)."""
-    result = utils.placeholder_to_file_path(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_gcs_bucket)
+    result = utils.placeholder_to_file_path(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_path)
     assert result == expected
 
 
@@ -332,7 +332,7 @@ def test_placeholder_to_file_path_site_replacement():
         delivery_date="2024-01-01",
         sql_script=sql_script,
         vocab_version="v1.0",
-        vocab_gcs_bucket="vocab"
+        vocab_path="vocab"
     )
 
     assert result == expected
@@ -349,7 +349,7 @@ def test_placeholder_to_file_path_multiple_site_replacements():
         delivery_date="2024-01-01",
         sql_script=sql_script,
         vocab_version="v1.0",
-        vocab_gcs_bucket="vocab"
+        vocab_path="vocab"
     )
 
     assert result == expected
@@ -370,7 +370,7 @@ def test_placeholder_to_file_path_current_date_replacement(mock_datetime):
         delivery_date="2024-01-01",
         sql_script=sql_script,
         vocab_version="v1.0",
-        vocab_gcs_bucket="vocab"
+        vocab_path="vocab"
     )
 
     assert result == expected
@@ -412,7 +412,7 @@ def test_placeholder_to_file_path_all_placeholders_together(mock_datetime):
         delivery_date="2025-06-15",
         sql_script=sql_script,
         vocab_version="v2025",
-        vocab_gcs_bucket="vocab-comprehensive"
+        vocab_path="vocab-comprehensive"
     )
 
     assert result == expected
@@ -423,7 +423,7 @@ def test_placeholder_to_file_path_all_placeholders_together(mock_datetime):
 # =============================================================================
 
 @pytest.mark.parametrize(
-    "site,site_bucket,delivery_date,sql_script,vocab_version,vocab_gcs_bucket,expected",
+    "site,site_bucket,delivery_date,sql_script,vocab_version,vocab_path,expected",
     [
         # Test harmonized table (condition_occurrence) - should use omop_etl path
         (
@@ -609,7 +609,7 @@ def test_placeholder_to_file_path_all_placeholders_together(mock_datetime):
         ),
     ]
 )
-def test_placeholder_to_harmonized_file_path_table_replacements(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_gcs_bucket, expected):
+def test_placeholder_to_harmonized_file_path_table_replacements(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_path, expected):
     """
     Test placeholder_to_harmonized_file_path() for proper path resolution.
 
@@ -617,7 +617,7 @@ def test_placeholder_to_harmonized_file_path_table_replacements(site, site_bucke
     Non-harmonized tables should use: converted_files/{table}.parquet
     Vocabulary tables should use: optimized/{table}.parquet
     """
-    result = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_gcs_bucket)
+    result = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_path)
     assert result == expected
 
 
@@ -632,7 +632,7 @@ def test_placeholder_to_harmonized_file_path_site_replacement():
         delivery_date="2024-01-01",
         sql_script=sql_script,
         vocab_version="v1.0",
-        vocab_gcs_bucket="vocab"
+        vocab_path="vocab"
     )
 
     assert result == expected
@@ -653,7 +653,7 @@ def test_placeholder_to_harmonized_file_path_current_date_replacement(mock_datet
         delivery_date="2024-01-01",
         sql_script=sql_script,
         vocab_version="v1.0",
-        vocab_gcs_bucket="vocab"
+        vocab_path="vocab"
     )
 
     assert result == expected
@@ -705,7 +705,7 @@ def test_placeholder_to_harmonized_file_path_comprehensive(mock_datetime):
         delivery_date="2026-12-31",
         sql_script=sql_script,
         vocab_version="v2026",
-        vocab_gcs_bucket="final-vocab"
+        vocab_path="final-vocab"
     )
 
     assert result == expected
