@@ -25,11 +25,8 @@ class FileValidator:
         self.omop_version = omop_version
         self.delivery_date = delivery_date
         self.storage_path = storage_path
-
-        # Derived attributes computed once
         self.table_name = utils.get_table_name_from_path(file_path)
         self.bucket_name, _ = utils.get_bucket_and_delivery_date_from_path(file_path)
-
         # Loaded on demand
         self._cdm_schema: Optional[dict[Any, Any]] = None
         self._table_schema: Optional[dict[Any, Any]] = None
@@ -133,13 +130,13 @@ class FileValidator:
             raise Exception(f"Error validating columns for {self.file_path}: {str(e)}") from e
 
     def _get_cdm_schema(self) -> dict[Any, Any]:
-        """Get CDM schema, caching for reuse."""
+        """Get CDM schema for the specified OMOP version"""
         if self._cdm_schema is None:
             self._cdm_schema = utils.get_cdm_schema(cdm_version=self.omop_version)
         return self._cdm_schema
 
     def _get_table_schema(self) -> dict[Any, Any]:
-        """Get table-specific schema, caching for reuse."""
+        """Get table-specific schema for the specified OMOP version"""
         if self._table_schema is None:
             self._table_schema = utils.get_table_schema(
                 table_name=self.table_name,
@@ -148,7 +145,7 @@ class FileValidator:
         return self._table_schema
 
     def _get_parquet_columns(self) -> set:
-        """Get column names from parquet file."""
+        """Get column names from a Parquet file."""
         parquet_path = utils.get_parquet_artifact_location(self.file_path)
         columns = utils.get_columns_from_file(parquet_path)
         return set(columns)
