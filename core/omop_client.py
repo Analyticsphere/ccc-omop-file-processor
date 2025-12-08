@@ -7,6 +7,30 @@ import core.utils as utils
 from core.storage_backend import storage
 
 
+def generate_upgrade_file_sql(upgrade_script: str, normalized_file_path: str) -> str:
+    """
+    Generate SQL to upgrade an OMOP CDM table file.
+
+    Creates SQL that:
+    - Applies version-specific upgrade transformation script
+    - Reads from normalized Parquet file
+    - Overwrites the same file with upgraded data
+
+    Args:
+        upgrade_script: SQL transformation script for the table upgrade
+        normalized_file_path: Path to the normalized Parquet file
+
+    Returns:
+        SQL string for upgrading the file
+    """
+    return f"""
+        COPY (
+            {upgrade_script}
+            FROM read_parquet('{storage.get_uri(normalized_file_path)}')
+        ) TO '{storage.get_uri(normalized_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+    """
+
+
 def upgrade_file(file_path: str, cdm_version: str, target_omop_version: str) -> None:
     """
     Upgrades an OMOP CDM table file from one version to another by applying version-specific transformations.
@@ -34,12 +58,10 @@ def upgrade_file(file_path: str, cdm_version: str, target_omop_version: str) -> 
                     with open(upgrade_file_path, 'r') as f:
                         upgrade_script = f.read()
 
-                    select_statement = f"""
-                        COPY (
-                            {upgrade_script}
-                            FROM read_parquet('{storage.get_uri(normalized_file_path)}')
-                        ) TO '{storage.get_uri(normalized_file_path)}' {constants.DUCKDB_FORMAT_STRING}
-                    """
+                    # Generate SQL
+                    select_statement = generate_upgrade_file_sql(upgrade_script, normalized_file_path)
+
+                    # Execute SQL
                     utils.execute_duckdb_sql(select_statement, f"Unable to upgrade file {file_path}:")
 
                 except Exception as e:
@@ -48,6 +70,45 @@ def upgrade_file(file_path: str, cdm_version: str, target_omop_version: str) -> 
             utils.logger.info(f"No changes in {file_path} when upgrading from 5.3 to 5.4")
     else:
         raise Exception(f"OMOP CDM version {cdm_version} not supported")
+
+def generate_convert_vocab_sql(csv_file_path: str, parquet_file_path: str, csv_columns: list[str]) -> str:
+    """
+    Generate SQL to convert vocabulary CSV file to Parquet format.
+
+    Creates SQL that:
+    - Reads tab-delimited CSV vocabulary file
+    - Handles date fields (valid_start_date, valid_end_date) with proper formatting
+    - Preserves column names and order from CSV
+
+    Args:
+        csv_file_path: Path to the input CSV vocabulary file
+        parquet_file_path: Path for the output Parquet file
+        csv_columns: List of column names from the CSV file
+
+    Returns:
+        SQL string for converting vocabulary CSV to Parquet
+    """
+    # Build the SELECT statement with columns in the predefined order
+    select_columns = []
+    for col in csv_columns:
+        if col in ('valid_start_date', 'valid_end_date'):
+            # Handle date fields; need special handling or they're interpreted as numeric values
+            select_columns.append(
+                f'CAST(STRPTIME(CAST("{col}" AS VARCHAR), \'%Y%m%d\') AS DATE) AS "{col}"'
+            )
+        else:
+            select_columns.append(f'"{col}"')
+
+    select_statement = ', '.join(select_columns)
+
+    # Execute the COPY command to convert CSV to Parquet with columns in the correct order
+    return f"""
+        COPY (
+            SELECT {select_statement}
+            FROM read_csv('{storage.get_uri(csv_file_path)}', delim='\t',strict_mode=False)
+        ) TO '{storage.get_uri(parquet_file_path)}' {constants.DUCKDB_FORMAT_STRING};
+    """
+
 
 def convert_vocab_to_parquet(vocab_version: str, vocab_path: str) -> None:
     """
@@ -67,26 +128,10 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_path: str) -> None:
                 # Get column names
                 csv_columns = utils.get_columns_from_file(csv_file_path)
 
-                # Build the SELECT statement with columns in the predefined order
-                select_columns = []
-                for col in csv_columns:
-                    if col in ('valid_start_date', 'valid_end_date'):
-                        # Handle date fields; need special handling or they're interpreted as numeric values
-                        select_columns.append(
-                            f'CAST(STRPTIME(CAST("{col}" AS VARCHAR), \'%Y%m%d\') AS DATE) AS "{col}"'
-                        )
-                    else:
-                        select_columns.append(f'"{col}"')
+                # Generate SQL
+                convert_query = generate_convert_vocab_sql(csv_file_path, parquet_file_path, csv_columns)
 
-                select_statement = ', '.join(select_columns)
-
-                # Execute the COPY command to convert CSV to Parquet with columns in the correct order
-                convert_query = f"""
-                    COPY (
-                        SELECT {select_statement}
-                        FROM read_csv('{storage.get_uri(csv_file_path)}', delim='\t',strict_mode=False)
-                    ) TO '{storage.get_uri(parquet_file_path)}' {constants.DUCKDB_FORMAT_STRING};
-                """
+                # Execute SQL
                 utils.execute_duckdb_sql(convert_query, "Unable to convert vocabulary CSV to Parquet")
     else:
         raise Exception(f"Vocabulary path {vocab_root_path} not found")

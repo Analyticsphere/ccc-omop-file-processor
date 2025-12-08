@@ -15,7 +15,7 @@ Required Environment Variables:
           domain_check, omop_etl, consolidate_etl, discover_tables, deduplicate_single_table)
 
 Optional Environment Variables:
-    OMOP_VOCAB_PATH: GCS bucket for vocabulary files (defaults to constants.OMOP_VOCAB_PATH)
+    OMOP_VOCAB_PATH: GCS bucket for vocabulary files (defaults to constants.VOCAB_PATH)
     OUTPUT_GCS_PATH: For discover_tables step, path to write table configs JSON
 
 Exit Codes:
@@ -57,7 +57,7 @@ def validate_env_vars() -> dict[str, str]:
         sys.exit(1)
 
     # Optional variables with defaults
-    env_values['OMOP_VOCAB_PATH'] = os.getenv('OMOP_VOCAB_PATH', constants.OMOP_VOCAB_PATH)
+    env_values['OMOP_VOCAB_PATH'] = os.getenv('OMOP_VOCAB_PATH', constants.VOCAB_PATH)
     env_values['OUTPUT_GCS_PATH'] = os.getenv('OUTPUT_GCS_PATH', '')
 
     return env_values
