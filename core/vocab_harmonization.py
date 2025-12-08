@@ -125,7 +125,7 @@ class VocabHarmonizer:
                     WHEN vocab.concept_id_domain = 'Note' THEN 'note'
                     WHEN vocab.concept_id_domain = 'Specimen' THEN 'specimen'
                 ELSE '{source_table_name}' END AS target_table
-            """
+        """
         select_exprs.append(case_when_target_table)
 
         select_sql = ",\n                ".join(select_exprs)
@@ -134,7 +134,7 @@ class VocabHarmonizer:
                 FROM read_parquet('@{source_table_name.upper()}') AS tbl
                 INNER JOIN vocab
                     ON {target_concept_id_column} = vocab.concept_id
-            """
+                """
 
         return f"""
                     WITH vocab AS (
@@ -146,7 +146,7 @@ class VocabHarmonizer:
                     SELECT {select_sql}
                     {from_sql}
                     {existing_files_where_clause}
-            """
+                """
 
     @staticmethod
     def generate_check_new_targets_sql(
@@ -407,7 +407,6 @@ class VocabHarmonizer:
         """
         Generate and execute SQL to check for and update non-standard source-to-target mappings to standard
         """
-
         schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
 
         columns = schema[self.source_table_name]["columns"]
@@ -456,7 +455,6 @@ class VocabHarmonizer:
         Generate and execute SQL to check for cases in which a non-standard target_concept_id
         has a mapping or replacement to a standard concept_id
         """
-
         if mapping_type == constants.TARGET_REMAP:
             vocab_status_string = "existing non-standard target remapped to standard code"
             mapping_relationships = "'Maps to', 'Maps to value'"
