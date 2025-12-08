@@ -55,7 +55,7 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
 
         # Register filesystem for cloud storage if using GCS backend
-        if os.getenv('STORAGE_BACKEND', 'gcs') == 'gcs':
+        if constants.STORAGE_BACKEND == constants.GCS_BACKEND:
             conn.register_filesystem(filesystem('gcs'))
 
         return conn, local_db_file

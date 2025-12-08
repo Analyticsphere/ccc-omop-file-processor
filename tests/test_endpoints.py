@@ -732,12 +732,11 @@ class TestHarmonizedParquetsToBqEndpoint:
     def test_harmonized_parquets_to_bq_success(self, mock_load, client):
         """Test successful harmonized Parquets loading."""
         mock_load.return_value = {
-            'loaded': ['observation', 'measurement'],
-            'skipped': []
+            'loaded': ['observation', 'measurement']
         }
 
         response = client.post('/harmonized_parquets_to_bq', json={
-            'gcs_bucket': 'test-bucket',
+            'bucket': 'test-bucket',
             'delivery_date': '2025-01-01',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset'
@@ -746,29 +745,10 @@ class TestHarmonizedParquetsToBqEndpoint:
         assert response.status_code == 200
         assert b"Successfully loaded 2 table(s)" in response.data
 
-    @patch('core.endpoints.gcp_services.load_harmonized_parquets_to_bq')
-    def test_harmonized_parquets_to_bq_with_skipped(self, mock_load, client):
-        """Test harmonized Parquets loading with skipped tables."""
-        mock_load.return_value = {
-            'loaded': ['observation'],
-            'skipped': ['measurement']
-        }
-
-        response = client.post('/harmonized_parquets_to_bq', json={
-            'gcs_bucket': 'test-bucket',
-            'delivery_date': '2025-01-01',
-            'project_id': 'test-project',
-            'dataset_id': 'test_dataset'
-        })
-
-        assert response.status_code == 200
-        assert b"Successfully loaded 1 table(s)" in response.data
-        assert b"Skipped 1 table(s)" in response.data
-
     def test_harmonized_parquets_to_bq_missing_parameters(self, client):
         """Test missing parameters return 400."""
         response = client.post('/harmonized_parquets_to_bq', json={
-            'gcs_bucket': 'test-bucket'
+            'bucket': 'test-bucket'
         })
 
         assert response.status_code == 400
@@ -780,7 +760,7 @@ class TestHarmonizedParquetsToBqEndpoint:
         mock_load.side_effect = Exception("Loading failed")
 
         response = client.post('/harmonized_parquets_to_bq', json={
-            'gcs_bucket': 'test-bucket',
+            'bucket': 'test-bucket',
             'delivery_date': '2025-01-01',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset'
@@ -802,7 +782,7 @@ class TestLoadDerivedTablesToBqEndpoint:
         }
 
         response = client.post('/load_derived_tables_to_bq', json={
-            'gcs_bucket': 'test-bucket',
+            'bucket': 'test-bucket',
             'delivery_date': '2025-01-01',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset'
@@ -820,7 +800,7 @@ class TestLoadDerivedTablesToBqEndpoint:
         }
 
         response = client.post('/load_derived_tables_to_bq', json={
-            'gcs_bucket': 'test-bucket',
+            'bucket': 'test-bucket',
             'delivery_date': '2025-01-01',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset'
@@ -832,7 +812,7 @@ class TestLoadDerivedTablesToBqEndpoint:
     def test_load_derived_tables_to_bq_missing_parameters(self, client):
         """Test missing parameters return 400."""
         response = client.post('/load_derived_tables_to_bq', json={
-            'gcs_bucket': 'test-bucket'
+            'bucket': 'test-bucket'
         })
 
         assert response.status_code == 400
@@ -844,7 +824,7 @@ class TestLoadDerivedTablesToBqEndpoint:
         mock_load.side_effect = Exception("Loading failed")
 
         response = client.post('/load_derived_tables_to_bq', json={
-            'gcs_bucket': 'test-bucket',
+            'bucket': 'test-bucket',
             'delivery_date': '2025-01-01',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset'

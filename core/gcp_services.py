@@ -256,7 +256,6 @@ def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_
     
     # Load each consolidated parquet file to BigQuery
     loaded_tables = []
-    skipped_tables = []
     
     for table_name in sorted(table_names):
         # Construct path to consolidated parquet file
@@ -264,9 +263,7 @@ def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_
         
         # Check if the consolidated file exists
         if not utils.parquet_file_exists(consolidated_file_path):
-            utils.logger.warning(f"Consolidated parquet file not found: {consolidated_file_path}")
-            skipped_tables.append(table_name)
-            continue
+            raise Exception(f"Consolidated parquet file not found: {consolidated_file_path}")
         
         try:
             utils.logger.info(f"Loading {table_name} from {consolidated_file_path} to BigQuery")
@@ -281,11 +278,9 @@ def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_
             utils.logger.info(f"Successfully loaded {table_name} to BigQuery")
         except Exception as e:
             utils.logger.error(f"Failed to load {table_name}: {str(e)}")
-            skipped_tables.append(table_name)
     
     return {
-        'loaded': loaded_tables,
-        'skipped': skipped_tables
+        'loaded': loaded_tables
     }
 
 def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: str, dataset_id: str) -> dict[str, list[str]]:
@@ -325,7 +320,6 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
         utils.logger.warning(f"No derived table parquet files found in {gcs_path}")
         return {
             'loaded': [],
-            'skipped': []
         }
 
     # Extract table names from file paths
@@ -336,7 +330,6 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
 
     # Load each derived table parquet file to BigQuery
     loaded_tables = []
-    skipped_tables = []
 
     for table_name in sorted(table_names):
         # Construct path to derived table parquet file
@@ -344,9 +337,7 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
 
         # Check if the file exists
         if not utils.parquet_file_exists(derived_file_path):
-            utils.logger.warning(f"Derived table parquet file not found: {derived_file_path}")
-            skipped_tables.append(table_name)
-            continue
+            raise Exception(f"Derived table parquet file not found: {derived_file_path}")
 
         try:
             utils.logger.info(f"Loading derived table {table_name} from {derived_file_path} to BigQuery")
@@ -361,9 +352,7 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
             utils.logger.info(f"Successfully loaded derived table {table_name} to BigQuery")
         except Exception as e:
             utils.logger.error(f"Failed to load derived table {table_name}: {str(e)}")
-            skipped_tables.append(table_name)
 
     return {
         'loaded': loaded_tables,
-        'skipped': skipped_tables
     }
