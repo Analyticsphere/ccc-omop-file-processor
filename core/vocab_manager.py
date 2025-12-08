@@ -34,9 +34,6 @@ class VocabularyManager:
         Processes all CSV vocabulary files in the vocabulary version directory,
         converting them to Parquet and storing in the optimized_vocab folder.
         Handles date fields (valid_start_date, valid_end_date) with proper formatting.
-
-        Raises:
-            Exception: If vocabulary path not found or conversion fails
         """
         # Confirm desired vocabulary version exists
         vocab_files = utils.list_files(self.vocab_path, self.vocab_version, constants.CSV)
@@ -66,9 +63,6 @@ class VocabularyManager:
 
         Combines concept IDs with their mapping/replacement relationships into a single
         table/file for efficient lookups during vocabulary harmonization.
-
-        Raises:
-            Exception: If vocabulary path not found or file creation fails
         """
         optimized_file_path = utils.get_optimized_vocab_file_path(self.vocab_version, self.vocab_path)
 
@@ -103,9 +97,6 @@ class VocabularyManager:
             table_file_name: Name of the vocabulary table file (without extension)
             project_id: GCP project ID for BigQuery
             dataset_id: BigQuery dataset ID
-
-        Raises:
-            Exception: If vocabulary table not found or load fails
         """
         vocab_parquet_path = storage.get_uri(
             f"{self.optimized_vocab_folder_path}{table_file_name}{constants.PARQUET}"
@@ -129,9 +120,6 @@ class VocabularyManager:
 
         Args:
             vocabulary_file_path: Full URI path to the vocabulary parquet file
-
-        Returns:
-            SQL statement that queries vocabulary_version for the 'None' vocabulary_id
         """
         return f"""
         SELECT vocabulary_version
@@ -168,15 +156,16 @@ class VocabularyManager:
             else:
                 select_columns.append(f'"{col}"')
 
-        select_statement = ', '.join(select_columns)
+        select_columns_str = ', '.join(select_columns)
 
-        # Execute the COPY command to convert CSV to Parquet with columns in the correct order
-        return f"""
+        select_statement = f"""
         COPY (
-            SELECT {select_statement}
+            SELECT {select_columns_str}
             FROM read_csv('{storage.get_uri(csv_file_path)}', delim='\t',strict_mode=False)
         ) TO '{storage.get_uri(parquet_file_path)}' {constants.DUCKDB_FORMAT_STRING};
-    """
+        """
+
+        return select_statement
 
     @staticmethod
     def generate_optimized_vocab_sql(concept_path: str, concept_relationship_path: str, output_path: str) -> str:
@@ -197,20 +186,22 @@ class VocabularyManager:
         Returns:
             SQL string for creating optimized vocabulary file
         """
-        return f"""
-                COPY (
-                    SELECT DISTINCT
-                        c1.concept_id AS concept_id, -- Every concept_id from concept table
-                        c1.standard_concept AS concept_id_standard,
-                        c1.domain_id AS concept_id_domain,
-                        cr.relationship_id,
-                        cr.concept_id_2 AS target_concept_id, -- targets to concept_id's
-                        c2.standard_concept AS target_concept_id_standard,
-                        c2.domain_id AS target_concept_id_domain
-                    FROM read_parquet('{concept_path}') c1
-                    LEFT JOIN read_parquet('{concept_relationship_path}') cr on c1.concept_id = cr.concept_id_1
-                    LEFT JOIN read_parquet('{concept_path}') c2 on cr.concept_id_2 = c2.concept_id
-                    WHERE IFNULL(cr.relationship_id, '')
-                        IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
-                ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
-                """
+        create_vocab_statement = f"""
+            COPY (
+                SELECT DISTINCT
+                    c1.concept_id AS concept_id, -- Every concept_id from concept table
+                    c1.standard_concept AS concept_id_standard,
+                    c1.domain_id AS concept_id_domain,
+                    cr.relationship_id,
+                    cr.concept_id_2 AS target_concept_id, -- targets to concept_id's
+                    c2.standard_concept AS target_concept_id_standard,
+                    c2.domain_id AS target_concept_id_domain
+                FROM read_parquet('{concept_path}') c1
+                LEFT JOIN read_parquet('{concept_relationship_path}') cr on c1.concept_id = cr.concept_id_1
+                LEFT JOIN read_parquet('{concept_path}') c2 on cr.concept_id_2 = c2.concept_id
+                WHERE IFNULL(cr.relationship_id, '')
+                    IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
+            ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
+            """
+
+        return create_vocab_statement
