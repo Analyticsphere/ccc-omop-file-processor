@@ -1,19 +1,20 @@
 """
-Unit tests for utils.py SQL generation functions.
+Unit tests for reporting.py SQL generation functions.
 
 Tests that SQL generation functions produce output matching reference SQL files.
 Reference SQL files were captured from known-good function output and are stored
-in tests/reference/sql/utils/
+in tests/reference/sql/reporting/
 """
 
-import pytest
 from pathlib import Path
 
-from core.utils import generate_report_consolidation_sql, generate_vocab_version_query_sql
+import pytest
 
+from core.reporting import (generate_report_consolidation_sql,
+                            get_report_tmp_artifacts_path)
 
 # Path to reference SQL files
-REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "utils"
+REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "reporting"
 
 
 def normalize_sql(sql: str) -> str:
@@ -47,14 +48,14 @@ class TestGenerateReportConsolidationSql:
         assert normalize_sql(result) == normalize_sql(expected)
 
 
-class TestGenerateVocabVersionQuerySql:
-    """Tests for generate_vocab_version_query_sql()."""
-
-    def test_standard_vocab_version_query(self):
-        """Test SQL generation for querying vocabulary version from vocabulary table."""
-        vocabulary_file_path = "gs://vocab-bucket/synthea53/2025-01-01/artifacts/converted_files/vocabulary.parquet"
-
-        result = generate_vocab_version_query_sql(vocabulary_file_path)
-
-        expected = load_reference_sql("generate_vocab_version_query_sql_standard.sql")
-        assert normalize_sql(result) == normalize_sql(expected)
+@pytest.mark.parametrize(
+    "bucket,delivery_date,expected_path",
+    [
+        ("synthea53", "2024-12-31", "synthea53/2024-12-31/artifacts/delivery_report/tmp/"),
+        ("bucket", "folder", "bucket/folder/artifacts/delivery_report/tmp/"),
+        ("test-bucket", "2025-10-04", "test-bucket/2025-10-04/artifacts/delivery_report/tmp/"),
+    ]
+)
+def test_get_report_tmp_artifacts_path(bucket, delivery_date, expected_path):
+    """Test path generation for temporary report artifacts directory."""
+    assert get_report_tmp_artifacts_path(bucket, delivery_date) == expected_path

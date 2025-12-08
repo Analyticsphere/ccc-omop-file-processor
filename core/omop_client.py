@@ -7,6 +7,23 @@ import core.utils as utils
 from core.storage_backend import storage
 
 
+def generate_vocab_version_query_sql(vocabulary_file_path: str) -> str:
+    """
+    Generate SQL to extract vocabulary version from vocabulary table.
+
+    Args:
+        vocabulary_file_path: Full URI path to the vocabulary parquet file
+
+    Returns:
+        SQL statement that queries vocabulary_version for the 'None' vocabulary_id
+    """
+    return f"""
+        SELECT vocabulary_version
+        FROM read_parquet('{vocabulary_file_path}')
+        WHERE vocabulary_id = 'None'
+    """
+
+
 def generate_upgrade_file_sql(upgrade_script: str, normalized_file_path: str) -> str:
     """
     Generate SQL to upgrade an OMOP CDM table file.

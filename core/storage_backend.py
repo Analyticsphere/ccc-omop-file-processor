@@ -1,7 +1,8 @@
 import os
 import pathlib
-from google.cloud import storage as gcs_storage
 from typing import List
+
+from google.cloud import storage as gcs_storage
 
 
 class StorageBackend:
@@ -315,6 +316,7 @@ class StorageBackend:
     def _list_subdirectories_local(self, directory_path: str) -> List[str]:
         """List subdirectories in local filesystem."""
         import os
+
         from core import utils
 
         # Remove scheme and resolve to absolute path

@@ -11,6 +11,7 @@ import core.gcp_services as gcp_services
 import core.helpers.pipeline_log as pipeline_log
 import core.normalization as normalization
 import core.omop_client as omop_client
+import core.reporting as reporting
 import core.utils as utils
 import core.vocab_harmonization as vocab_harmonization
 from core.storage_backend import storage
@@ -449,7 +450,7 @@ def generate_final_delivery_report() -> tuple[str, int]:
 
     try:
         utils.logger.info(f"Generating final delivery report for {report_data['delivery_date']} delivery from {report_data['site']}")
-        utils.generate_report(report_data)
+        reporting.generate_report(report_data)
 
         return "Generated delivery report file", 200
     except Exception as e:

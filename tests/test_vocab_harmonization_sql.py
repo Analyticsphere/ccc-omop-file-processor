@@ -6,12 +6,12 @@ Reference SQL files were captured from known-good function output and are stored
 in tests/reference/sql/vocab_harmonization/
 """
 
-import pytest
 from pathlib import Path
 
-from core.vocab_harmonization import VocabHarmonizer
-import core.utils as utils
+import pytest
 
+import core.utils as utils
+from core.vocab_harmonization import VocabHarmonizer
 
 # Path to reference SQL files
 REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "vocab_harmonization"

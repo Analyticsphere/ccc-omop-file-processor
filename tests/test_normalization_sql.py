@@ -6,11 +6,11 @@ Reference SQL files were captured from known-good function output and are stored
 in tests/reference/sql/normalization/
 """
 
-import pytest
 from pathlib import Path
 
-from core.normalization import generate_row_count_sql
+import pytest
 
+from core.normalization import generate_row_count_sql
 
 # Path to reference SQL files
 REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "normalization"

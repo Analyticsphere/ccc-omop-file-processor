@@ -6,14 +6,12 @@ Reference SQL files were captured from known-good function output and are stored
 in tests/reference/sql/file_processor/
 """
 
-import pytest
 from pathlib import Path
 
-from core.file_processor import (
-    generate_process_incoming_parquet_sql,
-    generate_csv_to_parquet_sql
-)
+import pytest
 
+from core.file_processor import (generate_csv_to_parquet_sql,
+                                 generate_process_incoming_parquet_sql)
 
 # Path to reference SQL files
 REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "file_processor"

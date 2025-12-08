@@ -6,15 +6,14 @@ Reference SQL files were captured from known-good function output and are stored
 in tests/reference/sql/omop_client/
 """
 
-import pytest
 from pathlib import Path
 
-from core.omop_client import (
-    generate_upgrade_file_sql,
-    generate_convert_vocab_sql,
-    generate_optimized_vocab_sql
-)
+import pytest
 
+from core.omop_client import (generate_convert_vocab_sql,
+                              generate_optimized_vocab_sql,
+                              generate_upgrade_file_sql,
+                              generate_vocab_version_query_sql)
 
 # Path to reference SQL files
 REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "omop_client"
@@ -141,4 +140,17 @@ class TestGenerateOptimizedVocabSql:
         )
 
         expected = load_reference_sql("generate_optimized_vocab_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateVocabVersionQuerySql:
+    """Tests for generate_vocab_version_query_sql()."""
+
+    def test_standard_vocab_version_query(self):
+        """Test SQL generation for querying vocabulary version from vocabulary table."""
+        vocabulary_file_path = "gs://vocab-bucket/synthea53/2025-01-01/artifacts/converted_files/vocabulary.parquet"
+
+        result = generate_vocab_version_query_sql(vocabulary_file_path)
+
+        expected = load_reference_sql("generate_vocab_version_query_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
