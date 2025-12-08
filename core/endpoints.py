@@ -451,7 +451,8 @@ def generate_final_delivery_report() -> tuple[str, int]:
 
     try:
         utils.logger.info(f"Generating final delivery report for {report_data['delivery_date']} delivery from {report_data['site']}")
-        reporting.generate_report(report_data)
+        generator = reporting.ReportGenerator(report_data)
+        generator.generate()
 
         return "Generated delivery report file", 200
     except Exception as e:
