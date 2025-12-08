@@ -383,20 +383,20 @@ def target_vocab_to_bq() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     table_file_name: Optional[str] = data.get('table_file_name')
     vocab_version: Optional[str] = data.get('vocab_version')
-    vocab_gcs_bucket: str = constants.VOCAB_PATH
+    vocab_bucket: str = constants.VOCAB_PATH
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
 
-    if not all([vocab_version, vocab_gcs_bucket, project_id, dataset_id, table_file_name]):
-        return "Missing a required parameter to 'load_target_vocab' endpoint. Required: vocab_version, vocab_gcs_bucket, project_id, dataset_id, table_file_name", 400
+    if not all([vocab_version, vocab_bucket, project_id, dataset_id, table_file_name]):
+        return "Missing a required parameter to 'load_target_vocab' endpoint. Required: vocab_version, vocab_bucket, project_id, dataset_id, table_file_name", 400
     try:
         # At this point we know these are not None
         assert vocab_version is not None
         assert table_file_name is not None
         assert project_id is not None
         assert dataset_id is not None
-        
-        omop_client.load_vocabulary_table(vocab_version, vocab_gcs_bucket, table_file_name, project_id, dataset_id)
+
+        omop_client.load_vocabulary_table(vocab_version, vocab_bucket, table_file_name, project_id, dataset_id)
 
         return f"Successfully loaded vocabulary {vocab_version} file {table_file_name} to {project_id}.{dataset_id}", 200
     except Exception as e:
@@ -406,7 +406,7 @@ def target_vocab_to_bq() -> tuple[str, int]:
 
 @app.route('/parquet_to_bq', methods=['POST'])
 def parquet_gcs_to_bq() -> tuple[str, int]:
-    """Load Parquet file from GCS to BigQuery table."""
+    """Load Parquet file to BigQuery table."""
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     project_id: Optional[str] = data.get('project_id')
@@ -505,30 +505,30 @@ def populate_cdm_source_file() -> tuple[str, int]:
 @app.route('/harmonized_parquets_to_bq', methods=['POST'])
 def harmonized_parquets_to_bq() -> tuple[str, int]:
     """
-    Load consolidated OMOP ETL parquet files from GCS to BigQuery.
-    
+    Load consolidated OMOP ETL parquet files to BigQuery.
+
     This endpoint discovers all consolidated parquet files in the OMOP_ETL artifacts directory
     and loads each one to its corresponding BigQuery table.
     """
     data: dict[str, Any] = request.get_json() or {}
-    gcs_bucket: Optional[str] = data.get('gcs_bucket')
+    bucket: Optional[str] = data.get('gcs_bucket')
     delivery_date: Optional[str] = data.get('delivery_date')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
 
-    if not all([gcs_bucket, delivery_date, project_id, dataset_id]):
+    if not all([bucket, delivery_date, project_id, dataset_id]):
         return "Missing a required parameter to 'harmonized_parquets_to_bq' endpoint. Required: gcs_bucket, delivery_date, project_id, dataset_id", 400
-    
+
     try:
         # At this point we know these are not None
-        assert gcs_bucket is not None
+        assert bucket is not None
         assert delivery_date is not None
         assert project_id is not None
         assert dataset_id is not None
-        
+
         # Call the GCP service function to handle the heavy lifting
         results = gcp_services.load_harmonized_parquets_to_bq(
-            gcs_bucket,
+            bucket,
             delivery_date,
             project_id,
             dataset_id
@@ -557,30 +557,30 @@ def harmonized_parquets_to_bq() -> tuple[str, int]:
 @app.route('/load_derived_tables_to_bq', methods=['POST'])
 def load_derived_tables_to_bq() -> tuple[str, int]:
     """
-    Load derived table parquet files from GCS to BigQuery.
+    Load derived table parquet files to BigQuery.
 
     This endpoint discovers all derived table parquet files in the DERIVED_FILES artifacts directory
     and loads each one to its corresponding BigQuery table.
     """
     data: dict[str, Any] = request.get_json() or {}
-    gcs_bucket: Optional[str] = data.get('gcs_bucket')
+    bucket: Optional[str] = data.get('gcs_bucket')
     delivery_date: Optional[str] = data.get('delivery_date')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
 
-    if not all([gcs_bucket, delivery_date, project_id, dataset_id]):
+    if not all([bucket, delivery_date, project_id, dataset_id]):
         return "Missing a required parameter to 'load_derived_tables_to_bq' endpoint. Required: gcs_bucket, delivery_date, project_id, dataset_id", 400
 
     try:
         # At this point we know these are not None
-        assert gcs_bucket is not None
+        assert bucket is not None
         assert delivery_date is not None
         assert project_id is not None
         assert dataset_id is not None
 
         # Call the GCP service function to handle the heavy lifting
         results = gcp_services.load_derived_tables_to_bq(
-            gcs_bucket,
+            bucket,
             delivery_date,
             project_id,
             dataset_id

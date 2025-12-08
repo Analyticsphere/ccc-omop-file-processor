@@ -317,10 +317,10 @@ def get_optimized_vocab_file_path(vocab_version: str, vocab_path: str) -> str:
     optimized_vocab_path = f"{vocab_path}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{constants.OPTIMIZED_VOCAB_FILE_NAME}"
     return optimized_vocab_path
 
-def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
+def get_delivery_vocabulary_version(bucket: str, delivery_date: str) -> str:
     """Extract vocabulary version from vocabulary table in a site's delivery."""
 
-    vocabulary_parquet_file = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}vocabulary{constants.PARQUET}"
+    vocabulary_parquet_file = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}vocabulary{constants.PARQUET}"
 
     if parquet_file_exists(vocabulary_parquet_file):
         try:

@@ -282,10 +282,10 @@ def populate_cdm_source_file(cdm_source_data: dict) -> None:
     Args:
         cdm_source_data: Dictionary containing CDM source metadata fields
     """
-    gcs_bucket = cdm_source_data["gcs_bucket"]
+    bucket = cdm_source_data["gcs_bucket"]
     delivery_date = cdm_source_data["source_release_date"]
 
-    cdm_source_path = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}cdm_source{constants.PARQUET}"
+    cdm_source_path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}cdm_source{constants.PARQUET}"
 
     file_exists = utils.parquet_file_exists(cdm_source_path)
 
@@ -301,7 +301,7 @@ def populate_cdm_source_file(cdm_source_data: dict) -> None:
 
     utils.logger.info(f"Populating cdm_source Parquet file for {delivery_date} delivery")
 
-    vocab_version = utils.get_delivery_vocabulary_version(gcs_bucket, delivery_date)
+    vocab_version = utils.get_delivery_vocabulary_version(bucket, delivery_date)
     populate_sql = generate_populate_cdm_source_sql(cdm_source_data, vocab_version, storage.get_uri(cdm_source_path))
     utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
 

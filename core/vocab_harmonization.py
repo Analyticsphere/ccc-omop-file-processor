@@ -682,14 +682,14 @@ class VocabHarmonizer:
 
         # Get list of table subdirectories
         subdirectories = storage.list_subdirectories(storage_path)
-        
+
         # Extract just the table names from the full paths
         table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
-        
+
         if not table_names:
-            utils.logger.warning(f"No table directories found in {gcs_path}")
+            utils.logger.warning(f"No table directories found in {storage_path}")
             return
-        
+
         utils.logger.info(f"Found {len(table_names)} table(s) to consolidate: {sorted(table_names)}")
         
         # Process each table directory
@@ -717,14 +717,14 @@ class VocabHarmonizer:
 
         # Get list of table subdirectories
         subdirectories = storage.list_subdirectories(storage_path)
-        
+
         # Extract just the table names from the full paths
         table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
-        
+
         if not table_names:
-            utils.logger.warning(f"No table directories found in {gcs_path}")
+            utils.logger.warning(f"No table directories found in {storage_path}")
             return
-        
+
         utils.logger.info(f"Found {len(table_names)} table(s) to check for deduplication: {sorted(table_names)}")
         
         # Process each table directory
@@ -1038,7 +1038,7 @@ class VocabHarmonizer:
         table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
 
         if not table_names:
-            utils.logger.warning(f"No table directories found in {gcs_path}")
+            utils.logger.warning(f"No table directories found in {storage_path}")
             return []
 
         utils.logger.info(f"Found {len(table_names)} table(s) for potential deduplication: {sorted(table_names)}")
