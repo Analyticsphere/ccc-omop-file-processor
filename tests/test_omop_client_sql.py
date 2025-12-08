@@ -171,12 +171,12 @@ class TestGeneratePopulateCdmSourceSql:
             "cdm_etl_reference": "https://github.com/example/etl",
             "source_release_date": "2025-01-01",
             "cdm_release_date": "2025-01-15",
-            "cdm_version": "5.4",
-            "gcs_bucket": "test-bucket"
+            "cdm_version": "5.4"
         }
+        vocab_version = "v5.0_24-JAN-25"
         output_path = "gs://test-bucket/2025-01-01/artifacts/converted_files/cdm_source.parquet"
 
-        result = generate_populate_cdm_source_sql(cdm_source_data, output_path)
+        result = generate_populate_cdm_source_sql(cdm_source_data, vocab_version, output_path)
 
         expected = load_reference_sql("generate_populate_cdm_source_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)

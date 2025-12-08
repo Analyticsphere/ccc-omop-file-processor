@@ -235,7 +235,7 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
     except Exception as e:
         raise Exception(f"DDL file error: {e}")
 
-def generate_populate_cdm_source_sql(cdm_source_data: dict, output_path: str) -> str:
+def generate_populate_cdm_source_sql(cdm_source_data: dict, vocab_version: str, output_path: str) -> str:
     """
     Generate SQL to create cdm_source Parquet file with metadata.
 
@@ -244,15 +244,12 @@ def generate_populate_cdm_source_sql(cdm_source_data: dict, output_path: str) ->
 
     Args:
         cdm_source_data: Dictionary containing CDM source metadata fields
+        vocab_version: Vocabulary version string
         output_path: Path where cdm_source Parquet file should be written
 
     Returns:
         SQL statement that creates single-row cdm_source Parquet file
     """
-    vocab_version = utils.get_delivery_vocabulary_version(
-        cdm_source_data["gcs_bucket"],
-        cdm_source_data["source_release_date"]
-    )
     cdm_version_concept_id = utils.get_cdm_version_concept_id(cdm_source_data["cdm_version"])
 
     return f"""
@@ -305,7 +302,8 @@ def populate_cdm_source_file(cdm_source_data: dict) -> None:
 
     utils.logger.info(f"Populating cdm_source Parquet file for {delivery_date} delivery")
 
-    populate_sql = generate_populate_cdm_source_sql(cdm_source_data, storage.get_uri(cdm_source_path))
+    vocab_version = utils.get_delivery_vocabulary_version(gcs_bucket, delivery_date)
+    populate_sql = generate_populate_cdm_source_sql(cdm_source_data, vocab_version, storage.get_uri(cdm_source_path))
     utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
 
 

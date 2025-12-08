@@ -11,5 +11,5 @@ CAST('2025-01-01' AS DATE) AS source_release_date,
 CAST('2025-01-15' AS DATE) AS cdm_release_date,
 '5.4' AS cdm_version,
 756265 AS cdm_version_concept_id,
-'No vocabulary file provided' AS vocabulary_version
+'v5.0_24-JAN-25' AS vocabulary_version
 ) TO 'gs://test-bucket/2025-01-01/artifacts/converted_files/cdm_source.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)
