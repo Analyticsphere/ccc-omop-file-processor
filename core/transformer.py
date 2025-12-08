@@ -181,12 +181,9 @@ class Transformer:
 
         return transform_sql
 
-    # TODO: Put the transformed file in a common location for all files being processed in the pipeline
     def get_transformed_path(self) -> str:
         """Return output path for transformed Parquet file."""
         return f"{self.etl_artifact_path}{self.target_table}/parts/{self.target_table}_from_{self.source_table}{constants.PARQUET}"
-        
-        # f"{self.file_path}transformed/{self.target_table}_{uuid.uuid4()}{constants.PARQUET}"
 
     def placeholder_to_file_path(self, sql: str) -> str:
         """

@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from google.cloud import storage as gcs_storage  # type: ignore
 
-from core import utils, constants
+from core import constants, utils
 
 
 class StorageBackend:
