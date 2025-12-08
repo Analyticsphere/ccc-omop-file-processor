@@ -85,7 +85,7 @@ docker run -d \
   -v /Users/frankenbergerea/Development/ccc-omop-file-processor/local-data:/data \
   -v /Users/frankenbergerea/Development/synthea/synthea_53:/data/synthea_53 \
   -e STORAGE_BACKEND=local \
-  -e VOCAB_GCS_PATH=/data/vocabulary \
+  -e OMOP_VOCAB_PATH=/data/vocabulary \
   -e BQ_LOGGING_TABLE=local_logs \
   -e PORT=8080 \
   omop-processor:local
@@ -309,7 +309,7 @@ docker stop omop-processor-local && docker rm omop-processor-local
 4. **Documentation Updates**
    - Updated QUICKSTART.md: moved create_optimized_vocab to working endpoints
    - Updated endpoint name: create_artifact_buckets → create_artifact_directories
-   - Updated environment variable: VOCAB_GCS_PATH → VOCAB_PATH
+   - Updated environment variable: OMOP_VOCAB_PATH → VOCAB_PATH
 
 ### Files Modified
 - `core/omop_client.py` - Fixed path duplication bug

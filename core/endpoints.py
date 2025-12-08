@@ -382,7 +382,7 @@ def target_vocab_to_bq() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     table_file_name: Optional[str] = data.get('table_file_name')
     vocab_version: Optional[str] = data.get('vocab_version')
-    vocab_gcs_bucket: str = constants.VOCAB_GCS_PATH
+    vocab_gcs_bucket: str = constants.OMOP_VOCAB_PATH
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
 

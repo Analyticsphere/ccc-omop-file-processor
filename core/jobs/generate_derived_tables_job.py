@@ -13,7 +13,7 @@ Required Environment Variables:
     VOCAB_VERSION: Vocabulary version
 
 Optional Environment Variables:
-    OMOP_VOCAB_PATH: GCS bucket for vocabulary files (defaults to constants.VOCAB_GCS_PATH)
+    OMOP_VOCAB_PATH: GCS bucket for vocabulary files (defaults to constants.OMOP_VOCAB_PATH)
 
 Exit Codes:
     0: Success
@@ -48,7 +48,7 @@ def validate_env_vars() -> dict[str, str]:
         sys.exit(1)
 
     # Optional variables with defaults
-    env_values['OMOP_VOCAB_PATH'] = os.getenv('OMOP_VOCAB_PATH', constants.VOCAB_GCS_PATH)
+    env_values['OMOP_VOCAB_PATH'] = os.getenv('OMOP_VOCAB_PATH', constants.OMOP_VOCAB_PATH)
 
     return env_values
 

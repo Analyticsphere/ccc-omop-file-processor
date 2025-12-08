@@ -177,7 +177,7 @@ gcsfs==2025.3.0               # GCS filesystem (TO BE REPLACED)
      -p 8080:8080 \
      -v /Users/frankenbergerea/Development/ccc-omop-file-processor/local-data:/data \
      -e STORAGE_BACKEND=local \
-     -e VOCAB_GCS_PATH=/data/vocabulary \
+     -e OMOP_VOCAB_PATH=/data/vocabulary \
      -e BQ_LOGGING_TABLE=local_logs \
      -e PORT=8080 \
      omop-processor:local
@@ -200,7 +200,7 @@ gcsfs==2025.3.0               # GCS filesystem (TO BE REPLACED)
 ```bash
 STORAGE_BACKEND=local              # Switch to local filesystem
 BQ_LOGGING_TABLE=local_logs        # Mock BigQuery logging
-VOCAB_GCS_PATH=/data/vocabulary    # Local vocab path
+OMOP_VOCAB_PATH=/data/vocabulary    # Local vocab path
 PORT=8080                          # API port (internal)
 DUCKDB_TEMP_DIR=/data/temp/        # DuckDB temp directory
 ```
@@ -454,13 +454,13 @@ OMOP vocabulary files from [Athena](https://athena.ohdsi.org/search-terms/start)
 
 **Environment Variable:**
 ```bash
-VOCAB_GCS_PATH=/data/vocabulary
+OMOP_VOCAB_PATH=/data/vocabulary
 ```
 
 **Tasks:**
 - [ ] Download vocabulary files from Athena
 - [ ] Place in local directory structure
-- [ ] Update VOCAB_GCS_PATH to local path
+- [ ] Update OMOP_VOCAB_PATH to local path
 - [ ] Test `/create_optimized_vocab` endpoint
 
 **Success Criteria:**
@@ -501,7 +501,7 @@ ENV FLASK_APP=/app/core/endpoints.py
 ENV FLASK_RUN_HOST=0.0.0.0
 ENV STORAGE_BACKEND=local
 ENV DUCKDB_TEMP_DIR=/data/temp/
-ENV VOCAB_GCS_PATH=/data/vocabulary
+ENV OMOP_VOCAB_PATH=/data/vocabulary
 ENV BQ_LOGGING_TABLE=local_logs
 
 EXPOSE 8080
@@ -526,7 +526,7 @@ services:
       - ./core:/app/core  # Hot reload for development
     environment:
       - STORAGE_BACKEND=local
-      - VOCAB_GCS_PATH=/data/vocabulary
+      - OMOP_VOCAB_PATH=/data/vocabulary
       - DUCKDB_TEMP_DIR=/data/temp/
       - BQ_LOGGING_TABLE=local_logs
       - FLASK_ENV=development

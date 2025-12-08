@@ -100,7 +100,7 @@ python -m flask run
 - `DUCKDB_THREADS` - Thread count (default: `2`)
 
 ### Other Configuration
-- `VOCAB_GCS_PATH` - Vocabulary files location
+- `OMOP_VOCAB_PATH` - Vocabulary files location
 - `BQ_LOGGING_TABLE` - BigQuery logging table (mocked in local mode)
 - `PORT` - API port (default: `8080`)
 

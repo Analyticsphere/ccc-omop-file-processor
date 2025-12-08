@@ -170,7 +170,7 @@ Several values used across multiple endpoints are configured through environment
 
 | Configuration | Variable | Description |
 |---------------|----------|-------------|
-| Vocabulary GCS Path | `VOCAB_GCS_PATH` | GCS bucket path containing vocabulary files |
+| Vocabulary GCS Path | `OMOP_VOCAB_PATH` | GCS bucket path containing vocabulary files |
 | BigQuery Logging Table | `BQ_LOGGING_TABLE` | Fully qualified table ID for pipeline logging |
 | Service Name | `SERVICE_NAME` | Name of the service for identification in logs |
 
@@ -238,7 +238,7 @@ OMOP vocabulary files are updated twice a year. Users will need to manually down
 |-----------|------|----------|-------------|
 | vocab_version | string | Yes | The version of the OMOP vocabulary to use |
 
-**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
+**Note:** The vocabulary GCS bucket is configured via the `OMOP_VOCAB_PATH` constant and does not need to be passed in the request.
 
 **Example Request:**
 ```json
@@ -487,7 +487,7 @@ Airflow is responsible for calling each step in sequence.
 - `"Discover tables for deduplication"`
 - `"Deduplicate single table"`
 
-**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
+**Note:** The vocabulary GCS bucket is configured via the `OMOP_VOCAB_PATH` constant and does not need to be passed in the request.
 
 **Response:**
 
@@ -653,7 +653,7 @@ Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement
 | dataset_id | string | Yes | BigQuery dataset ID |
 | vocab_version | string | Yes | Vocabulary version |
 
-**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
+**Note:** The vocabulary GCS bucket is configured via the `OMOP_VOCAB_PATH` constant and does not need to be passed in the request.
 
 **Example Request:**
 ```json
@@ -708,7 +708,7 @@ Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement
 | project_id | string | Yes | Google Cloud project ID |
 | dataset_id | string | Yes | BigQuery dataset ID |
 
-**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
+**Note:** The vocabulary GCS bucket is configured via the `OMOP_VOCAB_PATH` constant and does not need to be passed in the request.
 
 **Example Request:**
 ```json

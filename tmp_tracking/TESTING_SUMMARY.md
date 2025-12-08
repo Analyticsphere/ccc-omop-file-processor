@@ -141,7 +141,7 @@ docker run -d \
   -v /Users/frankenbergerea/Development/ccc-omop-file-processor/local-data:/data \
   -v /Users/frankenbergerea/Development/synthea/synthea_53:/data/synthea_53 \
   -e STORAGE_BACKEND=local \
-  -e VOCAB_GCS_PATH=/data/vocabulary \
+  -e OMOP_VOCAB_PATH=/data/vocabulary \
   -e BQ_LOGGING_TABLE=local_logs \
   -e PORT=8080 \
   omop-processor:local
@@ -153,7 +153,7 @@ docker run -d \
 
 ### Environment Variables
 - `STORAGE_BACKEND=local` - Use local filesystem
-- `VOCAB_GCS_PATH=/data/vocabulary` - Vocabulary location
+- `OMOP_VOCAB_PATH=/data/vocabulary` - Vocabulary location
 - `BQ_LOGGING_TABLE=local_logs` - Mock BigQuery logging
 - `PORT=8080` - API port
 
