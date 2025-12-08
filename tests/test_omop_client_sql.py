@@ -11,7 +11,8 @@ from pathlib import Path
 
 from core.omop_client import (
     generate_upgrade_file_sql,
-    generate_convert_vocab_sql
+    generate_convert_vocab_sql,
+    generate_optimized_vocab_sql
 )
 
 
@@ -125,4 +126,19 @@ class TestGenerateConvertVocabSql:
         )
 
         expected = load_reference_sql("generate_convert_vocab_sql_mixed.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateOptimizedVocabSql:
+    """Tests for generate_optimized_vocab_sql()."""
+
+    def test_standard_optimized_vocab(self):
+        """Test SQL generation for optimized vocabulary file creation."""
+        result = generate_optimized_vocab_sql(
+            concept_path='gs://vocab-bucket/v5.0_24-JAN-25/optimized/concept.parquet',
+            concept_relationship_path='gs://vocab-bucket/v5.0_24-JAN-25/optimized/concept_relationship.parquet',
+            output_path='gs://vocab-bucket/v5.0_24-JAN-25/optimized/optimized_vocab_file.parquet'
+        )
+
+        expected = load_reference_sql("generate_optimized_vocab_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)

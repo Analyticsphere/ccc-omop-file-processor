@@ -136,6 +136,43 @@ def convert_vocab_to_parquet(vocab_version: str, vocab_path: str) -> None:
     else:
         raise Exception(f"Vocabulary path {vocab_root_path} not found")
 
+def generate_optimized_vocab_sql(concept_path: str, concept_relationship_path: str, output_path: str) -> str:
+    """
+    Generate SQL to create optimized vocabulary file.
+
+    Creates SQL that:
+    - Denormalizes concept and concept_relationship tables
+    - Includes mapping relationships (Maps to, Maps to value, Maps to unit)
+    - Includes replacement relationships (Concept replaced by, was_a to, etc.)
+    - Outputs to optimized vocabulary file for efficient lookups
+
+    Args:
+        concept_path: URI path to concept.parquet file
+        concept_relationship_path: URI path to concept_relationship.parquet file
+        output_path: URI path for output optimized_vocab_file.parquet
+
+    Returns:
+        SQL string for creating optimized vocabulary file
+    """
+    return f"""
+                COPY (
+                    SELECT DISTINCT
+                        c1.concept_id AS concept_id, -- Every concept_id from concept table
+                        c1.standard_concept AS concept_id_standard,
+                        c1.domain_id AS concept_id_domain,
+                        cr.relationship_id,
+                        cr.concept_id_2 AS target_concept_id, -- targets to concept_id's
+                        c2.standard_concept AS target_concept_id_standard,
+                        c2.domain_id AS target_concept_id_domain
+                    FROM read_parquet('{concept_path}') c1
+                    LEFT JOIN read_parquet('{concept_relationship_path}') cr on c1.concept_id = cr.concept_id_1
+                    LEFT JOIN read_parquet('{concept_path}') c2 on cr.concept_id_2 = c2.concept_id
+                    WHERE IFNULL(cr.relationship_id, '')
+                        IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
+                ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
+                """
+
+
 def create_optimized_vocab_file(vocab_version: str, vocab_path: str) -> None:
     """
     Create optimized vocabulary file by denormalizing concept and concept_relationship tables.
@@ -156,23 +193,10 @@ def create_optimized_vocab_file(vocab_version: str, vocab_path: str) -> None:
                 concept_relationship_path = storage.get_uri(f"{vocab_path}{constants.OPTIMIZED_VOCAB_FOLDER}/concept_relationship{constants.PARQUET}")
                 output_path = storage.get_uri(optimized_file_path)
 
-                transform_query = f"""
-                COPY (
-                    SELECT DISTINCT
-                        c1.concept_id AS concept_id, -- Every concept_id from concept table
-                        c1.standard_concept AS concept_id_standard,
-                        c1.domain_id AS concept_id_domain,
-                        cr.relationship_id,
-                        cr.concept_id_2 AS target_concept_id, -- targets to concept_id's
-                        c2.standard_concept AS target_concept_id_standard,
-                        c2.domain_id AS target_concept_id_domain
-                    FROM read_parquet('{concept_path}') c1
-                    LEFT JOIN read_parquet('{concept_relationship_path}') cr on c1.concept_id = cr.concept_id_1
-                    LEFT JOIN read_parquet('{concept_path}') c2 on cr.concept_id_2 = c2.concept_id
-                    WHERE IFNULL(cr.relationship_id, '')
-                        IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
-                ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
-                """
+                # Generate SQL
+                transform_query = generate_optimized_vocab_sql(concept_path, concept_relationship_path, output_path)
+
+                # Execute SQL
                 utils.execute_duckdb_sql(transform_query, "Unable to create optimized vocab file")
 
             else:
