@@ -217,7 +217,8 @@ def normalize_parquet_file() -> tuple[str, int]:
         
         parquet_file_path: str = utils.get_parquet_artifact_location(file_path)
         utils.logger.info(f"Attempting to normalize Parquet file {parquet_file_path}")
-        normalization.normalize_file(parquet_file_path, omop_version, date_format, datetime_format)
+        normalizer = normalization.Normalizer(parquet_file_path, omop_version, date_format, datetime_format)
+        normalizer.normalize()
 
         return "Normalized Parquet file", 200
     except Exception as e:

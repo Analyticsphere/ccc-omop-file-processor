@@ -291,7 +291,7 @@ def populate_cdm_source_file(cdm_source_data: dict) -> None:
 
     if file_exists:
         # Check if file has rows
-        row_count_sql = normalization.generate_row_count_sql(storage.get_uri(cdm_source_path))
+        row_count_sql = normalization.Normalizer.generate_row_count_sql(storage.get_uri(cdm_source_path))
         result = utils.execute_duckdb_sql(row_count_sql, "Unable to count rows in cdm_source", return_results=True)
         row_count = result[0][0] if result else 0
 
