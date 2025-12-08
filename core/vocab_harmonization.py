@@ -12,7 +12,6 @@ from core.storage_backend import storage
 class VocabHarmonizer:
     """
     A class for harmonizing OMOP parquet files according to specified vocabulary version.
-    Handles the entire process from reading parquet files to generating SQL and saving harmonized output.
     """
 
     def __init__(self, file_path: str, cdm_version: str, site: str, vocab_version: str, vocab_path: str, project_id: str, dataset_id: str):
@@ -65,25 +64,254 @@ class VocabHarmonizer:
 
         return None
 
-    def source_target_remapping(self) -> None:
+    @staticmethod
+    def generate_domain_table_check_sql(
+        source_table_name: str,
+        ordered_omop_columns: list[str],
+        target_concept_id_column: str,
+        source_concept_id_column: str,
+        existing_files_where_clause: str = ""
+    ) -> str:
         """
-        Generate and execute SQL to check for and update non-standard source-to-target mappings to standard        
+        Generate SQL to assign current domain and target table to concepts not remapped in previous steps.
+
+        Creates SQL that:
+        - Creates vocab CTE with distinct concept_id and domain values
+        - Joins source table with vocab on target_concept_id
+        - Assigns target_domain based on concept's current domain
+        - Excludes rows already harmonized in previous steps
+        - Adds harmonization metadata columns
+        - Determines target table based on concept domain
+
+        Args:
+            source_table_name: Name of the source OMOP table
+            ordered_omop_columns: List of column names in schema order
+            target_concept_id_column: Full column reference (e.g., 'condition_concept_id')
+            source_concept_id_column: Full column reference or value (e.g., 'condition_source_concept_id')
+            existing_files_where_clause: Optional WHERE clause to exclude already-harmonized rows
+
+        Returns:
+            SQL string with placeholders (@TABLE_NAME, @OPTIMIZED_VOCABULARY)
         """
+        select_exprs: list = []
 
-        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
+        for column_name in ordered_omop_columns:
+            column_name = f"tbl.{column_name}"
+            select_exprs.append(column_name)
 
-        columns = schema[self.source_table_name]["columns"]
-        ordered_omop_columns = list(columns.keys())  # preserve column order
+        # Add columns to store metadata related to vocab harmonization for later reporting
+        metadata_columns = [
+            "vocab.concept_id_domain AS target_domain",
+            "'domain check' AS vocab_harmonization_status",
+            f"{source_concept_id_column} AS source_concept_id",
+            f"{target_concept_id_column} AS previous_target_concept_id",
+            f"{target_concept_id_column} AS target_concept_id"
+        ]
+        for metadata_column in metadata_columns:
+            select_exprs.append(metadata_column)
 
-        # Get _concept_id and _source_concept_id columns for table
-        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
-        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
-        primary_key = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+        # Add vh_value_as_concept_id field to keep structure consistent with remapped tables
+        select_exprs.append("CAST(NULL AS BIGINT) AS vh_value_as_concept_id")
 
-        # specimen and note tables don't have _source_concept_id columns so can't be evaluated with this method
-        if not source_concept_id_column or source_concept_id_column == "":
-            return
+        # Add target table statement
+        case_when_target_table = f"""
+                CASE
+                    WHEN vocab.concept_id_domain = 'Visit' THEN 'visit_occurrence'
+                    WHEN vocab.concept_id_domain = 'Condition' THEN 'condition_occurrence'
+                    WHEN vocab.concept_id_domain = 'Drug' THEN 'drug_exposure'
+                    WHEN vocab.concept_id_domain = 'Procedure' THEN 'procedure_occurrence'
+                    WHEN vocab.concept_id_domain = 'Device' THEN 'device_exposure'
+                    WHEN vocab.concept_id_domain = 'Measurement' THEN 'measurement'
+                    WHEN vocab.concept_id_domain = 'Observation' THEN 'observation'
+                    WHEN vocab.concept_id_domain = 'Note' THEN 'note'
+                    WHEN vocab.concept_id_domain = 'Specimen' THEN 'specimen'
+                ELSE '{source_table_name}' END AS target_table
+            """
+        select_exprs.append(case_when_target_table)
 
+        select_sql = ",\n                ".join(select_exprs)
+
+        from_sql = f"""
+                FROM read_parquet('@{source_table_name.upper()}') AS tbl
+                INNER JOIN vocab
+                    ON {target_concept_id_column} = vocab.concept_id
+            """
+
+        return f"""
+                    WITH vocab AS (
+                        SELECT DISTINCT
+                            concept_id,
+                            concept_id_domain
+                        FROM read_parquet('@OPTIMIZED_VOCABULARY')
+                    )
+                    SELECT {select_sql}
+                    {from_sql}
+                    {existing_files_where_clause}
+            """
+
+    @staticmethod
+    def generate_check_new_targets_sql(
+        source_table_name: str,
+        ordered_omop_columns: list[str],
+        target_concept_id_column: str,
+        source_concept_id_column: str,
+        primary_key_column: str,
+        vocab_status_string: str,
+        mapping_relationships: str,
+        existing_files_where_clause: str = ""
+    ) -> str:
+        """
+        Generate SQL to check for cases where non-standard target_concept_id has mapping/replacement to standard.
+
+        Creates SQL that:
+        - Joins source table with optimized vocabulary on target_concept_id
+        - Identifies rows where target has a mapping to a different standard concept
+        - Updates source_concept_id to previous target value
+        - Handles Measurement Value domain mappings via pivot CTE
+        - Adds vocabulary harmonization metadata columns
+        - Determines target table based on target domain
+
+        Args:
+            source_table_name: Name of the source OMOP table
+            ordered_omop_columns: List of column names in schema order
+            target_concept_id_column: Name of the target concept_id column (e.g., 'condition_concept_id')
+            source_concept_id_column: Name/value of source concept_id column (e.g., 'condition_source_concept_id')
+            primary_key_column: Name of the primary key column
+            vocab_status_string: Status message for harmonization (e.g., 'existing non-standard target remapped to standard code')
+            mapping_relationships: SQL string of relationship types to check (e.g., "'Maps to', 'Maps to value'")
+            existing_files_where_clause: Optional WHERE clause to exclude already-harmonized rows
+
+        Returns:
+            SQL string with placeholders (@TABLE_NAME, @OPTIMIZED_VOCABULARY)
+        """
+        initial_select_exprs: list = []
+        final_select_exprs: list = []
+
+        for column_name in ordered_omop_columns:
+            column_name = f"tbl.{column_name}"
+            final_select_exprs.append(column_name)
+
+            # Replace new target concept_id in target_concept_id_column
+            if column_name == f"tbl.{target_concept_id_column}":
+                column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
+
+            # Set _source_concept_id value to previous target
+            if column_name == f"{source_concept_id_column}":
+                column_name = f"tbl.{target_concept_id_column} AS {source_concept_id_column.replace('tbl.','')}"
+
+            initial_select_exprs.append(column_name)
+
+        # Add columns to store metadata related to vocab harmonization for later reporting
+        metadata_columns = [
+            "vocab.target_concept_id_domain AS target_domain",
+            f"'{vocab_status_string}' AS vocab_harmonization_status",
+            f"{source_concept_id_column} AS source_concept_id",
+            f"tbl.{target_concept_id_column} AS previous_target_concept_id",
+            "vocab.target_concept_id AS target_concept_id"
+        ]
+        for metadata_column in metadata_columns:
+            initial_select_exprs.append(metadata_column)
+
+            # Only include the alias in the second select statement
+            alias = metadata_column.split(" AS ")[1]
+            final_select_exprs.append(alias)
+
+        initial_select_sql = ",\n                ".join(initial_select_exprs)
+
+        initial_from_sql = f"""
+                FROM read_parquet('@{source_table_name.upper()}') AS tbl
+                INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
+                    ON tbl.{target_concept_id_column} = vocab.concept_id
+                WHERE tbl.{target_concept_id_column} != vocab.target_concept_id
+                AND vocab.relationship_id IN ({mapping_relationships})
+                AND vocab.target_concept_id_standard = 'S'
+                --AND tbl.{source_concept_id_column} = 0
+            """
+
+        # Add existing files exclusion if provided
+        if existing_files_where_clause:
+            initial_from_sql = initial_from_sql + existing_files_where_clause
+
+        pivot_cte = f"""
+                -- Pivot so that Meas Value mappings get associated with target_concept_id_column
+                SELECT
+                    tbl.{primary_key_column},
+                    MAX(vocab.target_concept_id) AS vh_value_as_concept_id
+                FROM read_parquet('@{source_table_name.upper()}') AS tbl
+                INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
+                    ON tbl.{target_concept_id_column} = vocab.concept_id
+                WHERE vocab.target_concept_id_domain = 'Meas Value'
+                GROUP BY tbl.{primary_key_column}
+            """
+
+        # Add column to final select that store Meas Value mapping
+        final_select_exprs.append("mv_cte.vh_value_as_concept_id")
+
+        # Add target table to final output
+        case_when_target_table = f"""
+                CASE
+                    WHEN tbl.target_domain = 'Visit' THEN 'visit_occurrence'
+                    WHEN tbl.target_domain = 'Condition' THEN 'condition_occurrence'
+                    WHEN tbl.target_domain = 'Drug' THEN 'drug_exposure'
+                    WHEN tbl.target_domain = 'Procedure' THEN 'procedure_occurrence'
+                    WHEN tbl.target_domain = 'Device' THEN 'device_exposure'
+                    WHEN tbl.target_domain = 'Measurement' THEN 'measurement'
+                    WHEN tbl.target_domain = 'Observation' THEN 'observation'
+                    WHEN tbl.target_domain = 'Note' THEN 'note'
+                    WHEN tbl.target_domain = 'Specimen' THEN 'specimen'
+                ELSE '{source_table_name}' END AS target_table
+            """
+        final_select_exprs.append(case_when_target_table)
+        final_select_sql = ",\n                ".join(final_select_exprs)
+
+        final_from_sql = f"""
+                FROM base AS tbl
+                LEFT JOIN meas_value AS mv_cte
+                    ON tbl.{primary_key_column} = mv_cte.{primary_key_column}
+                WHERE tbl.target_domain != 'Meas Value'
+            """
+
+        return f"""
+                WITH base AS (
+                    SELECT
+                        {initial_select_sql}
+                    {initial_from_sql}
+                ), meas_value AS (
+                    {pivot_cte}
+                )
+                SELECT
+                    {final_select_sql}
+                {final_from_sql}
+            """
+
+    @staticmethod
+    def generate_source_target_remapping_sql(
+        source_table_name: str,
+        ordered_omop_columns: list[str],
+        target_concept_id_column: str,
+        source_concept_id_column: str,
+        primary_key: str
+    ) -> str:
+        """
+        Generate SQL to check for and update non-standard source-to-target mappings to standard.
+
+        Creates SQL that:
+        - Joins source table with optimized vocabulary on source_concept_id
+        - Identifies rows where source_concept_id maps to a different standard target
+        - Handles Measurement Value domain mappings via pivot CTE
+        - Adds vocabulary harmonization metadata columns
+        - Determines target table based on target domain
+
+        Args:
+            source_table_name: Name of the source OMOP table
+            ordered_omop_columns: List of column names in schema order
+            target_concept_id_column: Name of the target concept_id column (e.g., 'condition_concept_id')
+            source_concept_id_column: Name of the source concept_id column (e.g., 'condition_source_concept_id')
+            primary_key: Name of the primary key column
+
+        Returns:
+            SQL string with placeholders (@TABLE_NAME, @OPTIMIZED_VOCABULARY)
+        """
         initial_select_exprs: list = []
         final_select_exprs: list = []
 
@@ -96,7 +324,7 @@ class VocabHarmonizer:
                 column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
 
             initial_select_exprs.append(column_name)
-        
+
         # Add columns to store metadata related to vocab harmonization for later reporting
         metadata_columns = [
             "vocab.target_concept_id_domain AS target_domain",
@@ -115,67 +343,96 @@ class VocabHarmonizer:
         initial_select_sql = ",\n                ".join(initial_select_exprs)
 
         initial_from_sql = f"""
-            FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
-            INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
-                ON tbl.{source_concept_id_column} = vocab.concept_id
-            WHERE tbl.{source_concept_id_column} != 0
-            AND tbl.{target_concept_id_column} != vocab.target_concept_id
-            AND vocab.relationship_id IN ('Maps to', 'Maps to value')
-            AND vocab.target_concept_id_standard = 'S'
-        """
+                FROM read_parquet('@{source_table_name.upper()}') AS tbl
+                INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
+                    ON tbl.{source_concept_id_column} = vocab.concept_id
+                WHERE tbl.{source_concept_id_column} != 0
+                AND tbl.{target_concept_id_column} != vocab.target_concept_id
+                AND vocab.relationship_id IN ('Maps to', 'Maps to value')
+                AND vocab.target_concept_id_standard = 'S'
+            """
 
         pivot_cte = f"""
-            -- Pivot so that Meas Value mappings get associated with target_concept_id_column
-            SELECT 
-                tbl.{primary_key},
-                MAX(vocab.target_concept_id) AS vh_value_as_concept_id
-            FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
-            INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab 
-                ON tbl.{source_concept_id_column} = vocab.concept_id
-            WHERE vocab.target_concept_id_domain = 'Meas Value'
-            GROUP BY tbl.{primary_key}
-        """
+                -- Pivot so that Meas Value mappings get associated with target_concept_id_column
+                SELECT
+                    tbl.{primary_key},
+                    MAX(vocab.target_concept_id) AS vh_value_as_concept_id
+                FROM read_parquet('@{source_table_name.upper()}') AS tbl
+                INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
+                    ON tbl.{source_concept_id_column} = vocab.concept_id
+                WHERE vocab.target_concept_id_domain = 'Meas Value'
+                GROUP BY tbl.{primary_key}
+            """
 
         # Add column to final select that store Meas Value mapping
         final_select_exprs.append("mv_cte.vh_value_as_concept_id")
 
         # Add target table to final output
         case_when_target_table = f"""
-            CASE 
-                WHEN tbl.target_domain = 'Visit' THEN 'visit_occurrence'
-                WHEN tbl.target_domain = 'Condition' THEN 'condition_occurrence'
-                WHEN tbl.target_domain = 'Drug' THEN 'drug_exposure'
-                WHEN tbl.target_domain = 'Procedure' THEN 'procedure_occurrence'
-                WHEN tbl.target_domain = 'Device' THEN 'device_exposure'
-                WHEN tbl.target_domain = 'Measurement' THEN 'measurement'
-                WHEN tbl.target_domain = 'Observation' THEN 'observation'
-                WHEN tbl.target_domain = 'Note' THEN 'note'
-                WHEN tbl.target_domain = 'Specimen' THEN 'specimen'
-            ELSE '{self.source_table_name}' END AS target_table
-        """
+                CASE
+                    WHEN tbl.target_domain = 'Visit' THEN 'visit_occurrence'
+                    WHEN tbl.target_domain = 'Condition' THEN 'condition_occurrence'
+                    WHEN tbl.target_domain = 'Drug' THEN 'drug_exposure'
+                    WHEN tbl.target_domain = 'Procedure' THEN 'procedure_occurrence'
+                    WHEN tbl.target_domain = 'Device' THEN 'device_exposure'
+                    WHEN tbl.target_domain = 'Measurement' THEN 'measurement'
+                    WHEN tbl.target_domain = 'Observation' THEN 'observation'
+                    WHEN tbl.target_domain = 'Note' THEN 'note'
+                    WHEN tbl.target_domain = 'Specimen' THEN 'specimen'
+                ELSE '{source_table_name}' END AS target_table
+            """
         final_select_exprs.append(case_when_target_table)
         final_select_sql = ",\n                ".join(final_select_exprs)
 
         final_from_sql = f"""
-            FROM base AS tbl
-            LEFT JOIN meas_value AS mv_cte
-                ON tbl.{primary_key} = mv_cte.{primary_key}
-            WHERE tbl.target_domain != 'Meas Value'
-        """
+                FROM base AS tbl
+                LEFT JOIN meas_value AS mv_cte
+                    ON tbl.{primary_key} = mv_cte.{primary_key}
+                WHERE tbl.target_domain != 'Meas Value'
+            """
 
-        cte_with_placeholders = f"""
-            WITH base AS (
+        return f"""
+                WITH base AS (
+                    SELECT
+                        {initial_select_sql}
+                    {initial_from_sql}
+                ), meas_value AS (
+                    {pivot_cte}
+                )
                 SELECT
-                    {initial_select_sql}
-                {initial_from_sql}
-            ), meas_value AS (
-                {pivot_cte}
-            )
-            SELECT
-                {final_select_sql}
-            {final_from_sql}
+                    {final_select_sql}
+                {final_from_sql}
+            """
+    
+    def source_target_remapping(self) -> None:
+        """
+        Generate and execute SQL to check for and update non-standard source-to-target mappings to standard
         """
 
+        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
+
+        columns = schema[self.source_table_name]["columns"]
+        ordered_omop_columns = list(columns.keys())  # preserve column order
+
+        # Get _concept_id and _source_concept_id columns for table
+        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
+        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
+        primary_key = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+
+        # specimen and note tables don't have _source_concept_id columns so can't be evaluated with this method
+        if not source_concept_id_column or source_concept_id_column == "":
+            return
+
+        # Generate SQL with placeholders
+        cte_with_placeholders = VocabHarmonizer.generate_source_target_remapping_sql(
+            source_table_name=self.source_table_name,
+            ordered_omop_columns=ordered_omop_columns,
+            target_concept_id_column=target_concept_id_column,
+            source_concept_id_column=source_concept_id_column,
+            primary_key=primary_key
+        )
+
+        # Replace placeholders with actual file paths
         final_cte = utils.placeholder_to_file_path(
             self.site,
             self.bucket,
@@ -185,6 +442,7 @@ class VocabHarmonizer:
             self.vocab_path
         )
 
+        # Wrap in COPY statement and execute
         output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}")
         final_sql = f"""
             COPY (
@@ -196,7 +454,7 @@ class VocabHarmonizer:
 
     def check_new_targets(self, mapping_type: str) -> None:
         """
-        Generate and execute SQL to check for cases in which a non-standard target_concept_id 
+        Generate and execute SQL to check for cases in which a non-standard target_concept_id
         has a mapping or replacement to a standard concept_id
         """
 
@@ -220,115 +478,32 @@ class VocabHarmonizer:
             else f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']}"
         primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
 
-        initial_select_exprs: list = []
-        final_select_exprs: list = []
-
-        for column_name in ordered_omop_columns:
-            column_name = f"tbl.{column_name}"
-            final_select_exprs.append(column_name)
-
-            # Replace new target concept_id in target_concept_id_column
-            if column_name == f"tbl.{target_concept_id_column}":
-                column_name = f"vocab.target_concept_id AS {target_concept_id_column}"
-            
-            # Set _source_concept_id value to previous target
-            if column_name == f"{source_concept_id_column}":
-                column_name = f"tbl.{target_concept_id_column} AS {source_concept_id_column.replace('tbl.','')}"
-
-            initial_select_exprs.append(column_name)
-        
-        # Add columns to store metadata related to vocab harmonization for later reporting
-        metadata_columns = [
-            "vocab.target_concept_id_domain AS target_domain",
-            f"'{vocab_status_string}' AS vocab_harmonization_status",
-            f"{source_concept_id_column} AS source_concept_id",
-            f"tbl.{target_concept_id_column} AS previous_target_concept_id",
-            "vocab.target_concept_id AS target_concept_id"
-        ]
-        for metadata_column in metadata_columns:
-            initial_select_exprs.append(metadata_column)
-
-            # Only include the alias in the second select statement
-            alias = metadata_column.split(" AS ")[1]
-            final_select_exprs.append(alias)
-
-        initial_select_sql = ",\n                ".join(initial_select_exprs)
-
-        initial_from_sql = f"""
-            FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
-            INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
-                ON tbl.{target_concept_id_column} = vocab.concept_id
-            WHERE tbl.{target_concept_id_column} != vocab.target_concept_id
-            AND vocab.relationship_id IN ({mapping_relationships})
-            AND vocab.target_concept_id_standard = 'S' 
-            --AND tbl.{source_concept_id_column} = 0
-        """
-
-        # Don't perform target remapping on rows which have already been harominzed
-        # primary_key_column values were made unique per row values in normalization step, 
+        # Don't perform target remapping on rows which have already been harmonized
+        # primary_key_column values were made unique per row values in normalization step,
         #   so they can be used for identification here
+        existing_files_where_clause = ""
         exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
         if exisiting_files:
             existing_files_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
-            where_sql = f"""
+            existing_files_where_clause = f"""
                 AND tbl.{primary_key_column} NOT IN (
                     SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
                 )
             """
-            initial_from_sql = initial_from_sql + where_sql
 
-        pivot_cte = f"""
-            -- Pivot so that Meas Value mappings get associated with target_concept_id_column
-            SELECT 
-                tbl.{primary_key_column},
-                MAX(vocab.target_concept_id) AS vh_value_as_concept_id
-            FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
-            INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab 
-                ON tbl.{target_concept_id_column} = vocab.concept_id
-            WHERE vocab.target_concept_id_domain = 'Meas Value'
-            GROUP BY tbl.{primary_key_column}
-        """
+        # Generate SQL with placeholders
+        cte_with_placeholders = VocabHarmonizer.generate_check_new_targets_sql(
+            source_table_name=self.source_table_name,
+            ordered_omop_columns=ordered_omop_columns,
+            target_concept_id_column=target_concept_id_column,
+            source_concept_id_column=source_concept_id_column,
+            primary_key_column=primary_key_column,
+            vocab_status_string=vocab_status_string,
+            mapping_relationships=mapping_relationships,
+            existing_files_where_clause=existing_files_where_clause
+        )
 
-        # Add column to final select that store Meas Value mapping
-        final_select_exprs.append("mv_cte.vh_value_as_concept_id")
-
-        # Add target table to final output
-        case_when_target_table = f"""
-            CASE 
-                WHEN tbl.target_domain = 'Visit' THEN 'visit_occurrence'
-                WHEN tbl.target_domain = 'Condition' THEN 'condition_occurrence'
-                WHEN tbl.target_domain = 'Drug' THEN 'drug_exposure'
-                WHEN tbl.target_domain = 'Procedure' THEN 'procedure_occurrence'
-                WHEN tbl.target_domain = 'Device' THEN 'device_exposure'
-                WHEN tbl.target_domain = 'Measurement' THEN 'measurement'
-                WHEN tbl.target_domain = 'Observation' THEN 'observation'
-                WHEN tbl.target_domain = 'Note' THEN 'note'
-                WHEN tbl.target_domain = 'Specimen' THEN 'specimen'
-            ELSE '{self.source_table_name}' END AS target_table
-        """
-        final_select_exprs.append(case_when_target_table)
-        final_select_sql = ",\n                ".join(final_select_exprs)
-
-        final_from_sql = f"""
-            FROM base AS tbl
-            LEFT JOIN meas_value AS mv_cte
-                ON tbl.{primary_key_column} = mv_cte.{primary_key_column}
-            WHERE tbl.target_domain != 'Meas Value'
-        """
-
-        cte_with_placeholders = f"""
-            WITH base AS (
-                SELECT
-                    {initial_select_sql}
-                {initial_from_sql}
-            ), meas_value AS (
-                {pivot_cte}
-            )
-            SELECT
-                {final_select_sql}
-            {final_from_sql}
-        """
-
+        # Replace placeholders with actual file paths
         final_cte = utils.placeholder_to_file_path(
             self.site,
             self.bucket,
@@ -338,6 +513,7 @@ class VocabHarmonizer:
             self.vocab_path
         )
 
+        # Wrap in COPY statement and execute
         output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_{table_name}{constants.PARQUET}")
         final_sql = f"""
             COPY (
@@ -361,79 +537,37 @@ class VocabHarmonizer:
             else f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']}"
         primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
 
-        select_exprs: list = []
-
-        for column_name in ordered_omop_columns:
-            column_name = f"tbl.{column_name}"
-            select_exprs.append(column_name)
-
-        # Add columns to store metadata related to vocab harmonization for later reporting
-        metadata_columns = [
-            "vocab.concept_id_domain AS target_domain",
-            "'domain check' AS vocab_harmonization_status",
-            f"{source_concept_id_column} AS source_concept_id",
-            f"{target_concept_id_column} AS previous_target_concept_id",
-            f"{target_concept_id_column} AS target_concept_id"
-        ]
-        for metadata_column in metadata_columns:
-            select_exprs.append(metadata_column)
-        
-        # Add vh_value_as_concept_id field to keep structure consistent with remapped tables
-        select_exprs.append("CAST(NULL AS BIGINT) AS vh_value_as_concept_id")
-        # Add target table statement
-        case_when_target_table = f"""
-            CASE 
-                WHEN vocab.concept_id_domain = 'Visit' THEN 'visit_occurrence'
-                WHEN vocab.concept_id_domain = 'Condition' THEN 'condition_occurrence'
-                WHEN vocab.concept_id_domain = 'Drug' THEN 'drug_exposure'
-                WHEN vocab.concept_id_domain = 'Procedure' THEN 'procedure_occurrence'
-                WHEN vocab.concept_id_domain = 'Device' THEN 'device_exposure'
-                WHEN vocab.concept_id_domain = 'Measurement' THEN 'measurement'
-                WHEN vocab.concept_id_domain = 'Observation' THEN 'observation'
-                WHEN vocab.concept_id_domain = 'Note' THEN 'note'
-                WHEN vocab.concept_id_domain = 'Specimen' THEN 'specimen'
-            ELSE '{self.source_table_name}' END AS target_table
-        """
-        select_exprs.append(case_when_target_table)
-
-        select_sql = ",\n                ".join(select_exprs)
-
-        from_sql = f"""
-            FROM read_parquet('@{self.source_table_name.upper()}') AS tbl
-            INNER JOIN vocab
-                ON {target_concept_id_column} = vocab.concept_id
-        """
-
-        # Don't perform domain check on rows which have already been harominzed
-        # primary_key_column values were made unique per row values in normalization step, 
+        # Don't perform domain check on rows which have already been harmonized
+        # primary_key_column values were made unique per row values in normalization step,
         #   so they can be used for identification here
+        existing_files_where_clause = ""
         exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
-        where_sql = ""
         if exisiting_files:
             existing_files_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
-            where_sql = f"""
+            existing_files_where_clause = f"""
                 WHERE tbl.{primary_key_column} NOT IN (
                     SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
                 )
             """
 
-        # Create vocab CTE with distinct concept_id and domain_id values
-        # Without the CTE, duplicates will occur when 1 concept_id is mapped to more than 1 target
+        # Generate SQL with placeholders
+        inner_sql = VocabHarmonizer.generate_domain_table_check_sql(
+            source_table_name=self.source_table_name,
+            ordered_omop_columns=ordered_omop_columns,
+            target_concept_id_column=target_concept_id_column,
+            source_concept_id_column=source_concept_id_column,
+            existing_files_where_clause=existing_files_where_clause
+        )
+
+        # Wrap in COPY statement with output path
         output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}")
         sql_statement = f"""
             COPY (
-                WITH vocab AS (
-                    SELECT DISTINCT
-                        concept_id,
-                        concept_id_domain
-                    FROM read_parquet('@OPTIMIZED_VOCABULARY')
-                )
-                SELECT {select_sql}
-                {from_sql}
-                {where_sql}
+                {inner_sql}
             ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
         """
 
+        # Replace placeholders with actual file paths
         final_sql_statement = utils.placeholder_to_file_path(
             self.site,
             self.bucket,
