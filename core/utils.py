@@ -78,15 +78,29 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: str)
         # Manually run garabage collection here to reclaim memory
         gc.collect()
 
-def execute_duckdb_sql(sql: str, error_msg: str) -> None:
-    """Execute SQL statement using DuckDB with automatic connection management."""
+def execute_duckdb_sql(sql: str, error_msg: str, return_results: bool = False):
+    """
+    Execute SQL statement using DuckDB with automatic connection management.
+
+    Args:
+        sql: SQL statement to execute
+        error_msg: Error message to display if execution fails
+        return_results: If True, returns query result object. If False, returns None. Defaults to False.
+
+    Returns:
+        If return_results=True: Query result object from DuckDB (can use fetchone(), fetchall(), etc.)
+        If return_results=False: None
+    """
     conn = None
     local_db_file = None
     try:
         conn, local_db_file = create_duckdb_connection()
 
         with conn:
-            conn.execute(sql)
+            result = conn.execute(sql)
+            if return_results:
+                return result
+            return None
     except Exception as e:
         raise Exception(f"{error_msg}: {str(e)}") from e
     finally:
@@ -303,31 +317,39 @@ def get_optimized_vocab_file_path(vocab_version: str, vocab_path: str) -> str:
     optimized_vocab_path = f"{vocab_path}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{constants.OPTIMIZED_VOCAB_FILE_NAME}"
     return optimized_vocab_path
 
+def generate_vocab_version_query_sql(vocabulary_file_path: str) -> str:
+    """
+    Generate SQL to extract vocabulary version from vocabulary table.
+
+    Args:
+        vocabulary_file_path: Full URI path to the vocabulary parquet file
+
+    Returns:
+        SQL statement that queries vocabulary_version for the 'None' vocabulary_id
+    """
+    return f"""
+        SELECT vocabulary_version
+        FROM read_parquet('{vocabulary_file_path}')
+        WHERE vocabulary_id = 'None'
+    """
+
+
 def get_delivery_vocabulary_version(gcs_bucket: str, delivery_date: str) -> str:
     """Extract vocabulary version from vocabulary table in a site's delivery."""
     vocabulary_parquet_file = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}vocabulary{constants.PARQUET}"
 
     if parquet_file_exists(vocabulary_parquet_file):
-        conn = None
-        local_db_file = None
         try:
-            conn, local_db_file = create_duckdb_connection()
-            with conn:
-                vocab_version_query = f"""
-                    SELECT vocabulary_version
-                    FROM read_parquet('{storage.get_uri(vocabulary_parquet_file)}')
-                    WHERE vocabulary_id = 'None'
-                """
-                result = conn.execute(vocab_version_query).fetchone()
-                if result:
-                    return result[0]
-                return "Unknown vocabulary version"
-        except Exception as e:
-            logger.error(f"Unable to upgrade file: {e}")
+            # Generate SQL to query vocabulary version
+            vocab_version_query = generate_vocab_version_query_sql(storage.get_uri(vocabulary_parquet_file))
+            result = execute_duckdb_sql(vocab_version_query, "Unable to query vocabulary version", return_results=True)
+            row = result.fetchone()
+            if row:
+                return row[0]
             return "Unknown vocabulary version"
-        finally:
-            if conn is not None:
-                close_duckdb_connection(conn, local_db_file)
+        except Exception as e:
+            logger.error(f"Unable to query vocabulary version: {e}")
+            return "Unknown vocabulary version"
     else:
         return "No vocabulary file provided"
 
@@ -396,6 +418,26 @@ def list_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[s
     except Exception as e:
         raise Exception(f"Error listing files: {str(e)}")
 
+def generate_report_consolidation_sql(select_statement: str, output_path: str) -> str:
+    """
+    Generate SQL to consolidate multiple report files into a single CSV.
+
+    Args:
+        select_statement: UNION ALL query joining multiple parquet files
+        output_path: Full path where the consolidated CSV report should be written
+
+    Returns:
+        SQL statement that sets max_expression_depth and exports consolidated data to CSV
+    """
+    return f"""
+        SET max_expression_depth TO 1000000;
+
+        COPY (
+            {select_statement}
+        ) TO '{output_path}' (HEADER, DELIMITER ',');
+    """
+
+
 def generate_report(report_data: dict) -> None:
     """
     Generate final delivery report by consolidating all report artifacts into CSV.
@@ -417,15 +459,8 @@ def generate_report(report_data: dict) -> None:
 
         output_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT.value}delivery_report_{site}_{delivery_date}{constants.CSV}")
 
-        # Combine SET command and COPY statement into single SQL execution
-        # SET must be on same connection as COPY to apply to that query
-        join_files_query = f"""
-            SET max_expression_depth TO 1000000;
-
-            COPY (
-                {select_statement}
-            ) TO '{output_path}' (HEADER, DELIMITER ',');
-        """
+        # Generate SQL to consolidate report files
+        join_files_query = generate_report_consolidation_sql(select_statement, output_path)
 
         execute_duckdb_sql(join_files_query, "Unable to merge reporting artifacts")
 
