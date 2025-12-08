@@ -10,7 +10,7 @@ class OMOPClient:
     OMOP CDM client operations including upgrades, derived data generation, and BigQuery management.
 
     Handles:
-    - CDM version upgrades (e.g., 5.3 to 5.4)
+    - CDM version upgrades (currently supports upgrading from CDM v5.3 to v5.4.)
     - cdm_source file population
     - Derived data table generation from harmonized data
     - BigQuery table creation
@@ -22,7 +22,6 @@ class OMOPClient:
         Upgrade an OMOP CDM table file from one version to another.
 
         Applies version-specific transformations to upgrade table schema and data.
-        Currently supports upgrading from CDM v5.3 to v5.4.
 
         Handles three cases for table upgrades:
         1. No changes needed (table remains the same in new version)
@@ -33,9 +32,6 @@ class OMOPClient:
             file_path: Path to the file to upgrade
             cdm_version: Current CDM version of the file
             target_omop_version: Target CDM version to upgrade to
-
-        Raises:
-            Exception: If CDM version not supported or upgrade fails
         """
         normalized_file_path = utils.get_parquet_artifact_location(file_path)
         table_name = utils.get_table_name_from_path(file_path)
@@ -62,9 +58,9 @@ class OMOPClient:
                     except Exception as e:
                         raise Exception(f"Unable to open SQL upgrade file {upgrade_file_path}: {e}") from e
             else:
-                utils.logger.info(f"No changes in {file_path} when upgrading from 5.3 to 5.4")
+                utils.logger.info(f"No changes in {file_path} when upgrading from {cdm_version} to {target_omop_version}")
         else:
-            raise Exception(f"OMOP CDM version {cdm_version} not supported")
+            raise Exception(f"OMOP CDM version transformation from {cdm_version} to {target_omop_version} not supported")
 
     @staticmethod
     def create_missing_bq_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
@@ -110,16 +106,16 @@ class OMOPClient:
 
         Args:
             cdm_source_data: Dictionary containing CDM source metadata fields:
-                - gcs_bucket: GCS bucket path
-                - source_release_date: Release date of source data
-                - cdm_source_name: Name of the CDM source
-                - cdm_source_abbreviation: Abbreviation
-                - cdm_holder: Organization holding the data
-                - source_description: Description of data source
-                - cdm_version: OMOP CDM version
-                - (optional) source_documentation_reference: Documentation URL
-                - (optional) cdm_etl_reference: ETL documentation URL
-                - cdm_release_date: Release date of CDM
+            gcs_bucket: GCS bucket path
+            source_release_date: Release date of source data
+            cdm_source_name: Name of the CDM source
+            cdm_source_abbreviation: Abbreviation
+            cdm_holder: Organization holding the data
+            source_description: Description of data source
+            cdm_version: OMOP CDM version
+            (optional) source_documentation_reference: Documentation URL
+            (optional) cdm_etl_reference: ETL documentation URL
+            cdm_release_date: Release date of CDM
         """
         bucket = cdm_source_data["gcs_bucket"]
         delivery_date = cdm_source_data["source_release_date"]
@@ -147,11 +143,11 @@ class OMOPClient:
     @staticmethod
     def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_date: str, table_name: str, vocab_version: str, vocab_path: str) -> None:
         """
-        Execute SQL scripts to generate derived data table Parquet files from HARMONIZED data.
+        Execute SQL scripts to generate derived data table Parquet files from harmonized data.
 
-        This function is called AFTER vocabulary harmonization is complete and reads from the
+        This function is called after vocabulary harmonization is complete and reads from the
         harmonized Parquet files in the omop_etl directory. The output is written to the
-        derived_files directory and will be loaded to BigQuery in a separate step.
+        derived_files directory and will be loaded to a database in a separate step.
 
         Args:
             site: Site identifier
@@ -160,9 +156,6 @@ class OMOPClient:
             table_name: Name of derived table to generate (observation_period, drug_era, etc.)
             vocab_version: Vocabulary version to use for harmonization lookups
             vocab_path: Path to vocabulary files
-
-        Raises:
-            Exception: If table is not a derived data table or generation fails
         """
         sql_script_name = table_name
 
@@ -256,16 +249,15 @@ class OMOPClient:
         Args:
             upgrade_script: SQL transformation script for the table upgrade
             normalized_file_path: Path to the normalized Parquet file
-
-        Returns:
-            SQL string for upgrading the file
         """
-        return f"""
+        upgrade_statement = f"""
         COPY (
             {upgrade_script}
             FROM read_parquet('{storage.get_uri(normalized_file_path)}')
         ) TO '{storage.get_uri(normalized_file_path)}' {constants.DUCKDB_FORMAT_STRING}
-    """
+        """
+
+        return upgrade_statement
 
     @staticmethod
     def generate_populate_cdm_source_sql(cdm_source_data: dict, vocab_version: str, output_path: str) -> str:
@@ -279,25 +271,24 @@ class OMOPClient:
             cdm_source_data: Dictionary containing CDM source metadata fields
             vocab_version: Vocabulary version string
             output_path: Path where cdm_source Parquet file should be written
-
-        Returns:
-            SQL statement that creates single-row cdm_source Parquet file
         """
         cdm_version_concept_id = utils.get_cdm_version_concept_id(cdm_source_data["cdm_version"])
 
-        return f"""
-        COPY (
-            SELECT
-                '{cdm_source_data["cdm_source_name"]}' AS cdm_source_name,
-                '{cdm_source_data["cdm_source_abbreviation"]}' AS cdm_source_abbreviation,
-                '{cdm_source_data["cdm_holder"]}' AS cdm_holder,
-                '{cdm_source_data["source_description"]}' AS source_description,
-                '{cdm_source_data.get("source_documentation_reference", "")}' AS source_documentation_reference,
-                '{cdm_source_data.get("cdm_etl_reference", "")}' AS cdm_etl_reference,
-                CAST('{cdm_source_data["source_release_date"]}' AS DATE) AS source_release_date,
-                CAST('{cdm_source_data["cdm_release_date"]}' AS DATE) AS cdm_release_date,
-                '{cdm_source_data["cdm_version"]}' AS cdm_version,
-                {cdm_version_concept_id} AS cdm_version_concept_id,
-                '{vocab_version}' AS vocabulary_version
-        ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
-    """
+        cdm_source_statement = f"""
+            COPY (
+                SELECT
+                    '{cdm_source_data["cdm_source_name"]}' AS cdm_source_name,
+                    '{cdm_source_data["cdm_source_abbreviation"]}' AS cdm_source_abbreviation,
+                    '{cdm_source_data["cdm_holder"]}' AS cdm_holder,
+                    '{cdm_source_data["source_description"]}' AS source_description,
+                    '{cdm_source_data.get("source_documentation_reference", "")}' AS source_documentation_reference,
+                    '{cdm_source_data.get("cdm_etl_reference", "")}' AS cdm_etl_reference,
+                    CAST('{cdm_source_data["source_release_date"]}' AS DATE) AS source_release_date,
+                    CAST('{cdm_source_data["cdm_release_date"]}' AS DATE) AS cdm_release_date,
+                    '{cdm_source_data["cdm_version"]}' AS cdm_version,
+                    {cdm_version_concept_id} AS cdm_version_concept_id,
+                    '{vocab_version}' AS vocabulary_version
+            ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+        return cdm_source_statement
