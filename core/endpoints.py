@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from flask import Flask, jsonify, request  # type: ignore
@@ -26,7 +26,7 @@ def heartbeat() -> tuple[Any, int]:
 
     return jsonify({
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'service': constants.SERVICE_NAME
     }), 200
 

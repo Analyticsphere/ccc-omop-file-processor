@@ -131,7 +131,7 @@ class TestTransformerPlaceholderToFilePath:
         assert result == sql
 
 
-class TestTransformerOmopToOmopEtl:
+class TestTransformerOMOPToOMOPETL:
     """Tests for omop_to_omop_etl method."""
 
     @patch('core.transformer.utils.execute_duckdb_sql')
@@ -179,7 +179,7 @@ class TestTransformerOmopToOmopEtl:
         assert "SQL execution failed" in str(exc_info.value)
 
 
-class TestTransformerGenerateOmopToOmopSql:
+class TestTransformerGenerateOMOPToOMOPSql:
     """Tests for generate_omop_to_omop_sql method - basic functionality."""
 
     @patch('core.transformer.utils.get_primary_key_column')
@@ -188,11 +188,11 @@ class TestTransformerGenerateOmopToOmopSql:
     def test_generate_sql_reads_template_file(self, mock_file, mock_get_schema, mock_get_pk):
         """Test that SQL generation reads the template file."""
         mock_file.return_value.read.return_value = """
-SELECT
-    condition_occurrence_id AS observation_id,
-    person_id AS person_id
-FROM read_parquet('@CONDITION_OCCURRENCE')
-"""
+        SELECT
+            condition_occurrence_id AS observation_id,
+            person_id AS person_id
+        FROM read_parquet('@CONDITION_OCCURRENCE')
+        """
         mock_get_schema.return_value = {
             "observation": {
                 "columns": {
@@ -224,10 +224,10 @@ FROM read_parquet('@CONDITION_OCCURRENCE')
     def test_generate_sql_wraps_in_copy_statement(self, mock_file, mock_get_schema, mock_get_pk):
         """Test that generated SQL is wrapped in COPY statement."""
         mock_file.return_value.read.return_value = """
-SELECT
-    condition_occurrence_id AS observation_id
-FROM read_parquet('@CONDITION_OCCURRENCE')
-"""
+        SELECT
+            condition_occurrence_id AS observation_id
+        FROM read_parquet('@CONDITION_OCCURRENCE')
+        """
         mock_get_schema.return_value = {
             "observation": {
                 "columns": {
@@ -258,10 +258,10 @@ FROM read_parquet('@CONDITION_OCCURRENCE')
     def test_generate_sql_adds_cast_for_required_fields(self, mock_file, mock_get_schema, mock_get_pk):
         """Test that required fields get COALESCE and CAST."""
         mock_file.return_value.read.return_value = """
-SELECT
-    person_id AS person_id
-FROM read_parquet('@CONDITION_OCCURRENCE')
-"""
+        SELECT
+            person_id AS person_id
+        FROM read_parquet('@CONDITION_OCCURRENCE')
+        """
         mock_get_schema.return_value = {
             "observation": {
                 "columns": {
@@ -320,7 +320,7 @@ FROM read_parquet('@CONDITION_OCCURRENCE')
         assert "COALESCE(value_as_number" not in result
 
 
-class TestTransformerGenerateOmopToOmopSqlGoldenFiles:
+class TestTransformerGenerateOMOPToOMOPSqlGoldenFiles:
     """Golden file tests for generate_omop_to_omop_sql method."""
 
     from pathlib import Path
