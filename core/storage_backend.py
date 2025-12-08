@@ -166,8 +166,6 @@ class StorageBackend:
 
     def _file_exists_gcs(self, file_path: str) -> bool:
         """Check if file exists in GCS."""
-        
-
         path_without_prefix = self.strip_scheme(file_path)
         bucket_name, _ = utils.get_bucket_and_delivery_date_from_path(path_without_prefix)
         blob_path = '/'.join(path_without_prefix.split('/')[1:])
@@ -198,8 +196,6 @@ class StorageBackend:
 
     def _list_files_local(self, directory_path: str, pattern: Optional[str] = None) -> List[str]:
         """List files on local filesystem."""
-        
-
         path = self.strip_scheme(directory_path)
         if not path.startswith('/'):
             data_root = os.getenv('DATA_ROOT', '/data')
@@ -218,7 +214,6 @@ class StorageBackend:
 
     def _list_files_gcs(self, directory_path: str, pattern: Optional[str] = None) -> List[str]:
         """List files in GCS."""
-
         path_without_prefix = self.strip_scheme(directory_path)
         bucket_name = path_without_prefix.split('/')[0]
         folder_path = '/'.join(path_without_prefix.split('/')[1:])

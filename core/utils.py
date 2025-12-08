@@ -12,7 +12,6 @@ import duckdb  # type: ignore
 from fsspec import filesystem  # type: ignore
 
 import core.constants as constants
-import core.omop_client as omop_client
 import core.vocab_manager as vocab_manager
 from core.storage_backend import storage
 
@@ -69,8 +68,8 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: Opti
         conn.close()
 
         # Remove the local database file if it exists
-        if local_db_file and os.path.exists(local_db_file):
-            os.remove(local_db_file)
+        if local_db_file and storage.file_exists(local_db_file):
+            storage.delete_file(local_db_file)
 
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection: {e}")
@@ -93,6 +92,7 @@ def execute_duckdb_sql(sql: str, error_msg: str, return_results: bool = False):
     """
     conn = None
     local_db_file = None
+
     try:
         conn, local_db_file = create_duckdb_connection()
 
@@ -117,9 +117,6 @@ def get_table_name_from_path(file_path: str) -> str:
 
     for ext in constants.FILE_EXTENSIONS:
         file_name = file_name.replace(ext, '')
-
-    # If using a 'fixed' file, remove the appened string indicating it's a fixed file
-    file_name = file_name.replace(constants.FIXED_FILE_TAG_STRING, '')
 
     return file_name
 
@@ -176,7 +173,6 @@ def get_columns_from_file(file_path: str) -> list:
         4. Drops the temporary table.
         5. Returns a list of the actual column names present in the file.
     """
-
     file_path = storage.strip_scheme(file_path)
     
     # Determine file type by extension
@@ -320,7 +316,6 @@ def get_optimized_vocab_file_path(vocab_version: str, vocab_path: str) -> str:
 
 def get_delivery_vocabulary_version(bucket: str, delivery_date: str) -> str:
     """Extract vocabulary version from vocabulary table in a site's delivery."""
-
     vocabulary_parquet_file = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}vocabulary{constants.PARQUET}"
 
     if parquet_file_exists(vocabulary_parquet_file):

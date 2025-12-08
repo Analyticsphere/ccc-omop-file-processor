@@ -12,9 +12,7 @@ from core.storage_backend import storage
     [
         ("synthea53/2024-12-31/care_site.parquet", "care_site"),
         ("bucket/folder/person.csv", "person"),
-        ("bucket/folder/observation_pipeline_fix_formatting.csv", "observation"),
         ("bucket/folder/visit_occurrence", "visit_occurrence"),
-        ("bucket/folder/observation_pipeline_fix_formatting.parquet", "observation"),
         ("bucket/folder/observation.csv", "observation"),
         ("bucket/folder/observation", "observation"),
         ("bucket/folder/observation.csv.gz", "observation"),
@@ -66,7 +64,7 @@ def test_get_bucket_and_delivery_date_from_path(gcs_path, expected_bucket, expec
             f"bucket/folder/artifacts/converted_files/person.parquet"
         ),
         (
-            "bucket/folder/observation_pipeline_fix_formatting.csv",
+            "bucket/folder/observation.csv",
             f"bucket/folder/artifacts/converted_files/observation.parquet"
         ),
         (
@@ -91,7 +89,7 @@ def test_get_parquet_artifact_location(gcs_path, expected_artifact_path):
             f"bucket/folder/artifacts/harmonized_files/person/"
         ),
         (
-            "bucket/folder/observation_pipeline_fix_formatting.csv",
+            "bucket/folder/observation.csv",
             f"bucket/folder/artifacts/harmonized_files/observation/"
         ),
         (
@@ -116,7 +114,7 @@ def test_get_parquet_harmonized_path(gcs_path, expected_harmonized_path):
             f"bucket/folder/artifacts/invalid_rows/person.parquet"
         ),
         (
-            "bucket/folder/observation_pipeline_fix_formatting.csv",
+            "bucket/folder/observation.csv",
             f"bucket/folder/artifacts/invalid_rows/observation.parquet"
         ),
         (

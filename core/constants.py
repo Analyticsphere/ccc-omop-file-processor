@@ -51,8 +51,6 @@ PIPELINE_COMPLETE_STRING = "completed"
 PIPELINE_ERROR_STRING = "error"
 PIPELINE_DAG_FAIL_MESSAGE = "DAG failed"
 
-FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
-
 class BQWriteTypes(str, Enum):
     """
     BigQuery write operation types.
