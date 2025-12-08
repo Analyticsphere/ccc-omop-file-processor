@@ -31,7 +31,6 @@ import traceback
 from google.cloud import storage as gcs_storage  # type: ignore
 
 import core.constants as constants
-import core.gcp_services as gcp_services
 import core.utils as utils
 import core.vocab_harmonization as vocab_harmonization
 from core.storage_backend import storage

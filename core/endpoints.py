@@ -484,23 +484,22 @@ def create_missing_omop_tables() -> tuple[str, int]:
         return f"Unable to create missing tables: {str(e)}", 500
 
 
-@app.route('/populate_cdm_source', methods=['POST'])
-def add_cdm_source_record() -> tuple[str, int]:
-    """Populate cdm_source table with metadata about the CDM instance and delivery."""
+@app.route('/populate_cdm_source_file', methods=['POST'])
+def populate_cdm_source_file() -> tuple[str, int]:
+    """Populate cdm_source Parquet file with metadata if empty or non-existent."""
     cdm_source_data: dict[str, Any] = request.get_json() or {}
 
-    # Validate required columns
     if not cdm_source_data.get('source_release_date') or not cdm_source_data.get('cdm_source_abbreviation'):
-        return "Missing required parameters to 'populate_cdm_source' endpoint JSON: source_release_date and cdm_source_abbreviation", 400
+        return "Missing required parameters: source_release_date and cdm_source_abbreviation", 400
 
     try:
-        utils.logger.info(f"If empty, populating cdm_source table for {cdm_source_data['source_release_date']} delivery from {cdm_source_data['cdm_source_abbreviation']}")
-        omop_client.populate_cdm_source(cdm_source_data)
+        utils.logger.info(f"Checking cdm_source file for {cdm_source_data['source_release_date']} delivery from {cdm_source_data['cdm_source_abbreviation']}")
+        omop_client.populate_cdm_source_file(cdm_source_data)
 
-        return "cdm_source table populated", 200
+        return "cdm_source file populated if needed", 200
     except Exception as e:
-        utils.logger.error(f"Unable to populate cdm_source table: {str(e)}")
-        return f"Unable to populate cdm_source table: {str(e)}", 500 
+        utils.logger.error(f"Unable to populate cdm_source file: {str(e)}")
+        return f"Unable to populate cdm_source file: {str(e)}", 500 
  
 
 @app.route('/harmonized_parquets_to_bq', methods=['POST'])

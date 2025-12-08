@@ -1,9 +1,3 @@
-"""
-Reporting module for OMOP file processor.
-
-Handles consolidation of delivery report artifacts and metadata generation.
-"""
-
 import os
 from datetime import datetime
 

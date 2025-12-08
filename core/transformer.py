@@ -1,6 +1,4 @@
-import logging
 import re
-import sys
 
 import core.constants as constants
 import core.utils as utils

@@ -12,6 +12,7 @@ import pytest
 
 from core.omop_client import (generate_convert_vocab_sql,
                               generate_optimized_vocab_sql,
+                              generate_populate_cdm_source_sql,
                               generate_upgrade_file_sql,
                               generate_vocab_version_query_sql)
 
@@ -153,4 +154,29 @@ class TestGenerateVocabVersionQuerySql:
         result = generate_vocab_version_query_sql(vocabulary_file_path)
 
         expected = load_reference_sql("generate_vocab_version_query_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGeneratePopulateCdmSourceSql:
+    """Tests for generate_populate_cdm_source_sql()."""
+
+    def test_standard_cdm_source_population(self):
+        """Test SQL generation for populating cdm_source Parquet file with metadata."""
+        cdm_source_data = {
+            "cdm_source_name": "Test Site Medical Center",
+            "cdm_source_abbreviation": "test_site",
+            "cdm_holder": "NIH/NCI Connect for Cancer Prevention Study",
+            "source_description": "Electronic Health Record (EHR) data from test_site",
+            "source_documentation_reference": "https://example.com/docs",
+            "cdm_etl_reference": "https://github.com/example/etl",
+            "source_release_date": "2025-01-01",
+            "cdm_release_date": "2025-01-15",
+            "cdm_version": "5.4",
+            "gcs_bucket": "test-bucket"
+        }
+        output_path = "gs://test-bucket/2025-01-01/artifacts/converted_files/cdm_source.parquet"
+
+        result = generate_populate_cdm_source_sql(cdm_source_data, output_path)
+
+        expected = load_reference_sql("generate_populate_cdm_source_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)

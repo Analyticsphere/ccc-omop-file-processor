@@ -1,8 +1,6 @@
-
-from google.cloud import bigquery  # type: ignore
-
 import core.constants as constants
 import core.gcp_services as gcp_services
+import core.normalization as normalization
 import core.utils as utils
 from core.storage_backend import storage
 
@@ -237,77 +235,79 @@ def create_missing_tables(project_id: str, dataset_id: str, omop_version: str) -
     except Exception as e:
         raise Exception(f"DDL file error: {e}")
 
-def populate_cdm_source(cdm_source_data: dict) -> None:
-    """Populate cdm_source table with metadata about the CDM instance."""
-    project_id = cdm_source_data["project_id"]
-    dataset_id = cdm_source_data["dataset_id"]
+def generate_populate_cdm_source_sql(cdm_source_data: dict, output_path: str) -> str:
+    """
+    Generate SQL to create cdm_source Parquet file with metadata.
+
+    Creates a single-row Parquet file containing CDM source metadata including
+    version information, release dates, and vocabulary version.
+
+    Args:
+        cdm_source_data: Dictionary containing CDM source metadata fields
+        output_path: Path where cdm_source Parquet file should be written
+
+    Returns:
+        SQL statement that creates single-row cdm_source Parquet file
+    """
+    vocab_version = utils.get_delivery_vocabulary_version(
+        cdm_source_data["gcs_bucket"],
+        cdm_source_data["source_release_date"]
+    )
+    cdm_version_concept_id = utils.get_cdm_version_concept_id(cdm_source_data["cdm_version"])
+
+    return f"""
+        COPY (
+            SELECT
+                '{cdm_source_data["cdm_source_name"]}' AS cdm_source_name,
+                '{cdm_source_data["cdm_source_abbreviation"]}' AS cdm_source_abbreviation,
+                '{cdm_source_data["cdm_holder"]}' AS cdm_holder,
+                '{cdm_source_data["source_description"]}' AS source_description,
+                '{cdm_source_data.get("source_documentation_reference", "")}' AS source_documentation_reference,
+                '{cdm_source_data.get("cdm_etl_reference", "")}' AS cdm_etl_reference,
+                CAST('{cdm_source_data["source_release_date"]}' AS DATE) AS source_release_date,
+                CAST('{cdm_source_data["cdm_release_date"]}' AS DATE) AS cdm_release_date,
+                '{cdm_source_data["cdm_version"]}' AS cdm_version,
+                {cdm_version_concept_id} AS cdm_version_concept_id,
+                '{vocab_version}' AS vocabulary_version
+        ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
+    """
+
+
+def populate_cdm_source_file(cdm_source_data: dict) -> None:
+    """
+    Populate cdm_source Parquet file with metadata if empty or non-existent.
+
+    Checks if site delivered cdm_source file and populates it with metadata if needed:
+    - If file exists and has rows: do nothing (site provided data)
+    - If file exists but is empty: populate with metadata
+    - If file doesn't exist: create and populate with metadata
+
+    Args:
+        cdm_source_data: Dictionary containing CDM source metadata fields
+    """
     gcs_bucket = cdm_source_data["gcs_bucket"]
     delivery_date = cdm_source_data["source_release_date"]
-    cdm_version = cdm_source_data["cdm_version"]
 
-    vocab_version = utils.get_delivery_vocabulary_version(gcs_bucket, delivery_date)
-    cdm_version_concept_id = utils.get_cdm_version_concept_id(cdm_version)
+    cdm_source_path = f"{gcs_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}cdm_source{constants.PARQUET}"
 
-    try:
-        # Build the insert statement
-        query = f"""
-            INSERT INTO `{project_id}.{dataset_id}.cdm_source` (
-                cdm_source_name,
-                cdm_source_abbreviation,
-                cdm_holder,
-                source_description,
-                source_documentation_reference,
-                cdm_etl_reference,
-                source_release_date,
-                cdm_release_date,
-                cdm_version,
-                cdm_version_concept_id,
-                vocabulary_version
-            )
-            SELECT
-                @cdm_source_name,
-                @cdm_source_abbreviation,
-                @cdm_holder,
-                @source_description,
-                @source_documentation_reference,
-                @cdm_etl_reference,
-                @source_release_date,
-                @cdm_release_date,
-                @cdm_version,
-                @cdm_version_concept_id,
-                @vocabulary_version
-            FROM (SELECT 1) dummy_table
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM `{project_id}.{dataset_id}.cdm_source`
-                LIMIT 1
-            );
-        """
+    file_exists = utils.parquet_file_exists(cdm_source_path)
 
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("cdm_source_name", "STRING", cdm_source_data["cdm_source_name"]),
-                bigquery.ScalarQueryParameter("cdm_source_abbreviation", "STRING", cdm_source_data["cdm_source_abbreviation"]),
-                bigquery.ScalarQueryParameter("cdm_holder", "STRING", cdm_source_data["cdm_holder"]),
-                bigquery.ScalarQueryParameter("source_description", "STRING", cdm_source_data["source_description"]),
-                bigquery.ScalarQueryParameter("source_documentation_reference", "STRING", cdm_source_data["source_documentation_reference"]),
-                bigquery.ScalarQueryParameter("cdm_etl_reference", "STRING", cdm_source_data["cdm_etl_reference"]),
-                bigquery.ScalarQueryParameter("source_release_date", "DATE", delivery_date),
-                bigquery.ScalarQueryParameter("cdm_release_date", "DATE", cdm_source_data["cdm_release_date"]),
-                bigquery.ScalarQueryParameter("cdm_version", "STRING", cdm_version),
-                bigquery.ScalarQueryParameter("cdm_version_concept_id", "INT64", cdm_version_concept_id),
-                bigquery.ScalarQueryParameter("vocabulary_version", "STRING", vocab_version),
-            ]
-        )
+    if file_exists:
+        # Check if file has rows
+        
+        row_count_sql = normalization.generate_row_count_sql(storage.get_uri(cdm_source_path))
+        result = utils.execute_duckdb_sql(row_count_sql, "Unable to count rows in cdm_source", return_results=True)
+        row_count = result.fetchone()[0]
 
-        # Run the query as a job and wait for it to complete.
-        gcp_services.execute_bq_sql(query, job_config)
-    except Exception as e:
-        error_details = {
-            'error_type': type(e).__name__,
-            'error_message': str(e),
-        }
-        raise Exception(f"Unable to add pipeline log record: {error_details}") from e
+        if row_count > 0:
+            utils.logger.info(f"cdm_source file has {row_count} rows, skipping population")
+            return
+
+    utils.logger.info(f"Populating cdm_source Parquet file for {delivery_date} delivery")
+
+    populate_sql = generate_populate_cdm_source_sql(cdm_source_data, storage.get_uri(cdm_source_path))
+    utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
+
 
 def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_date: str, table_name: str, vocab_version: str, vocab_path: str) -> None:
     """

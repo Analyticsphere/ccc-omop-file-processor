@@ -1,5 +1,3 @@
-import duckdb  # type: ignore
-
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
 import core.utils as utils
