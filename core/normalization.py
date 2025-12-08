@@ -244,6 +244,21 @@ def normalize_file(parquet_file_path: str, cdm_version: str, date_format: str, d
         create_row_count_artifacts(parquet_file_path, cdm_version)
 
 
+def generate_row_count_sql(parquet_file_path: str) -> str:
+    """
+    Generate SQL to count rows in a parquet file.
+
+    Args:
+        parquet_file_path: Full URI path to the parquet file
+
+    Returns:
+        SQL statement that counts all rows in the parquet file
+    """
+    return f"""
+        SELECT COUNT(*) FROM read_parquet('{parquet_file_path}')
+    """
+
+
 def create_row_count_artifacts(file_path: str, cdm_version: str) -> None:
     """
     Create report artifacts with row counts for valid and invalid rows after normalization.
@@ -258,33 +273,26 @@ def create_row_count_artifacts(file_path: str, cdm_version: str) -> None:
 
     files = [valid_rows_file, invalid_rows_file]
 
-    # Create connection for counting rows
-    conn = None
-    local_db_file = None
+    # Count rows for each file and create report artifacts
     try:
-        conn, local_db_file = utils.create_duckdb_connection()
-        with conn:
-            for file in files:
-                file_path, count_type = file
+        for file in files:
+            file_path, count_type = file
 
-                count_query = f"""
-                    SELECT COUNT(*) FROM read_parquet('{storage.get_uri(file_path)}')
-                """
-                result_row = conn.execute(count_query).fetchone()
-                result = result_row[0] if result_row else 0
+            # Generate SQL to count rows
+            count_query = generate_row_count_sql(storage.get_uri(file_path))
+            result = utils.execute_duckdb_sql(count_query, "Unable to count rows", return_results=True)
+            result_row = result.fetchone()
+            row_count = result_row[0] if result_row else 0
 
-                ra = report_artifact.ReportArtifact(
-                    delivery_date=delivery_date,
-                    artifact_bucket=bucket,
-                    concept_id=table_concept_id,
-                    name=f"{count_type}: {table_name}",
-                    value_as_string=None,
-                    value_as_concept_id=None,
-                    value_as_number=result
-                )
-                ra.save_artifact()
+            ra = report_artifact.ReportArtifact(
+                delivery_date=delivery_date,
+                artifact_bucket=bucket,
+                concept_id=table_concept_id,
+                name=f"{count_type}: {table_name}",
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=row_count
+            )
+            ra.save_artifact()
     except Exception as e:
         raise Exception(f"Unable to create row count artifacts: {e}") from e
-    finally:
-        if conn is not None:
-            utils.close_duckdb_connection(conn, local_db_file)
