@@ -182,7 +182,7 @@ class Normalizer:
             if column_name == 'person_id' and connect_id_column_name:
                 # Always use connect_id value for person_id when connect_id exists
                 coalesce_exprs.append(
-                    f"TRY_CAST({connect_id_column_name} AS {column_type}) AS {column_name}"
+                    f"TRY_CAST(COALESCE({connect_id_column_name}, {default_value}) AS {column_type}) AS {column_name}"
                 )
 
                 # Add to row validity check if required

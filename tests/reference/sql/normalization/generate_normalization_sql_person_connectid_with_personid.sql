@@ -1,6 +1,6 @@
 CREATE OR REPLACE TABLE row_check AS
             SELECT
-                TRY_CAST(connect_id AS BIGINT) AS person_id,
+                TRY_CAST(COALESCE(connect_id, '-1') AS BIGINT) AS person_id,
                 TRY_CAST(COALESCE(gender_concept_id, '0') AS BIGINT) AS gender_concept_id,
                 TRY_CAST(COALESCE(year_of_birth, '-1') AS BIGINT) AS year_of_birth,
                 TRY_CAST(month_of_birth AS BIGINT) AS month_of_birth,
