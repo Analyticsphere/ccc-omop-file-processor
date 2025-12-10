@@ -139,9 +139,7 @@ Common issues and solutions:
 
 ## Introduction
 
-The omop-file-processor API provides a set of endpoints for working with healthcare data structured according to the Observational Medical Outcomes Partnership (OMOP) Common Data Model (CDM). It is currently deployed as a Google Cloud Run service in the NCI's Connect GCP environment.
-
-The API operates on files stored in Google Cloud Storage (GCS) buckets. Each endpoint performs specific operations on individual data files within an OMOP delivery, with users providing GCS file paths and configuration parameters to initiate processing. This file-centric approach supports performant parallel processing of large healthcare datasets.
+The omop-file-processor API provides a set of endpoints for working with healthcare data structured according to the Observational Medical Outcomes Partnership (OMOP) Common Data Model (CDM). It is currently deployed as a Google Cloud Run service in the NCI's Connect GCP environment. The API operates on files stored in Google Cloud Storage (GCS) buckets. Each endpoint performs specific operations on individual data files within an OMOP delivery.
 
 This API facilitates:
 
@@ -152,7 +150,7 @@ This API facilitates:
 - **BigQuery Integration**: Loads processed data into Google BigQuery for analysis
 - **Process Logging**: Tracks processing steps and outcomes for auditing and troubleshooting
 
-The API is implemented using Flask, providing a RESTful interface. The data processing logic uses DuckDB for manipulation of CSV and Parquet files. Although the underlying technology is designed to be platform-agnostic, the current implementation requires files to be stored in GCS buckets.
+The API is implemented using Flask, providing a RESTful interface. The data processing logic uses DuckDB for manipulation of CSV and Parquet files. The underlying technology is designed to be platform-agnostic, but the current implementation uses Google cloud services.
 
 ## Common Response Codes
 
@@ -609,7 +607,7 @@ This endpoint should be called after all vocabulary harmonization steps have com
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| gcs_bucket | string | Yes | GCS bucket name (e.g., "delivery_site") |
+| bucket | string | Yes | GCS bucket name (e.g., "delivery_site") |
 | delivery_date | string | Yes | Delivery date (YYYY-MM-DD format) |
 | project_id | string | Yes | Google Cloud project ID |
 | dataset_id | string | Yes | BigQuery dataset ID |
@@ -620,13 +618,13 @@ Returns a 200 status code with a message describing the results.
 
 **Example Response:**
 ```
-Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement. Skipped 0 table(s)
+Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement
 ```
 
 **Example Request:**
 ```json
 {
-    "gcs_bucket": "delivery_site",
+    "bucket": "delivery_site",
     "delivery_date": "2023-05-01",
     "project_id": "my-gcp-project",
     "dataset_id": "omop_cdm"
@@ -646,7 +644,7 @@ Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | site | string | Yes | Site identifier |
-| gcs_bucket | string | Yes | Google Cloud Storage bucket |
+| bucket | string | Yes | Google Cloud Storage bucket |
 | delivery_date | string | Yes | Delivery date |
 | table_name | string | Yes | Name of the derived table to create |
 | project_id | string | Yes | Google Cloud project ID |
@@ -659,7 +657,7 @@ Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement
 ```json
 {
     "site": "hospital-a",
-    "gcs_bucket": "my-site-bucket",
+    "bucket": "my-site-bucket",
     "delivery_date": "2023-05-01",
     "table_name": "drug_era",
     "project_id": "my-gcp-project",

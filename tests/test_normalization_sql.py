@@ -142,3 +142,69 @@ class TestGenerateNormalizationSql:
 
             expected = load_reference_sql("generate_normalization_sql_measurement.sql")
             assert normalize_sql(result) == normalize_sql(expected)
+
+    def test_person_with_connectid_and_personid(self):
+        """
+        Test SQL generation when file has both connect_id and person_id columns.
+
+        When both columns exist:
+        - connect_id value should be used for person_id
+        - Both columns should appear in row hash calculation
+        """
+        from unittest.mock import patch
+
+        import core.utils as utils
+
+        # Get columns from actual OMOP CDM schema
+        schema = utils.get_table_schema("person", "5.4")
+        actual_columns = list(schema["person"]["columns"].keys())
+        # Add connect_id to the list of actual columns
+        actual_columns_with_connectid = ['person_id', 'connect_id'] + [col for col in actual_columns if col != 'person_id']
+
+        with patch('core.normalization.utils.get_columns_from_file') as mock_get_columns:
+            mock_get_columns.return_value = actual_columns_with_connectid
+
+            normalizer = Normalizer(
+                file_path="test-bucket/2025-01-01/person.parquet",
+                cdm_version="5.4",
+                date_format="%Y-%m-%d",
+                datetime_format="%Y-%m-%d %H:%M:%S"
+            )
+
+            result = normalizer._generate_normalization_sql()
+
+            expected = load_reference_sql("generate_normalization_sql_person_connectid_with_personid.sql")
+            assert normalize_sql(result) == normalize_sql(expected)
+
+    def test_person_with_connectid_without_personid(self):
+        """
+        Test SQL generation when file has connect_id but no person_id column.
+
+        When only connect_id exists:
+        - connect_id value should be used for person_id
+        - Only connect_id should appear in row hash calculation (not person_id)
+        """
+        from unittest.mock import patch
+
+        import core.utils as utils
+
+        # Get columns from actual OMOP CDM schema
+        schema = utils.get_table_schema("person", "5.4")
+        actual_columns = list(schema["person"]["columns"].keys())
+        # Replace person_id with connect_id
+        actual_columns_with_connectid = ['connect_id'] + [col for col in actual_columns if col != 'person_id']
+
+        with patch('core.normalization.utils.get_columns_from_file') as mock_get_columns:
+            mock_get_columns.return_value = actual_columns_with_connectid
+
+            normalizer = Normalizer(
+                file_path="test-bucket/2025-01-01/person.parquet",
+                cdm_version="5.4",
+                date_format="%Y-%m-%d",
+                datetime_format="%Y-%m-%d %H:%M:%S"
+            )
+
+            result = normalizer._generate_normalization_sql()
+
+            expected = load_reference_sql("generate_normalization_sql_person_connectid_without_personid.sql")
+            assert normalize_sql(result) == normalize_sql(expected)
