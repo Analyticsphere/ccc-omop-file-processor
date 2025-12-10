@@ -208,3 +208,37 @@ class TestGenerateNormalizationSql:
 
             expected = load_reference_sql("generate_normalization_sql_person_connectid_without_personid.sql")
             assert normalize_sql(result) == normalize_sql(expected)
+
+    def test_condition_occurrence_with_connectid(self):
+        """
+        Test SQL generation for non-person table (condition_occurrence) with connect_id.
+
+        Demonstrates that connect_id logic applies to ALL tables, not just person table.
+        When connect_id exists in condition_occurrence:
+        - connect_id value should be used for person_id
+        - Surrogate key (condition_occurrence_id) should be generated from composite hash
+        """
+        from unittest.mock import patch
+
+        import core.utils as utils
+
+        # Get columns from actual OMOP CDM schema
+        schema = utils.get_table_schema("condition_occurrence", "5.4")
+        actual_columns = list(schema["condition_occurrence"]["columns"].keys())
+        # Add connect_id to simulate a file that has both person_id and connect_id
+        actual_columns_with_connectid = ['person_id', 'connect_id'] + [col for col in actual_columns if col != 'person_id']
+
+        with patch('core.normalization.utils.get_columns_from_file') as mock_get_columns:
+            mock_get_columns.return_value = actual_columns_with_connectid
+
+            normalizer = Normalizer(
+                file_path="test-bucket/2025-01-01/condition_occurrence.parquet",
+                cdm_version="5.4",
+                date_format="%Y-%m-%d",
+                datetime_format="%Y-%m-%d %H:%M:%S"
+            )
+
+            result = normalizer._generate_normalization_sql()
+
+            expected = load_reference_sql("generate_normalization_sql_condition_occurrence_connectid.sql")
+            assert normalize_sql(result) == normalize_sql(expected)

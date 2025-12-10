@@ -16,6 +16,9 @@ class Normalizer:
     - Valid/invalid row separation
     - Deterministic composite key generation for surrogate key tables
     - Row count artifact creation
+    - Connect ID handling: When connectid/connect_id column exists in ANY table,
+      its value is used for person_id (applies to person, condition_occurrence,
+      drug_exposure, measurement, and all other OMOP tables with person_id)
     """
 
     def __init__(self, file_path: str, cdm_version: str, date_format: str, datetime_format: str):
@@ -178,7 +181,8 @@ class Normalizer:
                 else "NULL"
             )
 
-            # Special handling for person_id when connect_id exists
+            # Special handling for person_id when connect_id exists in ANY table
+            # Sites may send connect_id in any table (person, condition_occurrence, drug_exposure, etc.)
             if column_name == 'person_id' and connect_id_column_name:
                 # Always use connect_id value for person_id when connect_id exists
                 coalesce_exprs.append(
@@ -326,6 +330,9 @@ class Normalizer:
     def _find_connect_id_column(actual_columns: list) -> str:
         """
         Find Connect_ID column name if it exists in file.
+
+        Sites may send connect_id in any table (person, condition_occurrence, drug_exposure, etc.)
+        to identify Connect study participants. When found, its value should be used for person_id.
 
         Args:
             actual_columns: List of actual column names in file
