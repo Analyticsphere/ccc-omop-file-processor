@@ -2,11 +2,12 @@ import os
 from typing import Optional
 
 from google.cloud import bigquery  # type: ignore
-from google.cloud import storage  # type: ignore
+from google.cloud import storage as gcs_storage  # type: ignore
 from google.cloud.exceptions import NotFound  # type: ignore
 
 import core.constants as constants
 import core.utils as utils
+from core.storage_backend import storage
 
 
 def remove_all_tables(project_id: str, dataset_id: str) -> None:
@@ -39,7 +40,7 @@ def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, t
     # PROCESSED_FILE -> overwrite table with the pipeline-processed version of the file in file_path
     elif write_type == constants.BQWriteTypes.PROCESSED_FILE:
         write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-        parquet_path = f"gs://{utils.get_parquet_artifact_location(file_path)}"
+        parquet_path = storage.get_uri(utils.get_parquet_artifact_location(file_path))
         
     # When upgrading to 5.4, some Parquet files may get deleted
     # First confirm that Parquet file does exist before trying to load to BQ
@@ -72,9 +73,10 @@ def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, t
         raise Exception(f"Error loading Parquet file {parquet_path} to BigQuery: {e}") from e
 
 def get_bq_log_row(site: str, date_to_check: str) -> list:
+    """Retrieve pipeline log entries from BigQuery for specified site and delivery date."""
     client = bigquery.Client()
 
-    # Check if the table exists. If it doesn't, return an empty list.
+    # Check if the logging table exists. If it doesn't, return an empty list.
     try:
         client.get_table(constants.BQ_LOGGING_TABLE)
     except NotFound:
@@ -106,47 +108,17 @@ def get_bq_log_row(site: str, date_to_check: str) -> list:
     except Exception as e:
         raise Exception(f"Failed to retrieve BigQuery pipeline logs for site '{site}' and date '{date_to_check}': {e}") from e
 
-def create_gcs_directory(directory_path: str, delete_exisiting_files: bool = True) -> None:
-    """Creates a directory in GCS by creating an empty blob.
-    If directory exists and delete_exisiting_files is True, deletes any existing files first.
-    """
-    bucket_name, _ = utils.get_bucket_and_delivery_date_from_gcs_path(directory_path) #directory_path.split('/')[0]
-    blob_name = '/'.join(directory_path.split('/')[1:])
-
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-
-    try:
-        # First check if directory exists and has files
-        blobs = bucket.list_blobs(prefix=blob_name)
-
-        if delete_exisiting_files:
-            # Delete any existing files in the directory
-            for blob in blobs:
-                try:
-                    bucket.blob(blob.name).delete()
-                except Exception as e:
-                    utils.logger.error(f"Failed to delete file {blob.name}: {e}")
-
-        # Create the directory marker
-        blob = bucket.blob(blob_name)
-        if not blob.exists():
-            blob.upload_from_string('')
-
-    except Exception as e:
-        raise Exception(f"Unable to create artifact directories in GCS path {directory_path}: {e}") from e
-
 def delete_gcs_file(gcs_path: str) -> None:
     """
     Deletes a file from Google Cloud Storage.
     """
     try:
         # Initialize GCS client
-        storage_client = storage.Client()
+        storage_client = gcs_storage.Client()
 
         # Extract bucket name and blob path
-        # Remove 'gs://' prefix and split into bucket and path
-        path_without_prefix = gcs_path.replace('gs://', '')
+        # Remove storage scheme prefix and split into bucket and path
+        path_without_prefix = storage.strip_scheme(gcs_path)
         bucket_name = path_without_prefix.split('/')[0]
         blob_path = '/'.join(path_without_prefix.split('/')[1:])
 
@@ -172,7 +144,7 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
         blob_path = parts[1] if len(parts) > 1 else None
 
         # Initialize the client
-        client = storage.Client()
+        client = gcs_storage.Client()
 
         # Check if bucket exists
         try:
@@ -201,7 +173,7 @@ def vocab_gcs_path_exists(gcs_path: str) -> bool:
         return False
 
 def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig]) -> bigquery.table.RowIterator:
-    # Initialize the BigQuery client
+    """Execute BigQuery SQL query and return results."""
     client = bigquery.Client()
 
     try:
@@ -218,72 +190,18 @@ def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig
     except Exception as e:
         raise Exception(f"Error executing query: {e}")
 
-def download_from_gcs(gcs_file_path: str) -> str:
-    """
-    Downloads a CSV file from Google Cloud Storage to a local directory.
-    """
-    try:
-        # Define paths
-        bucket, delivery_date = utils.get_bucket_and_delivery_date_from_gcs_path(gcs_file_path)
-        filename = f"{utils.get_table_name_from_gcs_path(gcs_file_path)}"
-        source_blob = f"{delivery_date}/{filename}{constants.CSV}"
-        destination_file_path = f"/tmp/{filename}{constants.CSV}"
-
-        # Create directory to store file
-        os.makedirs('/tmp', exist_ok=True)
-
-        # Initialize a storage client
-        storage_client = storage.Client()
-
-        # Get the bucket
-        bucket = storage_client.bucket(bucket)
-
-        # Get the blob (file)
-        blob = bucket.blob(source_blob)
-
-        # Get the remote file size before downloading
-        blob.reload()  # Ensure we have the latest metadata
-        remote_size_bytes = blob.size
-        remote_size_gb = float(float(remote_size_bytes) / float((1024 * 1024 * 1024)))
-
-        # If the size of the file is greater than half of what is allocated to DuckDB, return exception
-        if remote_size_gb > float(constants.DUCKDB_MEMORY_LIMIT.replace('GB', '')) * 0.5:
-            raise Exception(f"CSV file {gcs_file_path} has invalid quoting, but cannot be fixed due to size constraints. Allocate at least {remote_size_gb * 2}GB of memory to the Cloud Run function")
-
-        # Download the file
-        blob.download_to_filename(destination_file_path)
-
-        return destination_file_path
-
-    except Exception as e:
-        raise Exception(f"Error downloading file {gcs_file_path}: {e}")
-
-def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name: str) -> None:
-    """
-    Uploads a file to the specified GCS bucket.
-    """
-    # Initialize the GCS client
-    storage_client = storage.Client()
-
-    # Get the bucket
-    bucket = storage_client.bucket(bucket_name)
-
-    # Create a blob object and upload the file
-    blob = bucket.blob(destination_blob_name)
-    blob.upload_from_filename(local_file_path)
-
 def list_gcs_subdirectories(gcs_path: str) -> list:
     """
     Lists all subdirectories within a given GCS path.
     """
     try:
         # Split the path into bucket name and prefix
-        parts = gcs_path.replace('gs://', '').split('/', 1)
+        parts = storage.strip_scheme(gcs_path).split('/', 1)
         bucket_name = parts[0]
         prefix = parts[1] if len(parts) > 1 else ''
 
         # Initialize the client
-        client = storage.Client()
+        client = gcs_storage.Client()
         bucket = client.bucket(bucket_name)
 
         # List blobs with the specified prefix
@@ -313,15 +231,15 @@ def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_
         dataset_id: BigQuery dataset ID
         
     Returns:
-        Dictionary with 'loaded' and 'skipped' keys, each containing a list of table names
+        Dictionary with 'loaded' keys a list of table names
         
     Raises:
         Exception: If no table directories are found or if there's an error during processing
     """
     # Construct the OMOP_ETL directory path
     etl_folder = f"{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}"
-    gcs_path = f"gs://{gcs_bucket}/{etl_folder}"
-    
+    gcs_path = storage.get_uri(f"{gcs_bucket}/{etl_folder}")
+
     utils.logger.info(f"Looking for consolidated parquet files in {gcs_path}")
     
     # Get list of table subdirectories
@@ -338,17 +256,14 @@ def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_
     
     # Load each consolidated parquet file to BigQuery
     loaded_tables = []
-    skipped_tables = []
     
     for table_name in sorted(table_names):
         # Construct path to consolidated parquet file
-        consolidated_file_path = f"gs://{gcs_bucket}/{etl_folder}{table_name}/{table_name}{constants.PARQUET}"
+        consolidated_file_path = storage.get_uri(f"{gcs_bucket}/{etl_folder}{table_name}/{table_name}{constants.PARQUET}")
         
         # Check if the consolidated file exists
         if not utils.parquet_file_exists(consolidated_file_path):
-            utils.logger.warning(f"Consolidated parquet file not found: {consolidated_file_path}")
-            skipped_tables.append(table_name)
-            continue
+            raise Exception(f"Consolidated parquet file not found: {consolidated_file_path}")
         
         try:
             utils.logger.info(f"Loading {table_name} from {consolidated_file_path} to BigQuery")
@@ -363,11 +278,9 @@ def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_
             utils.logger.info(f"Successfully loaded {table_name} to BigQuery")
         except Exception as e:
             utils.logger.error(f"Failed to load {table_name}: {str(e)}")
-            skipped_tables.append(table_name)
     
     return {
-        'loaded': loaded_tables,
-        'skipped': skipped_tables
+        'loaded': loaded_tables
     }
 
 def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: str, dataset_id: str) -> dict[str, list[str]]:
@@ -384,19 +297,19 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
         dataset_id: BigQuery dataset ID
 
     Returns:
-        Dictionary with 'loaded' and 'skipped' keys, each containing a list of table names
+        Dictionary with 'loaded' keys containing a list of table names
 
     Raises:
         Exception: If there's an error during processing
     """
     # Construct the DERIVED_FILES directory path
     derived_folder = f"{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}"
-    gcs_path = f"gs://{gcs_bucket}/{derived_folder}"
+    gcs_path = storage.get_uri(f"{gcs_bucket}/{derived_folder}")
 
     utils.logger.info(f"Looking for derived table parquet files in {gcs_path}")
 
     # List all parquet files in the derived_files directory
-    client = storage.Client(project=project_id)
+    client = gcs_storage.Client(project=project_id)
     bucket = client.bucket(gcs_bucket)
     prefix = derived_folder
 
@@ -407,7 +320,6 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
         utils.logger.warning(f"No derived table parquet files found in {gcs_path}")
         return {
             'loaded': [],
-            'skipped': []
         }
 
     # Extract table names from file paths
@@ -418,17 +330,14 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
 
     # Load each derived table parquet file to BigQuery
     loaded_tables = []
-    skipped_tables = []
 
     for table_name in sorted(table_names):
         # Construct path to derived table parquet file
-        derived_file_path = f"gs://{gcs_bucket}/{derived_folder}{table_name}{constants.PARQUET}"
+        derived_file_path = storage.get_uri(f"{gcs_bucket}/{derived_folder}{table_name}{constants.PARQUET}")
 
         # Check if the file exists
         if not utils.parquet_file_exists(derived_file_path):
-            utils.logger.warning(f"Derived table parquet file not found: {derived_file_path}")
-            skipped_tables.append(table_name)
-            continue
+            raise Exception(f"Derived table parquet file not found: {derived_file_path}")
 
         try:
             utils.logger.info(f"Loading derived table {table_name} from {derived_file_path} to BigQuery")
@@ -443,9 +352,7 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
             utils.logger.info(f"Successfully loaded derived table {table_name} to BigQuery")
         except Exception as e:
             utils.logger.error(f"Failed to load derived table {table_name}: {str(e)}")
-            skipped_tables.append(table_name)
 
     return {
         'loaded': loaded_tables,
-        'skipped': skipped_tables
     }

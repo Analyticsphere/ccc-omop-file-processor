@@ -5,14 +5,17 @@ from datetime import date, datetime
 from typing import Optional
 
 import core.constants as constants
+import core.reporting as reporting
 import core.utils as utils
+from core.storage_backend import storage
 
 
 class ReportArtifact:
     def __init__(self, delivery_date: str, artifact_bucket: str, concept_id: Optional[int], name: str, value_as_string: Optional[str], value_as_concept_id: Optional[int], value_as_number: Optional[float]):
+        """Initialize ReportArtifact object for creating delivery reports."""
         self.delivery_date = delivery_date
         self.artifact_bucket = artifact_bucket
-        self.report_artifact_path = utils.get_report_tmp_artifacts_gcs_path(artifact_bucket, delivery_date)
+        self.report_artifact_path = reporting.get_report_tmp_artifacts_path(artifact_bucket, delivery_date)
         self.concept_id = concept_id if concept_id is not None else 0
         self.name = name
         self.value_as_string = value_as_string
@@ -20,10 +23,11 @@ class ReportArtifact:
         self.value_as_number = value_as_number
 
     def save_artifact(self) -> None:
+        """Save report artifact as Parquet file in temporary report directory."""
         random_id = random.randint(0, 2**31 - 1) # Random, positive, integer within 32 bit signed space
         random_string = str(uuid.uuid4())
 
-        file_path = f"{self.report_artifact_path}delivery_report_part_{random_string}{constants.PARQUET}"
+        file_path = storage.get_uri(f"{self.report_artifact_path}delivery_report_part_{random_string}{constants.PARQUET}")
 
         value_as_string_sql = 'NULL' if self.value_as_string is None else f"'{self.value_as_string}'"
         value_as_number_sql = 'NULL' if self.value_as_number is None else f"'{self.value_as_number}'"

@@ -7,8 +7,15 @@ DUCKDB_MAX_SIZE = "5000GB"
 DUCKDB_THREADS = "2"
 
 SERVICE_NAME = "omop-file-processor"
-BQ_LOGGING_TABLE = os.getenv('BQ_LOGGING_TABLE', 'NO _BQ_LOGGING_TABLE DEFINED')
-VOCAB_GCS_PATH = os.getenv('VOCAB_GCS_PATH', 'NO _VOCAB_GCS_PATH DEFINED')
+GCS_BACKEND = "gcs"
+LOCAL_BACKEND = "local"
+BACKENDS = {
+    GCS_BACKEND: 'gs://',
+    LOCAL_BACKEND: 'file://',
+}
+BQ_LOGGING_TABLE = os.getenv('BQ_LOGGING_TABLE', 'NO BQ_LOGGING_TABLE DEFINED')
+VOCAB_PATH = os.getenv('OMOP_VOCAB_PATH', 'NO _OMOP_VOCAB_PATH DEFINED')
+STORAGE_BACKEND = os.getenv('STORAGE_BACKEND', GCS_BACKEND)
 
 PARQUET = ".parquet"
 CSV_GZ = ".csv.gz"
@@ -44,12 +51,14 @@ PIPELINE_COMPLETE_STRING = "completed"
 PIPELINE_ERROR_STRING = "error"
 PIPELINE_DAG_FAIL_MESSAGE = "DAG failed"
 
-FIXED_FILE_TAG_STRING = "_pipeline_fix_formatting"
-
 class BQWriteTypes(str, Enum):
-    # SPECIFIC_FILE -> overwrite table with the exact Parquet file in file_path
+    """
+    BigQuery write operation types.
+
+    SPECIFIC_FILE: Overwrite table with the exact Parquet file specified
+    PROCESSED_FILE: Overwrite table with pipeline-processed version of the file
+    """
     SPECIFIC_FILE = "specific_file"
-    # PROCESSED_FILE -> overwrite table with the pipeline-processed version of the file in file_path
     PROCESSED_FILE = "processed_file"
 
 CONDITION_ERA = "condition_era"
@@ -114,11 +123,9 @@ VOCAB_PATH_PLACEHOLDERS = {
 
 class ArtifactPaths(str, Enum):
     ARTIFACTS = "artifacts/"
-    FIXED_FILES = f"{ARTIFACTS}fixed_files/"
     CONVERTED_FILES = f"{ARTIFACTS}converted_files/"
     HARMONIZED_FILES = f"{ARTIFACTS}harmonized_files/"
     OMOP_ETL = f"{ARTIFACTS}omop_etl/"
-    CREATED_FILES = f"{ARTIFACTS}created_files/"
     DERIVED_FILES = f"{ARTIFACTS}derived_files/"
     REPORT = f"{ARTIFACTS}delivery_report/"
     REPORT_TMP = f"{ARTIFACTS}delivery_report/tmp/"

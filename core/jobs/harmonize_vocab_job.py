@@ -15,7 +15,7 @@ Required Environment Variables:
           domain_check, omop_etl, consolidate_etl, discover_tables, deduplicate_single_table)
 
 Optional Environment Variables:
-    VOCAB_GCS_BUCKET: GCS bucket for vocabulary files (defaults to constants.VOCAB_GCS_PATH)
+    OMOP_VOCAB_PATH: GCS bucket for vocabulary files (defaults to constants.VOCAB_PATH)
     OUTPUT_GCS_PATH: For discover_tables step, path to write table configs JSON
 
 Exit Codes:
@@ -28,12 +28,12 @@ import os
 import sys
 import traceback
 
-from google.cloud import storage
+from google.cloud import storage as gcs_storage  # type: ignore
 
 import core.constants as constants
-import core.gcp_services as gcp_services
 import core.utils as utils
 import core.vocab_harmonization as vocab_harmonization
+from core.storage_backend import storage
 
 
 def validate_env_vars() -> dict[str, str]:
@@ -56,7 +56,7 @@ def validate_env_vars() -> dict[str, str]:
         sys.exit(1)
 
     # Optional variables with defaults
-    env_values['VOCAB_GCS_BUCKET'] = os.getenv('VOCAB_GCS_BUCKET', constants.VOCAB_GCS_PATH)
+    env_values['OMOP_VOCAB_PATH'] = os.getenv('OMOP_VOCAB_PATH', constants.VOCAB_PATH)
     env_values['OUTPUT_GCS_PATH'] = os.getenv('OUTPUT_GCS_PATH', '')
 
     return env_values
@@ -75,7 +75,7 @@ def main():
 
     utils.logger.info(f"FILE_PATH: {env_values['FILE_PATH']}")
     utils.logger.info(f"VOCAB_VERSION: {env_values['VOCAB_VERSION']}")
-    utils.logger.info(f"VOCAB_GCS_BUCKET: {env_values['VOCAB_GCS_BUCKET']}")
+    utils.logger.info(f"OMOP_VOCAB_PATH: {env_values['OMOP_VOCAB_PATH']}")
     utils.logger.info(f"OMOP_VERSION: {env_values['OMOP_VERSION']}")
     utils.logger.info(f"SITE: {env_values['SITE']}")
     utils.logger.info(f"PROJECT_ID: {env_values['PROJECT_ID']}")
@@ -89,7 +89,7 @@ def main():
             cdm_version=env_values['OMOP_VERSION'],
             site=env_values['SITE'],
             vocab_version=env_values['VOCAB_VERSION'],
-            vocab_gcs_bucket=env_values['VOCAB_GCS_BUCKET'],
+            vocab_path=env_values['OMOP_VOCAB_PATH'],
             project_id=env_values['PROJECT_ID'],
             dataset_id=env_values['DATASET_ID']
         )
@@ -107,17 +107,14 @@ def main():
                 result_json = json.dumps(result, indent=2)
 
                 # Parse GCS path
-                if env_values['OUTPUT_GCS_PATH'].startswith('gs://'):
-                    gcs_path = env_values['OUTPUT_GCS_PATH'].replace('gs://', '')
-                else:
-                    gcs_path = env_values['OUTPUT_GCS_PATH']
+                gcs_path = storage.strip_scheme(env_values['OUTPUT_GCS_PATH'])
 
                 parts = gcs_path.split('/', 1)
                 bucket_name = parts[0]
                 blob_path = parts[1] if len(parts) > 1 else 'table_configs.json'
 
                 # Upload to GCS
-                storage_client = storage.Client()
+                storage_client = gcs_storage.Client()
                 bucket = storage_client.bucket(bucket_name)
                 blob = bucket.blob(blob_path)
                 blob.upload_from_string(result_json, content_type='application/json')

@@ -50,7 +50,7 @@ Set these variables in the Cloud Build trigger configuration:
 
 - **`_IMAGE_NAME`**: Container image name (default: `ccc-omop-file-processor`)
 - **`_SERVICE_ACCOUNT`**: Service account email (format: `service-account@project-id.iam.gserviceaccount.com`)
-- **`_TMP_GCS_BUCKET`**: GCS bucket used for temporarily processing files
+- **`_TMP_DIRECTORY`**: GCS bucket used for temporarily processing files
 - **`_BQ_LOGGING_TABLE`**: Table used to store pipeline execution status in BigQuery. Specify a fully qualified table path (i.e. `project_name.dataset_name.table_name`). The pipeline will create the specified table if it does not already exist.
 - **`_VOCAB_GCS_PATH`**: GCS bucket containing OMOP vocabulary files downloaded from Athena
 
@@ -71,7 +71,7 @@ Adjust these settings in the `constants.py` file to match resouce allocations:
 
 1. **Set up GCS buckets** for your data files
    - Create a main bucket for data files
-   - Ensure the `_TMP_GCS_BUCKET` exists for temporary processing
+   - Ensure the `_TMP_DIRECTORY` exists for temporary processing
    - Download vocabulary files from [Athena](https://athena.ohdsi.org/search-terms/start) and upload them to a folder in the GCS bucket `_VOCAB_GCS_PATH`.
 
 2. **Deploy the service**
@@ -139,9 +139,7 @@ Common issues and solutions:
 
 ## Introduction
 
-The omop-file-processor API provides a set of endpoints for working with healthcare data structured according to the Observational Medical Outcomes Partnership (OMOP) Common Data Model (CDM). It is currently deployed as a Google Cloud Run service in the NCI's Connect GCP environment.
-
-The API operates on files stored in Google Cloud Storage (GCS) buckets. Each endpoint performs specific operations on individual data files within an OMOP delivery, with users providing GCS file paths and configuration parameters to initiate processing. This file-centric approach supports performant parallel processing of large healthcare datasets.
+The omop-file-processor API provides a set of endpoints for working with healthcare data structured according to the Observational Medical Outcomes Partnership (OMOP) Common Data Model (CDM). It is currently deployed as a Google Cloud Run service in the NCI's Connect GCP environment. The API operates on files stored in Google Cloud Storage (GCS) buckets. Each endpoint performs specific operations on individual data files within an OMOP delivery.
 
 This API facilitates:
 
@@ -152,7 +150,7 @@ This API facilitates:
 - **BigQuery Integration**: Loads processed data into Google BigQuery for analysis
 - **Process Logging**: Tracks processing steps and outcomes for auditing and troubleshooting
 
-The API is implemented using Flask, providing a RESTful interface. The data processing logic uses DuckDB for manipulation of CSV and Parquet files. Although the underlying technology is designed to be platform-agnostic, the current implementation requires files to be stored in GCS buckets.
+The API is implemented using Flask, providing a RESTful interface. The data processing logic uses DuckDB for manipulation of CSV and Parquet files. The underlying technology is designed to be platform-agnostic, but the current implementation uses Google cloud services.
 
 ## Common Response Codes
 
@@ -170,7 +168,7 @@ Several values used across multiple endpoints are configured through environment
 
 | Configuration | Variable | Description |
 |---------------|----------|-------------|
-| Vocabulary GCS Path | `VOCAB_GCS_PATH` | GCS bucket path containing vocabulary files |
+| Vocabulary GCS Path | `OMOP_VOCAB_PATH` | GCS bucket path containing vocabulary files |
 | BigQuery Logging Table | `BQ_LOGGING_TABLE` | Fully qualified table ID for pipeline logging |
 | Service Name | `SERVICE_NAME` | Name of the service for identification in logs |
 
@@ -238,7 +236,7 @@ OMOP vocabulary files are updated twice a year. Users will need to manually down
 |-----------|------|----------|-------------|
 | vocab_version | string | Yes | The version of the OMOP vocabulary to use |
 
-**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
+**Note:** The vocabulary GCS bucket is configured via the `OMOP_VOCAB_PATH` constant and does not need to be passed in the request.
 
 **Example Request:**
 ```json
@@ -487,7 +485,7 @@ Airflow is responsible for calling each step in sequence.
 - `"Discover tables for deduplication"`
 - `"Deduplicate single table"`
 
-**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
+**Note:** The vocabulary GCS bucket is configured via the `OMOP_VOCAB_PATH` constant and does not need to be passed in the request.
 
 **Response:**
 
@@ -609,7 +607,7 @@ This endpoint should be called after all vocabulary harmonization steps have com
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| gcs_bucket | string | Yes | GCS bucket name (e.g., "delivery_site") |
+| bucket | string | Yes | GCS bucket name (e.g., "delivery_site") |
 | delivery_date | string | Yes | Delivery date (YYYY-MM-DD format) |
 | project_id | string | Yes | Google Cloud project ID |
 | dataset_id | string | Yes | BigQuery dataset ID |
@@ -620,13 +618,13 @@ Returns a 200 status code with a message describing the results.
 
 **Example Response:**
 ```
-Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement. Skipped 0 table(s)
+Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement
 ```
 
 **Example Request:**
 ```json
 {
-    "gcs_bucket": "delivery_site",
+    "bucket": "delivery_site",
     "delivery_date": "2023-05-01",
     "project_id": "my-gcp-project",
     "dataset_id": "omop_cdm"
@@ -646,20 +644,20 @@ Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | site | string | Yes | Site identifier |
-| gcs_bucket | string | Yes | Google Cloud Storage bucket |
+| bucket | string | Yes | Google Cloud Storage bucket |
 | delivery_date | string | Yes | Delivery date |
 | table_name | string | Yes | Name of the derived table to create |
 | project_id | string | Yes | Google Cloud project ID |
 | dataset_id | string | Yes | BigQuery dataset ID |
 | vocab_version | string | Yes | Vocabulary version |
 
-**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
+**Note:** The vocabulary GCS bucket is configured via the `OMOP_VOCAB_PATH` constant and does not need to be passed in the request.
 
 **Example Request:**
 ```json
 {
     "site": "hospital-a",
-    "gcs_bucket": "my-site-bucket",
+    "bucket": "my-site-bucket",
     "delivery_date": "2023-05-01",
     "table_name": "drug_era",
     "project_id": "my-gcp-project",
@@ -708,7 +706,7 @@ Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement
 | project_id | string | Yes | Google Cloud project ID |
 | dataset_id | string | Yes | BigQuery dataset ID |
 
-**Note:** The vocabulary GCS bucket is configured via the `VOCAB_GCS_PATH` constant and does not need to be passed in the request.
+**Note:** The vocabulary GCS bucket is configured via the `OMOP_VOCAB_PATH` constant and does not need to be passed in the request.
 
 **Example Request:**
 ```json

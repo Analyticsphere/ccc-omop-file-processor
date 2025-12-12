@@ -59,10 +59,11 @@ def main():
     try:
         # Execute file processing
         utils.logger.info(f"Processing file: {env_values['FILE_PATH']}")
-        file_processor.process_incoming_file(
-            file_type=env_values['FILE_TYPE'],
-            gcs_file_path=env_values['FILE_PATH']
+        processor = file_processor.FileProcessor(
+            file_path=env_values['FILE_PATH'],
+            file_type=env_values['FILE_TYPE']
         )
+        processor.process()
 
         utils.logger.info("=" * 80)
         utils.logger.info("Cloud Run Job: Process Incoming File - SUCCESS")

@@ -23,11 +23,11 @@ steps:
     '--cpu=4', '--memory=16Gi',
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL', # Directly use the substitution variable
-    '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,VOCAB_GCS_PATH=$_VOCAB_GCS_PATH',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
     '--concurrency=1',
     '--timeout=3600',
     '--execution-environment=gen2',
-    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
     '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data'
   ]
 
@@ -39,13 +39,13 @@ steps:
     '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
-    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,VOCAB_GCS_PATH=$_VOCAB_GCS_PATH',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
     '--cpu=4',
     '--memory=16Gi',
     '--task-timeout=3600s',
     '--max-retries=0',
     '--parallelism=1',
-    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
     '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
     '--args=python,-m,core.jobs.process_incoming_file_job'
   ]
@@ -58,13 +58,13 @@ steps:
     '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
-    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,VOCAB_GCS_PATH=$_VOCAB_GCS_PATH',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
     '--cpu=4',
     '--memory=16Gi',
     '--task-timeout=3600s',
     '--max-retries=0',
     '--parallelism=1',
-    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
     '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
     '--args=python,-m,core.jobs.normalize_parquet_job'
   ]
@@ -77,13 +77,13 @@ steps:
     '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
-    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,VOCAB_GCS_PATH=$_VOCAB_GCS_PATH',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
     '--cpu=4',
     '--memory=16Gi',
     '--task-timeout=3600s',
     '--max-retries=0',
     '--parallelism=1',
-    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
     '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
     '--args=python,-m,core.jobs.upgrade_cdm_job'
   ]
@@ -96,13 +96,13 @@ steps:
     '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
-    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,VOCAB_GCS_PATH=$_VOCAB_GCS_PATH',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
     '--cpu=4',
     '--memory=16Gi',
     '--task-timeout=7200s',
     '--max-retries=0',
     '--parallelism=1',
-    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
     '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
     '--args=python,-m,core.jobs.harmonize_vocab_job'
   ]
@@ -115,13 +115,13 @@ steps:
     '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
-    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,VOCAB_GCS_PATH=$_VOCAB_GCS_PATH',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
     '--cpu=4',
     '--memory=16Gi',
     '--task-timeout=3600s',
     '--max-retries=0',
     '--parallelism=1',
-    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_GCS_BUCKET',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
     '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
     '--args=python,-m,core.jobs.generate_derived_tables_job'
   ]

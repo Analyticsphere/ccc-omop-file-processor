@@ -1,10 +1,8 @@
-import logging
 import re
-import sys
-import uuid
 
 import core.constants as constants
 import core.utils as utils
+from core.storage_backend import storage
 
 
 class Transformer:
@@ -14,26 +12,18 @@ class Transformer:
     must be moved to the table appropriate for their new domain.
     """
     def __init__(self, site: str, file_path: str, cdm_version: str, source_table: str, target_table: str, etl_artifact_path: str):
+        """Initialize Transformer object used for OMOP-to-OMOP ETL."""
         self.site = site
         self.file_path = file_path
         self.cdm_version = cdm_version
         self.source_table = source_table
         self.target_table = target_table
         self.etl_artifact_path = etl_artifact_path
-        
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[logging.StreamHandler(sys.stdout)]
-        )
-        # Create the logger at module level so its settings are applied throughout class
-        self.logger = logging.getLogger(__name__)
 
     def omop_to_omop_etl(self) -> None:
-        # Execute the OMOP to OMOP ETL SQL script
+        """Execute OMOP-to-OMOP ETL transformation using SQL scripts."""
         transform_sql = self.generate_omop_to_omop_sql()
         utils.execute_duckdb_sql(transform_sql, f"Unable to execute OMOP ETL SQL transformation")
-
 
     def generate_omop_to_omop_sql(self) -> str:
         """
@@ -186,18 +176,14 @@ class Transformer:
             COPY (
                 {final_sql}
                 WHERE target_table = '{self.target_table}'
-            ) TO 'gs://{self.get_transformed_path()}' {constants.DUCKDB_FORMAT_STRING}
+            ) TO '{storage.get_uri(self.get_transformed_path())}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         return transform_sql
 
-    # TODO: Put the transformed file in a common location for all files being processed in the pipeline
-    # In a subsequent step, all transformed files can be combined and then checked for duplicates globally
-    # Afer duplicates are resolved, the file can be loaded to BQ
     def get_transformed_path(self) -> str:
+        """Return output path for transformed Parquet file."""
         return f"{self.etl_artifact_path}{self.target_table}/parts/{self.target_table}_from_{self.source_table}{constants.PARQUET}"
-        
-        # f"{self.file_path}transformed/{self.target_table}_{uuid.uuid4()}{constants.PARQUET}"
 
     def placeholder_to_file_path(self, sql: str) -> str:
         """
@@ -206,7 +192,7 @@ class Transformer:
         replacement_result = sql
 
         for placeholder, _ in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-            clinical_data_table_path = f"gs://{self.file_path}*{constants.PARQUET}"
+            clinical_data_table_path = storage.get_uri(f"{self.file_path}*{constants.PARQUET}")
             replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
         return replacement_result

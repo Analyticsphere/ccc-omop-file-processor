@@ -66,12 +66,13 @@ def main():
         utils.logger.info(f"Parquet artifact path: {parquet_file_path}")
 
         # Execute normalization
-        normalization.normalize_file(
-            parquet_gcs_file_path=parquet_file_path,
+        normalizer = normalization.Normalizer(
+            file_path=parquet_file_path,
             cdm_version=env_values['OMOP_VERSION'],
             date_format=env_values['DATE_FORMAT'],
             datetime_format=env_values['DATETIME_FORMAT']
         )
+        normalizer.normalize()
 
         utils.logger.info("=" * 80)
         utils.logger.info("Cloud Run Job: Normalize Parquet - SUCCESS")

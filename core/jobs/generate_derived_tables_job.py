@@ -13,7 +13,7 @@ Required Environment Variables:
     VOCAB_VERSION: Vocabulary version
 
 Optional Environment Variables:
-    VOCAB_GCS_BUCKET: GCS bucket for vocabulary files (defaults to constants.VOCAB_GCS_PATH)
+    OMOP_VOCAB_PATH: GCS bucket for vocabulary files (defaults to constants.VOCAB_PATH)
 
 Exit Codes:
     0: Success
@@ -48,7 +48,7 @@ def validate_env_vars() -> dict[str, str]:
         sys.exit(1)
 
     # Optional variables with defaults
-    env_values['VOCAB_GCS_BUCKET'] = os.getenv('VOCAB_GCS_BUCKET', constants.VOCAB_GCS_PATH)
+    env_values['OMOP_VOCAB_PATH'] = os.getenv('OMOP_VOCAB_PATH', constants.VOCAB_PATH)
 
     return env_values
 
@@ -69,18 +69,18 @@ def main():
     utils.logger.info(f"DELIVERY_DATE: {env_values['DELIVERY_DATE']}")
     utils.logger.info(f"TABLE_NAME: {env_values['TABLE_NAME']}")
     utils.logger.info(f"VOCAB_VERSION: {env_values['VOCAB_VERSION']}")
-    utils.logger.info(f"VOCAB_GCS_BUCKET: {env_values['VOCAB_GCS_BUCKET']}")
+    utils.logger.info(f"OMOP_VOCAB_PATH: {env_values['OMOP_VOCAB_PATH']}")
 
     try:
         # Execute derived table generation
         utils.logger.info(f"Generating derived table: {env_values['TABLE_NAME']}")
-        omop_client.generate_derived_data_from_harmonized(
+        omop_client.OMOPClient.generate_derived_data_from_harmonized(
             site=env_values['SITE'],
-            site_bucket=env_values['GCS_BUCKET'],
+            bucket=env_values['GCS_BUCKET'],
             delivery_date=env_values['DELIVERY_DATE'],
             table_name=env_values['TABLE_NAME'],
             vocab_version=env_values['VOCAB_VERSION'],
-            vocab_gcs_bucket=env_values['VOCAB_GCS_BUCKET']
+            vocab_path=env_values['OMOP_VOCAB_PATH']
         )
 
         utils.logger.info("=" * 80)
