@@ -141,7 +141,7 @@ class OMOPClient:
         utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
 
     @staticmethod
-    def generate_derived_data_from_harmonized(site: str, site_bucket: str, delivery_date: str, table_name: str, vocab_version: str, vocab_path: str) -> None:
+    def generate_derived_data_from_harmonized(site: str, bucket: str, delivery_date: str, table_name: str, vocab_version: str, vocab_path: str) -> None:
         """
         Execute SQL scripts to generate derived data table Parquet files from harmonized data.
 
@@ -151,7 +151,7 @@ class OMOPClient:
 
         Args:
             site: Site identifier
-            site_bucket: GCS bucket for the site
+            bucket: GCS bucket for the site
             delivery_date: Date of data delivery
             table_name: Name of derived table to generate (observation_period, drug_era, etc.)
             vocab_version: Vocabulary version to use for harmonization lookups
@@ -169,10 +169,10 @@ class OMOPClient:
             # Check if this table goes through vocabulary harmonization
             if required_table in constants.VOCAB_HARMONIZED_TABLES:
                 # Look for harmonized version
-                parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{required_table}/{required_table}{constants.PARQUET}"
+                parquet_path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{required_table}/{required_table}{constants.PARQUET}"
             else:
                 # Look for converted version (e.g., person, death)
-                parquet_path = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
+                parquet_path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
 
             if not utils.parquet_file_exists(parquet_path):
                 # Don't raise exception if required table doesn't exist, just log warning
@@ -185,9 +185,9 @@ class OMOPClient:
         # https://ohdsi.github.io/CommonDataModel/ehrObsPeriods.html
         if table_name == constants.OBSERVATION_PERIOD:
             # Check for harmonized visit_occurrence
-            visit_occurrence_table = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}visit_occurrence/visit_occurrence{constants.PARQUET}"
+            visit_occurrence_table = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}visit_occurrence/visit_occurrence{constants.PARQUET}"
             # Death table doesn't go through harmonization
-            death_table = f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}death{constants.PARQUET}"
+            death_table = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}death{constants.PARQUET}"
 
             # Need separate SQL scripts for different file delivery scenarios
             # DuckDB doesn't support branch logic based on table/file availability so choosing SQL script via Python
@@ -209,17 +209,17 @@ class OMOPClient:
                 create_statement_path = f"{constants.DERIVED_TABLE_SCRIPT_PATH}{sql_script_name}_create.sql"
                 with open(create_statement_path, 'r') as f:
                     create_statement_raw = f.read()
-                create_statement = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, create_statement_raw, vocab_version, vocab_path)
+                create_statement = utils.placeholder_to_harmonized_file_path(site, bucket, delivery_date, create_statement_raw, vocab_version, vocab_path)
 
             sql_path = f"{constants.DERIVED_TABLE_SCRIPT_PATH}{sql_script_name}.sql"
             with open(sql_path, 'r') as f:
                 select_statement_raw = f.read()
 
             # Add table locations using harmonized file paths
-            select_statement = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, select_statement_raw, vocab_version, vocab_path)
+            select_statement = utils.placeholder_to_harmonized_file_path(site, bucket, delivery_date, select_statement_raw, vocab_version, vocab_path)
 
             # Output to derived_files directory
-            parquet_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}{table_name}{constants.PARQUET}")
+            parquet_path = storage.get_uri(f"{bucket}/{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}{table_name}{constants.PARQUET}")
 
             # Generate and execute final SQL
             sql_statement = f"""

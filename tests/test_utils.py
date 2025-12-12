@@ -227,7 +227,7 @@ def test_get_placeholder_value(column_name, column_type, expected_value):
 # =============================================================================
 
 @pytest.mark.parametrize(
-    "site,site_bucket,delivery_date,sql_script,vocab_version,vocab_path,expected",
+    "site,bucket,delivery_date,sql_script,vocab_version,vocab_path,expected",
     [
         # Test single clinical data placeholder - person
         (
@@ -301,9 +301,9 @@ def test_get_placeholder_value(column_name, column_type, expected_value):
         ),
     ]
 )
-def test_placeholder_to_file_path_without_site_and_date(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_path, expected):
+def test_placeholder_to_file_path_without_site_and_date(site, bucket, delivery_date, sql_script, vocab_version, vocab_path, expected):
     """Test placeholder_to_file_path() for clinical and vocabulary table replacements (excluding @SITE and @CURRENT_DATE)."""
-    result = utils.placeholder_to_file_path(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_path)
+    result = utils.placeholder_to_file_path(site, bucket, delivery_date, sql_script, vocab_version, vocab_path)
     assert result == expected
 
 
@@ -314,7 +314,7 @@ def test_placeholder_to_file_path_site_replacement():
 
     result = utils.placeholder_to_file_path(
         site="my-site",
-        site_bucket="bucket",
+        bucket="bucket",
         delivery_date="2024-01-01",
         sql_script=sql_script,
         vocab_version="v1.0",
@@ -331,7 +331,7 @@ def test_placeholder_to_file_path_multiple_site_replacements():
 
     result = utils.placeholder_to_file_path(
         site="test-site",
-        site_bucket="bucket",
+        bucket="bucket",
         delivery_date="2024-01-01",
         sql_script=sql_script,
         vocab_version="v1.0",
@@ -352,7 +352,7 @@ def test_placeholder_to_file_path_current_date_replacement(mock_datetime):
 
     result = utils.placeholder_to_file_path(
         site="site",
-        site_bucket="bucket",
+        bucket="bucket",
         delivery_date="2024-01-01",
         sql_script=sql_script,
         vocab_version="v1.0",
@@ -394,7 +394,7 @@ def test_placeholder_to_file_path_all_placeholders_together(mock_datetime):
 
     result = utils.placeholder_to_file_path(
         site="comprehensive-site",
-        site_bucket="comprehensive-bucket",
+        bucket="comprehensive-bucket",
         delivery_date="2025-06-15",
         sql_script=sql_script,
         vocab_version="v2025",
@@ -409,7 +409,7 @@ def test_placeholder_to_file_path_all_placeholders_together(mock_datetime):
 # =============================================================================
 
 @pytest.mark.parametrize(
-    "site,site_bucket,delivery_date,sql_script,vocab_version,vocab_path,expected",
+    "site,bucket,delivery_date,sql_script,vocab_version,vocab_path,expected",
     [
         # Test harmonized table (condition_occurrence) - should use omop_etl path
         (
@@ -595,7 +595,7 @@ def test_placeholder_to_file_path_all_placeholders_together(mock_datetime):
         ),
     ]
 )
-def test_placeholder_to_harmonized_file_path_table_replacements(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_path, expected):
+def test_placeholder_to_harmonized_file_path_table_replacements(site, bucket, delivery_date, sql_script, vocab_version, vocab_path, expected):
     """
     Test placeholder_to_harmonized_file_path() for proper path resolution.
 
@@ -603,7 +603,7 @@ def test_placeholder_to_harmonized_file_path_table_replacements(site, site_bucke
     Non-harmonized tables should use: converted_files/{table}.parquet
     Vocabulary tables should use: optimized/{table}.parquet
     """
-    result = utils.placeholder_to_harmonized_file_path(site, site_bucket, delivery_date, sql_script, vocab_version, vocab_path)
+    result = utils.placeholder_to_harmonized_file_path(site, bucket, delivery_date, sql_script, vocab_version, vocab_path)
     assert result == expected
 
 
@@ -614,7 +614,7 @@ def test_placeholder_to_harmonized_file_path_site_replacement():
 
     result = utils.placeholder_to_harmonized_file_path(
         site="harmonized-site",
-        site_bucket="bucket",
+        bucket="bucket",
         delivery_date="2024-01-01",
         sql_script=sql_script,
         vocab_version="v1.0",
@@ -635,7 +635,7 @@ def test_placeholder_to_harmonized_file_path_current_date_replacement(mock_datet
 
     result = utils.placeholder_to_harmonized_file_path(
         site="site",
-        site_bucket="bucket",
+        bucket="bucket",
         delivery_date="2024-01-01",
         sql_script=sql_script,
         vocab_version="v1.0",
@@ -687,7 +687,7 @@ def test_placeholder_to_harmonized_file_path_comprehensive(mock_datetime):
 
     result = utils.placeholder_to_harmonized_file_path(
         site="final-site",
-        site_bucket="final-bucket",
+        bucket="final-bucket",
         delivery_date="2026-12-31",
         sql_script=sql_script,
         vocab_version="v2026",

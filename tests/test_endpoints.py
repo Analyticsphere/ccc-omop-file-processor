@@ -472,7 +472,7 @@ class TestGenerateDerivedTablesEndpoint:
         """Test successful derived table generation."""
         response = client.post('/generate_derived_tables_from_harmonized', json={
             'site': 'test_site',
-            'site_bucket': 'test-bucket',
+            'bucket': 'test-bucket',
             'delivery_date': '2025-01-01',
             'table_name': 'drug_era',
             'vocab_version': 'v5.0_24-JAN-25'
@@ -497,7 +497,7 @@ class TestGenerateDerivedTablesEndpoint:
 
         response = client.post('/generate_derived_tables_from_harmonized', json={
             'site': 'test_site',
-            'site_bucket': 'test-bucket',
+            'bucket': 'test-bucket',
             'delivery_date': '2025-01-01',
             'table_name': 'drug_era',
             'vocab_version': 'v5.0_24-JAN-25'

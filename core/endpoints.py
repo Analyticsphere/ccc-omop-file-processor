@@ -356,25 +356,25 @@ def generate_derived_tables_from_harmonized() -> tuple[str, int]:
     """
     data: dict[str, Any] = request.get_json() or {}
     site: Optional[str] = data.get('site')
-    site_bucket: Optional[str] = data.get('site_bucket')
+    bucket: Optional[str] = data.get('bucket')
     delivery_date: Optional[str] = data.get('delivery_date')
     table_name: Optional[str] = data.get('table_name')
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_path: str = constants.VOCAB_PATH
 
     # Validate required parameters
-    if not all([site, delivery_date, table_name, vocab_version, vocab_path, site_bucket]):
-        return "Missing a required parameter to 'generate_derived_tables_from_harmonized' endpoint. Required: site, delivery_date, table_name, vocab_version, vocab_path, site_bucket", 400
+    if not all([site, delivery_date, table_name, vocab_version, vocab_path, bucket]):
+        return "Missing a required parameter to 'generate_derived_tables_from_harmonized' endpoint. Required: site, delivery_date, table_name, vocab_version, vocab_path, bucket", 400
 
     try:
         assert site is not None
-        assert site_bucket is not None
+        assert bucket is not None
         assert delivery_date is not None
         assert table_name is not None
         assert vocab_version is not None
 
         utils.logger.info(f"Generating derived table {table_name} from harmonized data for {delivery_date} delivery from {site}")
-        omop_client.OMOPClient.generate_derived_data_from_harmonized(site, site_bucket, delivery_date, table_name, vocab_version, vocab_path)
+        omop_client.OMOPClient.generate_derived_data_from_harmonized(site, bucket, delivery_date, table_name, vocab_version, vocab_path)
         return "Created derived table from harmonized data", 200
     except Exception as e:
         utils.logger.error(f"Unable to create derived table from harmonized data: {str(e)}")

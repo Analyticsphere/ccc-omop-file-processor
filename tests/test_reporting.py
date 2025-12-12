@@ -21,7 +21,7 @@ class TestReportGeneratorInit:
         """Test that initialization stores all report_data parameters."""
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",
@@ -48,7 +48,7 @@ class TestReportGeneratorInit:
 
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",
@@ -77,7 +77,7 @@ class TestReportGeneratorGenerate:
         """Test that generate calls both metadata and consolidation methods."""
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",
@@ -98,7 +98,7 @@ class TestReportGeneratorGenerate:
         """Test that metadata is created before consolidation."""
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",
@@ -136,7 +136,7 @@ class TestReportGeneratorMetadataArtifacts:
 
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",
@@ -168,7 +168,7 @@ class TestReportGeneratorMetadataArtifacts:
 
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",
@@ -222,7 +222,7 @@ class TestReportGeneratorMetadataArtifacts:
 
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",
@@ -255,7 +255,7 @@ class TestReportGeneratorConsolidateReportFiles:
 
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",
@@ -291,7 +291,7 @@ class TestReportGeneratorConsolidateReportFiles:
 
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",
@@ -321,7 +321,7 @@ class TestReportGeneratorConsolidateReportFiles:
 
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",
@@ -398,7 +398,7 @@ class TestReportGeneratorHelpers:
         """Test _get_tmp_artifacts_path returns correct path."""
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",
@@ -420,7 +420,7 @@ class TestReportGeneratorHelpers:
 
         report_data = {
             "site": "test_site",
-            "site_bucket": "test-bucket",
+            "bucket": "test-bucket",
             "delivery_date": "2025-01-15",
             "site_display_name": "Test Site",
             "file_delivery_format": "parquet",

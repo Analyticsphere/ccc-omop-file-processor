@@ -211,7 +211,7 @@ class TestOMOPClientGenerateDerivedDataFromHarmonized:
         with pytest.raises(Exception) as exc_info:
             OMOPClient.generate_derived_data_from_harmonized(
                 site="test_site",
-                site_bucket="gs://test-bucket",
+                bucket="gs://test-bucket",
                 delivery_date="2025-01-01",
                 table_name="invalid_table",
                 vocab_version="v5.0_24-JAN-25",
@@ -227,7 +227,7 @@ class TestOMOPClientGenerateDerivedDataFromHarmonized:
 
         OMOPClient.generate_derived_data_from_harmonized(
             site="test_site",
-            site_bucket="gs://test-bucket",
+            bucket="gs://test-bucket",
             delivery_date="2025-01-01",
             table_name="observation_period",
             vocab_version="v5.0_24-JAN-25",
@@ -248,7 +248,7 @@ class TestOMOPClientGenerateDerivedDataFromHarmonized:
 
         OMOPClient.generate_derived_data_from_harmonized(
             site="test_site",
-            site_bucket="gs://test-bucket",
+            bucket="gs://test-bucket",
             delivery_date="2025-01-01",
             table_name="observation_period",
             vocab_version="v5.0_24-JAN-25",

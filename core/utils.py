@@ -370,14 +370,14 @@ def get_primary_key_column(table_name: str, cdm_version: str) -> str:
     # For tables with no primary key, return ""
     return ""
 
-def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_path: str) -> str:
+def placeholder_to_file_path(site: str, bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_path: str) -> str:
     """
     Replaces clinical data table place holder strings in SQL scripts with paths to table parquet files
     """
     replacement_result = sql_script
 
     for placeholder, replacement in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
-        clinical_data_table_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}")
+        clinical_data_table_path = storage.get_uri(f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{replacement}{constants.PARQUET}")
         replacement_result = replacement_result.replace(placeholder, clinical_data_table_path)
 
     # Replaces vocab table place holder strings in SQL scripts with paths to target vocabulary version
@@ -393,7 +393,7 @@ def placeholder_to_file_path(site: str, site_bucket: str, delivery_date: str, sq
 
     return replacement_result
 
-def placeholder_to_harmonized_file_path(site: str, site_bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_path: str) -> str:
+def placeholder_to_harmonized_file_path(site: str, bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_path: str) -> str:
     """
     Replaces clinical data table placeholder strings in SQL scripts with paths to the appropriate parquet files.
 
@@ -410,10 +410,10 @@ def placeholder_to_harmonized_file_path(site: str, site_bucket: str, delivery_da
         # Check if this table underwent vocabulary harmonization
         if table_name in constants.VOCAB_HARMONIZED_TABLES:
             # Harmonized tables are in: omop_etl/{table_name}/{table_name}.parquet
-            table_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{table_name}/{table_name}{constants.PARQUET}")
+            table_path = storage.get_uri(f"{bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{table_name}/{table_name}{constants.PARQUET}")
         else:
             # Non-harmonized tables are in: converted_files/{table_name}.parquet
-            table_path = storage.get_uri(f"{site_bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{table_name}{constants.PARQUET}")
+            table_path = storage.get_uri(f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{table_name}{constants.PARQUET}")
 
         replacement_result = replacement_result.replace(placeholder, table_path)
 

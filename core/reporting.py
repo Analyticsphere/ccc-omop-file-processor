@@ -22,7 +22,7 @@ class ReportGenerator:
         Args:
             report_data: Dictionary containing delivery metadata:
             site: Site identifier
-            site_bucket: Storage bucket for site data
+            bucket: Storage bucket for site data
             delivery_date: Delivery date string (YYYY-MM-DD)
             site_display_name: Human-readable site name
             file_delivery_format: Format of delivered files (e.g., .csv, .parquet)
@@ -31,7 +31,7 @@ class ReportGenerator:
             target_cdm_version: Target OMOP CDM version
         """
         self.site = report_data["site"]
-        self.bucket = report_data["site_bucket"]
+        self.bucket = report_data["bucket"]
         self.delivery_date = report_data["delivery_date"]
         self.site_display_name = report_data["site_display_name"]
         self.file_delivery_format = report_data["file_delivery_format"]
