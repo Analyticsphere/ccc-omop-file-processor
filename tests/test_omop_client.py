@@ -134,7 +134,7 @@ class TestOMOPClientPopulateCdmSourceFile:
         mock_get_vocab.return_value = "v5.0_24-JAN-25"
 
         cdm_source_data = {
-            "gcs_bucket": "gs://test-bucket",
+            "bucket": "gs://test-bucket",
             "source_release_date": "2025-01-01",
             "cdm_source_name": "Test Site",
             "cdm_source_abbreviation": "test",
@@ -164,7 +164,7 @@ class TestOMOPClientPopulateCdmSourceFile:
         ]
 
         cdm_source_data = {
-            "gcs_bucket": "gs://test-bucket",
+            "bucket": "gs://test-bucket",
             "source_release_date": "2025-01-01",
             "cdm_source_name": "Test Site",
             "cdm_source_abbreviation": "test",
@@ -187,7 +187,7 @@ class TestOMOPClientPopulateCdmSourceFile:
         mock_execute.return_value = [[5]]  # File has 5 rows
 
         cdm_source_data = {
-            "gcs_bucket": "gs://test-bucket",
+            "bucket": "gs://test-bucket",
             "source_release_date": "2025-01-01",
             "cdm_source_name": "Test Site",
             "cdm_source_abbreviation": "test",

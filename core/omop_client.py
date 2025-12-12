@@ -106,7 +106,7 @@ class OMOPClient:
 
         Args:
             cdm_source_data: Dictionary containing CDM source metadata fields:
-            gcs_bucket: GCS bucket path
+            bucket: Bucket path
             source_release_date: Release date of source data
             cdm_source_name: Name of the CDM source
             cdm_source_abbreviation: Abbreviation
@@ -117,7 +117,7 @@ class OMOPClient:
             (optional) cdm_etl_reference: ETL documentation URL
             cdm_release_date: Release date of CDM
         """
-        bucket = cdm_source_data["gcs_bucket"]
+        bucket = cdm_source_data["bucket"]
         delivery_date = cdm_source_data["source_release_date"]
 
         cdm_source_path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}cdm_source{constants.PARQUET}"
