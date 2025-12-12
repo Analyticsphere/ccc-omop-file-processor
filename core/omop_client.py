@@ -13,7 +13,7 @@ class OMOPClient:
     - CDM version upgrades (currently supports upgrading from CDM v5.3 to v5.4.)
     - cdm_source file population
     - Derived data table generation from harmonized data
-    - BigQuery table creation
+    - Creating missing tables in BigQuery datasets
     """
 
     @staticmethod
