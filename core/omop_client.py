@@ -151,7 +151,7 @@ class OMOPClient:
 
         Args:
             site: Site identifier
-            bucket: GCS bucket for the site
+            bucket: Bucket for the site
             delivery_date: Date of data delivery
             table_name: Name of derived table to generate (observation_period, drug_era, etc.)
             vocab_version: Vocabulary version to use for harmonization lookups
