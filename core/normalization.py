@@ -394,7 +394,6 @@ class Normalizer:
         except Exception as e:
             raise Exception(f"Unable to handle missing person_id values: {e}") from e
 
-
     @staticmethod
     def _find_connect_id_column(actual_columns: list) -> str:
         """
