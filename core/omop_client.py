@@ -10,7 +10,7 @@ class OMOPClient:
     OMOP CDM client operations including upgrades, derived data generation, and BigQuery management.
 
     Handles:
-    - CDM version upgrades (currently supports upgrading from CDM v5.3 to v5.4.)
+    - CDM version upgrades
     - cdm_source file population
     - Derived data table generation from harmonized data
     - Creating missing tables in BigQuery datasets

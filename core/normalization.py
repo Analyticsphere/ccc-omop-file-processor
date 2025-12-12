@@ -14,11 +14,9 @@ class Normalizer:
     - Data type conversions to OMOP CDM standard types
     - Default value population for required columns
     - Valid/invalid row separation
-    - Deterministic composite key generation for surrogate key tables
+    - Deterministic composite primary key generation
     - Row count artifact creation
-    - Connect ID handling: When connectid/connect_id column exists in ANY table,
-      its value is used for person_id (applies to person, condition_occurrence,
-      drug_exposure, measurement, and all other OMOP tables with person_id)
+    - Connect ID handling
     """
 
     def __init__(self, file_path: str, cdm_version: str, date_format: str, datetime_format: str):
