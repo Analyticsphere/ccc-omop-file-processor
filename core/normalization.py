@@ -359,8 +359,8 @@ class Normalizer:
             missing_count = result[0][0] if result else 0
 
             # If there are rows with missing person_id, remove them from the normalized file
-            # The normalized data is used in further downstream processing; the rows with missing person_id
-            # are retained in the raw data files, but are removed from pipeline processing at this step.
+            # The normalized data is used in further downstream processing; the rows with missing person_id values
+            # are retained in the raw data files, but are removed from further pipeline processing at this step.
             if missing_count > 0:
                 # Rewrite normalized data file excluding rows with person_id = -1
                 filter_sql = f"""
