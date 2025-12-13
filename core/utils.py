@@ -299,6 +299,19 @@ def get_invalid_rows_path_from_path(file_path: str) -> str:
 
     return invalid_rows_path
 
+def get_report_tmp_artifacts_path(bucket: str, delivery_date: str) -> str:
+    """
+    Get path to the temporary report artifacts directory.
+
+    Args:
+        bucket: Storage bucket name
+        delivery_date: Delivery date string
+
+    Returns:
+        Path to temporary report artifacts directory (without scheme prefix)
+    """
+    return f"{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
+
 def parquet_file_exists(file_path: str) -> bool:
     """
     Check if a Parquet file exists in the configured storage backend.

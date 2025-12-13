@@ -5,7 +5,6 @@ from datetime import date, datetime
 from typing import Optional
 
 import core.constants as constants
-import core.reporting as reporting
 import core.utils as utils
 from core.storage_backend import storage
 
@@ -15,7 +14,7 @@ class ReportArtifact:
         """Initialize ReportArtifact object for creating delivery reports."""
         self.delivery_date = delivery_date
         self.artifact_bucket = artifact_bucket
-        self.report_artifact_path = reporting.get_report_tmp_artifacts_path(artifact_bucket, delivery_date)
+        self.report_artifact_path = utils.get_report_tmp_artifacts_path(artifact_bucket, delivery_date)
         self.concept_id = concept_id if concept_id is not None else 0
         self.name = name
         self.value_as_string = value_as_string
