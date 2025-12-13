@@ -73,9 +73,10 @@ class TestReportGeneratorGenerate:
     """Tests for generate orchestration method."""
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
+    @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_both_methods(self, mock_create_metadata, mock_consolidate):
-        """Test that generate calls both metadata and consolidation methods."""
+    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_type_concept, mock_consolidate):
+        """Test that generate calls metadata, type concept, and consolidation methods."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -91,12 +92,14 @@ class TestReportGeneratorGenerate:
         generator.generate()
 
         mock_create_metadata.assert_called_once()
+        mock_create_type_concept.assert_called_once()
         mock_consolidate.assert_called_once()
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
+    @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_consolidate):
-        """Test that metadata is created before consolidation."""
+    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_type_concept, mock_consolidate):
+        """Test that methods are called in correct order: metadata, type concept, consolidation."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -110,12 +113,13 @@ class TestReportGeneratorGenerate:
 
         call_order = []
         mock_create_metadata.side_effect = lambda: call_order.append('metadata')
+        mock_create_type_concept.side_effect = lambda: call_order.append('type_concept')
         mock_consolidate.side_effect = lambda: call_order.append('consolidate')
 
         generator = ReportGenerator(report_data)
         generator.generate()
 
-        assert call_order == ['metadata', 'consolidate']
+        assert call_order == ['metadata', 'type_concept', 'consolidate']
 
 
 class TestReportGeneratorMetadataArtifacts:
@@ -466,3 +470,285 @@ class TestGetReportTmpArtifactsPath:
         assert not path.startswith("s3://")
         assert not path.startswith("gs://")
         assert not path.startswith("file://")
+
+
+class TestTypeConceptBreakdownSQL:
+    """Tests for generate_type_concept_breakdown_sql static method."""
+
+    def test_generates_valid_sql_structure(self):
+        """Test that SQL has correct structure."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+        concept_uri = "gs://vocab-bucket/v5.0/optimized/concept.parquet"
+        type_field = "visit_type_concept_id"
+
+        sql = ReportGenerator.generate_type_concept_breakdown_sql(table_uri, concept_uri, type_field)
+
+        # Check key SQL components
+        assert "SELECT" in sql
+        assert f"COALESCE(t.{type_field}, 0) as type_concept_id" in sql
+        assert "COALESCE(c.concept_name, 'No matching concept') as concept_name" in sql
+        assert "COUNT(*) as record_count" in sql
+        assert f"FROM read_parquet('{table_uri}') t" in sql
+        assert f"LEFT JOIN read_parquet('{concept_uri}') c" in sql
+        assert f"ON t.{type_field} = c.concept_id" in sql
+        assert f"GROUP BY t.{type_field}, c.concept_name" in sql
+        assert "ORDER BY record_count DESC" in sql
+
+    def test_matches_golden_file(self):
+        """Test that generated SQL matches the golden file."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+        concept_uri = "gs://vocab-bucket/v5.0/optimized/concept.parquet"
+        type_field = "visit_type_concept_id"
+
+        sql = ReportGenerator.generate_type_concept_breakdown_sql(table_uri, concept_uri, type_field)
+
+        # Load golden file
+        with open('tests/reference/sql/reporting/generate_type_concept_breakdown_sql_standard.sql', 'r') as f:
+            expected_sql = f.read()
+
+        assert sql.strip() == expected_sql.strip()
+
+    def test_handles_different_type_fields(self):
+        """Test that SQL correctly uses different type_concept_id field names."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/converted_files/death.parquet"
+        concept_uri = "gs://vocab-bucket/v5.0/optimized/concept.parquet"
+
+        # Test different type fields
+        type_fields = [
+            "death_type_concept_id",
+            "condition_type_concept_id",
+            "measurement_type_concept_id",
+            "period_type_concept_id"
+        ]
+
+        for type_field in type_fields:
+            sql = ReportGenerator.generate_type_concept_breakdown_sql(table_uri, concept_uri, type_field)
+
+            # Verify the type_field appears in the correct places
+            assert f"COALESCE(t.{type_field}, 0)" in sql
+            assert f"ON t.{type_field} = c.concept_id" in sql
+            assert f"GROUP BY t.{type_field}, c.concept_name" in sql
+
+    def test_returns_string(self):
+        """Test that the function returns a string."""
+        table_uri = "gs://test-bucket/table.parquet"
+        concept_uri = "gs://vocab-bucket/concept.parquet"
+        type_field = "visit_type_concept_id"
+
+        sql = ReportGenerator.generate_type_concept_breakdown_sql(table_uri, concept_uri, type_field)
+
+        assert isinstance(sql, str)
+        assert len(sql) > 0
+
+
+class TestGetTablePath:
+    """Tests for _get_table_path helper method."""
+
+    @patch('core.reporting.storage.get_uri')
+    def test_omop_etl_path_structure(self, mock_get_uri):
+        """Test that OMOP_ETL tables use subdirectory structure."""
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0 20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        path = generator._get_table_path("visit_occurrence", constants.ArtifactPaths.OMOP_ETL)
+
+        expected = "test-bucket/2025-01-15/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+        assert path == expected
+
+    @patch('core.reporting.storage.get_uri')
+    def test_converted_files_path_structure(self, mock_get_uri):
+        """Test that CONVERTED_FILES tables use direct structure."""
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0 20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        path = generator._get_table_path("death", constants.ArtifactPaths.CONVERTED_FILES)
+
+        expected = "test-bucket/2025-01-15/artifacts/converted_files/death.parquet"
+        assert path == expected
+
+    @patch('core.reporting.storage.get_uri')
+    def test_derived_files_path_structure(self, mock_get_uri):
+        """Test that DERIVED_FILES tables use direct structure."""
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0 20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        path = generator._get_table_path("observation_period", constants.ArtifactPaths.DERIVED_FILES)
+
+        expected = "test-bucket/2025-01-15/artifacts/derived_files/observation_period.parquet"
+        assert path == expected
+
+    @patch('core.reporting.storage.get_uri')
+    def test_all_type_concept_tables(self, mock_get_uri):
+        """Test that all tables in TYPE_CONCEPT_TABLES generate valid paths."""
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0 20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+
+        # Test each table in TYPE_CONCEPT_TABLES
+        for table_name, config in constants.TYPE_CONCEPT_TABLES.items():
+            location = config["location"]
+            path = generator._get_table_path(table_name, location)
+
+            # Path should contain the table name and end with .parquet
+            assert table_name in path
+            assert path.endswith(".parquet")
+            assert "test-bucket" in path
+            assert "2025-01-15" in path
+            assert location.value in path
+
+
+class TestCreateTypeConceptBreakdownArtifacts:
+    """Tests for _create_type_concept_breakdown_artifacts method."""
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.report_artifact.ReportArtifact')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.storage.get_uri')
+    def test_creates_artifacts_for_existing_tables(self, mock_get_uri, mock_file_exists,
+                                                    mock_artifact, mock_execute_sql):
+        """Test that artifacts are created for tables that exist."""
+        # Setup mocks
+        mock_file_exists.return_value = True
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_execute_sql.return_value = [
+            (44818518, 'Inpatient Visit', 100),
+            (9202, 'Outpatient Visit', 50)
+        ]
+        mock_artifact_instance = MagicMock()
+        mock_artifact.return_value = mock_artifact_instance
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_type_concept_breakdown_artifacts()
+
+        # Should have created artifacts for the query results
+        # We have 14 tables and each returns 2 results, but we need to account for concept table check
+        assert mock_artifact.call_count > 0
+        assert mock_artifact_instance.save_artifact.call_count > 0
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.storage.get_uri')
+    def test_skips_missing_concept_table(self, mock_get_uri, mock_file_exists, mock_execute_sql):
+        """Test that method returns early when concept table doesn't exist."""
+        # Concept table doesn't exist
+        mock_file_exists.return_value = False
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_type_concept_breakdown_artifacts()
+
+        # Should not execute any SQL
+        mock_execute_sql.assert_not_called()
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.report_artifact.ReportArtifact')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.storage.get_uri')
+    def test_artifact_values_are_correct(self, mock_get_uri, mock_file_exists,
+                                         mock_artifact, mock_execute_sql):
+        """Test that artifact values are correctly populated."""
+        # Setup mocks - concept table exists, but only one data table
+        def file_exists_side_effect(path):
+            if 'concept.parquet' in path:
+                return True
+            if 'visit_occurrence.parquet' in path:
+                return True
+            return False
+
+        mock_file_exists.side_effect = file_exists_side_effect
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_execute_sql.return_value = [
+            (44818518, 'Inpatient Visit', 100),
+            (0, 'No matching concept', 5)
+        ]
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_type_concept_breakdown_artifacts()
+
+        # Get artifact creation calls
+        artifact_calls = mock_artifact.call_args_list
+
+        # First artifact should be for Inpatient Visit
+        first_call = artifact_calls[0].kwargs
+        assert first_call['delivery_date'] == "2025-01-15"
+        assert first_call['artifact_bucket'] == "test-bucket"
+        assert first_call['concept_id'] == 44818518
+        assert first_call['name'] == "Type concept breakdown: visit_occurrence"
+        assert first_call['value_as_string'] == 'Inpatient Visit'
+        assert first_call['value_as_concept_id'] == 44818518
+        assert first_call['value_as_number'] == 100.0
+
+        # Second artifact should be for NULL/0 values
+        second_call = artifact_calls[1].kwargs
+        assert second_call['concept_id'] == 0
+        assert second_call['value_as_string'] == 'No matching concept'
+        assert second_call['value_as_number'] == 5.0

@@ -216,6 +216,67 @@ TARGET_CDM_VERSION_REPORT_NAME = "Standardized to CDM version"
 FILE_PROCESSOR_VERSION_REPORT_NAME = "Pipeline file processor version"
 PROCESSED_DATE_REPORT_NAME = "Delivery processing date"
 
+# Tables with type_concept_id fields for reporting
+# Maps table name to its type concept field and file location
+TYPE_CONCEPT_TABLES = {
+    "visit_detail": {
+        "type_field": "visit_detail_type_concept_id",
+        "location": ArtifactPaths.CONVERTED_FILES
+    },
+    "death": {
+        "type_field": "death_type_concept_id",
+        "location": ArtifactPaths.CONVERTED_FILES
+    },
+    "cost": {
+        "type_field": "cost_type_concept_id",
+        "location": ArtifactPaths.CONVERTED_FILES
+    },
+    "episode": {
+        "type_field": "episode_type_concept_id",
+        "location": ArtifactPaths.CONVERTED_FILES
+    },
+    "observation_period": {
+        "type_field": "period_type_concept_id",
+        "location": ArtifactPaths.DERIVED_FILES
+    },
+    "visit_occurrence": {
+        "type_field": "visit_type_concept_id",
+        "location": ArtifactPaths.OMOP_ETL
+    },
+    "condition_occurrence": {
+        "type_field": "condition_type_concept_id",
+        "location": ArtifactPaths.OMOP_ETL
+    },
+    "drug_exposure": {
+        "type_field": "drug_type_concept_id",
+        "location": ArtifactPaths.OMOP_ETL
+    },
+    "procedure_occurrence": {
+        "type_field": "procedure_type_concept_id",
+        "location": ArtifactPaths.OMOP_ETL
+    },
+    "device_exposure": {
+        "type_field": "device_type_concept_id",
+        "location": ArtifactPaths.OMOP_ETL
+    },
+    "measurement": {
+        "type_field": "measurement_type_concept_id",
+        "location": ArtifactPaths.OMOP_ETL
+    },
+    "observation": {
+        "type_field": "observation_type_concept_id",
+        "location": ArtifactPaths.OMOP_ETL
+    },
+    "note": {
+        "type_field": "note_type_concept_id",
+        "location": ArtifactPaths.OMOP_ETL
+    },
+    "specimen": {
+        "type_field": "specimen_type_concept_id",
+        "location": ArtifactPaths.OMOP_ETL
+    }
+}
+
 SOURCE_TARGET = "source_target"
 DOMAIN_CHECK = "domain_check"
 TARGET_REMAP = "target_remap"
