@@ -329,7 +329,7 @@ class Normalizer:
 
     def _handle_missing_person_ids(self) -> None:
         """
-        Remove rows with missing person_id (-1) and create appropriate artifacts.
+        Remove rows with missing person_id (-1) and create appropriate delivery report artifacts.
 
         For person table: Creates "Number of persons with missing person_id" artifact.
         For other tables: Creates "Number of rows removed due to missing person_id values" artifact.
