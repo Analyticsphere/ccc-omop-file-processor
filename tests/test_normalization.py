@@ -60,10 +60,11 @@ class TestNormalizerNormalize:
     """Tests for normalize orchestration method."""
 
     @patch.object(Normalizer, '_create_row_count_artifacts')
+    @patch.object(Normalizer, '_handle_missing_person_ids')
     @patch('core.normalization.utils.execute_duckdb_sql')
     @patch.object(Normalizer, '_generate_normalization_sql')
     def test_normalize_executes_sql_and_creates_artifacts(
-        self, mock_gen_sql, mock_execute, mock_create_artifacts
+        self, mock_gen_sql, mock_execute, mock_handle_missing, mock_create_artifacts
     ):
         """Test that normalize executes SQL and creates artifacts when SQL exists."""
         mock_gen_sql.return_value = "CREATE TABLE test;"
@@ -82,13 +83,15 @@ class TestNormalizerNormalize:
             "CREATE TABLE test;",
             "Unable to normalize Parquet file bucket/2025-01-01/person.parquet"
         )
+        mock_handle_missing.assert_called_once()
         mock_create_artifacts.assert_called_once()
 
     @patch.object(Normalizer, '_create_row_count_artifacts')
+    @patch.object(Normalizer, '_handle_missing_person_ids')
     @patch('core.normalization.utils.execute_duckdb_sql')
     @patch.object(Normalizer, '_generate_normalization_sql')
     def test_normalize_skips_when_no_sql(
-        self, mock_gen_sql, mock_execute, mock_create_artifacts
+        self, mock_gen_sql, mock_execute, mock_handle_missing, mock_create_artifacts
     ):
         """Test that normalize skips execution when no SQL generated."""
         mock_gen_sql.return_value = ""
@@ -104,19 +107,22 @@ class TestNormalizerNormalize:
 
         mock_gen_sql.assert_called_once()
         mock_execute.assert_not_called()
+        mock_handle_missing.assert_not_called()
         mock_create_artifacts.assert_not_called()
 
     @patch.object(Normalizer, '_create_row_count_artifacts')
+    @patch.object(Normalizer, '_handle_missing_person_ids')
     @patch('core.normalization.utils.execute_duckdb_sql')
     @patch.object(Normalizer, '_generate_normalization_sql')
     def test_normalize_calls_in_correct_order(
-        self, mock_gen_sql, mock_execute, mock_create_artifacts
+        self, mock_gen_sql, mock_execute, mock_handle_missing, mock_create_artifacts
     ):
-        """Test that SQL generation, execution, and artifact creation happen in order."""
+        """Test that SQL generation, execution, missing person_id handling, and artifact creation happen in order."""
         mock_gen_sql.return_value = "CREATE TABLE test;"
         call_order = []
         mock_gen_sql.side_effect = lambda: (call_order.append('generate'), "CREATE TABLE test;")[1]
         mock_execute.side_effect = lambda *args: call_order.append('execute')
+        mock_handle_missing.side_effect = lambda: call_order.append('handle_missing')
         mock_create_artifacts.side_effect = lambda: call_order.append('artifacts')
 
         normalizer = Normalizer(
@@ -128,7 +134,7 @@ class TestNormalizerNormalize:
 
         normalizer.normalize()
 
-        assert call_order == ['generate', 'execute', 'artifacts']
+        assert call_order == ['generate', 'execute', 'handle_missing', 'artifacts']
 
 
 class TestNormalizerGenerateNormalizationSQL:
@@ -481,6 +487,213 @@ class TestNormalizerHelpers:
         result = Normalizer._find_connect_id_column(actual_columns)
 
         assert result == ""
+
+
+class TestNormalizerHandleMissingPersonIds:
+    """Tests for _handle_missing_person_ids method."""
+
+    @patch('core.normalization.report_artifact.ReportArtifact')
+    @patch('core.normalization.utils.execute_duckdb_sql')
+    @patch('core.normalization.storage.get_uri')
+    @patch('core.normalization.utils.get_cdm_schema')
+    @patch('core.normalization.utils.get_table_schema')
+    def test_removes_rows_with_missing_person_id_for_person_table(
+        self, mock_get_schema, mock_get_cdm_schema, mock_get_uri, mock_execute, mock_artifact
+    ):
+        """Test that rows with person_id = -1 are removed from person table."""
+        mock_get_schema.return_value = {
+            'person': {
+                'columns': {
+                    'person_id': {'type': 'BIGINT', 'required': 'True'}
+                }
+            }
+        }
+        mock_get_cdm_schema.return_value = {
+            'person': {'concept_id': 123456}
+        }
+        mock_get_uri.side_effect = lambda x: f"gs://{x}"
+        # First call returns count of 5, second call executes the filter
+        mock_execute.side_effect = [[[5]], None]
+        mock_artifact_instance = MagicMock()
+        mock_artifact.return_value = mock_artifact_instance
+
+        normalizer = Normalizer(
+            file_path="bucket/2025-01-01/person.parquet",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S"
+        )
+
+        normalizer._handle_missing_person_ids()
+
+        # Should execute count query and filter query
+        assert mock_execute.call_count == 2
+
+        # Verify count query
+        count_call = mock_execute.call_args_list[0]
+        assert "WHERE person_id = -1" in count_call[0][0]
+
+        # Verify filter query
+        filter_call = mock_execute.call_args_list[1]
+        assert "WHERE person_id != -1" in filter_call[0][0]
+        assert "COPY" in filter_call[0][0]
+
+        # Verify artifact created with correct name for person table
+        mock_artifact.assert_called_once()
+        artifact_call = mock_artifact.call_args
+        assert artifact_call.kwargs['name'] == "Number of persons with missing person_id"
+        assert artifact_call.kwargs['value_as_number'] == 5
+        mock_artifact_instance.save_artifact.assert_called_once()
+
+    @patch('core.normalization.report_artifact.ReportArtifact')
+    @patch('core.normalization.utils.execute_duckdb_sql')
+    @patch('core.normalization.storage.get_uri')
+    @patch('core.normalization.utils.get_cdm_schema')
+    @patch('core.normalization.utils.get_table_schema')
+    def test_removes_rows_with_missing_person_id_for_other_tables(
+        self, mock_get_schema, mock_get_cdm_schema, mock_get_uri, mock_execute, mock_artifact
+    ):
+        """Test that rows with person_id = -1 are removed from non-person tables."""
+        mock_get_schema.return_value = {
+            'condition_occurrence': {
+                'columns': {
+                    'condition_occurrence_id': {'type': 'BIGINT', 'required': 'True'},
+                    'person_id': {'type': 'BIGINT', 'required': 'True'}
+                }
+            }
+        }
+        mock_get_cdm_schema.return_value = {
+            'condition_occurrence': {'concept_id': 789012}
+        }
+        mock_get_uri.side_effect = lambda x: f"gs://{x}"
+        mock_execute.side_effect = [[[3]], None]
+        mock_artifact_instance = MagicMock()
+        mock_artifact.return_value = mock_artifact_instance
+
+        normalizer = Normalizer(
+            file_path="bucket/2025-01-01/condition_occurrence.parquet",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S"
+        )
+
+        normalizer._handle_missing_person_ids()
+
+        # Verify artifact created with correct name for non-person table
+        mock_artifact.assert_called_once()
+        artifact_call = mock_artifact.call_args
+        assert artifact_call.kwargs['name'] == "Number of rows removed due to missing person_id values: condition_occurrence"
+        assert artifact_call.kwargs['value_as_number'] == 3
+        mock_artifact_instance.save_artifact.assert_called_once()
+
+    @patch('core.normalization.report_artifact.ReportArtifact')
+    @patch('core.normalization.utils.execute_duckdb_sql')
+    @patch('core.normalization.storage.get_uri')
+    @patch('core.normalization.utils.get_cdm_schema')
+    @patch('core.normalization.utils.get_table_schema')
+    def test_creates_artifact_even_when_no_missing_person_ids(
+        self, mock_get_schema, mock_get_cdm_schema, mock_get_uri, mock_execute, mock_artifact
+    ):
+        """Test that artifact is created even when no rows have missing person_id."""
+        mock_get_schema.return_value = {
+            'person': {
+                'columns': {
+                    'person_id': {'type': 'BIGINT', 'required': 'True'}
+                }
+            }
+        }
+        mock_get_cdm_schema.return_value = {
+            'person': {'concept_id': 123456}
+        }
+        mock_get_uri.side_effect = lambda x: f"gs://{x}"
+        # Count returns 0 - no missing rows
+        mock_execute.return_value = [[0]]
+        mock_artifact_instance = MagicMock()
+        mock_artifact.return_value = mock_artifact_instance
+
+        normalizer = Normalizer(
+            file_path="bucket/2025-01-01/person.parquet",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S"
+        )
+
+        normalizer._handle_missing_person_ids()
+
+        # Should only execute count query (no filter needed)
+        assert mock_execute.call_count == 1
+
+        # Verify artifact still created with 0 count
+        mock_artifact.assert_called_once()
+        artifact_call = mock_artifact.call_args
+        assert artifact_call.kwargs['value_as_number'] == 0
+        mock_artifact_instance.save_artifact.assert_called_once()
+
+    @patch('core.normalization.utils.get_table_schema')
+    def test_skips_tables_without_person_id_column(self, mock_get_schema):
+        """Test that method returns early for tables without person_id column."""
+        mock_get_schema.return_value = {
+            'location': {
+                'columns': {
+                    'location_id': {'type': 'BIGINT', 'required': 'True'}
+                }
+            }
+        }
+
+        normalizer = Normalizer(
+            file_path="bucket/2025-01-01/location.parquet",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S"
+        )
+
+        # Should not raise an error and should return early
+        normalizer._handle_missing_person_ids()
+
+        # Schema was loaded to check columns
+        mock_get_schema.assert_called_once()
+
+    @patch('core.normalization.utils.get_table_schema')
+    def test_skips_when_table_not_in_schema(self, mock_get_schema):
+        """Test that method returns early when table not found in schema."""
+        mock_get_schema.return_value = {}
+
+        normalizer = Normalizer(
+            file_path="bucket/2025-01-01/unknown_table.parquet",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S"
+        )
+
+        # Should not raise an error and should return early
+        normalizer._handle_missing_person_ids()
+
+    @patch('core.normalization.utils.execute_duckdb_sql')
+    @patch('core.normalization.storage.get_uri')
+    @patch('core.normalization.utils.get_table_schema')
+    def test_raises_exception_on_error(self, mock_get_schema, mock_get_uri, mock_execute):
+        """Test that exceptions are properly raised when SQL execution fails."""
+        mock_get_schema.return_value = {
+            'person': {
+                'columns': {
+                    'person_id': {'type': 'BIGINT', 'required': 'True'}
+                }
+            }
+        }
+        mock_get_uri.side_effect = lambda x: f"gs://{x}"
+        mock_execute.side_effect = Exception("Database error")
+
+        normalizer = Normalizer(
+            file_path="bucket/2025-01-01/person.parquet",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S"
+        )
+
+        with pytest.raises(Exception) as exc_info:
+            normalizer._handle_missing_person_ids()
+
+        assert "Unable to handle missing person_id values" in str(exc_info.value)
 
 
 class TestNormalizerStaticMethods:

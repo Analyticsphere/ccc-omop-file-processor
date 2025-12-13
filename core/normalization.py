@@ -46,12 +46,15 @@ class Normalizer:
         Generates and executes normalization SQL, then creates row count artifacts
         for valid and invalid rows.
         """
-        sql = self._generate_normalization_sql()
+        normalization_sql = self._generate_normalization_sql()
 
-        # Only run normalization if SQL exists (table is in OMOP CDM)
-        if sql and len(sql) > 1:
+        # Only run normalization if SQL exists; SQL only exists if table is in OMOP
+        if normalization_sql and len(normalization_sql) > 1:
             # Execute normalization SQL (writes files to disk)
-            utils.execute_duckdb_sql(sql, f"Unable to normalize Parquet file {self.file_path}")
+            utils.execute_duckdb_sql(normalization_sql, f"Unable to normalize Parquet file {self.file_path}")
+
+            # Remove and report on missing person_id values
+            self._handle_missing_person_ids()
 
             # Create row count artifacts (reads files from disk)
             self._create_row_count_artifacts()
@@ -323,6 +326,73 @@ class Normalizer:
         if self._actual_columns is None:
             self._actual_columns = utils.get_columns_from_file(self.file_path)
         return self._actual_columns
+
+    def _handle_missing_person_ids(self) -> None:
+        """
+        Remove rows with missing person_id (-1) and create appropriate delivery report artifacts.
+
+        For person table: Creates "Number of persons with missing person_id" artifact.
+        For other tables: Creates "Number of rows removed due to missing person_id values" artifact.
+
+        Artifacts are created regardless of whether rows were removed (can show 0 count).
+        Only processes tables that have a person_id column in their schema.
+        """
+        # Get schema to check if person_id exists
+        schema = self._get_schema()
+        if not schema or self.table_name not in schema:
+            return
+
+        columns = schema[self.table_name]["columns"]
+
+        # Only process if person_id column exists in schema
+        if "person_id" not in columns:
+            return
+
+        try:
+            # Count rows with missing person_id (-1)
+            count_query = f"""
+            SELECT COUNT(*)
+            FROM read_parquet('{storage.get_uri(self.file_path)}')
+            WHERE person_id = -1
+            """
+            result = utils.execute_duckdb_sql(count_query, "Unable to count missing person_id rows", return_results=True)
+            missing_count = result[0][0] if result else 0
+
+            # If there are rows with missing person_id, remove them from the normalized file
+            # The normalized data is used in further downstream processing; the rows with missing person_id values
+            # are retained in the raw data files, but are removed from further pipeline processing at this step.
+            if missing_count > 0:
+                # Rewrite normalized data file excluding rows with person_id = -1
+                filter_sql = f"""
+                COPY (
+                    SELECT *
+                    FROM read_parquet('{storage.get_uri(self.file_path)}')
+                    WHERE person_id != -1
+                ) TO '{storage.get_uri(self.file_path)}' {constants.DUCKDB_FORMAT_STRING}
+                """
+                utils.execute_duckdb_sql(filter_sql, f"Unable to filter missing person_id rows from {self.file_path}")
+
+            # Create reporting artifact (even if count is 0)
+            table_concept_id = utils.get_cdm_schema(self.cdm_version)[self.table_name]['concept_id']
+
+            if self.table_name == "person":
+                artifact_name = "Number of persons with missing person_id"
+            else:
+                artifact_name = f"Number of rows removed due to missing person_id values: {self.table_name}"
+
+            artifact = report_artifact.ReportArtifact(
+                delivery_date=self.delivery_date,
+                artifact_bucket=self.bucket,
+                concept_id=table_concept_id,
+                name=artifact_name,
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=missing_count
+            )
+            artifact.save_artifact()
+
+        except Exception as e:
+            raise Exception(f"Unable to handle missing person_id values: {e}") from e
 
     @staticmethod
     def _find_connect_id_column(actual_columns: list) -> str:

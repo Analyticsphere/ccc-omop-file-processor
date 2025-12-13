@@ -121,7 +121,7 @@ class ReportGenerator:
 
     def _get_tmp_artifacts_path(self) -> str:
         """Get path to temporary report artifacts directory."""
-        return get_report_tmp_artifacts_path(self.bucket, self.delivery_date)
+        return utils.get_report_tmp_artifacts_path(self.bucket, self.delivery_date)
 
     def _get_output_path(self) -> str:
         """Get full URI path for final report CSV output."""
@@ -148,18 +148,3 @@ class ReportGenerator:
         """
 
         return consolidation_statement
-
-
-def get_report_tmp_artifacts_path(bucket: str, delivery_date: str) -> str:
-    """
-    Returns the path to the temporary report artifacts directory.
-
-    Args:
-        bucket: Storage bucket name
-        delivery_date: Delivery date string
-
-    Returns:
-        Path to temporary report artifacts directory (without scheme prefix)
-    """
-    report_tmp_dir = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
-    return report_tmp_dir

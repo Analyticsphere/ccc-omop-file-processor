@@ -11,7 +11,8 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 import core.constants as constants
-from core.reporting import ReportGenerator, get_report_tmp_artifacts_path
+import core.utils as utils
+from core.reporting import ReportGenerator
 
 
 class TestReportGeneratorInit:
@@ -449,7 +450,7 @@ class TestGetReportTmpArtifactsPath:
         bucket = "test-bucket"
         delivery_date = "2025-01-15"
 
-        path = get_report_tmp_artifacts_path(bucket, delivery_date)
+        path = utils.get_report_tmp_artifacts_path(bucket, delivery_date)
 
         expected_path = f"test-bucket/2025-01-15/{constants.ArtifactPaths.REPORT_TMP.value}"
         assert path == expected_path
@@ -459,7 +460,7 @@ class TestGetReportTmpArtifactsPath:
         bucket = "test-bucket"
         delivery_date = "2025-01-15"
 
-        path = get_report_tmp_artifacts_path(bucket, delivery_date)
+        path = utils.get_report_tmp_artifacts_path(bucket, delivery_date)
 
         # Should not start with s3:// or gs:// or file://
         assert not path.startswith("s3://")
