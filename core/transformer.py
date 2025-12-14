@@ -14,7 +14,7 @@ class Transformer:
     def __init__(self, site: str, file_path: str, cdm_version: str, source_table: str, target_table: str, etl_artifact_path: str):
         """Initialize Transformer object used for OMOP-to-OMOP ETL."""
         self.site = site
-        self.file_path = file_path # Path to vocabulary harmonized parquet file
+        self.file_path = file_path # Path to vocabulary-harmonized Parquet file
         self.cdm_version = cdm_version
         self.source_table = source_table
         self.target_table = target_table
@@ -29,6 +29,11 @@ class Transformer:
         """
         Generate a SQL statement that transforms data from one OMOP table to another,
         ensuring proper column types and adding placeholder values to NULL required columns
+
+        NOTE: Unlike other SQL generation functions in the codebase, this is NOT a static method.
+        It requires many instance state (cdm_version, source_table, target_table, site,
+        file_path, etl_artifact_path) attributes throughout its logic. The Transformer class is 
+        designed as a stateful context object for transformation operations.
         """
         
         # Find the transform SQL file
