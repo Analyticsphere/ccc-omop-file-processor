@@ -70,11 +70,14 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: Opti
         conn.close()
 
         # Remove the local database file if it exists
-        if local_db_file and storage.file_exists(local_db_file):
-            logger.debug(f"Deleting local database file: {local_db_file}")
-            storage.delete_file(local_db_file)
-        elif local_db_file:
-            logger.debug(f"Local database file does not exist, skipping deletion: {local_db_file}")
+        # Note: local_db_file is always a local filesystem path (temp file), not a GCS path
+        # We need to use os.path functions directly, not the storage backend
+        if local_db_file:
+            if os.path.exists(local_db_file):
+                logger.debug(f"Deleting local database file: {local_db_file}")
+                os.remove(local_db_file)
+            else:
+                logger.debug(f"Local database file does not exist, skipping deletion: {local_db_file}")
 
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection. local_db_file={repr(local_db_file)}, error: {e}")
