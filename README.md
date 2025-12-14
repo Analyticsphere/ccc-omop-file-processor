@@ -118,7 +118,7 @@ Common issues and solutions:
 - [Environment Configuration](#environment-configuration)
 - [API Endpoints](#api-endpoints)
   - [Heartbeat](#heartbeat)
-  - [Create artifact buckets](#create-artifact-buckets)
+  - [Create artifact directories](#create-artifact-directories)
   - [Create optimized vocabulary files](#create-optimized-vocab)
   - [Get BigQuery log row](#get-log-row)
   - [Get list of files to process](#get-file-list)
@@ -128,12 +128,13 @@ Common issues and solutions:
   - [Upgrade CDM version](#upgrade-cdm)
   - [Harmonize vocabulary version](#harmonize-vocab)
   - [Load harmonized parquets to BigQuery](#harmonized-parquets-to-bq)
-  - [Populate derived data](#populate-derived-data)
+  - [Generate derived tables from harmonized data](#generate-derived-tables-from-harmonized)
+  - [Load derived tables to BigQuery](#load-derived-tables-to-bq)
   - [Clear BigQuery dataset](#clear-bq-dataset)
   - [Load vocabulary data](#load-target-vocab)
   - [Load Parquet to BigQuery](#parquet-to-bq)
   - [Create missing tables](#create-missing-tables)
-  - [Populate cdm_source table](#populate-cdm-source)
+  - [Populate cdm_source file](#populate-cdm-source-file)
   - [Generate delivery report](#generate-delivery-report)
   - [BigQuery logging](#pipeline-log)
 
@@ -199,11 +200,11 @@ These values must be properly configured in the environment or application const
 
 ---
 
-### Create Artifact Buckets
+### Create Artifact Directories
 
-**Endpoint:** `POST /create_artifact_buckets`
+**Endpoint:** `POST /create_artifact_directories`
 
-**Description:** Creates the necessary buckets in Google Cloud Storage for the pipeline to store artifacts generated during data processing.
+**Description:** Creates the necessary directories in Google Cloud Storage for the pipeline to store artifacts generated during data processing (converted files, reports, etc.).
 
 **Request Parameters:**
 
@@ -633,11 +634,11 @@ Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement
 
 ---
 
-### Populate Derived Data
+### Generate Derived Tables From Harmonized
 
-**Endpoint:** `POST /populate_derived_data`
+**Endpoint:** `POST /generate_derived_tables_from_harmonized`
 
-**Description:** Generates and populates derived data tables based on OMOP data.
+**Description:** Generates derived tables from harmonized data (post-vocabulary harmonization). This endpoint should be called AFTER vocabulary harmonization is complete. It reads from harmonized Parquet files in the omop_etl directory and writes to the derived_files directory.
 
 **Request Parameters:**
 
@@ -647,8 +648,6 @@ Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement
 | bucket | string | Yes | Google Cloud Storage bucket |
 | delivery_date | string | Yes | Delivery date |
 | table_name | string | Yes | Name of the derived table to create |
-| project_id | string | Yes | Google Cloud project ID |
-| dataset_id | string | Yes | BigQuery dataset ID |
 | vocab_version | string | Yes | Vocabulary version |
 
 **Note:** The vocabulary GCS bucket is configured via the `OMOP_VOCAB_PATH` constant and does not need to be passed in the request.
@@ -657,12 +656,48 @@ Successfully loaded 3 table(s): condition_occurrence, drug_exposure, measurement
 ```json
 {
     "site": "hospital-a",
-    "bucket": "my-site-bucket",
+    "bucket": "delivery_site",
     "delivery_date": "2023-05-01",
     "table_name": "drug_era",
-    "project_id": "my-gcp-project",
-    "dataset_id": "omop_cdm",
     "vocab_version": "v5.0 29-FEB-24"
+}
+```
+
+---
+
+### Load Derived Tables to BQ
+
+**Endpoint:** `POST /load_derived_tables_to_bq`
+
+**Description:** Loads all derived table Parquet files to BigQuery. This endpoint discovers all derived table Parquet files in the derived_files artifacts directory and loads each one to its corresponding BigQuery table.
+
+This endpoint should be called after derived tables have been generated using the `/generate_derived_tables_from_harmonized` endpoint.
+
+**Request Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| bucket | string | Yes | GCS bucket name (e.g., "delivery_site") |
+| delivery_date | string | Yes | Delivery date (YYYY-MM-DD format) |
+| project_id | string | Yes | Google Cloud project ID |
+| dataset_id | string | Yes | BigQuery dataset ID |
+
+**Response Format:**
+
+Returns a 200 status code with a message describing the results.
+
+**Example Response:**
+```
+Successfully loaded 2 derived table(s): drug_era, condition_era
+```
+
+**Example Request:**
+```json
+{
+    "bucket": "delivery_site",
+    "delivery_date": "2023-05-01",
+    "project_id": "my-gcp-project",
+    "dataset_id": "omop_cdm"
 }
 ```
 
@@ -789,11 +824,11 @@ This endpoint requires the `write_type` parameter, which the file processor API 
 
 ---
 
-### Populate CDM Source
+### Populate CDM Source File
 
-**Endpoint:** `POST /populate_cdm_source`
+**Endpoint:** `POST /populate_cdm_source_file`
 
-**Description:** Populates the CDM_SOURCE table with metadata about the data source.
+**Description:** Populates the cdm_source Parquet file with metadata about the data source if empty or non-existent.
 
 **Request Parameters:**
 
