@@ -52,6 +52,7 @@ class ReportGenerator:
         self._create_metadata_artifacts()
         self._create_type_concept_breakdown_artifacts()
         self._create_vocabulary_breakdown_artifacts()
+        self._create_final_row_count_artifacts()
         self._consolidate_report_files()
 
     def _create_metadata_artifacts(self) -> None:
@@ -346,6 +347,87 @@ class ReportGenerator:
                     except Exception as e:
                         utils.logger.error(f"Error processing source vocabulary breakdown for {table_name}.{source_concept_id_field}: {e}")
 
+    def _create_final_row_count_artifacts(self) -> None:
+        """
+        Create final row count artifacts for all OMOP CDM tables.
+
+        Generates row count artifacts after vocabulary harmonization for every table
+        defined in the target CDM schema (5.4). If a table doesn't exist as a parquet
+        file, creates an artifact with count = 0.
+        """
+        # Get the target CDM schema (always 5.4)
+        try:
+            schema = utils.get_cdm_schema(self.target_cdm_version)
+        except Exception as e:
+            utils.logger.error(f"Unable to load CDM schema version {self.target_cdm_version}: {e}")
+            return
+
+        # Get all tables from the schema
+        all_tables = sorted(schema.keys())
+
+        # Process each table in the schema
+        for table_name in all_tables:
+            table_config: Any = constants.REPORTING_TABLE_CONFIG.get(table_name)
+
+            # Skip if table not in config (shouldn't happen since we added all tables)
+            if table_config is None:
+                utils.logger.warning(f"Table {table_name} not in REPORTING_TABLE_CONFIG, skipping final row count")
+                continue
+
+            location = table_config["location"]
+
+            # Get table concept_id from schema
+            table_concept_id = int(schema[table_name].get('concept_id', 0))
+
+            # Construct path to table
+            table_path = self._get_table_path(table_name, location)
+
+            # Check if table exists
+            if utils.parquet_file_exists(table_path):
+                # Table exists - count rows
+                table_uri = storage.get_uri(table_path)
+
+                try:
+                    sql = self.generate_row_count_sql(table_uri)
+                    result = utils.execute_duckdb_sql(
+                        sql,
+                        f"Unable to count rows for {table_name}",
+                        return_results=True
+                    )
+
+                    row_count = result[0][0] if result else 0
+
+                    # Create artifact with actual count
+                    artifact = report_artifact.ReportArtifact(
+                        delivery_date=self.delivery_date,
+                        artifact_bucket=self.bucket,
+                        concept_id=table_concept_id,
+                        name=f"Final row count: {table_name}",
+                        value_as_string=table_name,
+                        value_as_concept_id=table_concept_id,
+                        value_as_number=float(row_count)
+                    )
+                    artifact.save_artifact()
+
+                except Exception as e:
+                    utils.logger.error(f"Error counting rows for {table_name}: {e}")
+            else:
+                # Table doesn't exist - create artifact with count = 0
+                try:
+                    artifact = report_artifact.ReportArtifact(
+                        delivery_date=self.delivery_date,
+                        artifact_bucket=self.bucket,
+                        concept_id=table_concept_id,
+                        name=f"Final row count: {table_name}",
+                        value_as_string=table_name,
+                        value_as_concept_id=table_concept_id,
+                        value_as_number=0.0
+                    )
+                    artifact.save_artifact()
+
+                except Exception as e:
+                    utils.logger.error(f"Error creating zero-count artifact for {table_name}: {e}")
+
     @staticmethod
     def generate_type_concept_breakdown_sql(table_uri: str, concept_uri: str, type_field: str) -> str:
         """
@@ -401,6 +483,19 @@ class ReportGenerator:
             GROUP BY c.vocabulary_id
             ORDER BY record_count DESC
         """
+
+    @staticmethod
+    def generate_row_count_sql(table_uri: str) -> str:
+        """
+        Generate SQL to count rows in a table.
+
+        Args:
+            table_uri: Full URI path to the table's parquet file
+
+        Returns:
+            SQL statement that returns a single row with the count
+        """
+        return f"SELECT COUNT(*) as row_count FROM read_parquet('{table_uri}')"
 
     @staticmethod
     def generate_report_consolidation_sql(select_statement: str, output_path: str) -> str:

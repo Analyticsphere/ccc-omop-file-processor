@@ -367,6 +367,111 @@ REPORTING_TABLE_CONFIG = {
         "location": ArtifactPaths.DERIVED_FILES,
         "type_field": "period_type_concept_id",
         "vocabulary_fields": []
+    },
+    "condition_era": {
+        "location": ArtifactPaths.DERIVED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "drug_era": {
+        "location": ArtifactPaths.DERIVED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "dose_era": {
+        "location": ArtifactPaths.DERIVED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "episode_event": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "location": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "cdm_source": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "metadata": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "fact_relationship": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "note_nlp": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "source_to_concept_map": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "cohort": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "cohort_definition": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "concept": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "vocabulary": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "concept_ancestor": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "concept_class": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "concept_relationship": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "concept_synonym": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "domain": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "drug_strength": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
+    },
+    "relationship": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": []
     }
 }
 

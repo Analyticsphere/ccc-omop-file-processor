@@ -73,11 +73,12 @@ class TestReportGeneratorGenerate:
     """Tests for generate orchestration method."""
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
+    @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
     @patch.object(ReportGenerator, '_create_vocabulary_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_consolidate):
-        """Test that generate calls metadata, type concept, vocabulary, and consolidation methods."""
+    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_create_final_row_count, mock_consolidate):
+        """Test that generate calls metadata, type concept, vocabulary, final row count, and consolidation methods."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -95,14 +96,16 @@ class TestReportGeneratorGenerate:
         mock_create_metadata.assert_called_once()
         mock_create_type_concept.assert_called_once()
         mock_create_vocabulary.assert_called_once()
+        mock_create_final_row_count.assert_called_once()
         mock_consolidate.assert_called_once()
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
+    @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
     @patch.object(ReportGenerator, '_create_vocabulary_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_consolidate):
-        """Test that methods are called in correct order: metadata, type concept, vocabulary, consolidation."""
+    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_create_final_row_count, mock_consolidate):
+        """Test that methods are called in correct order: metadata, type concept, vocabulary, final row count, consolidation."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -118,12 +121,13 @@ class TestReportGeneratorGenerate:
         mock_create_metadata.side_effect = lambda: call_order.append('metadata')
         mock_create_type_concept.side_effect = lambda: call_order.append('type_concept')
         mock_create_vocabulary.side_effect = lambda: call_order.append('vocabulary')
+        mock_create_final_row_count.side_effect = lambda: call_order.append('final_row_count')
         mock_consolidate.side_effect = lambda: call_order.append('consolidate')
 
         generator = ReportGenerator(report_data)
         generator.generate()
 
-        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'consolidate']
+        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'final_row_count', 'consolidate']
 
 
 class TestReportGeneratorMetadataArtifacts:
