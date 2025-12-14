@@ -1023,6 +1023,11 @@ class VocabHarmonizer:
         Check for and fix duplicate primary keys in a consolidated parquet file.
         Only applies to tables with surrogate keys.
 
+        Note: This method manually manages its DuckDB connection (unlike other methods
+        that use execute_duckdb_sql) because it needs to maintain a temp table
+        ('duplicate_keys') across multiple SQL statements within the same session.
+        Temp tables only exist within a single connection session.
+
         Args:
             file_path: Path to the consolidated parquet file
             table_name: Name of the OMOP table
