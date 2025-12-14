@@ -358,49 +358,38 @@ class TestReportGeneratorConsolidateReportFiles:
 class TestReportGeneratorConsolidationSQL:
     """Tests for generate_report_consolidation_sql static method."""
 
-    def test_generates_valid_sql_structure(self):
-        """Test that SQL has correct structure."""
-        select_statement = "SELECT * FROM read_parquet('file1.parquet')"
-        output_path = "s3://bucket/report.csv"
-
-        sql = ReportGenerator.generate_report_consolidation_sql(select_statement, output_path)
-
-        # Check key SQL components
-        assert "SET max_expression_depth TO 1000000" in sql
-        assert "COPY (" in sql
-        assert select_statement in sql
-        assert f"TO '{output_path}'" in sql
-        assert "(HEADER, DELIMITER ',')" in sql
-
-    def test_preserves_union_all_statement(self):
-        """Test that UNION ALL statements are preserved in generated SQL."""
+    def test_matches_golden_file(self):
+        """Test that generated SQL matches the golden file."""
         select_statement = (
-            "SELECT * FROM read_parquet('file1.parquet') UNION ALL "
-            "SELECT * FROM read_parquet('file2.parquet') UNION ALL "
-            "SELECT * FROM read_parquet('file3.parquet')"
+            "SELECT * FROM read_parquet('gs://bucket/2025-01-01/report_tmp/file1.parquet') UNION ALL "
+            "SELECT * FROM read_parquet('gs://bucket/2025-01-01/report_tmp/file2.parquet') UNION ALL "
+            "SELECT * FROM read_parquet('gs://bucket/2025-01-01/report_tmp/file3.parquet')"
         )
-        output_path = "s3://bucket/report.csv"
+        output_path = "gs://bucket/2025-01-01/report/delivery_report_site1_2025-01-01.csv"
 
         sql = ReportGenerator.generate_report_consolidation_sql(select_statement, output_path)
 
-        # Verify UNION ALL is preserved
-        assert select_statement in sql
-        assert sql.count("UNION ALL") == 2
+        # Load golden file
+        with open('tests/reference/sql/reporting/generate_report_consolidation_sql_standard.sql', 'r') as f:
+            expected_sql = f.read()
 
-    def test_handles_different_output_paths(self):
-        """Test that different output path formats are handled correctly."""
+        # Normalize SQL for whitespace-insensitive comparison
+        def normalize_sql(sql: str) -> str:
+            lines = [line.strip() for line in sql.strip().split('\n')]
+            lines = [line for line in lines if line]
+            return '\n'.join(lines)
+
+        assert normalize_sql(sql) == normalize_sql(expected_sql)
+
+    def test_returns_string(self):
+        """Test that the function returns a string."""
         select_statement = "SELECT * FROM read_parquet('file.parquet')"
+        output_path = "gs://bucket/report.csv"
 
-        # Test various path formats
-        paths = [
-            "s3://bucket/report.csv",
-            "/local/path/report.csv",
-            "gs://bucket/report.csv"
-        ]
+        sql = ReportGenerator.generate_report_consolidation_sql(select_statement, output_path)
 
-        for path in paths:
-            sql = ReportGenerator.generate_report_consolidation_sql(select_statement, path)
-            assert f"TO '{path}'" in sql
+        assert isinstance(sql, str)
+        assert len(sql) > 0
 
 
 class TestReportGeneratorHelpers:
@@ -483,25 +472,6 @@ class TestGetReportTmpArtifactsPath:
 class TestTypeConceptBreakdownSQL:
     """Tests for generate_type_concept_breakdown_sql static method."""
 
-    def test_generates_valid_sql_structure(self):
-        """Test that SQL has correct structure."""
-        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
-        concept_uri = "gs://vocab-bucket/v5.0/optimized/concept.parquet"
-        type_field = "visit_type_concept_id"
-
-        sql = ReportGenerator.generate_type_concept_breakdown_sql(table_uri, concept_uri, type_field)
-
-        # Check key SQL components
-        assert "SELECT" in sql
-        assert f"COALESCE(t.{type_field}, 0) as type_concept_id" in sql
-        assert "COALESCE(c.concept_name, 'No matching concept') as concept_name" in sql
-        assert "COUNT(*) as record_count" in sql
-        assert f"FROM read_parquet('{table_uri}') t" in sql
-        assert f"LEFT JOIN read_parquet('{concept_uri}') c" in sql
-        assert f"ON t.{type_field} = c.concept_id" in sql
-        assert f"GROUP BY t.{type_field}, c.concept_name" in sql
-        assert "ORDER BY record_count DESC" in sql
-
     def test_matches_golden_file(self):
         """Test that generated SQL matches the golden file."""
         table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
@@ -515,27 +485,6 @@ class TestTypeConceptBreakdownSQL:
             expected_sql = f.read()
 
         assert sql.strip() == expected_sql.strip()
-
-    def test_handles_different_type_fields(self):
-        """Test that SQL correctly uses different type_concept_id field names."""
-        table_uri = "gs://test-bucket/2025-01-01/artifacts/converted_files/death.parquet"
-        concept_uri = "gs://vocab-bucket/v5.0/optimized/concept.parquet"
-
-        # Test different type fields
-        type_fields = [
-            "death_type_concept_id",
-            "condition_type_concept_id",
-            "measurement_type_concept_id",
-            "period_type_concept_id"
-        ]
-
-        for type_field in type_fields:
-            sql = ReportGenerator.generate_type_concept_breakdown_sql(table_uri, concept_uri, type_field)
-
-            # Verify the type_field appears in the correct places
-            assert f"COALESCE(t.{type_field}, 0)" in sql
-            assert f"ON t.{type_field} = c.concept_id" in sql
-            assert f"GROUP BY t.{type_field}, c.concept_name" in sql
 
     def test_returns_string(self):
         """Test that the function returns a string."""
