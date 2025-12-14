@@ -578,7 +578,6 @@ class VocabHarmonizer:
         except Exception as e:
             raise Exception(f"Unable to deduplicate table: {str(e)}") from e
 
-    # ===== Static SQL Generation Methods =====
     @staticmethod
     def generate_source_target_remapping_sql(
         source_table_name: str,

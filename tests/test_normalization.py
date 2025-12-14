@@ -62,11 +62,15 @@ class TestNormalizerNormalize:
     @patch.object(Normalizer, '_create_row_count_artifacts')
     @patch.object(Normalizer, '_handle_missing_person_ids')
     @patch('core.normalization.utils.execute_duckdb_sql')
-    @patch.object(Normalizer, '_generate_normalization_sql')
+    @patch('core.normalization.Normalizer.generate_normalization_sql')
+    @patch.object(Normalizer, '_get_actual_columns')
+    @patch.object(Normalizer, '_get_schema')
     def test_normalize_executes_sql_and_creates_artifacts(
-        self, mock_gen_sql, mock_execute, mock_handle_missing, mock_create_artifacts
+        self, mock_get_schema, mock_get_cols, mock_gen_sql, mock_execute, mock_handle_missing, mock_create_artifacts
     ):
         """Test that normalize executes SQL and creates artifacts when SQL exists."""
+        mock_get_schema.return_value = {'person': {'columns': {}}}
+        mock_get_cols.return_value = []
         mock_gen_sql.return_value = "CREATE TABLE test;"
 
         normalizer = Normalizer(
@@ -89,11 +93,15 @@ class TestNormalizerNormalize:
     @patch.object(Normalizer, '_create_row_count_artifacts')
     @patch.object(Normalizer, '_handle_missing_person_ids')
     @patch('core.normalization.utils.execute_duckdb_sql')
-    @patch.object(Normalizer, '_generate_normalization_sql')
+    @patch('core.normalization.Normalizer.generate_normalization_sql')
+    @patch.object(Normalizer, '_get_actual_columns')
+    @patch.object(Normalizer, '_get_schema')
     def test_normalize_skips_when_no_sql(
-        self, mock_gen_sql, mock_execute, mock_handle_missing, mock_create_artifacts
+        self, mock_get_schema, mock_get_cols, mock_gen_sql, mock_execute, mock_handle_missing, mock_create_artifacts
     ):
         """Test that normalize skips execution when no SQL generated."""
+        mock_get_schema.return_value = {}
+        mock_get_cols.return_value = []
         mock_gen_sql.return_value = ""
 
         normalizer = Normalizer(
@@ -113,14 +121,17 @@ class TestNormalizerNormalize:
     @patch.object(Normalizer, '_create_row_count_artifacts')
     @patch.object(Normalizer, '_handle_missing_person_ids')
     @patch('core.normalization.utils.execute_duckdb_sql')
-    @patch.object(Normalizer, '_generate_normalization_sql')
+    @patch('core.normalization.Normalizer.generate_normalization_sql')
+    @patch.object(Normalizer, '_get_actual_columns')
+    @patch.object(Normalizer, '_get_schema')
     def test_normalize_calls_in_correct_order(
-        self, mock_gen_sql, mock_execute, mock_handle_missing, mock_create_artifacts
+        self, mock_get_schema, mock_get_cols, mock_gen_sql, mock_execute, mock_handle_missing, mock_create_artifacts
     ):
         """Test that SQL generation, execution, missing person_id handling, and artifact creation happen in order."""
-        mock_gen_sql.return_value = "CREATE TABLE test;"
+        mock_get_schema.return_value = {'person': {'columns': {}}}
+        mock_get_cols.return_value = []
         call_order = []
-        mock_gen_sql.side_effect = lambda: (call_order.append('generate'), "CREATE TABLE test;")[1]
+        mock_gen_sql.side_effect = lambda *args, **kwargs: (call_order.append('generate'), "CREATE TABLE test;")[1]
         mock_execute.side_effect = lambda *args: call_order.append('execute')
         mock_handle_missing.side_effect = lambda: call_order.append('handle_missing')
         mock_create_artifacts.side_effect = lambda: call_order.append('artifacts')
@@ -138,36 +149,33 @@ class TestNormalizerNormalize:
 
 
 class TestNormalizerGenerateNormalizationSQL:
-    """Tests for _generate_normalization_sql method."""
+    """Tests for generate_normalization_sql method."""
 
-    @patch('core.normalization.utils.get_columns_from_file')
-    @patch('core.normalization.utils.get_table_schema')
-    def test_returns_empty_for_unknown_table(self, mock_get_schema, mock_get_columns):
+    def test_returns_empty_for_unknown_table(self):
         """Test that empty string returned when table not in schema."""
-        mock_get_schema.return_value = {}
+        schema = {}
+        actual_columns = []
 
-        normalizer = Normalizer(
+        sql = Normalizer.generate_normalization_sql(
             file_path="bucket/2025-01-01/unknown.parquet",
+            table_name="unknown",
             cdm_version="5.4",
             date_format="%Y-%m-%d",
-            datetime_format="%Y-%m-%d %H:%M:%S"
+            datetime_format="%Y-%m-%d %H:%M:%S",
+            schema=schema,
+            actual_columns=actual_columns
         )
-
-        sql = normalizer._generate_normalization_sql()
 
         assert sql == ""
 
     @patch('core.normalization.storage.get_uri')
     @patch('core.normalization.utils.get_invalid_rows_path_from_path')
     @patch('core.normalization.utils.get_primary_key_column')
-    @patch('core.normalization.utils.get_columns_from_file')
-    @patch('core.normalization.utils.get_table_schema')
     def test_generates_sql_for_valid_table(
-        self, mock_get_schema, mock_get_columns, mock_get_pk,
-        mock_invalid_path, mock_get_uri
+        self, mock_get_pk, mock_invalid_path, mock_get_uri
     ):
         """Test that SQL is generated for valid OMOP table."""
-        mock_get_schema.return_value = {
+        schema = {
             'person': {
                 'columns': {
                     'person_id': {'type': 'BIGINT', 'required': 'True'},
@@ -175,19 +183,20 @@ class TestNormalizerGenerateNormalizationSQL:
                 }
             }
         }
-        mock_get_columns.return_value = ['person_id', 'gender_concept_id']
+        actual_columns = ['person_id', 'gender_concept_id']
         mock_get_pk.return_value = 'person_id'
         mock_invalid_path.return_value = 'bucket/2025-01-01/invalid_person.parquet'
         mock_get_uri.side_effect = lambda x: f"gs://{x}"
 
-        normalizer = Normalizer(
+        sql = Normalizer.generate_normalization_sql(
             file_path="bucket/2025-01-01/person.parquet",
+            table_name="person",
             cdm_version="5.4",
             date_format="%Y-%m-%d",
-            datetime_format="%Y-%m-%d %H:%M:%S"
+            datetime_format="%Y-%m-%d %H:%M:%S",
+            schema=schema,
+            actual_columns=actual_columns
         )
-
-        sql = normalizer._generate_normalization_sql()
 
         assert "CREATE OR REPLACE TABLE row_check" in sql
         assert "COPY (" in sql
@@ -195,69 +204,49 @@ class TestNormalizerGenerateNormalizationSQL:
 
 
 class TestNormalizerGenerateColumnExpressions:
-    """Tests for _generate_column_expressions method."""
+    """Tests for generate_column_expressions method."""
 
-    @patch('core.normalization.utils.get_columns_from_file')
-    @patch('core.normalization.utils.get_table_schema')
-    def test_generates_expressions_for_existing_columns(self, mock_get_schema, mock_get_columns):
+    def test_generates_expressions_for_existing_columns(self):
         """Test that expressions generated for columns present in file."""
-        mock_get_schema.return_value = {
-            'person': {
-                'columns': {
-                    'person_id': {'type': 'BIGINT', 'required': 'True'},
-                    'gender_concept_id': {'type': 'BIGINT', 'required': 'False'}
-                }
-            }
+        columns = {
+            'person_id': {'type': 'BIGINT', 'required': 'True'},
+            'gender_concept_id': {'type': 'BIGINT', 'required': 'False'}
         }
-        mock_get_columns.return_value = ['person_id', 'gender_concept_id']
+        ordered_columns = ['person_id', 'gender_concept_id']
+        actual_columns = ['person_id', 'gender_concept_id']
 
-        normalizer = Normalizer(
-            file_path="bucket/2025-01-01/person.parquet",
-            cdm_version="5.4",
+        coalesce_exprs, row_validity = Normalizer.generate_column_expressions(
+            table_name="person",
+            columns=columns,
+            ordered_omop_columns=ordered_columns,
+            actual_columns=actual_columns,
+            connect_id_column_name="",
             date_format="%Y-%m-%d",
             datetime_format="%Y-%m-%d %H:%M:%S"
-        )
-
-        columns = mock_get_schema.return_value['person']['columns']
-        ordered_columns = ['person_id', 'gender_concept_id']
-        actual_columns = mock_get_columns.return_value
-
-        coalesce_exprs, row_validity = normalizer._generate_column_expressions(
-            columns, ordered_columns, actual_columns, ""
         )
 
         assert len(coalesce_exprs) == 2
         # Required column should be in row_validity
         assert len(row_validity) == 1
 
-    @patch('core.normalization.utils.get_columns_from_file')
-    @patch('core.normalization.utils.get_table_schema')
-    def test_generates_placeholders_for_missing_columns(self, mock_get_schema, mock_get_columns):
+    def test_generates_placeholders_for_missing_columns(self):
         """Test that placeholder expressions generated for missing columns."""
-        mock_get_schema.return_value = {
-            'person': {
-                'columns': {
-                    'person_id': {'type': 'BIGINT', 'required': 'True'},
-                    'year_of_birth': {'type': 'INTEGER', 'required': 'False'}
-                }
-            }
+        columns = {
+            'person_id': {'type': 'BIGINT', 'required': 'True'},
+            'year_of_birth': {'type': 'INTEGER', 'required': 'False'}
         }
+        ordered_columns = ['person_id', 'year_of_birth']
         # Only person_id exists in file
-        mock_get_columns.return_value = ['person_id']
+        actual_columns = ['person_id']
 
-        normalizer = Normalizer(
-            file_path="bucket/2025-01-01/person.parquet",
-            cdm_version="5.4",
+        coalesce_exprs, _ = Normalizer.generate_column_expressions(
+            table_name="person",
+            columns=columns,
+            ordered_omop_columns=ordered_columns,
+            actual_columns=actual_columns,
+            connect_id_column_name="",
             date_format="%Y-%m-%d",
             datetime_format="%Y-%m-%d %H:%M:%S"
-        )
-
-        columns = mock_get_schema.return_value['person']['columns']
-        ordered_columns = ['person_id', 'year_of_birth']
-        actual_columns = mock_get_columns.return_value
-
-        coalesce_exprs, _ = normalizer._generate_column_expressions(
-            columns, ordered_columns, actual_columns, ""
         )
 
         # Should have expression for person_id and placeholder for year_of_birth
@@ -266,116 +255,120 @@ class TestNormalizerGenerateColumnExpressions:
 
 
 class TestNormalizerGenerateColumnCastExpression:
-    """Tests for _generate_column_cast_expression method."""
+    """Tests for generate_column_cast_expression method."""
 
     def test_date_type_expression(self):
         """Test cast expression for DATE type columns."""
-        normalizer = Normalizer(
-            file_path="bucket/2025-01-01/person.parquet",
-            cdm_version="5.4",
+        from pathlib import Path
+
+        result = Normalizer.generate_column_cast_expression(
+            column_name="birth_date",
+            column_type="DATE",
+            default_value="'1970-01-01'",
             date_format="%Y-%m-%d",
             datetime_format="%Y-%m-%d %H:%M:%S"
         )
 
-        expr = normalizer._generate_column_cast_expression(
-            "birth_date", "DATE", "'1970-01-01'"
-        )
+        reference_path = Path(__file__).parent / "reference" / "sql" / "normalization" / "generate_column_cast_expression_date.sql"
+        with open(reference_path, 'r') as f:
+            expected = f.read()
 
-        assert "TRY_STRPTIME" in expr
-        assert "%Y-%m-%d" in expr
-        assert "AS DATE" in expr
+        assert result.strip() == expected.strip()
 
     def test_datetime_type_expression(self):
         """Test cast expression for DATETIME type columns."""
-        normalizer = Normalizer(
-            file_path="bucket/2025-01-01/visit_occurrence.parquet",
-            cdm_version="5.4",
+        from pathlib import Path
+
+        result = Normalizer.generate_column_cast_expression(
+            column_name="visit_start_datetime",
+            column_type="DATETIME",
+            default_value="'1901-01-01 00:00:00'",
             date_format="%Y-%m-%d",
             datetime_format="%Y-%m-%d %H:%M:%S"
         )
 
-        expr = normalizer._generate_column_cast_expression(
-            "visit_start_datetime", "DATETIME", "'1901-01-01 00:00:00'"
-        )
+        reference_path = Path(__file__).parent / "reference" / "sql" / "normalization" / "generate_column_cast_expression_datetime.sql"
+        with open(reference_path, 'r') as f:
+            expected = f.read()
 
-        assert "TRY_STRPTIME" in expr
-        assert "%Y-%m-%d %H:%M:%S" in expr
-        assert "AS DATETIME" in expr
+        assert result.strip() == expected.strip()
 
     def test_required_field_expression(self):
         """Test cast expression for required fields with default values."""
-        normalizer = Normalizer(
-            file_path="bucket/2025-01-01/person.parquet",
-            cdm_version="5.4",
+        from pathlib import Path
+
+        result = Normalizer.generate_column_cast_expression(
+            column_name="person_id",
+            column_type="BIGINT",
+            default_value="'-1'",
             date_format="%Y-%m-%d",
             datetime_format="%Y-%m-%d %H:%M:%S"
         )
 
-        expr = normalizer._generate_column_cast_expression(
-            "person_id", "BIGINT", "'-1'"
-        )
+        reference_path = Path(__file__).parent / "reference" / "sql" / "normalization" / "generate_column_cast_expression_required.sql"
+        with open(reference_path, 'r') as f:
+            expected = f.read()
 
-        assert "COALESCE" in expr
-        assert "'-1'" in expr
-        assert "AS BIGINT" in expr
+        assert result.strip() == expected.strip()
 
     def test_optional_field_expression(self):
         """Test cast expression for optional fields."""
-        normalizer = Normalizer(
-            file_path="bucket/2025-01-01/person.parquet",
-            cdm_version="5.4",
+        from pathlib import Path
+
+        result = Normalizer.generate_column_cast_expression(
+            column_name="day_of_birth",
+            column_type="INTEGER",
+            default_value="NULL",
             date_format="%Y-%m-%d",
             datetime_format="%Y-%m-%d %H:%M:%S"
         )
 
-        expr = normalizer._generate_column_cast_expression(
-            "day_of_birth", "INTEGER", "NULL"
-        )
+        reference_path = Path(__file__).parent / "reference" / "sql" / "normalization" / "generate_column_cast_expression_optional.sql"
+        with open(reference_path, 'r') as f:
+            expected = f.read()
 
-        assert "TRY_CAST" in expr
-        assert "AS INTEGER" in expr
-        # Should not have COALESCE for NULL default
-        assert "COALESCE" not in expr
+        assert result.strip() == expected.strip()
 
 
 class TestNormalizerGeneratePrimaryKeyClause:
-    """Tests for _generate_primary_key_clause method."""
+    """Tests for generate_primary_key_clause method."""
 
     @patch('core.normalization.utils.get_primary_key_column')
     def test_generates_clause_for_surrogate_key_table(self, mock_get_pk):
         """Test that REPLACE clause generated for surrogate key tables."""
+        from pathlib import Path
+
         mock_get_pk.return_value = 'condition_occurrence_id'
 
-        normalizer = Normalizer(
-            file_path="bucket/2025-01-01/condition_occurrence.parquet",
-            cdm_version="5.4",
-            date_format="%Y-%m-%d",
-            datetime_format="%Y-%m-%d %H:%M:%S"
+        ordered_columns = ['condition_occurrence_id', 'person_id', 'condition_concept_id']
+        result = Normalizer.generate_primary_key_clause(
+            table_name="condition_occurrence",
+            ordered_omop_columns=ordered_columns,
+            cdm_version="5.4"
         )
 
-        ordered_columns = ['condition_occurrence_id', 'person_id', 'condition_concept_id']
-        clause = normalizer._generate_primary_key_clause(ordered_columns)
+        reference_path = Path(__file__).parent / "reference" / "sql" / "normalization" / "generate_primary_key_clause_surrogate.sql"
+        with open(reference_path, 'r') as f:
+            expected = f.read()
 
-        assert "REPLACE" in clause
-        assert "hash" in clause
-        assert "condition_occurrence_id" in clause
-        # Primary key should not be included in hash
-        assert "person_id" in clause
-        assert "condition_concept_id" in clause
+        assert result.strip() == expected.strip()
 
     def test_returns_empty_for_non_surrogate_key_table(self):
         """Test that empty string returned for non-surrogate key tables."""
-        normalizer = Normalizer(
-            file_path="bucket/2025-01-01/person.parquet",
-            cdm_version="5.4",
-            date_format="%Y-%m-%d",
-            datetime_format="%Y-%m-%d %H:%M:%S"
-        )
+        from pathlib import Path
 
         ordered_columns = ['person_id', 'gender_concept_id']
-        clause = normalizer._generate_primary_key_clause(ordered_columns)
+        result = Normalizer.generate_primary_key_clause(
+            table_name="person",
+            ordered_omop_columns=ordered_columns,
+            cdm_version="5.4"
+        )
 
-        assert clause == ""
+        reference_path = Path(__file__).parent / "reference" / "sql" / "normalization" / "generate_primary_key_clause_non_surrogate.sql"
+        with open(reference_path, 'r') as f:
+            expected = f.read()
+
+        assert result.strip() == expected.strip()
 
 
 class TestNormalizerCreateRowCountArtifacts:
