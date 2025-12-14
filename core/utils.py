@@ -64,8 +64,6 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
 def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: Optional[str]) -> None:
     """Close DuckDB connection, remove temporary files, and free memory."""
     try:
-        logger.debug(f"Closing DuckDB connection. local_db_file={repr(local_db_file)}")
-
         # Close the DuckDB connection
         conn.close()
 
@@ -74,10 +72,7 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: Opti
         # We need to use os.path functions directly, not the storage backend
         if local_db_file:
             if os.path.exists(local_db_file):
-                logger.debug(f"Deleting local database file: {local_db_file}")
                 os.remove(local_db_file)
-            else:
-                logger.debug(f"Local database file does not exist, skipping deletion: {local_db_file}")
 
     except Exception as e:
         logger.error(f"Unable to close DuckDB connection. local_db_file={repr(local_db_file)}, error: {e}")
@@ -164,9 +159,7 @@ def get_bucket_and_delivery_date_from_path(file_path: str) -> Tuple[str, str]:
     Extract bucket name and delivery date from file path.
     Example: synthea53/2024-12-31/care_site.parquet -> (synthea53, 2024-12-31)
     """
-    logger.debug(f"Extracting bucket and delivery date from path: {repr(file_path)}")
     file_path = storage.strip_scheme(file_path)
-    logger.debug(f"Path after stripping scheme: {repr(file_path)}")
 
     path_parts = file_path.split('/')
     if len(path_parts) < 2:
@@ -174,7 +167,6 @@ def get_bucket_and_delivery_date_from_path(file_path: str) -> Tuple[str, str]:
         raise ValueError(f"Invalid path format: {file_path}. Expected format: bucket/delivery_date/...")
 
     bucket_name, delivery_date = path_parts[0], path_parts[1]
-    logger.debug(f"Extracted bucket={bucket_name}, delivery_date={delivery_date}")
     return bucket_name, delivery_date
 
 def get_columns_from_file(file_path: str) -> list:
