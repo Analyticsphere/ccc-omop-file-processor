@@ -27,7 +27,7 @@ class VocabHarmonizer:
         self.delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)[1]
         self.source_parquet_path = utils.get_parquet_artifact_location(file_path)
         self.harmonized_parquet_path = utils.get_parquet_harmonized_path(file_path)
-        self.harmonized_parquet_file = f'{self.harmonized_parquet_path}*{constants.PARQUET}'
+        self.harmonized_parquet_file = storage.get_uri(f"{self.harmonized_parquet_path}*{constants.PARQUET}")
         self.project_id = project_id
         self.dataset_id = dataset_id
 
@@ -130,12 +130,10 @@ class VocabHarmonizer:
         # primary_key_column values were made unique per row values in normalization step,
         #   so they can be used for identification here
         existing_files_where_clause = ""
-        exisiting_files = utils.valid_parquet_file(f'{self.harmonized_parquet_file}')
-        if exisiting_files:
-            existing_files_path = storage.get_uri(f"{self.harmonized_parquet_file}")
+        if utils.valid_parquet_file(self.harmonized_parquet_file):
             existing_files_where_clause = f"""
                 AND tbl.{primary_key_column} NOT IN (
-                    SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
+                    SELECT {primary_key_column} FROM read_parquet('{self.harmonized_parquet_file}')
                 )
             """
 
@@ -179,12 +177,10 @@ class VocabHarmonizer:
         # primary_key_column values were made unique per row values in normalization step,
         #   so they can be used for identification here
         existing_files_where_clause = ""
-        exisiting_files = utils.valid_parquet_file(f'{self.harmonized_parquet_file}')
-        if exisiting_files:
-            existing_files_path = storage.get_uri(f"{self.harmonized_parquet_file}")
+        if utils.valid_parquet_file(self.harmonized_parquet_file):
             existing_files_where_clause = f"""
                 WHERE tbl.{primary_key_column} NOT IN (
-                    SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
+                    SELECT {primary_key_column} FROM read_parquet('{self.harmonized_parquet_file}')
                 )
             """
 
