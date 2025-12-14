@@ -63,6 +63,522 @@ class VocabHarmonizer:
 
         return None
 
+    def source_target_remapping(self) -> None:
+        """
+        Generate and execute SQL to check for and update non-standard source-to-target mappings to standard
+        """
+        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
+
+        columns = schema[self.source_table_name]["columns"]
+        ordered_omop_columns = list(columns.keys())  # preserve column order
+
+        # Get _concept_id and _source_concept_id columns for table
+        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
+        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
+        primary_key = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+
+        # specimen and note tables don't have _source_concept_id columns so can't be evaluated with this method
+        if not source_concept_id_column or source_concept_id_column == "":
+            return
+
+        # Generate complete SQL
+        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}")
+        final_sql = VocabHarmonizer.generate_source_target_remapping_sql(
+            source_table_name=self.source_table_name,
+            ordered_omop_columns=ordered_omop_columns,
+            target_concept_id_column=target_concept_id_column,
+            source_concept_id_column=source_concept_id_column,
+            primary_key=primary_key,
+            site=self.site,
+            bucket=self.bucket,
+            delivery_date=self.delivery_date,
+            vocab_version=self.vocab_version,
+            vocab_path=self.vocab_path,
+            output_path=output_path
+        )
+
+        # Execute SQL
+        utils.execute_duckdb_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
+
+    def check_new_targets(self, mapping_type: str) -> None:
+        """
+        Generate and execute SQL to check for cases in which a non-standard target_concept_id
+        has a mapping or replacement to a standard concept_id
+        """
+        if mapping_type == constants.TARGET_REMAP:
+            vocab_status_string = "existing non-standard target remapped to standard code"
+            mapping_relationships = "'Maps to', 'Maps to value'"
+            table_name = "target_remap"
+        elif mapping_type == constants.TARGET_REPLACEMENT:
+            vocab_status_string = "existing non-standard target replaced with standard code"
+            mapping_relationships = "'Concept replaced by'"
+            table_name = "target_replacement"
+
+        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
+
+        columns = schema[self.source_table_name]["columns"]
+        ordered_omop_columns = list(columns.keys())  # preserve column order
+
+        # Get _concept_id and _source_concept_id columns for table
+        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
+        source_concept_id_column = '0' if constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id'] == "" \
+            else f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']}"
+        primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+
+        # Don't perform target remapping on rows which have already been harmonized
+        # primary_key_column values were made unique per row values in normalization step,
+        #   so they can be used for identification here
+        existing_files_where_clause = ""
+        exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
+        if exisiting_files:
+            existing_files_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
+            existing_files_where_clause = f"""
+                AND tbl.{primary_key_column} NOT IN (
+                    SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
+                )
+            """
+
+        # Generate complete SQL
+        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_{table_name}{constants.PARQUET}")
+        final_sql = VocabHarmonizer.generate_check_new_targets_sql(
+            source_table_name=self.source_table_name,
+            ordered_omop_columns=ordered_omop_columns,
+            target_concept_id_column=target_concept_id_column,
+            source_concept_id_column=source_concept_id_column,
+            primary_key_column=primary_key_column,
+            vocab_status_string=vocab_status_string,
+            mapping_relationships=mapping_relationships,
+            existing_files_where_clause=existing_files_where_clause,
+            site=self.site,
+            bucket=self.bucket,
+            delivery_date=self.delivery_date,
+            vocab_version=self.vocab_version,
+            vocab_path=self.vocab_path,
+            output_path=output_path
+        )
+
+        # Execute SQL
+        utils.execute_duckdb_sql(final_sql, f"Unable to execute SQL to check for new targets ({mapping_type}) {self.source_table_name}")
+
+    def domain_table_check(self) -> None:
+        """
+        Assign current domain and target table to concepts not remapped in previous steps.
+        Handles domain changes between vocabulary versions and site ETL misalignments.
+        """
+        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
+
+        columns = schema[self.source_table_name]["columns"]
+        ordered_omop_columns = list(columns.keys())  # preserve column order
+        target_concept_id_column = f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']}"
+        source_concept_id_column = '0' if constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id'] == "" \
+            else f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']}"
+        primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+
+        # Don't perform domain check on rows which have already been harmonized
+        # primary_key_column values were made unique per row values in normalization step,
+        #   so they can be used for identification here
+        existing_files_where_clause = ""
+        exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
+        if exisiting_files:
+            existing_files_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
+            existing_files_where_clause = f"""
+                WHERE tbl.{primary_key_column} NOT IN (
+                    SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
+                )
+            """
+
+        # Generate complete SQL
+        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}")
+        final_sql = VocabHarmonizer.generate_domain_table_check_sql(
+            source_table_name=self.source_table_name,
+            ordered_omop_columns=ordered_omop_columns,
+            target_concept_id_column=target_concept_id_column,
+            source_concept_id_column=source_concept_id_column,
+            existing_files_where_clause=existing_files_where_clause,
+            site=self.site,
+            bucket=self.bucket,
+            delivery_date=self.delivery_date,
+            vocab_version=self.vocab_version,
+            vocab_path=self.vocab_path,
+            output_path=output_path
+        )
+
+        # Execute SQL
+        utils.execute_duckdb_sql(final_sql, f"Unable to perform domain check against {self.source_table_name}")
+
+    def generate_table_transition_report(self, transition_counts: list[tuple]) -> None:
+        """
+        Generate report artifacts showing how many rows transitioned from the source table
+        to each target table during vocabulary harmonization.
+
+        Args:
+            transition_counts: List of tuples containing (target_table, row_count)
+        """
+        try:
+            utils.logger.info(f"Generating table transition report for {self.source_table_name}")
+
+            # Get the source table concept_id from the schema
+            schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
+            source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
+
+            # Create a report artifact for each target table
+            for target_table, row_count in transition_counts:
+                ra = report_artifact.ReportArtifact(
+                    delivery_date=self.delivery_date,
+                    artifact_bucket=self.bucket,
+                    concept_id=source_table_concept_id,
+                    name=f"Vocab harmonization table transition: {self.source_table_name} to {target_table}",
+                    value_as_string=None,
+                    value_as_concept_id=None,
+                    value_as_number=row_count
+                )
+                ra.save_artifact()
+                utils.logger.info(f"Table transition: {self.source_table_name} → {target_table}: {row_count} rows")
+
+        except Exception as e:
+            # Log the error but don't fail the entire process
+            utils.logger.error(f"Error generating table transition report: {str(e)}")
+
+    def omop_etl(self) -> None:
+        """
+        Partition harmonized data and transform to target OMOP tables.
+        Discovers all target tables and transforms each using OMOP-to-OMOP ETL.
+        """
+        utils.logger.info(f"Partitioning and ETLing source file {self.file_path} to appropriate target table(s)")
+
+        # Find all target tables in the source file
+        # Each of the target tables will be transformed to its own Parquet file with the appropriate structure
+        # That Parquet file will then be loaded to BQ
+        parquet_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
+
+        conn = None
+        local_db_file = None
+        try:
+            conn, local_db_file = utils.create_duckdb_connection()
+            with conn:
+                # Generate and execute SQL to get target tables
+                target_tables_sql = VocabHarmonizer.generate_get_target_tables_sql(parquet_path)
+                target_tables_list = conn.execute(target_tables_sql).fetch_df()['target_table'].tolist()
+
+                # Generate and execute SQL to get table transition counts for reporting
+                transition_count_sql = VocabHarmonizer.generate_table_transition_count_sql(parquet_path)
+                transition_counts = conn.execute(transition_count_sql).fetchall()
+
+                # Generate table transition report before transformation
+                self.generate_table_transition_report(transition_counts)
+        except Exception as e:
+            raise Exception(f"Unable to get target tables from Parquet file {self.file_path}: {e}") from e
+        finally:
+            if conn is not None:
+                utils.close_duckdb_connection(conn, local_db_file)
+
+        # Create a new Parquet file for each target table with the appropriate structure
+        for target_table in target_tables_list:
+            omop_transformer = transformer.Transformer(
+                self.site, self.target_parquet_path, self.cdm_version, self.source_table_name, target_table, utils.get_omop_etl_destination_path(self.file_path)
+            )
+
+            # Perform the OMOP-to-OMOP ETL for this target table
+            omop_transformer.omop_to_omop_etl()
+
+    def consolidate_etl_tables(self) -> None:
+        """
+        Orchestrates consolidation across all ETL'd tables.
+        
+        Discovers all table subdirectories in the OMOP_ETL artifacts directory
+        and consolidates each one by delegating to the single-table processing method.
+        """
+        utils.logger.info(f"Consolidating ETL files for {self.file_path}")
+        
+        # Get the OMOP ETL directory path
+        etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
+        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
+        etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
+        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
+
+        utils.logger.info(f"Looking for table directories in {storage_path}")
+
+        # Get list of table subdirectories
+        subdirectories = storage.list_subdirectories(storage_path)
+
+        # Extract just the table names from the full paths
+        table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
+
+        if not table_names:
+            utils.logger.warning(f"No table directories found in {storage_path}")
+            return
+
+        utils.logger.info(f"Found {len(table_names)} table(s) to consolidate: {sorted(table_names)}")
+        
+        # Process each table directory
+        utils.logger.info("Starting consolidation for each table...")
+        for table_name in sorted(table_names):
+            self._process_single_table(bucket_name, etl_folder, table_name)
+        utils.logger.info("Completed consolidation for all tables.")
+
+    def deduplicate_primary_keys_all_tables(self) -> None:
+        """
+        Orchestrates deduplication of primary keys across all consolidated ETL tables.
+        
+        Discovers all table subdirectories in the OMOP_ETL artifacts directory
+        and deduplicates primary keys for each table that has surrogate keys.
+        """
+        utils.logger.info(f"Deduplicating primary keys for ETL files for {self.file_path}")
+        
+        # Get the OMOP ETL directory path
+        etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
+        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
+        etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
+        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
+
+        utils.logger.info(f"Looking for table directories in {storage_path}")
+
+        # Get list of table subdirectories
+        subdirectories = storage.list_subdirectories(storage_path)
+
+        # Extract just the table names from the full paths
+        table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
+
+        if not table_names:
+            utils.logger.warning(f"No table directories found in {storage_path}")
+            return
+
+        utils.logger.info(f"Found {len(table_names)} table(s) to check for deduplication: {sorted(table_names)}")
+        
+        # Process each table directory
+        utils.logger.info("Starting deduplication for each table...")
+        for table_name in sorted(table_names):
+            # Construct the consolidated file path
+            table_dir = f"{etl_folder}{table_name}/"
+            consolidated_file_path = storage.get_uri(f"{bucket_name}/{table_dir}{table_name}{constants.PARQUET}")
+            
+            # Deduplicate primary keys for this table
+            self._deduplicate_primary_keys(consolidated_file_path, table_name)
+        utils.logger.info("Completed deduplication for all tables.")
+
+    def _process_single_table(self, bucket_name: str, etl_folder: str, table_name: str) -> None:
+        """
+        Combine all parquet files for a single table into one consolidated file.
+
+        Args:
+            bucket_name: Storage bucket/directory name
+            etl_folder: Path to the ETL folder within the storage location
+            table_name: Name of the OMOP table to consolidate
+        """
+        utils.logger.info(f"Consolidating files for table: {table_name}")
+        
+        # Construct paths
+        table_dir = f"{etl_folder}{table_name}/"
+        source_parquet_pattern = storage.get_uri(f"{bucket_name}/{table_dir}parts/*.parquet")
+        consolidated_file_path = storage.get_uri(f"{bucket_name}/{table_dir}{table_name}{constants.PARQUET}")
+
+        # Generate and execute SQL to combine all parquet files into one
+        combine_sql = VocabHarmonizer.generate_consolidate_single_table_sql(
+            source_parquet_pattern=source_parquet_pattern,
+            output_path=consolidated_file_path
+        )
+        utils.execute_duckdb_sql(combine_sql, f"Unable to consolidate files for table {table_name}")
+        utils.logger.info(f"Successfully consolidated {table_name}")
+
+    def _deduplicate_primary_keys(self, file_path: str, table_name: str) -> None:
+        """
+        Check for and fix duplicate primary keys in a consolidated parquet file.
+        Only applies to tables with surrogate keys.
+
+        Note: This method manually manages its DuckDB connection (unlike other methods
+        that use execute_duckdb_sql) because it needs to maintain a temp table
+        ('duplicate_keys') across multiple SQL statements within the same session.
+        Temp tables only exist within a single connection session.
+
+        Args:
+            file_path: Path to the consolidated parquet file
+            table_name: Name of the OMOP table
+        """
+        # Only process tables with surrogate keys
+        if table_name not in constants.SURROGATE_KEY_TABLES:
+            utils.logger.info(f"Table {table_name} does not use surrogate keys. Skipping deduplication.")
+            return
+        
+        # Get primary key column
+        primary_key_column = utils.get_primary_key_column(table_name, self.cdm_version)
+        if not primary_key_column:
+            utils.logger.info(f"No primary key column defined for table {table_name}. Skipping deduplication.")
+            return
+        
+        # Get primary key data type
+        schema = utils.get_table_schema(table_name, self.cdm_version)
+        if table_name not in schema:
+            utils.logger.warning(f"Schema not found for table {table_name}. Skipping deduplication.")
+            return
+        
+        target_columns_dict = schema[table_name]["columns"]
+        if primary_key_column not in target_columns_dict:
+            utils.logger.warning(f"Primary key column {primary_key_column} not found in schema. Skipping deduplication.")
+            return
+        
+        primary_key_type = target_columns_dict[primary_key_column]['type']
+
+        conn = None
+        local_db_file = None
+        try:
+            conn, local_db_file = utils.create_duckdb_connection()
+            with conn:
+                # Check if duplicates exist
+                utils.logger.info(f"Checking for duplicate primary keys in {table_name}...")
+                check_sql = VocabHarmonizer.generate_check_duplicates_sql(file_path, primary_key_column)
+                duplicates = conn.execute(check_sql).fetchall()
+
+                if not duplicates:
+                    utils.logger.info(f"No duplicate primary keys found in {table_name}")
+                    return
+
+                utils.logger.info(f"Found duplicate primary keys in {table_name}. Fixing...")
+
+                # Create temp table with duplicate keys only
+                create_temp_table_sql = VocabHarmonizer.generate_create_duplicate_keys_table_sql(file_path, primary_key_column)
+                conn.execute(create_temp_table_sql)
+
+                count_sql = VocabHarmonizer.generate_count_duplicates_sql()
+                dup_count_result = conn.execute(count_sql).fetchone()
+                dup_count = dup_count_result[0] if dup_count_result else 0
+                utils.logger.info(f"Found {dup_count} unique keys in {table_name} with duplicates")
+                
+                # Generate temp file paths
+                tmp_id = uuid.uuid4()
+                bucket_path = file_path.rsplit('/', 1)[0]
+                tmp_non_dup = f"{bucket_path}/tmp/tmp_non_dup_{tmp_id}.parquet"
+                tmp_dup_fixed = f"{bucket_path}/tmp/tmp_dup_fixed_{tmp_id}.parquet"
+                
+                # Pass 1: Write non-duplicate rows
+                utils.logger.info(f"Processing non-duplicate rows in in {table_name}...")
+                write_non_dup_sql = VocabHarmonizer.generate_write_non_duplicates_sql(
+                    file_path, primary_key_column, tmp_non_dup
+                )
+                conn.execute(write_non_dup_sql)
+
+                # Pass 2: Fix duplicate rows
+                utils.logger.info(f"Processing duplicate rows with fixes in {table_name}...")
+                fix_dup_sql = VocabHarmonizer.generate_fix_duplicates_sql(
+                    file_path, primary_key_column, primary_key_type, tmp_dup_fixed
+                )
+                conn.execute(fix_dup_sql)
+
+                # Combine both temp files and overwrite original
+                utils.logger.info(f"Merging non-duplicate and fixed duplicate rows in {table_name}...")
+                merge_sql = VocabHarmonizer.generate_merge_deduplicated_sql(
+                    tmp_non_dup, tmp_dup_fixed, file_path
+                )
+                conn.execute(merge_sql)
+                
+                # Cleanup temporary files
+                utils.logger.info(f"Cleaning up temporary files for {table_name}...")
+                try:
+                    storage.delete_file(tmp_non_dup)
+                    storage.delete_file(tmp_dup_fixed)
+                    utils.logger.info(f"Successfully cleaned up temporary files for {table_name}")
+                except Exception as cleanup_error:
+                    utils.logger.warning(f"Failed to clean up temporary files for {table_name}: {str(cleanup_error)}")
+                
+                utils.logger.info(f"Successfully deduplicated primary keys in {table_name}")
+
+        except Exception as e:
+            raise Exception(f"Unable to deduplicate primary keys for table {table_name}: {str(e)}") from e
+        finally:
+            if conn is not None:
+                utils.close_duckdb_connection(conn, local_db_file)
+
+    def discover_tables_for_deduplication(self) -> list[dict]:
+        """
+        Discover all tables in the OMOP_ETL artifacts directory that need deduplication.
+        Returns a list of table configuration dictionaries for parallel processing.
+
+        Returns:
+            List of dicts, each containing:
+                - site: Site identifier
+                - delivery_date: Delivery date
+                - table_name: Name of the OMOP table
+                - bucket_name: Storage bucket/directory name
+                - etl_folder: Path to ETL folder
+                - file_path: Full path to the consolidated parquet file
+        """
+        utils.logger.info(f"Discovering tables for deduplication for {self.file_path}")
+
+        # Get the OMOP ETL directory path
+        etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
+        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
+        etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
+        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
+
+        utils.logger.info(f"Looking for table directories in {storage_path}")
+
+        # Get list of table subdirectories
+        subdirectories = storage.list_subdirectories(storage_path)
+
+        # Extract table names from the full paths
+        table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
+
+        if not table_names:
+            utils.logger.warning(f"No table directories found in {storage_path}")
+            return []
+
+        utils.logger.info(f"Found {len(table_names)} table(s) for potential deduplication: {sorted(table_names)}")
+
+        # Build configuration for each table
+        table_configs = []
+        for table_name in sorted(table_names):
+            table_dir = f"{etl_folder}{table_name}/"
+            consolidated_file_path = storage.get_uri(f"{bucket_name}/{table_dir}{table_name}{constants.PARQUET}")
+
+            table_config = {
+                "site": self.site,
+                "delivery_date": self.delivery_date,
+                "table_name": table_name,
+                "bucket_name": bucket_name,
+                "etl_folder": etl_folder,
+                "file_path": consolidated_file_path,
+                "cdm_version": self.cdm_version,
+                "project_id": self.project_id,
+                "dataset_id": self.dataset_id
+            }
+            table_configs.append(table_config)
+
+        utils.logger.info(f"Prepared {len(table_configs)} table configuration(s) for deduplication")
+        return table_configs
+
+    def deduplicate_single_table(self) -> None:
+        """
+        Deduplicate primary keys for a single table based on the configuration in file_path.
+
+        This method expects self.file_path to be a JSON string containing the table configuration
+        with keys: table_name, file_path (path to consolidated parquet), cdm_version
+
+        This is designed to be called per-table in parallel by the Airflow DAG.
+        """
+        import json
+
+        # The file_path parameter will contain JSON configuration for the table
+        try:
+            # Parse the table configuration from file_path
+            table_config = json.loads(self.file_path)
+            table_name = table_config['table_name']
+            consolidated_file_path = table_config['file_path']
+
+            utils.logger.info(f"Deduplicating primary keys for table: {table_name}")
+            utils.logger.info(f"Consolidated file path: {consolidated_file_path}")
+
+            # Call the existing _deduplicate_primary_keys method with the table-specific info
+            self._deduplicate_primary_keys(consolidated_file_path, table_name)
+
+            utils.logger.info(f"Successfully completed deduplication for table: {table_name}")
+
+        except json.JSONDecodeError as e:
+            raise Exception(f"Invalid table configuration JSON: {str(e)}") from e
+        except KeyError as e:
+            raise Exception(f"Missing required key in table configuration: {str(e)}") from e
+        except Exception as e:
+            raise Exception(f"Unable to deduplicate table: {str(e)}") from e
+
+    # ===== Static SQL Generation Methods =====
     @staticmethod
     def generate_source_target_remapping_sql(
         source_table_name: str,
@@ -559,323 +1075,6 @@ class VocabHarmonizer:
             ORDER BY target_table
         """
 
-    def source_target_remapping(self) -> None:
-        """
-        Generate and execute SQL to check for and update non-standard source-to-target mappings to standard
-        """
-        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
-
-        columns = schema[self.source_table_name]["columns"]
-        ordered_omop_columns = list(columns.keys())  # preserve column order
-
-        # Get _concept_id and _source_concept_id columns for table
-        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
-        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
-        primary_key = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
-
-        # specimen and note tables don't have _source_concept_id columns so can't be evaluated with this method
-        if not source_concept_id_column or source_concept_id_column == "":
-            return
-
-        # Generate complete SQL
-        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}")
-        final_sql = VocabHarmonizer.generate_source_target_remapping_sql(
-            source_table_name=self.source_table_name,
-            ordered_omop_columns=ordered_omop_columns,
-            target_concept_id_column=target_concept_id_column,
-            source_concept_id_column=source_concept_id_column,
-            primary_key=primary_key,
-            site=self.site,
-            bucket=self.bucket,
-            delivery_date=self.delivery_date,
-            vocab_version=self.vocab_version,
-            vocab_path=self.vocab_path,
-            output_path=output_path
-        )
-
-        # Execute SQL
-        utils.execute_duckdb_sql(final_sql, f"Unable to execute SQL to harominze vocabulary in table {self.source_table_name}")
-
-    def check_new_targets(self, mapping_type: str) -> None:
-        """
-        Generate and execute SQL to check for cases in which a non-standard target_concept_id
-        has a mapping or replacement to a standard concept_id
-        """
-        if mapping_type == constants.TARGET_REMAP:
-            vocab_status_string = "existing non-standard target remapped to standard code"
-            mapping_relationships = "'Maps to', 'Maps to value'"
-            table_name = "target_remap"
-        elif mapping_type == constants.TARGET_REPLACEMENT:
-            vocab_status_string = "existing non-standard target replaced with standard code"
-            mapping_relationships = "'Concept replaced by'"
-            table_name = "target_replacement"
-
-        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
-
-        columns = schema[self.source_table_name]["columns"]
-        ordered_omop_columns = list(columns.keys())  # preserve column order
-
-        # Get _concept_id and _source_concept_id columns for table
-        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
-        source_concept_id_column = '0' if constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id'] == "" \
-            else f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']}"
-        primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
-
-        # Don't perform target remapping on rows which have already been harmonized
-        # primary_key_column values were made unique per row values in normalization step,
-        #   so they can be used for identification here
-        existing_files_where_clause = ""
-        exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
-        if exisiting_files:
-            existing_files_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
-            existing_files_where_clause = f"""
-                AND tbl.{primary_key_column} NOT IN (
-                    SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
-                )
-            """
-
-        # Generate complete SQL
-        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_{table_name}{constants.PARQUET}")
-        final_sql = VocabHarmonizer.generate_check_new_targets_sql(
-            source_table_name=self.source_table_name,
-            ordered_omop_columns=ordered_omop_columns,
-            target_concept_id_column=target_concept_id_column,
-            source_concept_id_column=source_concept_id_column,
-            primary_key_column=primary_key_column,
-            vocab_status_string=vocab_status_string,
-            mapping_relationships=mapping_relationships,
-            existing_files_where_clause=existing_files_where_clause,
-            site=self.site,
-            bucket=self.bucket,
-            delivery_date=self.delivery_date,
-            vocab_version=self.vocab_version,
-            vocab_path=self.vocab_path,
-            output_path=output_path
-        )
-
-        # Execute SQL
-        utils.execute_duckdb_sql(final_sql, f"Unable to execute SQL to check for new targets ({mapping_type}) {self.source_table_name}")
-
-    def domain_table_check(self) -> None:
-        """
-        Assign current domain and target table to concepts not remapped in previous steps.
-        Handles domain changes between vocabulary versions and site ETL misalignments.
-        """
-        schema = utils.get_table_schema(self.source_table_name, self.cdm_version)
-
-        columns = schema[self.source_table_name]["columns"]
-        ordered_omop_columns = list(columns.keys())  # preserve column order
-        target_concept_id_column = f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']}"
-        source_concept_id_column = '0' if constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id'] == "" \
-            else f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']}"
-        primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
-
-        # Don't perform domain check on rows which have already been harmonized
-        # primary_key_column values were made unique per row values in normalization step,
-        #   so they can be used for identification here
-        existing_files_where_clause = ""
-        exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
-        if exisiting_files:
-            existing_files_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
-            existing_files_where_clause = f"""
-                WHERE tbl.{primary_key_column} NOT IN (
-                    SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
-                )
-            """
-
-        # Generate complete SQL
-        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}")
-        final_sql = VocabHarmonizer.generate_domain_table_check_sql(
-            source_table_name=self.source_table_name,
-            ordered_omop_columns=ordered_omop_columns,
-            target_concept_id_column=target_concept_id_column,
-            source_concept_id_column=source_concept_id_column,
-            existing_files_where_clause=existing_files_where_clause,
-            site=self.site,
-            bucket=self.bucket,
-            delivery_date=self.delivery_date,
-            vocab_version=self.vocab_version,
-            vocab_path=self.vocab_path,
-            output_path=output_path
-        )
-
-        # Execute SQL
-        utils.execute_duckdb_sql(final_sql, f"Unable to perform domain check against {self.source_table_name}")
-
-    def generate_table_transition_report(self, transition_counts: list[tuple]) -> None:
-        """
-        Generate report artifacts showing how many rows transitioned from the source table
-        to each target table during vocabulary harmonization.
-
-        Args:
-            transition_counts: List of tuples containing (target_table, row_count)
-        """
-        try:
-            utils.logger.info(f"Generating table transition report for {self.source_table_name}")
-
-            # Get the source table concept_id from the schema
-            schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
-            source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
-
-            # Create a report artifact for each target table
-            for target_table, row_count in transition_counts:
-                ra = report_artifact.ReportArtifact(
-                    delivery_date=self.delivery_date,
-                    artifact_bucket=self.bucket,
-                    concept_id=source_table_concept_id,
-                    name=f"Vocab harmonization table transition: {self.source_table_name} to {target_table}",
-                    value_as_string=None,
-                    value_as_concept_id=None,
-                    value_as_number=row_count
-                )
-                ra.save_artifact()
-                utils.logger.info(f"Table transition: {self.source_table_name} → {target_table}: {row_count} rows")
-
-        except Exception as e:
-            # Log the error but don't fail the entire process
-            utils.logger.error(f"Error generating table transition report: {str(e)}")
-
-    def omop_etl(self) -> None:
-        """
-        Partition harmonized data and transform to target OMOP tables.
-        Discovers all target tables and transforms each using OMOP-to-OMOP ETL.
-        """
-        utils.logger.info(f"Partitioning and ETLing source file {self.file_path} to appropriate target table(s)")
-
-        # Find all target tables in the source file
-        # Each of the target tables will be transformed to its own Parquet file with the appropriate structure
-        # That Parquet file will then be loaded to BQ
-        parquet_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
-
-        conn = None
-        local_db_file = None
-        try:
-            conn, local_db_file = utils.create_duckdb_connection()
-            with conn:
-                # Generate and execute SQL to get target tables
-                target_tables_sql = VocabHarmonizer.generate_get_target_tables_sql(parquet_path)
-                target_tables_list = conn.execute(target_tables_sql).fetch_df()['target_table'].tolist()
-
-                # Generate and execute SQL to get table transition counts for reporting
-                transition_count_sql = VocabHarmonizer.generate_table_transition_count_sql(parquet_path)
-                transition_counts = conn.execute(transition_count_sql).fetchall()
-
-                # Generate table transition report before transformation
-                self.generate_table_transition_report(transition_counts)
-        except Exception as e:
-            raise Exception(f"Unable to get target tables from Parquet file {self.file_path}: {e}") from e
-        finally:
-            if conn is not None:
-                utils.close_duckdb_connection(conn, local_db_file)
-
-        # Create a new Parquet file for each target table with the appropriate structure
-        for target_table in target_tables_list:
-            omop_transformer = transformer.Transformer(
-                self.site, self.target_parquet_path, self.cdm_version, self.source_table_name, target_table, utils.get_omop_etl_destination_path(self.file_path)
-            )
-
-            # Perform the OMOP-to-OMOP ETL for this target table
-            omop_transformer.omop_to_omop_etl()
-
-    def consolidate_etl_tables(self) -> None:
-        """
-        Orchestrates consolidation across all ETL'd tables.
-        
-        Discovers all table subdirectories in the OMOP_ETL artifacts directory
-        and consolidates each one by delegating to the single-table processing method.
-        """
-        utils.logger.info(f"Consolidating ETL files for {self.file_path}")
-        
-        # Get the OMOP ETL directory path
-        etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
-        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
-        etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
-
-        utils.logger.info(f"Looking for table directories in {storage_path}")
-
-        # Get list of table subdirectories
-        subdirectories = storage.list_subdirectories(storage_path)
-
-        # Extract just the table names from the full paths
-        table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
-
-        if not table_names:
-            utils.logger.warning(f"No table directories found in {storage_path}")
-            return
-
-        utils.logger.info(f"Found {len(table_names)} table(s) to consolidate: {sorted(table_names)}")
-        
-        # Process each table directory
-        utils.logger.info("Starting consolidation for each table...")
-        for table_name in sorted(table_names):
-            self._process_single_table(bucket_name, etl_folder, table_name)
-        utils.logger.info("Completed consolidation for all tables.")
-
-    def deduplicate_primary_keys_all_tables(self) -> None:
-        """
-        Orchestrates deduplication of primary keys across all consolidated ETL tables.
-        
-        Discovers all table subdirectories in the OMOP_ETL artifacts directory
-        and deduplicates primary keys for each table that has surrogate keys.
-        """
-        utils.logger.info(f"Deduplicating primary keys for ETL files for {self.file_path}")
-        
-        # Get the OMOP ETL directory path
-        etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
-        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
-        etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
-
-        utils.logger.info(f"Looking for table directories in {storage_path}")
-
-        # Get list of table subdirectories
-        subdirectories = storage.list_subdirectories(storage_path)
-
-        # Extract just the table names from the full paths
-        table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
-
-        if not table_names:
-            utils.logger.warning(f"No table directories found in {storage_path}")
-            return
-
-        utils.logger.info(f"Found {len(table_names)} table(s) to check for deduplication: {sorted(table_names)}")
-        
-        # Process each table directory
-        utils.logger.info("Starting deduplication for each table...")
-        for table_name in sorted(table_names):
-            # Construct the consolidated file path
-            table_dir = f"{etl_folder}{table_name}/"
-            consolidated_file_path = storage.get_uri(f"{bucket_name}/{table_dir}{table_name}{constants.PARQUET}")
-            
-            # Deduplicate primary keys for this table
-            self._deduplicate_primary_keys(consolidated_file_path, table_name)
-        utils.logger.info("Completed deduplication for all tables.")
-
-    def _process_single_table(self, bucket_name: str, etl_folder: str, table_name: str) -> None:
-        """
-        Combine all parquet files for a single table into one consolidated file.
-
-        Args:
-            bucket_name: Storage bucket/directory name
-            etl_folder: Path to the ETL folder within the storage location
-            table_name: Name of the OMOP table to consolidate
-        """
-        utils.logger.info(f"Consolidating files for table: {table_name}")
-        
-        # Construct paths
-        table_dir = f"{etl_folder}{table_name}/"
-        source_parquet_pattern = storage.get_uri(f"{bucket_name}/{table_dir}parts/*.parquet")
-        consolidated_file_path = storage.get_uri(f"{bucket_name}/{table_dir}{table_name}{constants.PARQUET}")
-
-        # Generate and execute SQL to combine all parquet files into one
-        combine_sql = VocabHarmonizer.generate_consolidate_single_table_sql(
-            source_parquet_pattern=source_parquet_pattern,
-            output_path=consolidated_file_path
-        )
-        utils.execute_duckdb_sql(combine_sql, f"Unable to consolidate files for table {table_name}")
-        utils.logger.info(f"Successfully consolidated {table_name}")
-
     @staticmethod
     def generate_check_duplicates_sql(file_path: str, primary_key_column: str) -> str:
         """
@@ -1018,200 +1217,3 @@ class VocabHarmonizer:
             ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
         """
 
-    def _deduplicate_primary_keys(self, file_path: str, table_name: str) -> None:
-        """
-        Check for and fix duplicate primary keys in a consolidated parquet file.
-        Only applies to tables with surrogate keys.
-
-        Note: This method manually manages its DuckDB connection (unlike other methods
-        that use execute_duckdb_sql) because it needs to maintain a temp table
-        ('duplicate_keys') across multiple SQL statements within the same session.
-        Temp tables only exist within a single connection session.
-
-        Args:
-            file_path: Path to the consolidated parquet file
-            table_name: Name of the OMOP table
-        """
-        # Only process tables with surrogate keys
-        if table_name not in constants.SURROGATE_KEY_TABLES:
-            utils.logger.info(f"Table {table_name} does not use surrogate keys. Skipping deduplication.")
-            return
-        
-        # Get primary key column
-        primary_key_column = utils.get_primary_key_column(table_name, self.cdm_version)
-        if not primary_key_column:
-            utils.logger.info(f"No primary key column defined for table {table_name}. Skipping deduplication.")
-            return
-        
-        # Get primary key data type
-        schema = utils.get_table_schema(table_name, self.cdm_version)
-        if table_name not in schema:
-            utils.logger.warning(f"Schema not found for table {table_name}. Skipping deduplication.")
-            return
-        
-        target_columns_dict = schema[table_name]["columns"]
-        if primary_key_column not in target_columns_dict:
-            utils.logger.warning(f"Primary key column {primary_key_column} not found in schema. Skipping deduplication.")
-            return
-        
-        primary_key_type = target_columns_dict[primary_key_column]['type']
-
-        conn = None
-        local_db_file = None
-        try:
-            conn, local_db_file = utils.create_duckdb_connection()
-            with conn:
-                # Check if duplicates exist
-                utils.logger.info(f"Checking for duplicate primary keys in {table_name}...")
-                check_sql = VocabHarmonizer.generate_check_duplicates_sql(file_path, primary_key_column)
-                duplicates = conn.execute(check_sql).fetchall()
-
-                if not duplicates:
-                    utils.logger.info(f"No duplicate primary keys found in {table_name}")
-                    return
-
-                utils.logger.info(f"Found duplicate primary keys in {table_name}. Fixing...")
-
-                # Create temp table with duplicate keys only
-                create_temp_table_sql = VocabHarmonizer.generate_create_duplicate_keys_table_sql(file_path, primary_key_column)
-                conn.execute(create_temp_table_sql)
-
-                count_sql = VocabHarmonizer.generate_count_duplicates_sql()
-                dup_count_result = conn.execute(count_sql).fetchone()
-                dup_count = dup_count_result[0] if dup_count_result else 0
-                utils.logger.info(f"Found {dup_count} unique keys in {table_name} with duplicates")
-                
-                # Generate temp file paths
-                tmp_id = uuid.uuid4()
-                bucket_path = file_path.rsplit('/', 1)[0]
-                tmp_non_dup = f"{bucket_path}/tmp/tmp_non_dup_{tmp_id}.parquet"
-                tmp_dup_fixed = f"{bucket_path}/tmp/tmp_dup_fixed_{tmp_id}.parquet"
-                
-                # Pass 1: Write non-duplicate rows
-                utils.logger.info(f"Processing non-duplicate rows in in {table_name}...")
-                write_non_dup_sql = VocabHarmonizer.generate_write_non_duplicates_sql(
-                    file_path, primary_key_column, tmp_non_dup
-                )
-                conn.execute(write_non_dup_sql)
-
-                # Pass 2: Fix duplicate rows
-                utils.logger.info(f"Processing duplicate rows with fixes in {table_name}...")
-                fix_dup_sql = VocabHarmonizer.generate_fix_duplicates_sql(
-                    file_path, primary_key_column, primary_key_type, tmp_dup_fixed
-                )
-                conn.execute(fix_dup_sql)
-
-                # Combine both temp files and overwrite original
-                utils.logger.info(f"Merging non-duplicate and fixed duplicate rows in {table_name}...")
-                merge_sql = VocabHarmonizer.generate_merge_deduplicated_sql(
-                    tmp_non_dup, tmp_dup_fixed, file_path
-                )
-                conn.execute(merge_sql)
-                
-                # Cleanup temporary files
-                utils.logger.info(f"Cleaning up temporary files for {table_name}...")
-                try:
-                    storage.delete_file(tmp_non_dup)
-                    storage.delete_file(tmp_dup_fixed)
-                    utils.logger.info(f"Successfully cleaned up temporary files for {table_name}")
-                except Exception as cleanup_error:
-                    utils.logger.warning(f"Failed to clean up temporary files for {table_name}: {str(cleanup_error)}")
-                
-                utils.logger.info(f"Successfully deduplicated primary keys in {table_name}")
-
-        except Exception as e:
-            raise Exception(f"Unable to deduplicate primary keys for table {table_name}: {str(e)}") from e
-        finally:
-            if conn is not None:
-                utils.close_duckdb_connection(conn, local_db_file)
-
-    def discover_tables_for_deduplication(self) -> list[dict]:
-        """
-        Discover all tables in the OMOP_ETL artifacts directory that need deduplication.
-        Returns a list of table configuration dictionaries for parallel processing.
-
-        Returns:
-            List of dicts, each containing:
-                - site: Site identifier
-                - delivery_date: Delivery date
-                - table_name: Name of the OMOP table
-                - bucket_name: Storage bucket/directory name
-                - etl_folder: Path to ETL folder
-                - file_path: Full path to the consolidated parquet file
-        """
-        utils.logger.info(f"Discovering tables for deduplication for {self.file_path}")
-
-        # Get the OMOP ETL directory path
-        etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
-        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
-        etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
-
-        utils.logger.info(f"Looking for table directories in {storage_path}")
-
-        # Get list of table subdirectories
-        subdirectories = storage.list_subdirectories(storage_path)
-
-        # Extract table names from the full paths
-        table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
-
-        if not table_names:
-            utils.logger.warning(f"No table directories found in {storage_path}")
-            return []
-
-        utils.logger.info(f"Found {len(table_names)} table(s) for potential deduplication: {sorted(table_names)}")
-
-        # Build configuration for each table
-        table_configs = []
-        for table_name in sorted(table_names):
-            table_dir = f"{etl_folder}{table_name}/"
-            consolidated_file_path = storage.get_uri(f"{bucket_name}/{table_dir}{table_name}{constants.PARQUET}")
-
-            table_config = {
-                "site": self.site,
-                "delivery_date": self.delivery_date,
-                "table_name": table_name,
-                "bucket_name": bucket_name,
-                "etl_folder": etl_folder,
-                "file_path": consolidated_file_path,
-                "cdm_version": self.cdm_version,
-                "project_id": self.project_id,
-                "dataset_id": self.dataset_id
-            }
-            table_configs.append(table_config)
-
-        utils.logger.info(f"Prepared {len(table_configs)} table configuration(s) for deduplication")
-        return table_configs
-
-    def deduplicate_single_table(self) -> None:
-        """
-        Deduplicate primary keys for a single table based on the configuration in file_path.
-
-        This method expects self.file_path to be a JSON string containing the table configuration
-        with keys: table_name, file_path (path to consolidated parquet), cdm_version
-
-        This is designed to be called per-table in parallel by the Airflow DAG.
-        """
-        import json
-
-        # The file_path parameter will contain JSON configuration for the table
-        try:
-            # Parse the table configuration from file_path
-            table_config = json.loads(self.file_path)
-            table_name = table_config['table_name']
-            consolidated_file_path = table_config['file_path']
-
-            utils.logger.info(f"Deduplicating primary keys for table: {table_name}")
-            utils.logger.info(f"Consolidated file path: {consolidated_file_path}")
-
-            # Call the existing _deduplicate_primary_keys method with the table-specific info
-            self._deduplicate_primary_keys(consolidated_file_path, table_name)
-
-            utils.logger.info(f"Successfully completed deduplication for table: {table_name}")
-
-        except json.JSONDecodeError as e:
-            raise Exception(f"Invalid table configuration JSON: {str(e)}") from e
-        except KeyError as e:
-            raise Exception(f"Missing required key in table configuration: {str(e)}") from e
-        except Exception as e:
-            raise Exception(f"Unable to deduplicate table: {str(e)}") from e
