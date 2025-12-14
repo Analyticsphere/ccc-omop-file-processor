@@ -73,10 +73,11 @@ class TestReportGeneratorGenerate:
     """Tests for generate orchestration method."""
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
+    @patch.object(ReportGenerator, '_create_vocabulary_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_type_concept, mock_consolidate):
-        """Test that generate calls metadata, type concept, and consolidation methods."""
+    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_consolidate):
+        """Test that generate calls metadata, type concept, vocabulary, and consolidation methods."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -93,13 +94,15 @@ class TestReportGeneratorGenerate:
 
         mock_create_metadata.assert_called_once()
         mock_create_type_concept.assert_called_once()
+        mock_create_vocabulary.assert_called_once()
         mock_consolidate.assert_called_once()
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
+    @patch.object(ReportGenerator, '_create_vocabulary_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_type_concept, mock_consolidate):
-        """Test that methods are called in correct order: metadata, type concept, consolidation."""
+    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_consolidate):
+        """Test that methods are called in correct order: metadata, type concept, vocabulary, consolidation."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -114,12 +117,13 @@ class TestReportGeneratorGenerate:
         call_order = []
         mock_create_metadata.side_effect = lambda: call_order.append('metadata')
         mock_create_type_concept.side_effect = lambda: call_order.append('type_concept')
+        mock_create_vocabulary.side_effect = lambda: call_order.append('vocabulary')
         mock_consolidate.side_effect = lambda: call_order.append('consolidate')
 
         generator = ReportGenerator(report_data)
         generator.generate()
 
-        assert call_order == ['metadata', 'type_concept', 'consolidate']
+        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'consolidate']
 
 
 class TestReportGeneratorMetadataArtifacts:
@@ -606,7 +610,7 @@ class TestGetTablePath:
 
     @patch('core.reporting.storage.get_uri')
     def test_all_type_concept_tables(self, mock_get_uri):
-        """Test that all tables in TYPE_CONCEPT_TABLES generate valid paths."""
+        """Test that all tables in REPORTING_TABLE_CONFIG generate valid paths."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -620,8 +624,8 @@ class TestGetTablePath:
 
         generator = ReportGenerator(report_data)
 
-        # Test each table in TYPE_CONCEPT_TABLES
-        for table_name, config in constants.TYPE_CONCEPT_TABLES.items():
+        # Test each table in REPORTING_TABLE_CONFIG
+        for table_name, config in constants.REPORTING_TABLE_CONFIG.items():
             location = config["location"]
             path = generator._get_table_path(table_name, location)
 

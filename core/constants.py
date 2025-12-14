@@ -216,64 +216,157 @@ TARGET_CDM_VERSION_REPORT_NAME = "Standardized to CDM version"
 FILE_PROCESSOR_VERSION_REPORT_NAME = "Pipeline file processor version"
 PROCESSED_DATE_REPORT_NAME = "Delivery processing date"
 
-# Tables with type_concept_id fields for reporting
-# Maps table name to its type concept field and file location
-TYPE_CONCEPT_TABLES = {
-    "visit_detail": {
-        "type_field": "visit_detail_type_concept_id",
-        "location": ArtifactPaths.CONVERTED_FILES
-    },
-    "death": {
-        "type_field": "death_type_concept_id",
-        "location": ArtifactPaths.CONVERTED_FILES
-    },
-    "cost": {
-        "type_field": "cost_type_concept_id",
-        "location": ArtifactPaths.CONVERTED_FILES
-    },
-    "episode": {
-        "type_field": "episode_type_concept_id",
-        "location": ArtifactPaths.CONVERTED_FILES
-    },
-    "observation_period": {
-        "type_field": "period_type_concept_id",
-        "location": ArtifactPaths.DERIVED_FILES
+# Configuration for reporting on OMOP tables
+# Maps table name to its location, type_concept_id field, and vocabulary concept fields
+REPORTING_TABLE_CONFIG = {
+    "person": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": [
+            {"concept_id": "gender_concept_id", "source_concept_id": "gender_source_concept_id"},
+            {"concept_id": "race_concept_id", "source_concept_id": "race_source_concept_id"},
+            {"concept_id": "ethnicity_concept_id", "source_concept_id": "ethnicity_source_concept_id"}
+        ]
     },
     "visit_occurrence": {
+        "location": ArtifactPaths.OMOP_ETL,
         "type_field": "visit_type_concept_id",
-        "location": ArtifactPaths.OMOP_ETL
+        "vocabulary_fields": [
+            {"concept_id": "visit_concept_id", "source_concept_id": "visit_source_concept_id"},
+            {"concept_id": "admitted_from_concept_id", "source_concept_id": None},
+            {"concept_id": "discharged_to_concept_id", "source_concept_id": None}
+        ]
+    },
+    "visit_detail": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": "visit_detail_type_concept_id",
+        "vocabulary_fields": [
+            {"concept_id": "visit_detail_concept_id", "source_concept_id": "visit_detail_source_concept_id"},
+            {"concept_id": "admitted_from_concept_id", "source_concept_id": None},
+            {"concept_id": "discharged_to_concept_id", "source_concept_id": None}
+        ]
     },
     "condition_occurrence": {
+        "location": ArtifactPaths.OMOP_ETL,
         "type_field": "condition_type_concept_id",
-        "location": ArtifactPaths.OMOP_ETL
+        "vocabulary_fields": [
+            {"concept_id": "condition_concept_id", "source_concept_id": "condition_source_concept_id"},
+            {"concept_id": "condition_status_concept_id", "source_concept_id": None}
+        ]
     },
     "drug_exposure": {
+        "location": ArtifactPaths.OMOP_ETL,
         "type_field": "drug_type_concept_id",
-        "location": ArtifactPaths.OMOP_ETL
+        "vocabulary_fields": [
+            {"concept_id": "drug_concept_id", "source_concept_id": "drug_source_concept_id"},
+            {"concept_id": "route_concept_id", "source_concept_id": None}
+        ]
     },
     "procedure_occurrence": {
+        "location": ArtifactPaths.OMOP_ETL,
         "type_field": "procedure_type_concept_id",
-        "location": ArtifactPaths.OMOP_ETL
+        "vocabulary_fields": [
+            {"concept_id": "procedure_concept_id", "source_concept_id": "procedure_source_concept_id"},
+            {"concept_id": "modifier_concept_id", "source_concept_id": None}
+        ]
     },
     "device_exposure": {
+        "location": ArtifactPaths.OMOP_ETL,
         "type_field": "device_type_concept_id",
-        "location": ArtifactPaths.OMOP_ETL
+        "vocabulary_fields": [
+            {"concept_id": "device_concept_id", "source_concept_id": "device_source_concept_id"},
+            {"concept_id": "unit_concept_id", "source_concept_id": "unit_source_concept_id"}
+        ]
     },
     "measurement": {
+        "location": ArtifactPaths.OMOP_ETL,
         "type_field": "measurement_type_concept_id",
-        "location": ArtifactPaths.OMOP_ETL
+        "vocabulary_fields": [
+            {"concept_id": "measurement_concept_id", "source_concept_id": "measurement_source_concept_id"},
+            {"concept_id": "operator_concept_id", "source_concept_id": None},
+            {"concept_id": "value_as_concept_id", "source_concept_id": None},
+            {"concept_id": "unit_concept_id", "source_concept_id": "unit_source_concept_id"}
+        ]
     },
     "observation": {
+        "location": ArtifactPaths.OMOP_ETL,
         "type_field": "observation_type_concept_id",
-        "location": ArtifactPaths.OMOP_ETL
+        "vocabulary_fields": [
+            {"concept_id": "observation_concept_id", "source_concept_id": "observation_source_concept_id"},
+            {"concept_id": "value_as_concept_id", "source_concept_id": None},
+            {"concept_id": "qualifier_concept_id", "source_concept_id": None},
+            {"concept_id": "unit_concept_id", "source_concept_id": None}
+        ]
+    },
+    "death": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": "death_type_concept_id",
+        "vocabulary_fields": [
+            {"concept_id": "cause_concept_id", "source_concept_id": "cause_source_concept_id"}
+        ]
     },
     "note": {
+        "location": ArtifactPaths.OMOP_ETL,
         "type_field": "note_type_concept_id",
-        "location": ArtifactPaths.OMOP_ETL
+        "vocabulary_fields": [
+            {"concept_id": "note_class_concept_id", "source_concept_id": None},
+            {"concept_id": "encoding_concept_id", "source_concept_id": None},
+            {"concept_id": "language_concept_id", "source_concept_id": None}
+        ]
     },
     "specimen": {
+        "location": ArtifactPaths.OMOP_ETL,
         "type_field": "specimen_type_concept_id",
-        "location": ArtifactPaths.OMOP_ETL
+        "vocabulary_fields": [
+            {"concept_id": "specimen_concept_id", "source_concept_id": None},
+            {"concept_id": "unit_concept_id", "source_concept_id": None},
+            {"concept_id": "anatomic_site_concept_id", "source_concept_id": None},
+            {"concept_id": "disease_status_concept_id", "source_concept_id": None}
+        ]
+    },
+    "care_site": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": [
+            {"concept_id": "place_of_service_concept_id", "source_concept_id": None}
+        ]
+    },
+    "provider": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": [
+            {"concept_id": "specialty_concept_id", "source_concept_id": "specialty_source_concept_id"},
+            {"concept_id": "gender_concept_id", "source_concept_id": "gender_source_concept_id"}
+        ]
+    },
+    "payer_plan_period": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": None,
+        "vocabulary_fields": [
+            {"concept_id": "payer_concept_id", "source_concept_id": "payer_source_concept_id"},
+            {"concept_id": "plan_concept_id", "source_concept_id": "plan_source_concept_id"},
+            {"concept_id": "sponsor_concept_id", "source_concept_id": "sponsor_source_concept_id"},
+            {"concept_id": "stop_reason_concept_id", "source_concept_id": "stop_reason_source_concept_id"}
+        ]
+    },
+    "cost": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": "cost_type_concept_id",
+        "vocabulary_fields": [
+            {"concept_id": "currency_concept_id", "source_concept_id": None},
+            {"concept_id": "revenue_code_concept_id", "source_concept_id": None},
+            {"concept_id": "drg_concept_id", "source_concept_id": None}
+        ]
+    },
+    "episode": {
+        "location": ArtifactPaths.CONVERTED_FILES,
+        "type_field": "episode_type_concept_id",
+        "vocabulary_fields": []
+    },
+    "observation_period": {
+        "location": ArtifactPaths.DERIVED_FILES,
+        "type_field": "period_type_concept_id",
+        "vocabulary_fields": []
     }
 }
 

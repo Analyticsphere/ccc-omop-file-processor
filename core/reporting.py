@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from typing import Any
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
@@ -50,6 +51,7 @@ class ReportGenerator:
         """
         self._create_metadata_artifacts()
         self._create_type_concept_breakdown_artifacts()
+        self._create_vocabulary_breakdown_artifacts()
         self._consolidate_report_files()
 
     def _create_metadata_artifacts(self) -> None:
@@ -171,8 +173,14 @@ class ReportGenerator:
         concept_uri = storage.get_uri(concept_path)
 
         # Process each table with type_concept_id field
-        for table_name, table_config in constants.TYPE_CONCEPT_TABLES.items():
+        for table_name, table_config_obj in constants.REPORTING_TABLE_CONFIG.items():
+            table_config: Any = table_config_obj
             type_field = table_config["type_field"]
+
+            # Skip tables without type_concept_id field
+            if type_field is None:
+                continue
+
             location = table_config["location"]
 
             # Construct path to table
@@ -210,6 +218,134 @@ class ReportGenerator:
                 utils.logger.error(f"Error processing type concept breakdown for {table_name}: {e}")
                 continue
 
+    def _create_vocabulary_breakdown_artifacts(self) -> None:
+        """
+        Create report artifacts for vocabulary breakdowns across concept fields.
+
+        For each table with concept_id fields, queries the breakdown of vocabularies
+        for both source and target concepts, joining with the concept vocabulary table
+        to get vocabulary names. Creates report artifacts for each table-field-vocabulary combination.
+        """
+        # Get target vocabulary version for this delivery
+        target_vocab_version = self.target_vocabulary_version
+
+        # Construct path to concept table in vocabulary
+        concept_path = f"{constants.VOCAB_PATH}/{target_vocab_version}/optimized/concept{constants.PARQUET}"
+
+        # Check if concept table exists
+        if not utils.parquet_file_exists(concept_path):
+            utils.logger.warning(f"Concept table not found at {concept_path}, skipping vocabulary breakdown")
+            return
+
+        concept_uri = storage.get_uri(concept_path)
+
+        # Process each table with vocabulary concept fields
+        for table_name, table_config_obj in constants.REPORTING_TABLE_CONFIG.items():
+            table_config: Any = table_config_obj
+            vocabulary_fields = table_config["vocabulary_fields"]
+
+            # Skip tables without vocabulary fields
+            if not vocabulary_fields:
+                continue
+
+            location = table_config["location"]
+
+            # Construct path to table
+            table_path = self._get_table_path(table_name, location)
+
+            # Check if table exists
+            if not utils.parquet_file_exists(table_path):
+                utils.logger.info(f"Table {table_name} not found, skipping vocabulary breakdown")
+                continue
+
+            table_uri = storage.get_uri(table_path)
+
+            # Process each concept field in the table
+            for field_config in vocabulary_fields:
+                concept_id_field = field_config["concept_id"]
+                source_concept_id_field = field_config["source_concept_id"]
+
+                # Process target vocabulary (from concept_id field)
+                try:
+                    sql = self.generate_vocabulary_breakdown_sql(
+                        table_uri,
+                        concept_uri,
+                        concept_id_field,
+                        is_source=False
+                    )
+                    result = utils.execute_duckdb_sql(
+                        sql,
+                        f"Unable to query target vocabulary breakdown for {table_name}.{concept_id_field}",
+                        return_results=True
+                    )
+
+                    # Create report artifact for each vocabulary
+                    for row in result:
+                        vocabulary_id, record_count = row
+
+                        artifact = report_artifact.ReportArtifact(
+                            delivery_date=self.delivery_date,
+                            artifact_bucket=self.bucket,
+                            concept_id=0,
+                            name=f"Target vocabulary breakdown: {table_name}.{concept_id_field}",
+                            value_as_string=vocabulary_id,
+                            value_as_concept_id=0,
+                            value_as_number=float(record_count)
+                        )
+                        artifact.save_artifact()
+
+                except Exception as e:
+                    utils.logger.error(f"Error processing target vocabulary breakdown for {table_name}.{concept_id_field}: {e}")
+
+                # Process source vocabulary (from source_concept_id field)
+                if source_concept_id_field is None:
+                    # Create a single artifact indicating source not captured
+                    try:
+                        artifact = report_artifact.ReportArtifact(
+                            delivery_date=self.delivery_date,
+                            artifact_bucket=self.bucket,
+                            concept_id=0,
+                            name=f"Source vocabulary breakdown: {table_name}.{concept_id_field}",
+                            value_as_string="Source vocabulary not captured in OMOP",
+                            value_as_concept_id=0,
+                            value_as_number=None
+                        )
+                        artifact.save_artifact()
+                    except Exception as e:
+                        utils.logger.error(f"Error creating source not captured artifact for {table_name}.{concept_id_field}: {e}")
+                else:
+                    # Query and create artifacts for source vocabularies
+                    try:
+                        sql = self.generate_vocabulary_breakdown_sql(
+                            table_uri,
+                            concept_uri,
+                            source_concept_id_field,
+                            is_source=True
+                        )
+                        result = utils.execute_duckdb_sql(
+                            sql,
+                            f"Unable to query source vocabulary breakdown for {table_name}.{source_concept_id_field}",
+                            return_results=True
+                        )
+
+                        # Create report artifact for each vocabulary
+                        for row in result:
+                            vocabulary_id, record_count = row
+
+                            artifact = report_artifact.ReportArtifact(
+                                delivery_date=self.delivery_date,
+                                artifact_bucket=self.bucket,
+                                concept_id=0,
+                                name=f"Source vocabulary breakdown: {table_name}.{concept_id_field}",
+                                value_as_string=vocabulary_id,
+                                value_as_concept_id=0,
+                                value_as_number=float(record_count)
+                            )
+                            artifact.save_artifact()
+
+                    except Exception as e:
+                        utils.logger.error(f"Error processing source vocabulary breakdown for {table_name}.{source_concept_id_field}: {e}")
+
     @staticmethod
     def generate_type_concept_breakdown_sql(table_uri: str, concept_uri: str, type_field: str) -> str:
         """
@@ -235,6 +371,34 @@ class ReportGenerator:
             LEFT JOIN read_parquet('{concept_uri}') c
                 ON t.{type_field} = c.concept_id
             GROUP BY t.{type_field}, c.concept_name
+            ORDER BY record_count DESC
+        """
+
+    @staticmethod
+    def generate_vocabulary_breakdown_sql(table_uri: str, concept_uri: str, concept_field: str, is_source: bool) -> str:
+        """
+        Generate SQL to get vocabulary breakdown for a concept field.
+
+        Queries the specified concept field, joins with the concept vocabulary
+        table to get vocabulary IDs, and returns counts grouped by vocabulary.
+
+        Args:
+            table_uri: Full URI path to the table's parquet file
+            concept_uri: Full URI path to the concept vocabulary parquet file
+            concept_field: Name of the concept_id field to analyze
+            is_source: Whether this is a source concept field (for logging purposes)
+
+        Returns:
+            SQL statement that returns (vocabulary_id, record_count)
+        """
+        return f"""
+            SELECT
+                COALESCE(c.vocabulary_id, 'No matching concept') as vocabulary_id,
+                COUNT(*) as record_count
+            FROM read_parquet('{table_uri}') t
+            LEFT JOIN read_parquet('{concept_uri}') c
+                ON t.{concept_field} = c.concept_id
+            GROUP BY c.vocabulary_id
             ORDER BY record_count DESC
         """
 
