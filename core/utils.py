@@ -64,15 +64,20 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
 def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: Optional[str]) -> None:
     """Close DuckDB connection, remove temporary files, and free memory."""
     try:
+        logger.debug(f"Closing DuckDB connection. local_db_file={repr(local_db_file)}")
+
         # Close the DuckDB connection
         conn.close()
 
         # Remove the local database file if it exists
         if local_db_file and storage.file_exists(local_db_file):
+            logger.debug(f"Deleting local database file: {local_db_file}")
             storage.delete_file(local_db_file)
+        elif local_db_file:
+            logger.debug(f"Local database file does not exist, skipping deletion: {local_db_file}")
 
     except Exception as e:
-        logger.error(f"Unable to close DuckDB connection: {e}")
+        logger.error(f"Unable to close DuckDB connection. local_db_file={repr(local_db_file)}, error: {e}")
     finally:
         # Manually run garabage collection here to reclaim memory
         gc.collect()
@@ -156,8 +161,17 @@ def get_bucket_and_delivery_date_from_path(file_path: str) -> Tuple[str, str]:
     Extract bucket name and delivery date from file path.
     Example: synthea53/2024-12-31/care_site.parquet -> (synthea53, 2024-12-31)
     """
+    logger.debug(f"Extracting bucket and delivery date from path: {repr(file_path)}")
     file_path = storage.strip_scheme(file_path)
-    bucket_name, delivery_date = file_path.split('/')[:2]
+    logger.debug(f"Path after stripping scheme: {repr(file_path)}")
+
+    path_parts = file_path.split('/')
+    if len(path_parts) < 2:
+        logger.error(f"Invalid path format - expected at least 2 parts (bucket/date), got {len(path_parts)} parts: {repr(file_path)}")
+        raise ValueError(f"Invalid path format: {file_path}. Expected format: bucket/delivery_date/...")
+
+    bucket_name, delivery_date = path_parts[0], path_parts[1]
+    logger.debug(f"Extracted bucket={bucket_name}, delivery_date={delivery_date}")
     return bucket_name, delivery_date
 
 def get_columns_from_file(file_path: str) -> list:

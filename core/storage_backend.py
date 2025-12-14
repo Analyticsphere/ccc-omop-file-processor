@@ -166,7 +166,10 @@ class StorageBackend:
 
     def _file_exists_gcs(self, file_path: str) -> bool:
         """Check if file exists in GCS."""
+        utils.logger.debug(f"Checking if file exists in GCS: {file_path}")
         path_without_prefix = self.strip_scheme(file_path)
+        utils.logger.debug(f"Path without prefix: {repr(path_without_prefix)}")
+
         bucket_name, _ = utils.get_bucket_and_delivery_date_from_path(path_without_prefix)
         blob_path = '/'.join(path_without_prefix.split('/')[1:])
 
@@ -261,9 +264,18 @@ class StorageBackend:
 
     def _delete_file_gcs(self, file_path: str) -> None:
         """Delete file from GCS."""
+        utils.logger.debug(f"Attempting to delete file from GCS: {file_path}")
         path_without_prefix = self.strip_scheme(file_path)
+        utils.logger.debug(f"Path without prefix: {repr(path_without_prefix)}")
+
+        if not path_without_prefix or '/' not in path_without_prefix:
+            utils.logger.error(f"Invalid GCS path for deletion: {repr(path_without_prefix)}")
+            raise ValueError(f"Invalid GCS path format: {file_path}")
+
         bucket_name = path_without_prefix.split('/')[0]
         blob_path = '/'.join(path_without_prefix.split('/')[1:])
+
+        utils.logger.debug(f"Bucket: {bucket_name}, Blob path: {blob_path}")
 
         storage_client = gcs_storage.Client()
         bucket = storage_client.bucket(bucket_name)
@@ -271,6 +283,9 @@ class StorageBackend:
 
         if blob.exists():
             blob.delete()
+            utils.logger.debug(f"Successfully deleted file: {file_path}")
+        else:
+            utils.logger.debug(f"File does not exist in GCS, skipping deletion: {file_path}")
 
     def list_subdirectories(self, directory_path: str) -> List[str]:
         """
