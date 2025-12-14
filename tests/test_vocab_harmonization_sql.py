@@ -263,3 +263,16 @@ class TestGenerateTableTransitionCountSql:
 
         expected = load_reference_sql("generate_table_transition_count_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateVocabStatusCountSql:
+    """Tests for generate_vocab_status_count_sql()."""
+
+    def test_standard_vocab_status_count(self):
+        """Test SQL generation for counting rows by vocab harmonization status for reporting."""
+        result = VocabHarmonizer.generate_vocab_status_count_sql(
+            parquet_path='synthea53/2025-01-01/artifacts/harmonized/*.parquet'
+        )
+
+        expected = load_reference_sql("generate_vocab_status_count_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)

@@ -239,6 +239,41 @@ class VocabHarmonizer:
             # Log the error but don't fail the entire process
             utils.logger.error(f"Error generating table transition report: {str(e)}")
 
+    def generate_vocab_status_artifacts(self, status_counts: list[tuple]) -> None:
+        """
+        Generate report artifacts showing counts of each vocab harmonization status type.
+
+        This tracks what kinds of harmonization changes occurred (e.g., "source_concept_id mapped to new target",
+        "existing non-standard target remapped to standard code", etc.) at the table level.
+
+        Args:
+            status_counts: List of tuples containing (vocab_harmonization_status, row_count)
+        """
+        try:
+            utils.logger.info(f"Generating vocab harmonization status report for {self.source_table_name}")
+
+            # Get the source table concept_id from the schema
+            schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
+            source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
+
+            # Create a report artifact for each status type
+            for status, row_count in status_counts:
+                ra = report_artifact.ReportArtifact(
+                    delivery_date=self.delivery_date,
+                    artifact_bucket=self.bucket,
+                    concept_id=source_table_concept_id,
+                    name=f"Vocab harmonization status: {self.source_table_name} - {status}",
+                    value_as_string=None,
+                    value_as_concept_id=None,
+                    value_as_number=row_count
+                )
+                ra.save_artifact()
+                utils.logger.info(f"Vocab status: {self.source_table_name} - {status}: {row_count} rows")
+
+        except Exception as e:
+            # Log the error but don't fail the entire process
+            utils.logger.error(f"Error generating vocab status report: {str(e)}")
+
     def omop_etl(self) -> None:
         """
         Partition harmonized data and transform to target OMOP tables.
@@ -261,11 +296,18 @@ class VocabHarmonizer:
                 target_tables_list = conn.execute(target_tables_sql).fetch_df()['target_table'].tolist()
 
                 # Generate and execute SQL to get table transition counts for reporting
+                # Must be done before OMOP ETL step modifies the data
                 transition_count_sql = VocabHarmonizer.generate_table_transition_count_sql(parquet_path)
                 transition_counts = conn.execute(transition_count_sql).fetchall()
 
-                # Generate table transition report before transformation
+                # Generate and execute SQL to get vocab status counts for reporting
+                # Must be done before OMOP ETL step modifies the data
+                vocab_status_count_sql = VocabHarmonizer.generate_vocab_status_count_sql(parquet_path)
+                vocab_status_counts = conn.execute(vocab_status_count_sql).fetchall()
+
+                # Generate reports before transformation
                 self.generate_table_transition_artifacts(transition_counts)
+                self.generate_vocab_status_artifacts(vocab_status_counts)
         except Exception as e:
             raise Exception(f"Unable to get target tables from Parquet file {self.file_path}: {e}") from e
         finally:
@@ -1072,6 +1114,30 @@ class VocabHarmonizer:
             FROM read_parquet('{parquet_path}')
             GROUP BY target_table
             ORDER BY target_table
+        """
+
+    @staticmethod
+    def generate_vocab_status_count_sql(parquet_path: str) -> str:
+        """
+        Generate SQL to count rows by vocab harmonization status from harmonized parquet files.
+
+        This method generates a query that reads harmonized parquet files and
+        counts how many rows have each type of vocab harmonization status, used for reporting.
+
+        Args:
+            parquet_path: Path or glob pattern to harmonized parquet files
+                         (e.g., 'gs://bucket/path/harmonized/*.parquet')
+
+        Returns:
+            SQL SELECT statement that returns vocab_harmonization_status and row_count
+        """
+        return f"""
+            SELECT
+                vocab_harmonization_status,
+                COUNT(*) as row_count
+            FROM read_parquet('{parquet_path}')
+            GROUP BY vocab_harmonization_status
+            ORDER BY vocab_harmonization_status
         """
 
     @staticmethod
