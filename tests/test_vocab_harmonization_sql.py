@@ -237,3 +237,29 @@ class TestGenerateConsolidateSingleTableSql:
 
         expected = load_reference_sql("generate_consolidate_single_table_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateGetTargetTablesSql:
+    """Tests for generate_get_target_tables_sql()."""
+
+    def test_standard_get_target_tables(self):
+        """Test SQL generation for getting distinct target tables from harmonized files."""
+        result = VocabHarmonizer.generate_get_target_tables_sql(
+            parquet_path='synthea53/2025-01-01/artifacts/harmonized/*.parquet'
+        )
+
+        expected = load_reference_sql("generate_get_target_tables_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateTableTransitionCountSql:
+    """Tests for generate_table_transition_count_sql()."""
+
+    def test_standard_table_transition_count(self):
+        """Test SQL generation for counting rows by target table for reporting."""
+        result = VocabHarmonizer.generate_table_transition_count_sql(
+            parquet_path='synthea53/2025-01-01/artifacts/harmonized/*.parquet'
+        )
+
+        expected = load_reference_sql("generate_table_transition_count_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)

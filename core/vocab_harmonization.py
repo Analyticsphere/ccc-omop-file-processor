@@ -516,6 +516,49 @@ class VocabHarmonizer:
             ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
         """
 
+    @staticmethod
+    def generate_get_target_tables_sql(parquet_path: str) -> str:
+        """
+        Generate SQL to get distinct target tables from harmonized parquet files.
+
+        This method generates a query that reads harmonized parquet files and
+        returns a list of distinct target tables that data should be ETL'd into.
+
+        Args:
+            parquet_path: Path or glob pattern to harmonized parquet files
+                         (e.g., 'gs://bucket/path/harmonized/*.parquet')
+
+        Returns:
+            SQL SELECT statement that returns distinct target_table values
+        """
+        return f"""
+            SELECT DISTINCT target_table FROM read_parquet('{parquet_path}')
+        """
+
+    @staticmethod
+    def generate_table_transition_count_sql(parquet_path: str) -> str:
+        """
+        Generate SQL to count rows by target table from harmonized parquet files.
+
+        This method generates a query that reads harmonized parquet files and
+        counts how many rows transition to each target table, used for reporting.
+
+        Args:
+            parquet_path: Path or glob pattern to harmonized parquet files
+                         (e.g., 'gs://bucket/path/harmonized/*.parquet')
+
+        Returns:
+            SQL SELECT statement that returns target_table and row_count
+        """
+        return f"""
+            SELECT
+                target_table,
+                COUNT(*) as row_count
+            FROM read_parquet('{parquet_path}')
+            GROUP BY target_table
+            ORDER BY target_table
+        """
+
     def source_target_remapping(self) -> None:
         """
         Generate and execute SQL to check for and update non-standard source-to-target mappings to standard
@@ -659,36 +702,23 @@ class VocabHarmonizer:
         # Execute SQL
         utils.execute_duckdb_sql(final_sql, f"Unable to perform domain check against {self.source_table_name}")
 
-    def generate_table_transition_report(self, conn) -> None:
+    def generate_table_transition_report(self, transition_counts: list[tuple]) -> None:
         """
-        Generate report artifacts showing how many rows transitioned from the source table 
+        Generate report artifacts showing how many rows transitioned from the source table
         to each target table during vocabulary harmonization.
-        
+
         Args:
-            conn: Active DuckDB connection to use for queries
+            transition_counts: List of tuples containing (target_table, row_count)
         """
         try:
             utils.logger.info(f"Generating table transition report for {self.source_table_name}")
-            
+
             # Get the source table concept_id from the schema
             schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
             source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
-            
-            # Query to count rows by target table
-            parquet_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
-            count_query = f"""
-                SELECT
-                    target_table,
-                    COUNT(*) as row_count
-                FROM read_parquet('{parquet_path}')
-                GROUP BY target_table
-                ORDER BY target_table
-            """
-            
-            results = conn.execute(count_query).fetchall()
-            
+
             # Create a report artifact for each target table
-            for target_table, row_count in results:
+            for target_table, row_count in transition_counts:
                 ra = report_artifact.ReportArtifact(
                     delivery_date=self.delivery_date,
                     artifact_bucket=self.bucket,
@@ -700,7 +730,7 @@ class VocabHarmonizer:
                 )
                 ra.save_artifact()
                 utils.logger.info(f"Table transition: {self.source_table_name} → {target_table}: {row_count} rows")
-                
+
         except Exception as e:
             # Log the error but don't fail the entire process
             utils.logger.error(f"Error generating table transition report: {str(e)}")
@@ -715,20 +745,23 @@ class VocabHarmonizer:
         # Find all target tables in the source file
         # Each of the target tables will be transformed to its own Parquet file with the appropriate structure
         # That Parquet file will then be loaded to BQ
+        parquet_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
+
         conn = None
         local_db_file = None
         try:
             conn, local_db_file = utils.create_duckdb_connection()
             with conn:
-                parquet_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
-                target_tables = f"""
-                    SELECT DISTINCT target_table FROM read_parquet('{parquet_path}')
-                """
+                # Generate and execute SQL to get target tables
+                target_tables_sql = VocabHarmonizer.generate_get_target_tables_sql(parquet_path)
+                target_tables_list = conn.execute(target_tables_sql).fetch_df()['target_table'].tolist()
 
-                target_tables_list = conn.execute(target_tables).fetch_df()['target_table'].tolist()
+                # Generate and execute SQL to get table transition counts for reporting
+                transition_count_sql = VocabHarmonizer.generate_table_transition_count_sql(parquet_path)
+                transition_counts = conn.execute(transition_count_sql).fetchall()
 
                 # Generate table transition report before transformation
-                self.generate_table_transition_report(conn)
+                self.generate_table_transition_report(transition_counts)
         except Exception as e:
             raise Exception(f"Unable to get target tables from Parquet file {self.file_path}: {e}") from e
         finally:
