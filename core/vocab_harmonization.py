@@ -206,7 +206,7 @@ class VocabHarmonizer:
         # Execute SQL
         utils.execute_duckdb_sql(final_sql, f"Unable to perform domain check against {self.source_table_name}")
 
-    def generate_table_transition_report(self, transition_counts: list[tuple]) -> None:
+    def generate_table_transition_artifacts(self, transition_counts: list[tuple]) -> None:
         """
         Generate report artifacts showing how many rows transitioned from the source table
         to each target table during vocabulary harmonization.
@@ -265,7 +265,7 @@ class VocabHarmonizer:
                 transition_counts = conn.execute(transition_count_sql).fetchall()
 
                 # Generate table transition report before transformation
-                self.generate_table_transition_report(transition_counts)
+                self.generate_table_transition_artifacts(transition_counts)
         except Exception as e:
             raise Exception(f"Unable to get target tables from Parquet file {self.file_path}: {e}") from e
         finally:
