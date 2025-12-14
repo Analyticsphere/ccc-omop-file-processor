@@ -14,7 +14,7 @@ class Transformer:
     def __init__(self, site: str, file_path: str, cdm_version: str, source_table: str, target_table: str, etl_artifact_path: str):
         """Initialize Transformer object used for OMOP-to-OMOP ETL."""
         self.site = site
-        self.file_path = file_path
+        self.file_path = file_path # Path to vocabulary harmonized parquet file
         self.cdm_version = cdm_version
         self.source_table = source_table
         self.target_table = target_table

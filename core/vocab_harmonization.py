@@ -26,7 +26,8 @@ class VocabHarmonizer:
         self.bucket = utils.get_bucket_and_delivery_date_from_path(file_path)[0]
         self.delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)[1]
         self.source_parquet_path = utils.get_parquet_artifact_location(file_path)
-        self.target_parquet_path = utils.get_parquet_harmonized_path(file_path)
+        self.harmonized_parquet_path = utils.get_parquet_harmonized_path(file_path)
+        self.harmonized_parquet_file = f'{self.harmonized_parquet_path}*{constants.PARQUET}'
         self.project_id = project_id
         self.dataset_id = dataset_id
 
@@ -82,7 +83,7 @@ class VocabHarmonizer:
             return
 
         # Generate complete SQL
-        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}")
+        output_path = storage.get_uri(f"{self.harmonized_parquet_path}{self.source_table_name}_source_target_remap{constants.PARQUET}")
         final_sql = VocabHarmonizer.generate_source_target_remapping_sql(
             source_table_name=self.source_table_name,
             ordered_omop_columns=ordered_omop_columns,
@@ -129,9 +130,9 @@ class VocabHarmonizer:
         # primary_key_column values were made unique per row values in normalization step,
         #   so they can be used for identification here
         existing_files_where_clause = ""
-        exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
+        exisiting_files = utils.valid_parquet_file(f'{self.harmonized_parquet_file}')
         if exisiting_files:
-            existing_files_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
+            existing_files_path = storage.get_uri(f"{self.harmonized_parquet_file}")
             existing_files_where_clause = f"""
                 AND tbl.{primary_key_column} NOT IN (
                     SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
@@ -139,7 +140,7 @@ class VocabHarmonizer:
             """
 
         # Generate complete SQL
-        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_{table_name}{constants.PARQUET}")
+        output_path = storage.get_uri(f"{self.harmonized_parquet_path}{self.source_table_name}_{table_name}{constants.PARQUET}")
         final_sql = VocabHarmonizer.generate_check_new_targets_sql(
             source_table_name=self.source_table_name,
             ordered_omop_columns=ordered_omop_columns,
@@ -178,9 +179,9 @@ class VocabHarmonizer:
         # primary_key_column values were made unique per row values in normalization step,
         #   so they can be used for identification here
         existing_files_where_clause = ""
-        exisiting_files = utils.valid_parquet_file(f'{self.target_parquet_path}*{constants.PARQUET}')
+        exisiting_files = utils.valid_parquet_file(f'{self.harmonized_parquet_file}')
         if exisiting_files:
-            existing_files_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
+            existing_files_path = storage.get_uri(f"{self.harmonized_parquet_file}")
             existing_files_where_clause = f"""
                 WHERE tbl.{primary_key_column} NOT IN (
                     SELECT {primary_key_column} FROM read_parquet('{existing_files_path}')
@@ -188,7 +189,7 @@ class VocabHarmonizer:
             """
 
         # Generate complete SQL
-        output_path = storage.get_uri(f"{self.target_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}")
+        output_path = storage.get_uri(f"{self.harmonized_parquet_path}{self.source_table_name}_domain_check{constants.PARQUET}")
         final_sql = VocabHarmonizer.generate_domain_table_check_sql(
             source_table_name=self.source_table_name,
             ordered_omop_columns=ordered_omop_columns,
@@ -206,7 +207,7 @@ class VocabHarmonizer:
         # Execute SQL
         utils.execute_duckdb_sql(final_sql, f"Unable to perform domain check against {self.source_table_name}")
 
-    def generate_table_transition_artifacts(self, transition_counts: list[tuple]) -> None:
+    def generate_table_transition_artifacts(self) -> None:
         """
         Generate report artifacts showing how many rows transitioned from the source table
         to each target table during vocabulary harmonization.
@@ -217,6 +218,13 @@ class VocabHarmonizer:
         try:
             utils.logger.info(f"Generating table transition report for {self.source_table_name}")
 
+            transition_count_sql = VocabHarmonizer.generate_table_transition_count_sql(self.harmonized_parquet_file)
+            transition_counts = utils.execute_duckdb_sql(
+                transition_count_sql,
+                f"Unable to get table transition counts from Parquet file {self.file_path}",
+                return_results=True
+            )
+            
             # Get the source table concept_id from the schema
             schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
             source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
@@ -239,7 +247,7 @@ class VocabHarmonizer:
             # Log the error but don't fail the entire process
             utils.logger.error(f"Error generating table transition report: {str(e)}")
 
-    def generate_vocab_status_artifacts(self, status_counts: list[tuple]) -> None:
+    def generate_vocab_status_artifacts(self) -> None:
         """
         Generate report artifacts showing counts of each vocab harmonization status type.
 
@@ -251,6 +259,13 @@ class VocabHarmonizer:
         """
         try:
             utils.logger.info(f"Generating vocab harmonization status report for {self.source_table_name}")
+
+            vocab_status_count_sql = VocabHarmonizer.generate_vocab_status_count_sql(self.harmonized_parquet_file)
+            status_counts = utils.execute_duckdb_sql(
+                vocab_status_count_sql,
+                f"Unable to get vocab status counts from Parquet file {self.file_path}",
+                return_results=True
+            )
 
             # Get the source table concept_id from the schema
             schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
@@ -281,43 +296,24 @@ class VocabHarmonizer:
         """
         utils.logger.info(f"Partitioning and ETLing source file {self.file_path} to appropriate target table(s)")
 
-        # Find all target tables in the source file
-        # Each of the target tables will be transformed to its own Parquet file with the appropriate structure
-        # That Parquet file will then be loaded to BQ
-        parquet_path = storage.get_uri(f"{self.target_parquet_path}*{constants.PARQUET}")
+        # Generate reports before transformation
+        # Must be done before OMOP ETL step modifies the data
+        self.generate_table_transition_artifacts()
+        self.generate_vocab_status_artifacts()
 
-        conn = None
-        local_db_file = None
-        try:
-            conn, local_db_file = utils.create_duckdb_connection()
-            with conn:
-                # Generate and execute SQL to get target tables
-                target_tables_sql = VocabHarmonizer.generate_get_target_tables_sql(parquet_path)
-                target_tables_list = conn.execute(target_tables_sql).fetch_df()['target_table'].tolist()
-
-                # Generate and execute SQL to get table transition counts for reporting
-                # Must be done before OMOP ETL step modifies the data
-                transition_count_sql = VocabHarmonizer.generate_table_transition_count_sql(parquet_path)
-                transition_counts = conn.execute(transition_count_sql).fetchall()
-
-                # Generate and execute SQL to get vocab status counts for reporting
-                # Must be done before OMOP ETL step modifies the data
-                vocab_status_count_sql = VocabHarmonizer.generate_vocab_status_count_sql(parquet_path)
-                vocab_status_counts = conn.execute(vocab_status_count_sql).fetchall()
-
-                # Generate reports before transformation
-                self.generate_table_transition_artifacts(transition_counts)
-                self.generate_vocab_status_artifacts(vocab_status_counts)
-        except Exception as e:
-            raise Exception(f"Unable to get target tables from Parquet file {self.file_path}: {e}") from e
-        finally:
-            if conn is not None:
-                utils.close_duckdb_connection(conn, local_db_file)
+        # Generate and execute SQL to get target tables
+        target_tables_sql = VocabHarmonizer.generate_get_target_tables_sql(self.harmonized_parquet_file)
+        target_tables_result = utils.execute_duckdb_sql(
+            target_tables_sql,
+            f"Unable to get target tables from Parquet file {self.file_path}",
+            return_results=True
+        )
+        target_tables_list = [row[0] for row in target_tables_result]
 
         # Create a new Parquet file for each target table with the appropriate structure
         for target_table in target_tables_list:
             omop_transformer = transformer.Transformer(
-                self.site, self.target_parquet_path, self.cdm_version, self.source_table_name, target_table, utils.get_omop_etl_destination_path(self.file_path)
+                self.site, self.harmonized_parquet_path, self.cdm_version, self.source_table_name, target_table, utils.get_omop_etl_destination_path(self.file_path)
             )
 
             # Perform the OMOP-to-OMOP ETL for this target table
