@@ -1,7 +1,7 @@
 
             COPY (
                 SELECT
- CAST(COALESCE(hash(CONCAT(CAST(condition_occurrence_id AS VARCHAR),CAST(person_id AS VARCHAR),CAST(condition_concept_id AS VARCHAR),CAST(condition_start_date AS VARCHAR),CAST(condition_start_datetime AS VARCHAR),CAST(condition_type_concept_id AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),CAST(vh_value_as_concept_id AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),CAST(provider_id AS VARCHAR),CAST(visit_occurrence_id AS VARCHAR),CAST(visit_detail_id AS VARCHAR),CAST(condition_source_value AS VARCHAR),CAST(condition_source_concept_id AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),'test_site')) % 9223372036854775807, '-1') AS BIGINT) AS observation_id,
+ CAST(COALESCE(hash(CONCAT(CAST(condition_occurrence_id AS VARCHAR),CAST(person_id AS VARCHAR),CAST(condition_concept_id AS VARCHAR),CAST(condition_start_date AS VARCHAR),CAST(condition_start_datetime AS VARCHAR),CAST(condition_type_concept_id AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),CAST(COALESCE(vh_value_as_concept_id, 0) AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),CAST(provider_id AS VARCHAR),CAST(visit_occurrence_id AS VARCHAR),CAST(visit_detail_id AS VARCHAR),CAST(condition_source_value AS VARCHAR),CAST(condition_source_concept_id AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),CAST(NULL AS VARCHAR),'test_site')) % 9223372036854775807, '-1') AS BIGINT) AS observation_id,
  CAST(COALESCE(person_id, '-1') AS BIGINT) AS person_id,
  CAST(COALESCE(condition_concept_id, '0') AS BIGINT) AS observation_concept_id,
  CAST(COALESCE(condition_start_date, '1970-01-01') AS DATE) AS observation_date,
@@ -9,7 +9,7 @@
  CAST(COALESCE(condition_type_concept_id, '0') AS BIGINT) AS observation_type_concept_id,
  TRY_CAST(NULL AS DOUBLE) AS value_as_number,
  TRY_CAST(NULL AS VARCHAR) AS value_as_string,
- TRY_CAST(vh_value_as_concept_id AS BIGINT) AS value_as_concept_id,
+ TRY_CAST(COALESCE(vh_value_as_concept_id, 0) AS BIGINT) AS value_as_concept_id,
  TRY_CAST(NULL AS BIGINT) AS qualifier_concept_id,
  TRY_CAST(NULL AS BIGINT) AS unit_concept_id,
  TRY_CAST(provider_id AS BIGINT) AS provider_id,
