@@ -439,7 +439,9 @@ class VocabHarmonizer:
 
     def _build_existing_files_exclusion(self, primary_key_column: str, use_and: bool = True) -> str:
         """Build WHERE/AND clause to exclude already-harmonized rows."""
-        if not utils.valid_parquet_file(self.harmonized_parquet_file):
+        # Check if any harmonized parquet files exist in the directory
+        existing_files = storage.list_files(self.harmonized_parquet_path, pattern=f"*{constants.PARQUET}")
+        if not existing_files:
             return ""
 
         prefix = "AND" if use_and else "WHERE"
