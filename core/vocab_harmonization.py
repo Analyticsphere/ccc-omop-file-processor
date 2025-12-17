@@ -54,8 +54,6 @@ class VocabHarmonizer:
             self.omop_etl()
         elif step == constants.CONSOLIDATE_ETL:
             self.consolidate_etl_tables()
-        elif step == constants.DEDUPLICATE_PRIMARY_KEYS:
-            self.deduplicate_primary_keys_all_tables()
         elif step == constants.DISCOVER_TABLES_FOR_DEDUP:
             return self.discover_tables_for_deduplication()
         elif step == constants.DEDUPLICATE_SINGLE_TABLE:
@@ -412,43 +410,6 @@ class VocabHarmonizer:
             raise Exception(f"Missing required key in table configuration: {str(e)}") from e
         except Exception as e:
             raise Exception(f"Unable to deduplicate table: {str(e)}") from e
-
-    def deduplicate_primary_keys_all_tables(self) -> None:
-        """
-        Orchestrates deduplication of primary keys across all consolidated ETL tables.
-        
-        Discovers all table subdirectories in the OMOP_ETL artifacts directory
-        and deduplicates primary keys for each table that has surrogate keys.
-        """
-        utils.logger.info(f"Deduplicating primary keys for ETL files for {self.file_path}")
-
-        # Get the OMOP ETL directory path
-        bucket_name, _, etl_folder, storage_path = utils.get_omop_etl_paths(self.file_path)
-
-        utils.logger.info(f"Looking for table directories in {storage_path}")
-
-        # Get list of table subdirectories
-        subdirectories = storage.list_subdirectories(storage_path)
-
-        # Extract just the table names from the full paths
-        table_names = [subdir.rstrip('/').split('/')[-1] for subdir in subdirectories]
-
-        if not table_names:
-            utils.logger.warning(f"No table directories found in {storage_path}")
-            return
-
-        utils.logger.info(f"Found {len(table_names)} table(s) to check for deduplication: {sorted(table_names)}")
-        
-        # Process each table directory
-        utils.logger.info("Starting deduplication for each table...")
-        for table_name in sorted(table_names):
-            # Construct the consolidated file path
-            table_dir = f"{etl_folder}{table_name}/"
-            consolidated_file_path = storage.get_uri(f"{bucket_name}/{table_dir}{table_name}{constants.PARQUET}")
-            
-            # Deduplicate primary keys for this table
-            self._deduplicate_primary_keys(consolidated_file_path, table_name)
-        utils.logger.info("Completed deduplication for all tables.")
 
     def _get_table_schema_and_columns(self) -> tuple[dict, dict, list[str]]:
         """
