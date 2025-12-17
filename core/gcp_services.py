@@ -188,7 +188,7 @@ def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig
         return result
 
     except Exception as e:
-        raise Exception(f"Error executing query: {e}")
+        raise Exception(f"Error executing BigQuery SQL: {e}")
 
 def list_gcs_subdirectories(gcs_path: str) -> list:
     """
@@ -232,9 +232,6 @@ def load_harmonized_parquets_to_bq(gcs_bucket: str, delivery_date: str, project_
         
     Returns:
         Dictionary with 'loaded' keys a list of table names
-        
-    Raises:
-        Exception: If no table directories are found or if there's an error during processing
     """
     # Construct the OMOP_ETL directory path
     etl_folder = f"{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}"
@@ -298,9 +295,6 @@ def load_derived_tables_to_bq(gcs_bucket: str, delivery_date: str, project_id: s
 
     Returns:
         Dictionary with 'loaded' keys containing a list of table names
-
-    Raises:
-        Exception: If there's an error during processing
     """
     # Construct the DERIVED_FILES directory path
     derived_folder = f"{delivery_date}/{constants.ArtifactPaths.DERIVED_FILES.value}"

@@ -42,6 +42,7 @@ class OMOPClient:
         elif cdm_version == constants.CDM_v53 and target_omop_version == constants.CDM_v54:
             if table_name in constants.CDM_53_TO_54:
                 if constants.CDM_53_TO_54[table_name] == constants.REMOVED:
+                    # This deletes the pipeline-processed version of the file - NOT the original site delivery file
                     storage.delete_file(normalized_file_path)
                 elif constants.CDM_53_TO_54[table_name] == constants.CHANGED:
                     try:
@@ -74,9 +75,6 @@ class OMOPClient:
             project_id: GCP project ID for BigQuery
             dataset_id: BigQuery dataset ID
             omop_version: OMOP CDM version (e.g., '5.4')
-
-        Raises:
-            Exception: If DDL file not found or table creation fails
         """
         ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
 
@@ -228,7 +226,7 @@ class OMOPClient:
             COPY (
                 {select_statement}
             ) TO '{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
-        """
+            """
             utils.execute_duckdb_sql(sql_statement, f"Unable to execute SQL to generate {table_name}")
 
             utils.logger.info(f"Successfully generated derived table {table_name} from harmonized data to {parquet_path}")

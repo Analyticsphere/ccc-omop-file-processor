@@ -214,9 +214,6 @@ class Normalizer:
             datetime_format: Datetime format string (e.g., "%Y-%m-%d %H:%M:%S")
             schema: Table schema dictionary from utils.get_table_schema()
             actual_columns: List of actual columns present in file
-
-        Returns:
-            Complete executable SQL statement for normalization
         """
         # Validate schema
         if not schema or table_name not in schema:
@@ -316,9 +313,6 @@ class Normalizer:
             connect_id_column_name: Name of Connect_ID column if present
             date_format: Date format string for parsing
             datetime_format: Datetime format string for parsing
-
-        Returns:
-            Tuple of (coalesce_expressions, row_validity_expressions)
         """
         coalesce_exprs = []
         row_validity = []
@@ -400,9 +394,6 @@ class Normalizer:
             default_value: Default value to use if cast fails
             date_format: Date format string for parsing
             datetime_format: Datetime format string for parsing
-
-        Returns:
-            SQL expression string
         """
         # Special handling for DATE and DATETIME types
         if column_type in ["DATE", "TIMESTAMP", "DATETIME"]:
@@ -437,9 +428,6 @@ class Normalizer:
             table_name: Name of the OMOP table
             ordered_omop_columns: Ordered list of OMOP column names
             cdm_version: OMOP CDM version (e.g., "5.4")
-
-        Returns:
-            SQL REPLACE clause string, or empty string if not a surrogate key table
         """
         if table_name not in constants.SURROGATE_KEY_TABLES:
             return ""
@@ -467,9 +455,6 @@ class Normalizer:
 
         Args:
             actual_columns: List of actual column names in file
-
-        Returns:
-            Connect_ID column name, or empty string if not found
         """
         for column in actual_columns:
             if 'connectid' in column.lower() or 'connect_id' in column.lower():
@@ -495,9 +480,6 @@ class Normalizer:
         Args:
             datetime_format: Datetime format string for parsing
             column_exists_in_file: Whether birth_datetime column exists in source file
-
-        Returns:
-            SQL expression string for birth_datetime calculation
         """
         # Build calculation expression from component fields
         calculation_expr = """TRY_CAST(
@@ -526,9 +508,6 @@ class Normalizer:
 
         Args:
             parquet_file_path: Full URI path to parquet file
-
-        Returns:
-            SQL statement that counts all rows
         """
         return f"""
         SELECT COUNT(*) FROM read_parquet('{parquet_file_path}')

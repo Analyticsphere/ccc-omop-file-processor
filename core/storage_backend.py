@@ -293,8 +293,6 @@ class StorageBackend:
 
     def _list_subdirectories_local(self, directory_path: str) -> List[str]:
         """List subdirectories in local filesystem."""
-
-
         # Remove scheme and resolve to absolute path
         path_without_prefix = self.strip_scheme(directory_path)
         if not path_without_prefix.startswith('/'):

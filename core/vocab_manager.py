@@ -141,9 +141,6 @@ class VocabularyManager:
             csv_file_path: Path to the input CSV vocabulary file
             parquet_file_path: Path for the output Parquet file
             csv_columns: List of column names from the CSV file
-
-        Returns:
-            SQL string for converting vocabulary CSV to Parquet
         """
         # Build the SELECT statement with columns in the predefined order
         select_columns = []
@@ -182,9 +179,6 @@ class VocabularyManager:
             concept_path: URI path to concept.parquet file
             concept_relationship_path: URI path to concept_relationship.parquet file
             output_path: URI path for output optimized_vocab_file.parquet
-
-        Returns:
-            SQL string for creating optimized vocabulary file
         """
         create_vocab_statement = f"""
             COPY (

@@ -49,10 +49,13 @@ class ReportGenerator:
         Creates report artifacts with metadata and consolidates
         temporary report files into final CSV.
         """
+        # Generate additional reporting artifacts
         self._create_metadata_artifacts()
         self._create_type_concept_breakdown_artifacts()
         self._create_vocabulary_breakdown_artifacts()
         self._create_final_row_count_artifacts()
+
+        # Generate the final, single report CSV file
         self._consolidate_report_files()
 
     def _create_metadata_artifacts(self) -> None:
@@ -165,14 +168,12 @@ class ReportGenerator:
         target_vocab_version = self.target_vocabulary_version
 
         # Construct path to concept table in vocabulary
-        concept_path = f"{constants.VOCAB_PATH}/{target_vocab_version}/optimized/concept{constants.PARQUET}"
+        concept_path = storage.get_uri(f"{constants.VOCAB_PATH}/{target_vocab_version}/optimized/concept{constants.PARQUET}")
 
         # Check if concept table exists
         if not utils.parquet_file_exists(concept_path):
             utils.logger.warning(f"Concept table not found at {concept_path}, skipping type concept breakdown")
             return
-
-        concept_uri = storage.get_uri(concept_path)
 
         # Process each table with type_concept_id field
         for table_name, table_config_obj in constants.REPORTING_TABLE_CONFIG.items():
@@ -194,7 +195,7 @@ class ReportGenerator:
                 continue
 
             # Generate and execute SQL query for type_concept_id breakdown
-            sql = self.generate_type_concept_breakdown_sql(table_path, concept_uri, type_field)
+            sql = self.generate_type_concept_breakdown_sql(table_path, concept_path, type_field)
 
             try:
                 result = utils.execute_duckdb_sql(sql, f"Unable to query type concept breakdown for {table_name}", return_results=True)
@@ -230,14 +231,12 @@ class ReportGenerator:
         target_vocab_version = self.target_vocabulary_version
 
         # Construct path to concept table in vocabulary
-        concept_path = f"{constants.VOCAB_PATH}/{target_vocab_version}/optimized/concept{constants.PARQUET}"
+        concept_path = storage.get_uri(f"{constants.VOCAB_PATH}/{target_vocab_version}/optimized/concept{constants.PARQUET}")
 
         # Check if concept table exists
         if not utils.parquet_file_exists(concept_path):
             utils.logger.warning(f"Concept table not found at {concept_path}, skipping vocabulary breakdown")
             return
-
-        concept_uri = storage.get_uri(concept_path)
 
         # Process each table with vocabulary concept fields
         for table_name, table_config_obj in constants.REPORTING_TABLE_CONFIG.items():
@@ -267,7 +266,7 @@ class ReportGenerator:
                 try:
                     sql = self.generate_vocabulary_breakdown_sql(
                         table_path,
-                        concept_uri,
+                        concept_path,
                         concept_id_field,
                         is_source=False
                     )
@@ -316,7 +315,7 @@ class ReportGenerator:
                     try:
                         sql = self.generate_vocabulary_breakdown_sql(
                             table_path,
-                            concept_uri,
+                            concept_path,
                             source_concept_id_field,
                             is_source=True
                         )
@@ -435,9 +434,6 @@ class ReportGenerator:
             table_uri: Full URI path to the table's parquet file
             concept_uri: Full URI path to the concept vocabulary parquet file
             type_field: Name of the type_concept_id field to analyze
-
-        Returns:
-            SQL statement that returns (type_concept_id, concept_name, record_count)
         """
         return f"""
             SELECT
@@ -464,9 +460,6 @@ class ReportGenerator:
             concept_uri: Full URI path to the concept vocabulary parquet file
             concept_field: Name of the concept_id field to analyze
             is_source: Whether this is a source concept field (for logging purposes)
-
-        Returns:
-            SQL statement that returns (vocabulary_id, record_count)
         """
         return f"""
             SELECT
@@ -486,9 +479,6 @@ class ReportGenerator:
 
         Args:
             table_uri: Full URI path to the table's parquet file
-
-        Returns:
-            SQL statement that returns a single row with the count
         """
         return f"SELECT COUNT(*) as row_count FROM read_parquet('{table_uri}')"
 
