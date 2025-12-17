@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 
 from google.cloud import bigquery  # type: ignore

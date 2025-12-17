@@ -27,7 +27,6 @@ class FileValidator:
         self.storage_path = storage_path
         self.table_name = utils.get_table_name_from_path(file_path)
         self.bucket_name, _ = utils.get_bucket_and_delivery_date_from_path(file_path)
-        # Loaded on demand
         self._cdm_schema: Optional[dict[Any, Any]] = None
         self._table_schema: Optional[dict[Any, Any]] = None
 
