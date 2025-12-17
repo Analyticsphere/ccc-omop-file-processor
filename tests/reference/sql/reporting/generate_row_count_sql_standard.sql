@@ -1,0 +1,1 @@
+SELECT COUNT(*) as row_count FROM read_parquet('gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet')

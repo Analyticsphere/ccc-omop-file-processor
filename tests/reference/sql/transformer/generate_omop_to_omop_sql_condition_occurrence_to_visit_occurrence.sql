@@ -12,10 +12,10 @@
  TRY_CAST(provider_id AS BIGINT) AS provider_id,
  TRY_CAST(NULL AS BIGINT) AS care_site_id,
  TRY_CAST(condition_source_value AS VARCHAR) AS visit_source_value,
- TRY_CAST(condition_source_concept_id AS BIGINT) AS visit_source_concept_id,
- TRY_CAST(0 AS BIGINT) AS admitted_from_concept_id,
+ TRY_CAST(COALESCE(condition_source_concept_id, '0') AS BIGINT) AS visit_source_concept_id,
+ TRY_CAST(COALESCE(0, '0') AS BIGINT) AS admitted_from_concept_id,
  TRY_CAST(NULL AS VARCHAR) AS admitted_from_source_value,
- TRY_CAST(0 AS BIGINT) AS discharged_to_concept_id,
+ TRY_CAST(COALESCE(0, '0') AS BIGINT) AS discharged_to_concept_id,
  TRY_CAST(NULL AS VARCHAR) AS discharged_to_source_value,
  TRY_CAST(NULL AS BIGINT) AS preceding_visit_occurrence_id
 FROM read_parquet('gs://synthea53/2025-01-01/harmonized/*.parquet')

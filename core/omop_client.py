@@ -42,6 +42,7 @@ class OMOPClient:
         elif cdm_version == constants.CDM_v53 and target_omop_version == constants.CDM_v54:
             if table_name in constants.CDM_53_TO_54:
                 if constants.CDM_53_TO_54[table_name] == constants.REMOVED:
+                    # This deletes the pipeline-processed version of the file - NOT the original site delivery file
                     storage.delete_file(normalized_file_path)
                 elif constants.CDM_53_TO_54[table_name] == constants.CHANGED:
                     try:
@@ -74,9 +75,6 @@ class OMOPClient:
             project_id: GCP project ID for BigQuery
             dataset_id: BigQuery dataset ID
             omop_version: OMOP CDM version (e.g., '5.4')
-
-        Raises:
-            Exception: If DDL file not found or table creation fails
         """
         ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
 
@@ -169,7 +167,7 @@ class OMOPClient:
             # Check if this table goes through vocabulary harmonization
             if required_table in constants.VOCAB_HARMONIZED_TABLES:
                 # Look for harmonized version
-                parquet_path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{required_table}/{required_table}{constants.PARQUET}"
+                parquet_path = utils.get_omop_etl_table_path(bucket, delivery_date, required_table)
             else:
                 # Look for converted version (e.g., person, death)
                 parquet_path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
@@ -185,7 +183,7 @@ class OMOPClient:
         # https://ohdsi.github.io/CommonDataModel/ehrObsPeriods.html
         if table_name == constants.OBSERVATION_PERIOD:
             # Check for harmonized visit_occurrence
-            visit_occurrence_table = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}visit_occurrence/visit_occurrence{constants.PARQUET}"
+            visit_occurrence_table = utils.get_omop_etl_table_path(bucket, delivery_date, 'visit_occurrence')
             # Death table doesn't go through harmonization
             death_table = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}death{constants.PARQUET}"
 
@@ -228,7 +226,7 @@ class OMOPClient:
             COPY (
                 {select_statement}
             ) TO '{parquet_path}' {constants.DUCKDB_FORMAT_STRING}
-        """
+            """
             utils.execute_duckdb_sql(sql_statement, f"Unable to execute SQL to generate {table_name}")
 
             utils.logger.info(f"Successfully generated derived table {table_name} from harmonized data to {parquet_path}")

@@ -57,28 +57,24 @@ class TestGenerateNormalizationSql:
         - birth_datetime calculation from year/month/day components
         - Natural primary key (person_id) - no surrogate key replacement
         """
-        from unittest.mock import patch
-
         import core.utils as utils
 
         # Get columns from actual OMOP CDM schema
         schema = utils.get_table_schema("person", "5.4")
         actual_columns = list(schema["person"]["columns"].keys())
 
-        with patch('core.normalization.utils.get_columns_from_file') as mock_get_columns:
-            mock_get_columns.return_value = actual_columns
+        result = Normalizer.generate_normalization_sql(
+            file_path="test-bucket/2025-01-01/person.parquet",
+            table_name="person",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S",
+            schema=schema,
+            actual_columns=actual_columns
+        )
 
-            normalizer = Normalizer(
-                file_path="test-bucket/2025-01-01/person.parquet",
-                cdm_version="5.4",
-                date_format="%Y-%m-%d",
-                datetime_format="%Y-%m-%d %H:%M:%S"
-            )
-
-            result = normalizer._generate_normalization_sql()
-
-            expected = load_reference_sql("generate_normalization_sql_person.sql")
-            assert normalize_sql(result) == normalize_sql(expected)
+        expected = load_reference_sql("generate_normalization_sql_person.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
 
     def test_note_nlp_table_normalization(self):
         """
@@ -88,28 +84,24 @@ class TestGenerateNormalizationSql:
         - Contains 'offset' column which is a reserved keyword in DuckDB
         - Surrogate key (note_nlp_id) - requires composite key generation
         """
-        from unittest.mock import patch
-
         import core.utils as utils
 
         # Get columns from actual OMOP CDM schema
         schema = utils.get_table_schema("note_nlp", "5.4")
         actual_columns = list(schema["note_nlp"]["columns"].keys())
 
-        with patch('core.normalization.utils.get_columns_from_file') as mock_get_columns:
-            mock_get_columns.return_value = actual_columns
+        result = Normalizer.generate_normalization_sql(
+            file_path="test-bucket/2025-01-01/note_nlp.parquet",
+            table_name="note_nlp",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S",
+            schema=schema,
+            actual_columns=actual_columns
+        )
 
-            normalizer = Normalizer(
-                file_path="test-bucket/2025-01-01/note_nlp.parquet",
-                cdm_version="5.4",
-                date_format="%Y-%m-%d",
-                datetime_format="%Y-%m-%d %H:%M:%S"
-            )
-
-            result = normalizer._generate_normalization_sql()
-
-            expected = load_reference_sql("generate_normalization_sql_note_nlp.sql")
-            assert normalize_sql(result) == normalize_sql(expected)
+        expected = load_reference_sql("generate_normalization_sql_note_nlp.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
 
     def test_measurement_table_normalization(self):
         """
@@ -120,28 +112,24 @@ class TestGenerateNormalizationSql:
         - Multiple date/datetime fields requiring format parsing
         - Large number of optional columns
         """
-        from unittest.mock import patch
-
         import core.utils as utils
 
         # Get columns from actual OMOP CDM schema
         schema = utils.get_table_schema("measurement", "5.4")
         actual_columns = list(schema["measurement"]["columns"].keys())
 
-        with patch('core.normalization.utils.get_columns_from_file') as mock_get_columns:
-            mock_get_columns.return_value = actual_columns
+        result = Normalizer.generate_normalization_sql(
+            file_path="test-bucket/2025-01-01/measurement.parquet",
+            table_name="measurement",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S",
+            schema=schema,
+            actual_columns=actual_columns
+        )
 
-            normalizer = Normalizer(
-                file_path="test-bucket/2025-01-01/measurement.parquet",
-                cdm_version="5.4",
-                date_format="%Y-%m-%d",
-                datetime_format="%Y-%m-%d %H:%M:%S"
-            )
-
-            result = normalizer._generate_normalization_sql()
-
-            expected = load_reference_sql("generate_normalization_sql_measurement.sql")
-            assert normalize_sql(result) == normalize_sql(expected)
+        expected = load_reference_sql("generate_normalization_sql_measurement.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
 
     def test_person_with_connectid_and_personid(self):
         """
@@ -151,8 +139,6 @@ class TestGenerateNormalizationSql:
         - connect_id value should be used for person_id
         - Both columns should appear in row hash calculation
         """
-        from unittest.mock import patch
-
         import core.utils as utils
 
         # Get columns from actual OMOP CDM schema
@@ -161,20 +147,18 @@ class TestGenerateNormalizationSql:
         # Add connect_id to the list of actual columns
         actual_columns_with_connectid = ['person_id', 'connect_id'] + [col for col in actual_columns if col != 'person_id']
 
-        with patch('core.normalization.utils.get_columns_from_file') as mock_get_columns:
-            mock_get_columns.return_value = actual_columns_with_connectid
+        result = Normalizer.generate_normalization_sql(
+            file_path="test-bucket/2025-01-01/person.parquet",
+            table_name="person",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S",
+            schema=schema,
+            actual_columns=actual_columns_with_connectid
+        )
 
-            normalizer = Normalizer(
-                file_path="test-bucket/2025-01-01/person.parquet",
-                cdm_version="5.4",
-                date_format="%Y-%m-%d",
-                datetime_format="%Y-%m-%d %H:%M:%S"
-            )
-
-            result = normalizer._generate_normalization_sql()
-
-            expected = load_reference_sql("generate_normalization_sql_person_connectid_with_personid.sql")
-            assert normalize_sql(result) == normalize_sql(expected)
+        expected = load_reference_sql("generate_normalization_sql_person_connectid_with_personid.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
 
     def test_person_with_connectid_without_personid(self):
         """
@@ -184,8 +168,6 @@ class TestGenerateNormalizationSql:
         - connect_id value should be used for person_id
         - Only connect_id should appear in row hash calculation (not person_id)
         """
-        from unittest.mock import patch
-
         import core.utils as utils
 
         # Get columns from actual OMOP CDM schema
@@ -194,20 +176,18 @@ class TestGenerateNormalizationSql:
         # Replace person_id with connect_id
         actual_columns_with_connectid = ['connect_id'] + [col for col in actual_columns if col != 'person_id']
 
-        with patch('core.normalization.utils.get_columns_from_file') as mock_get_columns:
-            mock_get_columns.return_value = actual_columns_with_connectid
+        result = Normalizer.generate_normalization_sql(
+            file_path="test-bucket/2025-01-01/person.parquet",
+            table_name="person",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S",
+            schema=schema,
+            actual_columns=actual_columns_with_connectid
+        )
 
-            normalizer = Normalizer(
-                file_path="test-bucket/2025-01-01/person.parquet",
-                cdm_version="5.4",
-                date_format="%Y-%m-%d",
-                datetime_format="%Y-%m-%d %H:%M:%S"
-            )
-
-            result = normalizer._generate_normalization_sql()
-
-            expected = load_reference_sql("generate_normalization_sql_person_connectid_without_personid.sql")
-            assert normalize_sql(result) == normalize_sql(expected)
+        expected = load_reference_sql("generate_normalization_sql_person_connectid_without_personid.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
 
     def test_condition_occurrence_with_connectid(self):
         """
@@ -218,8 +198,6 @@ class TestGenerateNormalizationSql:
         - connect_id value should be used for person_id
         - Surrogate key (condition_occurrence_id) should be generated from composite hash
         """
-        from unittest.mock import patch
-
         import core.utils as utils
 
         # Get columns from actual OMOP CDM schema
@@ -228,17 +206,15 @@ class TestGenerateNormalizationSql:
         # Add connect_id to simulate a file that has both person_id and connect_id
         actual_columns_with_connectid = ['person_id', 'connect_id'] + [col for col in actual_columns if col != 'person_id']
 
-        with patch('core.normalization.utils.get_columns_from_file') as mock_get_columns:
-            mock_get_columns.return_value = actual_columns_with_connectid
+        result = Normalizer.generate_normalization_sql(
+            file_path="test-bucket/2025-01-01/condition_occurrence.parquet",
+            table_name="condition_occurrence",
+            cdm_version="5.4",
+            date_format="%Y-%m-%d",
+            datetime_format="%Y-%m-%d %H:%M:%S",
+            schema=schema,
+            actual_columns=actual_columns_with_connectid
+        )
 
-            normalizer = Normalizer(
-                file_path="test-bucket/2025-01-01/condition_occurrence.parquet",
-                cdm_version="5.4",
-                date_format="%Y-%m-%d",
-                datetime_format="%Y-%m-%d %H:%M:%S"
-            )
-
-            result = normalizer._generate_normalization_sql()
-
-            expected = load_reference_sql("generate_normalization_sql_condition_occurrence_connectid.sql")
-            assert normalize_sql(result) == normalize_sql(expected)
+        expected = load_reference_sql("generate_normalization_sql_condition_occurrence_connectid.sql")
+        assert normalize_sql(result) == normalize_sql(expected)

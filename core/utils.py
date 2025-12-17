@@ -68,11 +68,14 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: Opti
         conn.close()
 
         # Remove the local database file if it exists
-        if local_db_file and storage.file_exists(local_db_file):
-            storage.delete_file(local_db_file)
+        # Note: local_db_file is always a local filesystem path (temp file), not a GCS path
+        # We need to use os.path functions directly, not the storage backend
+        if local_db_file:
+            if os.path.exists(local_db_file):
+                os.remove(local_db_file)
 
     except Exception as e:
-        logger.error(f"Unable to close DuckDB connection: {e}")
+        logger.error(f"Unable to close DuckDB connection. local_db_file={repr(local_db_file)}, error: {e}")
     finally:
         # Manually run garabage collection here to reclaim memory
         gc.collect()
@@ -157,7 +160,13 @@ def get_bucket_and_delivery_date_from_path(file_path: str) -> Tuple[str, str]:
     Example: synthea53/2024-12-31/care_site.parquet -> (synthea53, 2024-12-31)
     """
     file_path = storage.strip_scheme(file_path)
-    bucket_name, delivery_date = file_path.split('/')[:2]
+
+    path_parts = file_path.split('/')
+    if len(path_parts) < 2:
+        logger.error(f"Invalid path format - expected at least 2 parts (bucket/date), got {len(path_parts)} parts: {repr(file_path)}")
+        raise ValueError(f"Invalid path format: {file_path}. Expected format: bucket/delivery_date/...")
+
+    bucket_name, delivery_date = path_parts[0], path_parts[1]
     return bucket_name, delivery_date
 
 def get_columns_from_file(file_path: str) -> list:
@@ -282,14 +291,55 @@ def get_parquet_harmonized_path(file_path: str) -> str:
 def get_omop_etl_destination_path(file_path: str) -> str:
     """Get path to OMOP ETL artifacts directory for transformed tables."""
     base_directory, delivery_date = get_bucket_and_delivery_date_from_path(file_path)
-    
+
     # Remove trailing slash if present
     base_directory = base_directory.rstrip('/')
-        
+
     # Construct the path to the OMOP ETL directory to store ETL'ed files
     parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}"
 
     return parquet_path
+
+def get_omop_etl_paths(file_path: str) -> Tuple[str, str, str, str]:
+    """
+    Get all path components related to OMOP ETL artifacts directory.
+
+    This is a convenience function that combines multiple path extraction steps
+    commonly used together when working with OMOP ETL artifacts.
+
+    Args:
+        file_path: Path to the source file
+
+    Returns:
+        Tuple of (bucket_name, directory_path, etl_folder, storage_path) where:
+        - bucket_name: Storage bucket/directory name
+        - directory_path: Delivery date directory path
+        - etl_folder: Relative path to ETL folder (e.g., "2024-01-01/omop_etl/")
+        - storage_path: Full storage URI to ETL folder (e.g., "gs://bucket/2024-01-01/omop_etl/")
+    """
+    etl_base_path = get_omop_etl_destination_path(file_path)
+    bucket_name, directory_path = get_bucket_and_delivery_date_from_path(etl_base_path)
+    etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
+    storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
+    return bucket_name, directory_path, etl_folder, storage_path
+
+def get_omop_etl_table_path(bucket: str, delivery_date: str, table_name: str) -> str:
+    """
+    Get full storage URI path to a specific table in OMOP ETL artifacts.
+
+    OMOP ETL tables are stored in subdirectories with the pattern:
+    {bucket}/{delivery_date}/omop_etl/{table_name}/{table_name}.parquet
+
+    Args:
+        bucket: Storage bucket/directory name
+        delivery_date: Delivery date string
+        table_name: Name of the OMOP table
+
+    Returns:
+        Full storage URI to the table's Parquet file
+    """
+    path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{table_name}/{table_name}{constants.PARQUET}"
+    return storage.get_uri(path)
 
 def get_invalid_rows_path_from_path(file_path: str) -> str:
     """Get path to invalid rows Parquet file for tables that failed normalization."""
@@ -423,7 +473,7 @@ def placeholder_to_harmonized_file_path(site: str, bucket: str, delivery_date: s
         # Check if this table underwent vocabulary harmonization
         if table_name in constants.VOCAB_HARMONIZED_TABLES:
             # Harmonized tables are in: omop_etl/{table_name}/{table_name}.parquet
-            table_path = storage.get_uri(f"{bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{table_name}/{table_name}{constants.PARQUET}")
+            table_path = get_omop_etl_table_path(bucket, delivery_date, table_name)
         else:
             # Non-harmonized tables are in: converted_files/{table_name}.parquet
             table_path = storage.get_uri(f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{table_name}{constants.PARQUET}")

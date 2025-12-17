@@ -47,7 +47,6 @@ class ReportArtifact:
         """
         utils.execute_duckdb_sql(record_statement, "Unable to save report artifact")
 
-    
     def to_json(self) -> str:
         """
         Returns a JSON string representation of the ReportArtifact's properties.

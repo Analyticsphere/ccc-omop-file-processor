@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from typing import Any
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
@@ -48,7 +49,13 @@ class ReportGenerator:
         Creates report artifacts with metadata and consolidates
         temporary report files into final CSV.
         """
+        # Generate additional reporting artifacts
         self._create_metadata_artifacts()
+        self._create_type_concept_breakdown_artifacts()
+        self._create_vocabulary_breakdown_artifacts()
+        self._create_final_row_count_artifacts()
+
+        # Generate the final, single report CSV file
         self._consolidate_report_files()
 
     def _create_metadata_artifacts(self) -> None:
@@ -129,6 +136,351 @@ class ReportGenerator:
             f"{self.bucket}/{self.delivery_date}/{constants.ArtifactPaths.REPORT.value}"
             f"delivery_report_{self.site}_{self.delivery_date}{constants.CSV}"
         )
+
+    def _get_table_path(self, table_name: str, location: constants.ArtifactPaths) -> str:
+        """
+        Construct full storage URI path to a table's Parquet file based on its location.
+
+        Args:
+            table_name: Name of the OMOP table
+            location: ArtifactPaths enum value indicating where the file is stored
+
+        Returns:
+            Full storage URI to the table's Parquet file
+        """
+        if location == constants.ArtifactPaths.OMOP_ETL:
+            # OMOP ETL tables are stored in subdirectories
+            return utils.get_omop_etl_table_path(self.bucket, self.delivery_date, table_name)
+        else:
+            # Converted and derived files are stored directly in their directories
+            path = f"{self.bucket}/{self.delivery_date}/{location.value}{table_name}{constants.PARQUET}"
+            return storage.get_uri(path)
+
+    def _create_type_concept_breakdown_artifacts(self) -> None:
+        """
+        Create report artifacts for type_concept_id breakdowns across all OMOP tables.
+
+        For each table with a type_concept_id field, queries the breakdown of type concepts
+        and their counts, joining with the concept vocabulary table to get concept names.
+        Creates one report artifact per table-type_concept pair.
+        """
+        # Get target vocabulary version for this delivery
+        target_vocab_version = self.target_vocabulary_version
+
+        # Construct path to concept table in vocabulary
+        concept_path = storage.get_uri(f"{constants.VOCAB_PATH}/{target_vocab_version}/optimized/concept{constants.PARQUET}")
+
+        # Check if concept table exists
+        if not utils.parquet_file_exists(concept_path):
+            utils.logger.warning(f"Concept table not found at {concept_path}, skipping type concept breakdown")
+            return
+
+        # Process each table with type_concept_id field
+        for table_name, table_config_obj in constants.REPORTING_TABLE_CONFIG.items():
+            table_config: Any = table_config_obj
+            type_field = table_config["type_field"]
+
+            # Skip tables without type_concept_id field
+            if type_field is None:
+                continue
+
+            location = table_config["location"]
+
+            # Construct path to table
+            table_path = self._get_table_path(table_name, location)
+
+            # Check if table exists
+            if not utils.parquet_file_exists(table_path):
+                utils.logger.info(f"Table {table_name} not found, skipping type concept breakdown")
+                continue
+
+            # Generate and execute SQL query for type_concept_id breakdown
+            sql = self.generate_type_concept_breakdown_sql(table_path, concept_path, type_field)
+
+            try:
+                result = utils.execute_duckdb_sql(sql, f"Unable to query type concept breakdown for {table_name}", return_results=True)
+
+                # Create report artifact for each type_concept_id
+                for row in result:
+                    type_concept_id, concept_name, record_count = row
+
+                    artifact = report_artifact.ReportArtifact(
+                        delivery_date=self.delivery_date,
+                        artifact_bucket=self.bucket,
+                        concept_id=type_concept_id,
+                        name=f"Type concept breakdown: {table_name}",
+                        value_as_string=concept_name,
+                        value_as_concept_id=type_concept_id,
+                        value_as_number=float(record_count)
+                    )
+                    artifact.save_artifact()
+
+            except Exception as e:
+                utils.logger.error(f"Error processing type concept breakdown for {table_name}: {e}")
+                continue
+
+    def _create_vocabulary_breakdown_artifacts(self) -> None:
+        """
+        Create report artifacts for vocabulary breakdowns across concept fields.
+
+        For each table with concept_id fields, queries the breakdown of vocabularies
+        for both source and target concepts, joining with the concept vocabulary table
+        to get vocabulary names. Creates report artifacts for each table-field-vocabulary combination.
+        """
+        # Get target vocabulary version for this delivery
+        target_vocab_version = self.target_vocabulary_version
+
+        # Construct path to concept table in vocabulary
+        concept_path = storage.get_uri(f"{constants.VOCAB_PATH}/{target_vocab_version}/optimized/concept{constants.PARQUET}")
+
+        # Check if concept table exists
+        if not utils.parquet_file_exists(concept_path):
+            utils.logger.warning(f"Concept table not found at {concept_path}, skipping vocabulary breakdown")
+            return
+
+        # Process each table with vocabulary concept fields
+        for table_name, table_config_obj in constants.REPORTING_TABLE_CONFIG.items():
+            table_config: Any = table_config_obj
+            vocabulary_fields = table_config["vocabulary_fields"]
+
+            # Skip tables without vocabulary fields
+            if not vocabulary_fields:
+                continue
+
+            location = table_config["location"]
+
+            # Construct path to table
+            table_path = self._get_table_path(table_name, location)
+
+            # Check if table exists
+            if not utils.parquet_file_exists(table_path):
+                utils.logger.info(f"Table {table_name} not found, skipping vocabulary breakdown")
+                continue
+
+            # Process each concept field in the table
+            for field_config in vocabulary_fields:
+                concept_id_field = field_config["concept_id"]
+                source_concept_id_field = field_config["source_concept_id"]
+
+                # Process target vocabulary (from concept_id field)
+                try:
+                    sql = self.generate_vocabulary_breakdown_sql(
+                        table_path,
+                        concept_path,
+                        concept_id_field,
+                        is_source=False
+                    )
+                    result = utils.execute_duckdb_sql(
+                        sql,
+                        f"Unable to query target vocabulary breakdown for {table_name}.{concept_id_field}",
+                        return_results=True
+                    )
+
+                    # Create report artifact for each vocabulary
+                    for row in result:
+                        vocabulary_id, record_count = row
+
+                        artifact = report_artifact.ReportArtifact(
+                            delivery_date=self.delivery_date,
+                            artifact_bucket=self.bucket,
+                            concept_id=0,
+                            name=f"Target vocabulary breakdown: {table_name}.{concept_id_field}",
+                            value_as_string=vocabulary_id,
+                            value_as_concept_id=0,
+                            value_as_number=float(record_count)
+                        )
+                        artifact.save_artifact()
+
+                except Exception as e:
+                    utils.logger.error(f"Error processing target vocabulary breakdown for {table_name}.{concept_id_field}: {e}")
+
+                # Process source vocabulary (from source_concept_id field)
+                if source_concept_id_field is None:
+                    # Create a single artifact indicating source not captured
+                    try:
+                        artifact = report_artifact.ReportArtifact(
+                            delivery_date=self.delivery_date,
+                            artifact_bucket=self.bucket,
+                            concept_id=0,
+                            name=f"Source vocabulary breakdown: {table_name}.{concept_id_field}",
+                            value_as_string="Source vocabulary not captured in OMOP",
+                            value_as_concept_id=0,
+                            value_as_number=None
+                        )
+                        artifact.save_artifact()
+                    except Exception as e:
+                        utils.logger.error(f"Error creating source not captured artifact for {table_name}.{concept_id_field}: {e}")
+                else:
+                    # Query and create artifacts for source vocabularies
+                    try:
+                        sql = self.generate_vocabulary_breakdown_sql(
+                            table_path,
+                            concept_path,
+                            source_concept_id_field,
+                            is_source=True
+                        )
+                        result = utils.execute_duckdb_sql(
+                            sql,
+                            f"Unable to query source vocabulary breakdown for {table_name}.{source_concept_id_field}",
+                            return_results=True
+                        )
+
+                        # Create report artifact for each vocabulary
+                        for row in result:
+                            vocabulary_id, record_count = row
+
+                            artifact = report_artifact.ReportArtifact(
+                                delivery_date=self.delivery_date,
+                                artifact_bucket=self.bucket,
+                                concept_id=0,
+                                name=f"Source vocabulary breakdown: {table_name}.{concept_id_field}",
+                                value_as_string=vocabulary_id,
+                                value_as_concept_id=0,
+                                value_as_number=float(record_count)
+                            )
+                            artifact.save_artifact()
+
+                    except Exception as e:
+                        utils.logger.error(f"Error processing source vocabulary breakdown for {table_name}.{source_concept_id_field}: {e}")
+
+    def _create_final_row_count_artifacts(self) -> None:
+        """
+        Create final row count artifacts for all OMOP CDM tables.
+
+        Generates row count artifacts after vocabulary harmonization for every table
+        defined in the target CDM schema (5.4). If a table doesn't exist as a parquet
+        file, creates an artifact with count = 0.
+        """
+        # Get the target CDM schema (always 5.4)
+        try:
+            schema = utils.get_cdm_schema(self.target_cdm_version)
+        except Exception as e:
+            utils.logger.error(f"Unable to load CDM schema version {self.target_cdm_version}: {e}")
+            return
+
+        # Get all tables from the schema
+        all_tables = sorted(schema.keys())
+
+        # Process each table in the schema
+        for table_name in all_tables:
+            table_config: Any = constants.REPORTING_TABLE_CONFIG.get(table_name)
+
+            # Skip if table not in config (shouldn't happen since we added all tables)
+            if table_config is None:
+                utils.logger.warning(f"Table {table_name} not in REPORTING_TABLE_CONFIG, skipping final row count")
+                continue
+
+            location = table_config["location"]
+
+            # Get table concept_id from schema
+            table_concept_id = int(schema[table_name].get('concept_id', 0))
+
+            # Construct path to table
+            table_path = self._get_table_path(table_name, location)
+
+            # Check if table exists
+            if utils.parquet_file_exists(table_path):
+                # Table exists - count rows
+                try:
+                    sql = self.generate_row_count_sql(table_path)
+                    result = utils.execute_duckdb_sql(
+                        sql,
+                        f"Unable to count rows for {table_name}",
+                        return_results=True
+                    )
+
+                    row_count = result[0][0] if result else 0
+
+                    # Create artifact with actual count
+                    artifact = report_artifact.ReportArtifact(
+                        delivery_date=self.delivery_date,
+                        artifact_bucket=self.bucket,
+                        concept_id=table_concept_id,
+                        name=f"Final row count: {table_name}",
+                        value_as_string=table_name,
+                        value_as_concept_id=table_concept_id,
+                        value_as_number=float(row_count)
+                    )
+                    artifact.save_artifact()
+
+                except Exception as e:
+                    utils.logger.error(f"Error counting rows for {table_name}: {e}")
+            else:
+                # Table doesn't exist - create artifact with count = 0
+                try:
+                    artifact = report_artifact.ReportArtifact(
+                        delivery_date=self.delivery_date,
+                        artifact_bucket=self.bucket,
+                        concept_id=table_concept_id,
+                        name=f"Final row count: {table_name}",
+                        value_as_string=table_name,
+                        value_as_concept_id=table_concept_id,
+                        value_as_number=0.0
+                    )
+                    artifact.save_artifact()
+
+                except Exception as e:
+                    utils.logger.error(f"Error creating zero-count artifact for {table_name}: {e}")
+
+    @staticmethod
+    def generate_type_concept_breakdown_sql(table_uri: str, concept_uri: str, type_field: str) -> str:
+        """
+        Generate SQL to get type_concept_id breakdown for a table.
+
+        Queries the specified type concept field, joins with the concept vocabulary
+        table to get concept names, and returns counts grouped by type_concept_id.
+
+        Args:
+            table_uri: Full URI path to the table's parquet file
+            concept_uri: Full URI path to the concept vocabulary parquet file
+            type_field: Name of the type_concept_id field to analyze
+        """
+        return f"""
+            SELECT
+                COALESCE(t.{type_field}, 0) as type_concept_id,
+                COALESCE(c.concept_name, 'No matching concept') as concept_name,
+                COUNT(*) as record_count
+            FROM read_parquet('{table_uri}') t
+            LEFT JOIN read_parquet('{concept_uri}') c
+                ON t.{type_field} = c.concept_id
+            GROUP BY t.{type_field}, c.concept_name
+            ORDER BY record_count DESC
+        """
+
+    @staticmethod
+    def generate_vocabulary_breakdown_sql(table_uri: str, concept_uri: str, concept_field: str, is_source: bool) -> str:
+        """
+        Generate SQL to get vocabulary breakdown for a concept field.
+
+        Queries the specified concept field, joins with the concept vocabulary
+        table to get vocabulary IDs, and returns counts grouped by vocabulary.
+
+        Args:
+            table_uri: Full URI path to the table's parquet file
+            concept_uri: Full URI path to the concept vocabulary parquet file
+            concept_field: Name of the concept_id field to analyze
+            is_source: Whether this is a source concept field (for logging purposes)
+        """
+        return f"""
+            SELECT
+                COALESCE(c.vocabulary_id, 'No matching concept') as vocabulary_id,
+                COUNT(*) as record_count
+            FROM read_parquet('{table_uri}') t
+            LEFT JOIN read_parquet('{concept_uri}') c
+                ON t.{concept_field} = c.concept_id
+            GROUP BY c.vocabulary_id
+            ORDER BY record_count DESC
+        """
+
+    @staticmethod
+    def generate_row_count_sql(table_uri: str) -> str:
+        """
+        Generate SQL to count rows in a table.
+
+        Args:
+            table_uri: Full URI path to the table's parquet file
+        """
+        return f"SELECT COUNT(*) as row_count FROM read_parquet('{table_uri}')"
 
     @staticmethod
     def generate_report_consolidation_sql(select_statement: str, output_path: str) -> str:

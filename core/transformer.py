@@ -14,7 +14,7 @@ class Transformer:
     def __init__(self, site: str, file_path: str, cdm_version: str, source_table: str, target_table: str, etl_artifact_path: str):
         """Initialize Transformer object used for OMOP-to-OMOP ETL."""
         self.site = site
-        self.file_path = file_path
+        self.file_path = file_path # Path to vocabulary-harmonized Parquet file
         self.cdm_version = cdm_version
         self.source_table = source_table
         self.target_table = target_table
@@ -29,6 +29,11 @@ class Transformer:
         """
         Generate a SQL statement that transforms data from one OMOP table to another,
         ensuring proper column types and adding placeholder values to NULL required columns
+
+        NOTE: Unlike other SQL generation functions in the codebase, this is NOT a static method.
+        It requires many instance state (cdm_version, source_table, target_table, site,
+        file_path, etl_artifact_path) attributes throughout its logic. The Transformer class is 
+        designed as a stateful context object for transformation operations.
         """
         
         # Find the transform SQL file
@@ -142,17 +147,25 @@ class Transformer:
             # Get target column schema info - check if the column exists in the schema
             if target_column in target_columns_dict:
                 column_info = target_columns_dict[target_column]
-                
+
                 column_type = column_info['type']
                 is_required = column_info['required'].lower() == 'true'
-                
-                # Process differently based on whether field is required or not
-                if is_required:
-                    # For required fields: COALESCE first, then CAST
+
+                # Concept_id fields must ALWAYS default to 0, never NULL (OHDSI convention)
+                # Apply COALESCE to all concept_id fields regardless of required status
+                if target_column.endswith('_concept_id'):
+                    placeholder = utils.get_placeholder_value(target_column, column_type)
+                    if is_required:
+                        final_expr = f"CAST(COALESCE({source_expr}, {placeholder}) AS {column_type})"
+                    else:
+                        final_expr = f"TRY_CAST(COALESCE({source_expr}, {placeholder}) AS {column_type})"
+                # Process other fields based on whether they're required or not
+                elif is_required:
+                    # For required non-concept_id fields: COALESCE first, then CAST
                     placeholder = utils.get_placeholder_value(target_column, column_type)
                     final_expr = f"CAST(COALESCE({source_expr}, {placeholder}) AS {column_type})"
                 else:
-                    # For non-required fields: TRY_CAST only
+                    # For non-required non-concept_id fields: TRY_CAST only
                     final_expr = f"TRY_CAST({source_expr} AS {column_type})"
                 
                 # Recreate the line with proper indentation

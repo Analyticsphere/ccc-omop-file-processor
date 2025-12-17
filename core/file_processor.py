@@ -165,7 +165,7 @@ class FileProcessor:
             if column.lower() not in ['offset', '"offset"', "'offset'"]:
                 select_list.append(f"""
                 "{column}" AS {column_alias}
-            """)
+                """)
             else:
                 select_list.append(f"{column} AS {column_alias}")
 

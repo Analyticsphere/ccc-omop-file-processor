@@ -7,7 +7,7 @@ SELECT
 	visit_type_concept_id AS observation_type_concept_id,
 	NULL AS value_as_number,
 	NULL AS value_as_string,
-	vh_value_as_concept_id AS value_as_concept_id,
+	COALESCE(vh_value_as_concept_id, 0) AS value_as_concept_id,
 	0 AS qualifier_concept_id,
 	0 AS unit_concept_id,
 	provider_id AS provider_id,
