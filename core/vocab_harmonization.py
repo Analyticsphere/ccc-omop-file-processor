@@ -126,7 +126,7 @@ class VocabHarmonizer:
             else f"tbl.{constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']}"
         primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
 
-        # Don't perform target remapping on rows which have already been harmonized
+        # Don't perform target remapping on rows which have already been harmonized.
         # primary_key_column values were made unique per row values in normalization step,
         #   so they can be used for identification here
         existing_files_where_clause = ""
@@ -323,12 +323,9 @@ class VocabHarmonizer:
         and consolidates each one by delegating to the single-table processing method.
         """
         utils.logger.info(f"Consolidating ETL files for {self.file_path}")
-        
+
         # Get the OMOP ETL directory path
-        etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
-        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
-        etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
+        bucket_name, directory_path, etl_folder, storage_path = utils.get_omop_etl_paths(self.file_path)
 
         utils.logger.info(f"Looking for table directories in {storage_path}")
 
@@ -358,12 +355,9 @@ class VocabHarmonizer:
         and deduplicates primary keys for each table that has surrogate keys.
         """
         utils.logger.info(f"Deduplicating primary keys for ETL files for {self.file_path}")
-        
+
         # Get the OMOP ETL directory path
-        etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
-        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
-        etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
+        bucket_name, directory_path, etl_folder, storage_path = utils.get_omop_etl_paths(self.file_path)
 
         utils.logger.info(f"Looking for table directories in {storage_path}")
 
@@ -538,10 +532,7 @@ class VocabHarmonizer:
         utils.logger.info(f"Discovering tables for deduplication for {self.file_path}")
 
         # Get the OMOP ETL directory path
-        etl_base_path = utils.get_omop_etl_destination_path(self.file_path)
-        bucket_name, directory_path = utils.get_bucket_and_delivery_date_from_path(etl_base_path)
-        etl_folder = f"{directory_path}/{constants.ArtifactPaths.OMOP_ETL.value}"
-        storage_path = storage.get_uri(f"{bucket_name}/{etl_folder}")
+        bucket_name, directory_path, etl_folder, storage_path = utils.get_omop_etl_paths(self.file_path)
 
         utils.logger.info(f"Looking for table directories in {storage_path}")
 

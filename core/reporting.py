@@ -136,21 +136,22 @@ class ReportGenerator:
 
     def _get_table_path(self, table_name: str, location: constants.ArtifactPaths) -> str:
         """
-        Construct path to a table's Parquet file based on its location.
+        Construct full storage URI path to a table's Parquet file based on its location.
 
         Args:
             table_name: Name of the OMOP table
             location: ArtifactPaths enum value indicating where the file is stored
 
         Returns:
-            Full path to the table's Parquet file (without URI scheme prefix)
+            Full storage URI to the table's Parquet file
         """
         if location == constants.ArtifactPaths.OMOP_ETL:
             # OMOP ETL tables are stored in subdirectories
-            return f"{self.bucket}/{self.delivery_date}/{location.value}{table_name}/{table_name}{constants.PARQUET}"
+            return utils.get_omop_etl_table_path(self.bucket, self.delivery_date, table_name)
         else:
             # Converted and derived files are stored directly in their directories
-            return f"{self.bucket}/{self.delivery_date}/{location.value}{table_name}{constants.PARQUET}"
+            path = f"{self.bucket}/{self.delivery_date}/{location.value}{table_name}{constants.PARQUET}"
+            return storage.get_uri(path)
 
     def _create_type_concept_breakdown_artifacts(self) -> None:
         """
@@ -192,10 +193,8 @@ class ReportGenerator:
                 utils.logger.info(f"Table {table_name} not found, skipping type concept breakdown")
                 continue
 
-            table_uri = storage.get_uri(table_path)
-
             # Generate and execute SQL query for type_concept_id breakdown
-            sql = self.generate_type_concept_breakdown_sql(table_uri, concept_uri, type_field)
+            sql = self.generate_type_concept_breakdown_sql(table_path, concept_uri, type_field)
 
             try:
                 result = utils.execute_duckdb_sql(sql, f"Unable to query type concept breakdown for {table_name}", return_results=True)
@@ -259,8 +258,6 @@ class ReportGenerator:
                 utils.logger.info(f"Table {table_name} not found, skipping vocabulary breakdown")
                 continue
 
-            table_uri = storage.get_uri(table_path)
-
             # Process each concept field in the table
             for field_config in vocabulary_fields:
                 concept_id_field = field_config["concept_id"]
@@ -269,7 +266,7 @@ class ReportGenerator:
                 # Process target vocabulary (from concept_id field)
                 try:
                     sql = self.generate_vocabulary_breakdown_sql(
-                        table_uri,
+                        table_path,
                         concept_uri,
                         concept_id_field,
                         is_source=False
@@ -318,7 +315,7 @@ class ReportGenerator:
                     # Query and create artifacts for source vocabularies
                     try:
                         sql = self.generate_vocabulary_breakdown_sql(
-                            table_uri,
+                            table_path,
                             concept_uri,
                             source_concept_id_field,
                             is_source=True
@@ -385,10 +382,8 @@ class ReportGenerator:
             # Check if table exists
             if utils.parquet_file_exists(table_path):
                 # Table exists - count rows
-                table_uri = storage.get_uri(table_path)
-
                 try:
-                    sql = self.generate_row_count_sql(table_uri)
+                    sql = self.generate_row_count_sql(table_path)
                     result = utils.execute_duckdb_sql(
                         sql,
                         f"Unable to count rows for {table_name}",

@@ -169,7 +169,7 @@ class OMOPClient:
             # Check if this table goes through vocabulary harmonization
             if required_table in constants.VOCAB_HARMONIZED_TABLES:
                 # Look for harmonized version
-                parquet_path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}{required_table}/{required_table}{constants.PARQUET}"
+                parquet_path = utils.get_omop_etl_table_path(bucket, delivery_date, required_table)
             else:
                 # Look for converted version (e.g., person, death)
                 parquet_path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{required_table}{constants.PARQUET}"
@@ -185,7 +185,7 @@ class OMOPClient:
         # https://ohdsi.github.io/CommonDataModel/ehrObsPeriods.html
         if table_name == constants.OBSERVATION_PERIOD:
             # Check for harmonized visit_occurrence
-            visit_occurrence_table = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.OMOP_ETL.value}visit_occurrence/visit_occurrence{constants.PARQUET}"
+            visit_occurrence_table = utils.get_omop_etl_table_path(bucket, delivery_date, 'visit_occurrence')
             # Death table doesn't go through harmonization
             death_table = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}death{constants.PARQUET}"
 

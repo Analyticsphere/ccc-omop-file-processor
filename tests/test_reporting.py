@@ -502,8 +502,12 @@ class TestGetTablePath:
     """Tests for _get_table_path helper method."""
 
     @patch('core.reporting.storage.get_uri')
-    def test_omop_etl_path_structure(self, mock_get_uri):
+    @patch('core.reporting.utils.get_omop_etl_table_path')
+    def test_omop_etl_path_structure(self, mock_get_omop_etl_table_path, mock_get_uri):
         """Test that OMOP_ETL tables use subdirectory structure."""
+        # Configure mocks to return expected paths with URI prefix
+        mock_get_omop_etl_table_path.return_value = "gs://test-bucket/2025-01-15/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -518,12 +522,17 @@ class TestGetTablePath:
         generator = ReportGenerator(report_data)
         path = generator._get_table_path("visit_occurrence", constants.ArtifactPaths.OMOP_ETL)
 
-        expected = "test-bucket/2025-01-15/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+        # Now expects URI prefix since method returns full storage URI
+        expected = "gs://test-bucket/2025-01-15/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
         assert path == expected
+        mock_get_omop_etl_table_path.assert_called_once_with("test-bucket", "2025-01-15", "visit_occurrence")
 
     @patch('core.reporting.storage.get_uri')
     def test_converted_files_path_structure(self, mock_get_uri):
         """Test that CONVERTED_FILES tables use direct structure."""
+        # Configure mock to add URI prefix to input path
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -538,12 +547,16 @@ class TestGetTablePath:
         generator = ReportGenerator(report_data)
         path = generator._get_table_path("death", constants.ArtifactPaths.CONVERTED_FILES)
 
-        expected = "test-bucket/2025-01-15/artifacts/converted_files/death.parquet"
+        # Now expects URI prefix since method returns full storage URI
+        expected = "gs://test-bucket/2025-01-15/artifacts/converted_files/death.parquet"
         assert path == expected
 
     @patch('core.reporting.storage.get_uri')
     def test_derived_files_path_structure(self, mock_get_uri):
         """Test that DERIVED_FILES tables use direct structure."""
+        # Configure mock to add URI prefix to input path
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -558,12 +571,18 @@ class TestGetTablePath:
         generator = ReportGenerator(report_data)
         path = generator._get_table_path("observation_period", constants.ArtifactPaths.DERIVED_FILES)
 
-        expected = "test-bucket/2025-01-15/artifacts/derived_files/observation_period.parquet"
+        # Now expects URI prefix since method returns full storage URI
+        expected = "gs://test-bucket/2025-01-15/artifacts/derived_files/observation_period.parquet"
         assert path == expected
 
+    @patch('core.reporting.utils.get_omop_etl_table_path')
     @patch('core.reporting.storage.get_uri')
-    def test_all_type_concept_tables(self, mock_get_uri):
+    def test_all_type_concept_tables(self, mock_get_uri, mock_get_omop_etl_table_path):
         """Test that all tables in REPORTING_TABLE_CONFIG generate valid paths."""
+        # Configure mocks to return paths with URI prefix
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_get_omop_etl_table_path.side_effect = lambda bucket, date, table: f"gs://{bucket}/{date}/artifacts/omop_etl/{table}/{table}.parquet"
+
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
