@@ -305,7 +305,7 @@ class VocabHarmonizer:
                     value_as_number=num_mappings
                 )
                 ra.save_artifact()
-                utils.logger.info(f"Same-table mapping: {self.source_table_name} - 1:{num_targets} within same table: {num_mappings} source concepts")
+                utils.logger.info(f"Same-table mapping: {self.source_table_name} - 1:{num_targets} within same table: {num_mappings} source rows")
 
         except Exception as e:
             # Log the error but don't fail the entire process
@@ -1136,16 +1136,18 @@ class VocabHarmonizer:
         """
         Generate SQL to count same-table mapping cardinalities from harmonized parquet files.
 
-        This method identifies all cases where source concepts map to target concepts within
-        the SAME target table (when that table matches the source table). This includes:
+        This method counts how many ROWS have each same-table mapping cardinality. This includes:
         - 1:1 mappings (normal case - source stays in same table with single target)
         - 1:N mappings (duplication case - source creates multiple rows in same table)
+
+        The counts represent the number of SOURCE ROWS, not unique source concepts. This is
+        important for understanding the total data volume and validating row counts.
 
         The 1:N cases (N >= 2) are particularly important for detecting vocabulary harmonization
         that causes record duplication within tables. The 1:1 counts are useful for validation.
 
-        For example, if source concept A maps to both target concepts B and C, and both targets
-        stay in the 'measurement' table, this represents a 1:2 same-table mapping.
+        For example, if source concept A appears in 100 rows and maps to 2 targets (B and C)
+        in the same table, all 100 rows will be counted in the 1:2 category.
 
         Args:
             parquet_path: Path or glob pattern to harmonized parquet files
@@ -1154,18 +1156,21 @@ class VocabHarmonizer:
         """
         return f"""
             SELECT
-                num_same_table_targets,
-                COUNT(*) as num_mappings
-            FROM (
+                cardinality_lookup.num_same_table_targets,
+                COUNT(*) as num_source_rows
+            FROM read_parquet('{parquet_path}') as main_data
+            INNER JOIN (
                 SELECT
                     previous_target_concept_id,
                     COUNT(DISTINCT target_concept_id) as num_same_table_targets
                 FROM read_parquet('{parquet_path}')
                 WHERE target_table = '{source_table_name}'
                 GROUP BY previous_target_concept_id
-            )
-            GROUP BY num_same_table_targets
-            ORDER BY num_same_table_targets
+            ) as cardinality_lookup
+            ON main_data.previous_target_concept_id = cardinality_lookup.previous_target_concept_id
+            WHERE main_data.target_table = '{source_table_name}'
+            GROUP BY cardinality_lookup.num_same_table_targets
+            ORDER BY cardinality_lookup.num_same_table_targets
         """
 
     @staticmethod
