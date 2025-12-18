@@ -445,24 +445,29 @@ def parquet_gcs_to_bq() -> tuple[str, int]:
         return f"Unable to load Parquet file: {str(e)}", 500
 
 
-@app.route('/generate_delivery_report', methods=['POST'])
-def generate_final_delivery_report() -> tuple[str, int]:
-    """Generate final delivery report CSV by generating final data points and consolidating all report artifacts."""
+@app.route('/generate_delivery_report_csv', methods=['POST'])
+def generate_delivery_report_csv() -> tuple[str, int]:
+    """
+    Generate delivery report CSV file with processing metadata and statistics.
+
+    The CSV file serves as a data source for visual reporting and dashboards.
+    Includes metadata, row counts, vocabulary breakdowns, and type concept distributions.
+    """
     report_data: dict[str, Any] = request.get_json() or {}
 
     # Validate required parameters
     if not report_data.get('delivery_date') or not report_data.get('site'):
-        return "Missing required parameters to 'generate_delivery_report' endpoint JSON: delivery_date and site", 400
+        return "Missing required parameters to 'generate_delivery_report_csv' endpoint JSON: delivery_date and site", 400
 
     try:
-        utils.logger.info(f"Generating final delivery report for {report_data['delivery_date']} delivery from {report_data['site']}")
+        utils.logger.info(f"Generating delivery report CSV for {report_data['delivery_date']} delivery from {report_data['site']}")
         generator = reporting.ReportGenerator(report_data)
         generator.generate()
 
-        return "Generated delivery report file", 200
+        return "Generated delivery report CSV file", 200
     except Exception as e:
-        utils.logger.error(f"Unable to generate delivery report: {str(e)}")
-        return f"Unable to generate delivery report: {str(e)}", 500
+        utils.logger.error(f"Unable to generate delivery report CSV: {str(e)}")
+        return f"Unable to generate delivery report CSV: {str(e)}", 500
 
 
 @app.route('/create_missing_tables', methods=['POST'])

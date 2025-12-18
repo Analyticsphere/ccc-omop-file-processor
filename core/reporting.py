@@ -10,10 +10,10 @@ from core.storage_backend import storage
 
 class ReportGenerator:
     """
-    Generates delivery reports for OMOP data processing.
+    Generates delivery report CSV files for OMOP data processing.
 
-    Consolidates temporary report artifacts into a final CSV report
-    and creates metadata entries documenting the delivery and processing.
+    Consolidates temporary report artifacts into a final CSV file that serves
+    as a data source for visual reporting and dashboards.
     """
 
     def __init__(self, report_data: dict):
@@ -44,10 +44,10 @@ class ReportGenerator:
 
     def generate(self) -> None:
         """
-        Generate complete delivery report.
+        Generate complete delivery report CSV file.
 
         Creates report artifacts with metadata and consolidates
-        temporary report files into final CSV.
+        temporary report files into final CSV for downstream reporting.
         """
         # Generate additional reporting artifacts
         self._create_metadata_artifacts()
@@ -105,9 +105,10 @@ class ReportGenerator:
 
     def _consolidate_report_files(self) -> None:
         """
-        Consolidate temporary report files into final CSV.
+        Consolidate temporary report files into final CSV file.
 
-        Discovers all temporary report parquet files and combines them into a single CSV file.
+        Discovers all temporary report parquet files and combines them into a single
+        CSV file that serves as a data source for visual reporting and dashboards.
         """
         # Find all temporary report files
         report_tmp_dir = f"{self.delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
