@@ -240,10 +240,14 @@ class Normalizer:
         # Build SQL fragments
         coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
 
-        # Ensure row_validity has at least one element
-        if not row_validity:
-            row_validity.append("''")
-        row_validity_sql = ", ".join(row_validity)
+        # Build row validity check: ALL required fields must be non-NULL
+        # Generate: (field1 IS NOT NULL AND field2 IS NOT NULL AND ...)
+        if row_validity:
+            row_validity_checks = [f"({field_expr}) IS NOT NULL" for field_expr in row_validity]
+            row_validity_sql = " AND ".join(row_validity_checks)
+        else:
+            # No required fields - all rows are valid
+            row_validity_sql = "TRUE"
 
         # Generate primary key replacement clause for surrogate key tables
         replace_clause = Normalizer.generate_primary_key_clause(
@@ -264,7 +268,7 @@ class Normalizer:
             SELECT
                 {coalesce_definitions_sql},
                 CASE
-                    WHEN COALESCE({row_validity_sql}) IS NULL THEN CAST((CAST(hash(CONCAT({row_hash_statement})) AS UBIGINT) % 9223372036854775807) AS BIGINT)
+                    WHEN NOT ({row_validity_sql}) THEN CAST((CAST(hash(CONCAT({row_hash_statement})) AS UBIGINT) % 9223372036854775807) AS BIGINT)
                     ELSE NULL END AS row_hash
             FROM read_parquet('{storage.get_uri(file_path)}')
         ;
