@@ -60,6 +60,8 @@ class ReportGenerator:
 
     def _create_metadata_artifacts(self) -> None:
         """Create report artifacts documenting delivery and processing metadata."""
+
+        utils.logger.info("Creating metadata report artifacts")
         # Get delivered vocabulary version
         delivered_vocab_version = utils.get_delivery_vocabulary_version(
             self.bucket,
@@ -98,6 +100,8 @@ class ReportGenerator:
                 value_as_number=None
             )
             artifact.save_artifact()
+
+            utils.logger.info("Created metadata artifacts")
 
     def _consolidate_report_files(self) -> None:
         """
@@ -164,6 +168,8 @@ class ReportGenerator:
         and their counts, joining with the concept vocabulary table to get concept names.
         Creates one report artifact per table-type_concept pair.
         """
+        utils.logger.info("Creating type concept breakdown report artifacts")
+
         # Get target vocabulary version for this delivery
         target_vocab_version = self.target_vocabulary_version
 
@@ -218,6 +224,8 @@ class ReportGenerator:
             except Exception as e:
                 utils.logger.error(f"Error processing type concept breakdown for {table_name}: {e}")
                 continue
+        
+        utils.logger.info("Created type concept breakdown report artifacts")
 
     def _create_vocabulary_breakdown_artifacts(self) -> None:
         """
@@ -227,6 +235,8 @@ class ReportGenerator:
         for both source and target concepts, joining with the concept vocabulary table
         to get vocabulary names. Creates report artifacts for each table-field-vocabulary combination.
         """
+        utils.logger.info("Creating vocabulary breakdown report artifacts")
+
         # Get target vocabulary version for this delivery
         target_vocab_version = self.target_vocabulary_version
 
@@ -343,6 +353,8 @@ class ReportGenerator:
                     except Exception as e:
                         utils.logger.error(f"Error processing source vocabulary breakdown for {table_name}.{source_concept_id_field}: {e}")
 
+        utils.logger.info("Created vocabulary breakdown report artifacts")
+
     def _create_final_row_count_artifacts(self) -> None:
         """
         Create final row count artifacts for all OMOP CDM tables.
@@ -351,6 +363,8 @@ class ReportGenerator:
         defined in the target CDM schema (5.4). If a table doesn't exist as a parquet
         file, creates an artifact with count = 0.
         """
+        utils.logger.info("Creating final row count report artifacts")
+
         # Get the target CDM schema (always 5.4)
         try:
             schema = utils.get_cdm_schema(self.target_cdm_version)
@@ -422,6 +436,8 @@ class ReportGenerator:
                 except Exception as e:
                     utils.logger.error(f"Error creating zero-count artifact for {table_name}: {e}")
 
+        utils.logger.info("Created final row count report artifacts")
+        
     @staticmethod
     def generate_type_concept_breakdown_sql(table_uri: str, concept_uri: str, type_field: str) -> str:
         """
