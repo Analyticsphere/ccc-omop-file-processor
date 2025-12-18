@@ -262,6 +262,46 @@ class VocabHarmonizer:
             # Log the error but don't fail the entire process
             utils.logger.error(f"Error generating vocab status report: {str(e)}")
 
+    def generate_mapping_cardinality_artifacts(self) -> None:
+        """
+        Generate report artifacts showing the distribution of mapping cardinalities.
+
+        This tracks how many 1:N mappings occurred during vocabulary harmonization.
+        For example, it reports how many source concepts mapped to 1 target (1:1),
+        how many mapped to 2 targets (1:2), etc.
+        """
+        try:
+            utils.logger.info(f"Generating mapping cardinality report for {self.source_table_name}")
+
+            mapping_cardinality_sql = VocabHarmonizer.generate_mapping_cardinality_count_sql(self.harmonized_parquet_file)
+            cardinality_counts = utils.execute_duckdb_sql(
+                mapping_cardinality_sql,
+                f"Unable to get mapping cardinality counts from Parquet file {self.file_path}",
+                return_results=True
+            )
+
+            # Get the source table concept_id from the schema
+            schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
+            source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
+
+            # Create a report artifact for each cardinality type
+            for num_targets, num_mappings in cardinality_counts:
+                ra = report_artifact.ReportArtifact(
+                    delivery_date=self.delivery_date,
+                    artifact_bucket=self.bucket,
+                    concept_id=source_table_concept_id,
+                    name=f"Vocab harmonization mapping cardinality: {self.source_table_name} - 1:{num_targets}",
+                    value_as_string=None,
+                    value_as_concept_id=None,
+                    value_as_number=num_mappings
+                )
+                ra.save_artifact()
+                utils.logger.info(f"Mapping cardinality: {self.source_table_name} - 1:{num_targets}: {num_mappings} unique mappings")
+
+        except Exception as e:
+            # Log the error but don't fail the entire process
+            utils.logger.error(f"Error generating mapping cardinality report: {str(e)}")
+
     def omop_etl(self) -> None:
         """
         Partition harmonized data and transform to target OMOP tables.
@@ -273,6 +313,7 @@ class VocabHarmonizer:
         # Must be done before OMOP ETL step modifies the data
         self.generate_table_transition_artifacts()
         self.generate_vocab_status_artifacts()
+        self.generate_mapping_cardinality_artifacts()
 
         # Generate and execute SQL to get target tables
         target_tables_sql = VocabHarmonizer.generate_get_target_tables_sql(self.harmonized_parquet_file)
@@ -1079,6 +1120,34 @@ class VocabHarmonizer:
             FROM read_parquet('{parquet_path}')
             GROUP BY vocab_harmonization_status
             ORDER BY vocab_harmonization_status
+        """
+
+    @staticmethod
+    def generate_mapping_cardinality_count_sql(parquet_path: str) -> str:
+        """
+        Generate SQL to count mapping cardinalities (1:1, 1:2, 1:N) from harmonized parquet files.
+
+        This method generates a query that identifies the unique source-to-target mapping
+        cardinalities and counts how many of each cardinality type exist in the data.
+        For example, it will report how many 1:1 mappings, 1:2 mappings, etc. occurred.
+
+        Args:
+            parquet_path: Path or glob pattern to harmonized parquet files
+                         (e.g., 'gs://bucket/path/harmonized/*.parquet')
+        """
+        return f"""
+            SELECT
+                num_targets,
+                COUNT(*) as num_mappings
+            FROM (
+                SELECT
+                    previous_target_concept_id,
+                    COUNT(DISTINCT target_concept_id) as num_targets
+                FROM read_parquet('{parquet_path}')
+                GROUP BY previous_target_concept_id
+            )
+            GROUP BY num_targets
+            ORDER BY num_targets
         """
 
     @staticmethod

@@ -337,3 +337,16 @@ class TestGenerateVocabStatusCountSql:
 
         expected = load_reference_sql("generate_vocab_status_count_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateMappingCardinalityCountSql:
+    """Tests for generate_mapping_cardinality_count_sql()."""
+
+    def test_standard_mapping_cardinality_count(self):
+        """Test SQL generation for counting mapping cardinalities (1:1, 1:2, 1:N) for reporting."""
+        result = VocabHarmonizer.generate_mapping_cardinality_count_sql(
+            parquet_path='synthea53/2025-01-01/artifacts/harmonized/*.parquet'
+        )
+
+        expected = load_reference_sql("generate_mapping_cardinality_count_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
