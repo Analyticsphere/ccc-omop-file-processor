@@ -262,21 +262,30 @@ class VocabHarmonizer:
             # Log the error but don't fail the entire process
             utils.logger.error(f"Error generating vocab status report: {str(e)}")
 
-    def generate_mapping_cardinality_artifacts(self) -> None:
+    def generate_same_table_mapping_cardinality_artifacts(self) -> None:
         """
-        Generate report artifacts showing the distribution of mapping cardinalities.
+        Generate report artifacts showing same-table mapping cardinalities.
 
-        This tracks how many 1:N mappings occurred during vocabulary harmonization.
-        For example, it reports how many source concepts mapped to 1 target (1:1),
-        how many mapped to 2 targets (1:2), etc.
+        This tracks all cases where source concepts map to target concepts within the SAME
+        target table, including:
+        - 1:1 mappings
+        - 1:N mappings where N >= 2
+
+        For example, if a measurement concept maps to 2 different measurement concepts,
+        this creates 2 rows in the measurement table from a single source row.
+
+        All cardinalities are reported to provide a complete picture and enable validation.
         """
         try:
-            utils.logger.info(f"Generating mapping cardinality report for {self.source_table_name}")
+            utils.logger.info(f"Generating same-table mapping cardinality report for {self.source_table_name}")
 
-            mapping_cardinality_sql = VocabHarmonizer.generate_mapping_cardinality_count_sql(self.harmonized_parquet_file)
+            mapping_cardinality_sql = VocabHarmonizer.generate_same_table_mapping_cardinality_count_sql(
+                self.harmonized_parquet_file,
+                self.source_table_name
+            )
             cardinality_counts = utils.execute_duckdb_sql(
                 mapping_cardinality_sql,
-                f"Unable to get mapping cardinality counts from Parquet file {self.file_path}",
+                f"Unable to get same-table mapping cardinality counts from Parquet file {self.file_path}",
                 return_results=True
             )
 
@@ -290,17 +299,17 @@ class VocabHarmonizer:
                     delivery_date=self.delivery_date,
                     artifact_bucket=self.bucket,
                     concept_id=source_table_concept_id,
-                    name=f"Vocab harmonization mapping cardinality: {self.source_table_name} - 1:{num_targets}",
+                    name=f"Vocab harmonization same-table mapping: {self.source_table_name} - 1:{num_targets}",
                     value_as_string=None,
                     value_as_concept_id=None,
                     value_as_number=num_mappings
                 )
                 ra.save_artifact()
-                utils.logger.info(f"Mapping cardinality: {self.source_table_name} - 1:{num_targets}: {num_mappings} unique mappings")
+                utils.logger.info(f"Same-table mapping: {self.source_table_name} - 1:{num_targets} within same table: {num_mappings} source concepts")
 
         except Exception as e:
             # Log the error but don't fail the entire process
-            utils.logger.error(f"Error generating mapping cardinality report: {str(e)}")
+            utils.logger.error(f"Error generating same-table mapping cardinality report: {str(e)}")
 
     def omop_etl(self) -> None:
         """
@@ -313,7 +322,7 @@ class VocabHarmonizer:
         # Must be done before OMOP ETL step modifies the data
         self.generate_table_transition_artifacts()
         self.generate_vocab_status_artifacts()
-        self.generate_mapping_cardinality_artifacts()
+        self.generate_same_table_mapping_cardinality_artifacts()
 
         # Generate and execute SQL to get target tables
         target_tables_sql = VocabHarmonizer.generate_get_target_tables_sql(self.harmonized_parquet_file)
@@ -1123,31 +1132,40 @@ class VocabHarmonizer:
         """
 
     @staticmethod
-    def generate_mapping_cardinality_count_sql(parquet_path: str) -> str:
+    def generate_same_table_mapping_cardinality_count_sql(parquet_path: str, source_table_name: str) -> str:
         """
-        Generate SQL to count mapping cardinalities (1:1, 1:2, 1:N) from harmonized parquet files.
+        Generate SQL to count same-table mapping cardinalities from harmonized parquet files.
 
-        This method generates a query that identifies the unique source-to-target mapping
-        cardinalities and counts how many of each cardinality type exist in the data.
-        For example, it will report how many 1:1 mappings, 1:2 mappings, etc. occurred.
+        This method identifies all cases where source concepts map to target concepts within
+        the SAME target table (when that table matches the source table). This includes:
+        - 1:1 mappings (normal case - source stays in same table with single target)
+        - 1:N mappings (duplication case - source creates multiple rows in same table)
+
+        The 1:N cases (N >= 2) are particularly important for detecting vocabulary harmonization
+        that causes record duplication within tables. The 1:1 counts are useful for validation.
+
+        For example, if source concept A maps to both target concepts B and C, and both targets
+        stay in the 'measurement' table, this represents a 1:2 same-table mapping.
 
         Args:
             parquet_path: Path or glob pattern to harmonized parquet files
                          (e.g., 'gs://bucket/path/harmonized/*.parquet')
+            source_table_name: Name of the source table (e.g., 'measurement') to filter on
         """
         return f"""
             SELECT
-                num_targets,
+                num_same_table_targets,
                 COUNT(*) as num_mappings
             FROM (
                 SELECT
                     previous_target_concept_id,
-                    COUNT(DISTINCT target_concept_id) as num_targets
+                    COUNT(DISTINCT target_concept_id) as num_same_table_targets
                 FROM read_parquet('{parquet_path}')
+                WHERE target_table = '{source_table_name}'
                 GROUP BY previous_target_concept_id
             )
-            GROUP BY num_targets
-            ORDER BY num_targets
+            GROUP BY num_same_table_targets
+            ORDER BY num_same_table_targets
         """
 
     @staticmethod
