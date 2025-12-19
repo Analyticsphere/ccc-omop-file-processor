@@ -1,17 +1,15 @@
 
             SELECT
-                cardinality_lookup.num_same_table_targets,
-                COUNT(*) as num_source_rows
-            FROM read_parquet('synthea53/2025-01-01/artifacts/harmonized/*.parquet') as main_data
-            INNER JOIN (
+                pk_cardinality.num_same_table_targets,
+                SUM(pk_cardinality.pk_row_count) as num_source_rows
+            FROM (
                 SELECT
-                    previous_target_concept_id,
-                    COUNT(DISTINCT target_concept_id) as num_same_table_targets
+                    measurement_id as primary_key,
+                    COUNT(DISTINCT target_concept_id) as num_same_table_targets,
+                    COUNT(*) as pk_row_count
                 FROM read_parquet('synthea53/2025-01-01/artifacts/harmonized/*.parquet')
                 WHERE target_table = 'measurement'
-                GROUP BY previous_target_concept_id
-            ) as cardinality_lookup
-            ON main_data.previous_target_concept_id = cardinality_lookup.previous_target_concept_id
-            WHERE main_data.target_table = 'measurement'
-            GROUP BY cardinality_lookup.num_same_table_targets
-            ORDER BY cardinality_lookup.num_same_table_targets
+                GROUP BY measurement_id
+            ) as pk_cardinality
+            GROUP BY pk_cardinality.num_same_table_targets
+            ORDER BY pk_cardinality.num_same_table_targets

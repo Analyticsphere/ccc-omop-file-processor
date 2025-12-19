@@ -346,7 +346,8 @@ class TestGenerateSameTableMappingCardinalityCountSql:
         """Test SQL generation for counting same-table mapping cardinalities (1:1, 1:2, 1:N) for reporting."""
         result = VocabHarmonizer.generate_same_table_mapping_cardinality_count_sql(
             parquet_path='synthea53/2025-01-01/artifacts/harmonized/*.parquet',
-            source_table_name='measurement'
+            source_table_name='measurement',
+            primary_key_column='measurement_id'
         )
 
         expected = load_reference_sql("generate_mapping_cardinality_count_sql_standard.sql")

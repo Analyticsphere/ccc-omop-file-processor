@@ -279,9 +279,16 @@ class VocabHarmonizer:
         try:
             utils.logger.info(f"Generating same-table mapping cardinality report for {self.source_table_name}")
 
+            # Get the primary key column for this table
+            primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+            if not primary_key_column:
+                utils.logger.warning(f"No primary key defined for {self.source_table_name}, skipping same-table mapping cardinality report")
+                return
+
             mapping_cardinality_sql = VocabHarmonizer.generate_same_table_mapping_cardinality_count_sql(
                 self.harmonized_parquet_file,
-                self.source_table_name
+                self.source_table_name,
+                primary_key_column
             )
             cardinality_counts = utils.execute_duckdb_sql(
                 mapping_cardinality_sql,
@@ -1132,45 +1139,45 @@ class VocabHarmonizer:
         """
 
     @staticmethod
-    def generate_same_table_mapping_cardinality_count_sql(parquet_path: str, source_table_name: str) -> str:
+    def generate_same_table_mapping_cardinality_count_sql(parquet_path: str, source_table_name: str, primary_key_column: str) -> str:
         """
         Generate SQL to count same-table mapping cardinalities from harmonized parquet files.
 
-        This method counts how many ROWS have each same-table mapping cardinality. This includes:
-        - 1:1 mappings (normal case - source stays in same table with single target)
-        - 1:N mappings (duplication case - source creates multiple rows in same table)
+        This method uses the PRIMARY KEY to identify unique source rows and count how many rows
+        have each same-table mapping cardinality. This includes:
+        - 1:1 mappings (normal case - primary key maps to single target in same table)
+        - 1:N mappings (duplication case - primary key maps to multiple targets in same table)
 
-        The counts represent the number of SOURCE ROWS, not unique source concepts. This is
-        important for understanding the total data volume and validating row counts.
+        The primary key is the deterministic identifier: for a 1:N mapping, the primary key
+        appears N times in the result (once per target), creating N rows that are all counted.
 
         The 1:N cases (N >= 2) are particularly important for detecting vocabulary harmonization
         that causes record duplication within tables. The 1:1 counts are useful for validation.
 
-        For example, if source concept A appears in 100 rows and maps to 2 targets (B and C)
-        in the same table, all 100 rows will be counted in the 1:2 category.
+        For example, if primary key X maps to 2 targets (A and B) in measurement table,
+        the PK appears in 2 rows, and both are counted in the 1:2 category.
 
         Args:
             parquet_path: Path or glob pattern to harmonized parquet files
                          (e.g., 'gs://bucket/path/harmonized/*.parquet')
             source_table_name: Name of the source table (e.g., 'measurement') to filter on
+            primary_key_column: Name of the primary key column (e.g., 'measurement_id')
         """
         return f"""
             SELECT
-                cardinality_lookup.num_same_table_targets,
-                COUNT(*) as num_source_rows
-            FROM read_parquet('{parquet_path}') as main_data
-            INNER JOIN (
+                pk_cardinality.num_same_table_targets,
+                SUM(pk_cardinality.pk_row_count) as num_source_rows
+            FROM (
                 SELECT
-                    previous_target_concept_id,
-                    COUNT(DISTINCT target_concept_id) as num_same_table_targets
+                    {primary_key_column} as primary_key,
+                    COUNT(DISTINCT target_concept_id) as num_same_table_targets,
+                    COUNT(*) as pk_row_count
                 FROM read_parquet('{parquet_path}')
                 WHERE target_table = '{source_table_name}'
-                GROUP BY previous_target_concept_id
-            ) as cardinality_lookup
-            ON main_data.previous_target_concept_id = cardinality_lookup.previous_target_concept_id
-            WHERE main_data.target_table = '{source_table_name}'
-            GROUP BY cardinality_lookup.num_same_table_targets
-            ORDER BY cardinality_lookup.num_same_table_targets
+                GROUP BY {primary_key_column}
+            ) as pk_cardinality
+            GROUP BY pk_cardinality.num_same_table_targets
+            ORDER BY pk_cardinality.num_same_table_targets
         """
 
     @staticmethod
