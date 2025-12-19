@@ -360,7 +360,7 @@ class TestGenerateRowDispositionCountSql:
     def test_standard_row_disposition_count(self):
         """Test SQL generation for counting row dispositions (stayed only, stayed and copied, moved) for reporting."""
         result = VocabHarmonizer.generate_row_disposition_count_sql(
-            parquet_path='synthea53/2025-01-01/artifacts/harmonized/*.parquet',
+            parquet_path='gs://synthea53/2025-01-01/artifacts/harmonized/measurement/*.parquet',
             source_table_name='measurement',
             primary_key_column='measurement_id'
         )

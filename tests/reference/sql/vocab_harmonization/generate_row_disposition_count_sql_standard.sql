@@ -4,7 +4,7 @@
                     measurement_id as primary_key,
                     COUNT(CASE WHEN target_table = 'measurement' THEN 1 END) as same_table_count,
                     COUNT(CASE WHEN target_table != 'measurement' THEN 1 END) as cross_table_count
-                FROM read_parquet('synthea53/2025-01-01/artifacts/harmonized/*.parquet')
+                FROM read_parquet('gs://synthea53/2025-01-01/artifacts/harmonized/measurement/*.parquet')
                 GROUP BY measurement_id
             )
             SELECT
