@@ -74,11 +74,12 @@ class TestReportGeneratorGenerate:
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
     @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
+    @patch.object(ReportGenerator, '_create_date_datetime_default_value_artifacts')
     @patch.object(ReportGenerator, '_create_vocabulary_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_create_final_row_count, mock_consolidate):
-        """Test that generate calls metadata, type concept, vocabulary, final row count, and consolidation methods."""
+    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_final_row_count, mock_consolidate):
+        """Test that generate calls metadata, type concept, vocabulary, date/datetime defaults, final row count, and consolidation methods."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -96,16 +97,18 @@ class TestReportGeneratorGenerate:
         mock_create_metadata.assert_called_once()
         mock_create_type_concept.assert_called_once()
         mock_create_vocabulary.assert_called_once()
+        mock_create_date_defaults.assert_called_once()
         mock_create_final_row_count.assert_called_once()
         mock_consolidate.assert_called_once()
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
     @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
+    @patch.object(ReportGenerator, '_create_date_datetime_default_value_artifacts')
     @patch.object(ReportGenerator, '_create_vocabulary_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_create_final_row_count, mock_consolidate):
-        """Test that methods are called in correct order: metadata, type concept, vocabulary, final row count, consolidation."""
+    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_final_row_count, mock_consolidate):
+        """Test that methods are called in correct order: metadata, type concept, vocabulary, date/datetime defaults, final row count, consolidation."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -121,13 +124,14 @@ class TestReportGeneratorGenerate:
         mock_create_metadata.side_effect = lambda: call_order.append('metadata')
         mock_create_type_concept.side_effect = lambda: call_order.append('type_concept')
         mock_create_vocabulary.side_effect = lambda: call_order.append('vocabulary')
+        mock_create_date_defaults.side_effect = lambda: call_order.append('date_defaults')
         mock_create_final_row_count.side_effect = lambda: call_order.append('final_row_count')
         mock_consolidate.side_effect = lambda: call_order.append('consolidate')
 
         generator = ReportGenerator(report_data)
         generator.generate()
 
-        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'final_row_count', 'consolidate']
+        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'date_defaults', 'final_row_count', 'consolidate']
 
 
 class TestReportGeneratorMetadataArtifacts:
@@ -390,6 +394,50 @@ class TestReportGeneratorConsolidationSQL:
 
         assert isinstance(sql, str)
         assert len(sql) > 0
+
+
+class TestReportGeneratorDateDatetimeDefaultCountSQL:
+    """Tests for generate_date_datetime_default_count_sql static method."""
+
+    def test_matches_golden_file(self):
+        """Test that generated SQL matches the golden file."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+        field_name = "visit_start_date"
+        default_value = "'1970-01-01'"
+
+        sql = ReportGenerator.generate_date_datetime_default_count_sql(table_uri, field_name, default_value)
+
+        # Load golden file
+        with open('tests/reference/sql/reporting/generate_date_datetime_default_count_sql_standard.sql', 'r') as f:
+            expected_sql = f.read()
+
+        # Normalize SQL for whitespace-insensitive comparison
+        def normalize_sql(sql: str) -> str:
+            lines = [line.strip() for line in sql.strip().split('\n')]
+            lines = [line for line in lines if line]
+            return '\n'.join(lines)
+
+        assert normalize_sql(sql) == normalize_sql(expected_sql)
+
+    def test_matches_golden_file_timestamp(self):
+        """Test that generated SQL for TIMESTAMP field matches the golden file."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+        field_name = "visit_start_datetime"
+        default_value = "'1901-01-01 00:00:00'"
+
+        sql = ReportGenerator.generate_date_datetime_default_count_sql(table_uri, field_name, default_value)
+
+        # Load golden file
+        with open('tests/reference/sql/reporting/generate_date_datetime_default_count_sql_timestamp.sql', 'r') as f:
+            expected_sql = f.read()
+
+        # Normalize SQL for whitespace-insensitive comparison
+        def normalize_sql(sql: str) -> str:
+            lines = [line.strip() for line in sql.strip().split('\n')]
+            lines = [line for line in lines if line]
+            return '\n'.join(lines)
+
+        assert normalize_sql(sql) == normalize_sql(expected_sql)
 
 
 class TestReportGeneratorHelpers:

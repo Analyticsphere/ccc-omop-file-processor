@@ -53,6 +53,7 @@ class ReportGenerator:
         self._create_metadata_artifacts()
         self._create_type_concept_breakdown_artifacts()
         self._create_vocabulary_breakdown_artifacts()
+        self._create_date_datetime_default_value_artifacts()
         self._create_final_row_count_artifacts()
 
         # Generate the final, single report CSV file
@@ -356,6 +357,96 @@ class ReportGenerator:
 
         utils.logger.info("Created vocabulary breakdown report artifacts")
 
+    def _create_date_datetime_default_value_artifacts(self) -> None:
+        """
+        Create report artifacts for date/datetime fields with default values.
+
+        For each table, identifies date and datetime fields from the OMOP schema.
+        For each date/datetime field, counts how many rows have the default placeholder value
+        (e.g., '1970-01-01' for DATE, '1901-01-01 00:00:00' for TIMESTAMP/DATETIME).
+        Creates one report artifact per table-field combination.
+        """
+        utils.logger.info("Creating date/datetime default value report artifacts")
+
+        # Process each table in reporting config
+        for table_name, table_config_obj in constants.REPORTING_TABLE_CONFIG.items():
+            table_config: Any = table_config_obj
+            location = table_config["location"]
+
+            # Construct path to table
+            table_path = self._get_table_path(table_name, location)
+
+            # Check if table exists
+            if not utils.parquet_file_exists(table_path):
+                utils.logger.info(f"Table {table_name} not found, skipping date/datetime default value check")
+                continue
+
+            # Get OMOP schema for this table
+            schema = utils.get_cdm_schema(cdm_version=self.target_cdm_version)
+            if table_name not in schema:
+                utils.logger.warning(f"Table {table_name} not found in CDM schema, skipping")
+                continue
+
+            table_schema = schema[table_name]
+            columns = table_schema.get("columns", {})
+
+            # Find date/datetime fields
+            date_datetime_fields = []
+            for column_name, column_props in columns.items():
+                column_type = column_props.get("type", "")
+                if column_type in ["DATE", "TIMESTAMP", "DATETIME"]:
+                    date_datetime_fields.append((column_name, column_type))
+
+            # Skip if no date/datetime fields
+            if not date_datetime_fields:
+                utils.logger.debug(f"Table {table_name} has no date/datetime fields, skipping")
+                continue
+
+            # Get table concept_id for the artifact
+            table_concept_id = table_schema.get("concept_id", 0)
+
+            # Process each date/datetime field
+            for field_name, field_type in date_datetime_fields:
+                try:
+                    # Get the default value for this field
+                    default_value = utils.get_placeholder_value(field_name, field_type)
+
+                    # Generate and execute SQL to count rows with default value
+                    sql = self.generate_date_datetime_default_count_sql(
+                        table_path,
+                        field_name,
+                        default_value
+                    )
+
+                    result = utils.execute_duckdb_sql(
+                        sql,
+                        f"Unable to query default value count for {table_name}.{field_name}",
+                        return_results=True
+                    )
+
+                    # Extract count from result
+                    default_count = result[0][0] if result else 0
+
+                    # Create report artifact
+                    artifact = report_artifact.ReportArtifact(
+                        delivery_date=self.delivery_date,
+                        artifact_bucket=self.bucket,
+                        concept_id=table_concept_id,
+                        name=f"Date/datetime default value count: {table_name}.{field_name}",
+                        value_as_string=None,
+                        value_as_concept_id=None,
+                        value_as_number=float(default_count)
+                    )
+                    artifact.save_artifact()
+
+                    utils.logger.info(f"Created default value artifact for {table_name}.{field_name}: {default_count} rows")
+
+                except Exception as e:
+                    utils.logger.error(f"Error processing default value count for {table_name}.{field_name}: {e}")
+                    continue
+
+        utils.logger.info("Created date/datetime default value report artifacts")
+
     def _create_final_row_count_artifacts(self) -> None:
         """
         Create final row count artifacts for all OMOP CDM tables.
@@ -498,6 +589,25 @@ class ReportGenerator:
             table_uri: Full URI path to the table's parquet file
         """
         return f"SELECT COUNT(*) as row_count FROM read_parquet('{table_uri}')"
+
+    @staticmethod
+    def generate_date_datetime_default_count_sql(table_uri: str, field_name: str, default_value: str) -> str:
+        """
+        Generate SQL to count rows with default values in date/datetime fields.
+
+        Args:
+            table_uri: Full URI path to the table's parquet file
+            field_name: Name of the date/datetime field to check
+            default_value: Default value to search for (e.g., '1970-01-01' or '1901-01-01 00:00:00')
+
+        Returns:
+            SQL query that counts rows where the field equals the default value
+        """
+        return f"""
+            SELECT COUNT(*) as default_count
+            FROM read_parquet('{table_uri}')
+            WHERE {field_name} = {default_value}
+        """
 
     @staticmethod
     def generate_report_consolidation_sql(select_statement: str, output_path: str) -> str:
