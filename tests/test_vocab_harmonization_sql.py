@@ -352,3 +352,18 @@ class TestGenerateSameTableMappingCardinalityCountSql:
 
         expected = load_reference_sql("generate_mapping_cardinality_count_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateRowDispositionCountSql:
+    """Tests for generate_row_disposition_count_sql()."""
+
+    def test_standard_row_disposition_count(self):
+        """Test SQL generation for counting row dispositions (stayed only, stayed and copied, moved) for reporting."""
+        result = VocabHarmonizer.generate_row_disposition_count_sql(
+            parquet_path='synthea53/2025-01-01/artifacts/harmonized/*.parquet',
+            source_table_name='measurement',
+            primary_key_column='measurement_id'
+        )
+
+        expected = load_reference_sql("generate_row_disposition_count_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
