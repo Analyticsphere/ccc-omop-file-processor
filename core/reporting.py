@@ -457,6 +457,9 @@ class ReportGenerator:
         - Not 0 (which represents "No matching concept")
         - Don't exist in the vocabulary
 
+        Note: Only checks standard concept_id fields and type_concept_id fields.
+        Source concept_id fields (e.g., condition_source_concept_id) are NOT checked.
+
         Creates one report artifact per table-field combination showing the count of rows
         with invalid concept_ids. This helps identify data quality issues where concept_ids
         reference non-existent vocabulary entries.
@@ -497,15 +500,12 @@ class ReportGenerator:
             # Collect all concept_id fields to check (including type_field)
             concept_fields_to_check = []
 
-            # Add vocabulary fields
+            # Add vocabulary fields (excluding source_concept_id fields)
             if vocabulary_fields:
                 for field_config in vocabulary_fields:
                     concept_id_field = field_config["concept_id"]
-                    source_concept_id_field = field_config["source_concept_id"]
-
+                    # Only check the standard concept_id field, not source_concept_id
                     concept_fields_to_check.append(concept_id_field)
-                    if source_concept_id_field:
-                        concept_fields_to_check.append(source_concept_id_field)
 
             # Add type field if present
             if type_field:
