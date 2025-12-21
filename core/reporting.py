@@ -54,6 +54,7 @@ class ReportGenerator:
         self._create_type_concept_breakdown_artifacts()
         self._create_vocabulary_breakdown_artifacts()
         self._create_date_datetime_default_value_artifacts()
+        self._create_invalid_concept_id_artifacts()
         self._create_final_row_count_artifacts()
 
         # Generate the final, single report CSV file
@@ -447,6 +448,109 @@ class ReportGenerator:
 
         utils.logger.info("Created date/datetime default value report artifacts")
 
+    def _create_invalid_concept_id_artifacts(self) -> None:
+        """
+        Create report artifacts for concept_id values that don't exist in the OMOP vocabulary.
+
+        For each table with concept_id fields, identifies concept_id values that are:
+        - Not NULL
+        - Not 0 (which represents "No matching concept")
+        - Don't exist in the vocabulary
+
+        Creates one report artifact per table-field combination showing the count of rows
+        with invalid concept_ids. This helps identify data quality issues where concept_ids
+        reference non-existent vocabulary entries.
+        """
+        utils.logger.info("Creating invalid concept_id report artifacts")
+
+        # Get target vocabulary version for this delivery
+        target_vocab_version = self.target_vocabulary_version
+
+        # Construct path to concept table in vocabulary
+        concept_path = storage.get_uri(f"{constants.VOCAB_PATH}/{target_vocab_version}/optimized/concept{constants.PARQUET}")
+
+        # Check if concept table exists
+        if not utils.parquet_file_exists(concept_path):
+            utils.logger.warning(f"Concept table not found at {concept_path}, skipping invalid concept_id check")
+            return
+
+        # Process each table with vocabulary concept fields
+        for table_name, table_config_obj in constants.REPORTING_TABLE_CONFIG.items():
+            table_config: Any = table_config_obj
+            vocabulary_fields = table_config["vocabulary_fields"]
+            type_field = table_config["type_field"]
+
+            # Skip tables without any concept fields
+            if not vocabulary_fields and not type_field:
+                continue
+
+            location = table_config["location"]
+
+            # Construct path to table
+            table_path = self._get_table_path(table_name, location)
+
+            # Check if table exists
+            if not utils.parquet_file_exists(table_path):
+                utils.logger.info(f"Table {table_name} not found, skipping invalid concept_id check")
+                continue
+
+            # Collect all concept_id fields to check (including type_field)
+            concept_fields_to_check = []
+
+            # Add vocabulary fields
+            if vocabulary_fields:
+                for field_config in vocabulary_fields:
+                    concept_id_field = field_config["concept_id"]
+                    source_concept_id_field = field_config["source_concept_id"]
+
+                    concept_fields_to_check.append(concept_id_field)
+                    if source_concept_id_field:
+                        concept_fields_to_check.append(source_concept_id_field)
+
+            # Add type field if present
+            if type_field:
+                concept_fields_to_check.append(type_field)
+
+            # Check each concept_id field for invalid values
+            for concept_field in concept_fields_to_check:
+                try:
+                    # Generate and execute SQL to find invalid concept_ids
+                    sql = self.generate_invalid_concept_id_sql(
+                        table_path,
+                        concept_path,
+                        concept_field
+                    )
+
+                    result = utils.execute_duckdb_sql(
+                        sql,
+                        f"Unable to query invalid concept_ids for {table_name}.{concept_field}",
+                        return_results=True
+                    )
+
+                    # Get total count of invalid concept_ids
+                    invalid_count = result[0][0] if result else 0
+
+                    # Create report artifact
+                    artifact = report_artifact.ReportArtifact(
+                        delivery_date=self.delivery_date,
+                        artifact_bucket=self.bucket,
+                        concept_id=0,
+                        name=f"Invalid concept_id count: {table_name}.{concept_field}",
+                        value_as_string=f"{table_name}.{concept_field}",
+                        value_as_concept_id=0,
+                        value_as_number=float(invalid_count)
+                    )
+                    artifact.save_artifact()
+
+                    if invalid_count > 0:
+                        utils.logger.warning(f"Found {invalid_count} invalid concept_ids in {table_name}.{concept_field}")
+
+                except Exception as e:
+                    utils.logger.error(f"Error checking invalid concept_ids for {table_name}.{concept_field}: {e}")
+                    continue
+
+        utils.logger.info("Created invalid concept_id report artifacts")
+
     def _create_final_row_count_artifacts(self) -> None:
         """
         Create final row count artifacts for all OMOP CDM tables.
@@ -607,6 +711,34 @@ class ReportGenerator:
             SELECT COUNT(*) as default_count
             FROM read_parquet('{table_uri}')
             WHERE {field_name} = {default_value}
+        """
+
+    @staticmethod
+    def generate_invalid_concept_id_sql(table_uri: str, concept_uri: str, concept_field: str) -> str:
+        """
+        Generate SQL to count rows with invalid concept_id values.
+
+        Identifies concept_id values that are:
+        - Not NULL
+        - Not 0 (which represents "No matching concept" in OMOP)
+        - Don't exist in the vocabulary concept table
+
+        Args:
+            table_uri: Full URI path to the table's parquet file
+            concept_uri: Full URI path to the concept vocabulary parquet file
+            concept_field: Name of the concept_id field to check
+
+        Returns:
+            SQL query that counts rows with invalid concept_ids
+        """
+        return f"""
+            SELECT COUNT(*) as invalid_count
+            FROM read_parquet('{table_uri}') t
+            LEFT JOIN read_parquet('{concept_uri}') c
+                ON t.{concept_field} = c.concept_id
+            WHERE t.{concept_field} IS NOT NULL
+              AND t.{concept_field} != 0
+              AND c.concept_id IS NULL
         """
 
     @staticmethod
