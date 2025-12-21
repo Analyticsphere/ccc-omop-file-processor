@@ -191,10 +191,11 @@ class VocabularyManager:
                     c2.standard_concept AS target_concept_id_standard,
                     c2.domain_id AS target_concept_id_domain
                 FROM read_parquet('{concept_path}') c1
-                LEFT JOIN read_parquet('{concept_relationship_path}') cr on c1.concept_id = cr.concept_id_1
+                LEFT JOIN (
+                    SELECT * FROM read_parquet('{concept_relationship_path}')
+                    WHERE relationship_id IN ({constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
+                ) cr on c1.concept_id = cr.concept_id_1
                 LEFT JOIN read_parquet('{concept_path}') c2 on cr.concept_id_2 = c2.concept_id
-                WHERE IFNULL(cr.relationship_id, '')
-                    IN ('', {constants.MAPPING_RELATIONSHIPS},{constants.REPLACEMENT_RELATIONSHIPS})
             ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
             """
 

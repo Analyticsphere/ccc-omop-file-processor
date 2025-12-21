@@ -1070,8 +1070,9 @@ class VocabHarmonizer:
             select_exprs.append(column_name)
 
         # Add columns to store metadata related to vocab harmonization for later reporting
+        # Use COALESCE to handle cases where concept_id is not in vocabulary
         metadata_columns = [
-            "vocab.concept_id_domain AS target_domain",
+            "COALESCE(vocab.concept_id_domain, 'Unknown') AS target_domain",
             "'domain check' AS vocab_harmonization_status",
             f"{source_concept_id_column} AS source_concept_id",
             f"{target_concept_id_column} AS previous_target_concept_id",
@@ -1084,6 +1085,7 @@ class VocabHarmonizer:
         select_exprs.append("CAST(NULL AS BIGINT) AS vh_value_as_concept_id")
 
         # Add target table statement
+        # Default to source table when concept_id is not in vocabulary
         case_when_target_table = f"""
                 CASE
                     WHEN vocab.concept_id_domain = 'Visit' THEN 'visit_occurrence'
@@ -1095,6 +1097,7 @@ class VocabHarmonizer:
                     WHEN vocab.concept_id_domain = 'Observation' THEN 'observation'
                     WHEN vocab.concept_id_domain = 'Note' THEN 'note'
                     WHEN vocab.concept_id_domain = 'Specimen' THEN 'specimen'
+                    WHEN vocab.concept_id_domain IS NULL THEN '{source_table_name}'
                 ELSE '{source_table_name}' END AS target_table
         """
         select_exprs.append(case_when_target_table)
@@ -1103,7 +1106,7 @@ class VocabHarmonizer:
 
         from_sql = f"""
                 FROM read_parquet('@{source_table_name.upper()}') AS tbl
-                INNER JOIN vocab
+                LEFT JOIN vocab
                     ON {target_concept_id_column} = vocab.concept_id
                 """
 
