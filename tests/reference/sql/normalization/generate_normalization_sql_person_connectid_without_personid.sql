@@ -29,7 +29,7 @@ CREATE OR REPLACE TABLE row_check AS
                 TRY_CAST(ethnicity_source_value AS VARCHAR) AS ethnicity_source_value,
                 TRY_CAST(COALESCE(ethnicity_source_concept_id, '0') AS BIGINT) AS ethnicity_source_concept_id,
                 CASE
-                    WHEN COALESCE(CAST(TRY_CAST(COALESCE(connect_id, '-1') AS BIGINT) AS VARCHAR), CAST(TRY_CAST(COALESCE(gender_concept_id, '0') AS BIGINT) AS VARCHAR), CAST(TRY_CAST(COALESCE(year_of_birth, '-1') AS BIGINT) AS VARCHAR), CAST(TRY_CAST(COALESCE(race_concept_id, '0') AS BIGINT) AS VARCHAR), CAST(TRY_CAST(COALESCE(ethnicity_concept_id, '0') AS BIGINT) AS VARCHAR)) IS NULL THEN CAST((CAST(hash(CONCAT(COALESCE(CAST(connect_id AS VARCHAR), ''), COALESCE(CAST(gender_concept_id AS VARCHAR), ''), COALESCE(CAST(year_of_birth AS VARCHAR), ''), COALESCE(CAST(month_of_birth AS VARCHAR), ''), COALESCE(CAST(day_of_birth AS VARCHAR), ''), COALESCE(CAST(birth_datetime AS VARCHAR), ''), COALESCE(CAST(race_concept_id AS VARCHAR), ''), COALESCE(CAST(ethnicity_concept_id AS VARCHAR), ''), COALESCE(CAST(location_id AS VARCHAR), ''), COALESCE(CAST(provider_id AS VARCHAR), ''), COALESCE(CAST(care_site_id AS VARCHAR), ''), COALESCE(CAST(person_source_value AS VARCHAR), ''), COALESCE(CAST(gender_source_value AS VARCHAR), ''), COALESCE(CAST(gender_source_concept_id AS VARCHAR), ''), COALESCE(CAST(race_source_value AS VARCHAR), ''), COALESCE(CAST(race_source_concept_id AS VARCHAR), ''), COALESCE(CAST(ethnicity_source_value AS VARCHAR), ''), COALESCE(CAST(ethnicity_source_concept_id AS VARCHAR), ''))) AS UBIGINT) % 9223372036854775807) AS BIGINT)
+                    WHEN NOT ((CAST(TRY_CAST(COALESCE(connect_id, '-1') AS BIGINT) AS VARCHAR)) IS NOT NULL AND (CAST(TRY_CAST(COALESCE(gender_concept_id, '0') AS BIGINT) AS VARCHAR)) IS NOT NULL AND (CAST(TRY_CAST(COALESCE(year_of_birth, '-1') AS BIGINT) AS VARCHAR)) IS NOT NULL AND (CAST(TRY_CAST(COALESCE(race_concept_id, '0') AS BIGINT) AS VARCHAR)) IS NOT NULL AND (CAST(TRY_CAST(COALESCE(ethnicity_concept_id, '0') AS BIGINT) AS VARCHAR)) IS NOT NULL) THEN CAST((CAST(hash(CONCAT(COALESCE(CAST(connect_id AS VARCHAR), ''), COALESCE(CAST(gender_concept_id AS VARCHAR), ''), COALESCE(CAST(year_of_birth AS VARCHAR), ''), COALESCE(CAST(month_of_birth AS VARCHAR), ''), COALESCE(CAST(day_of_birth AS VARCHAR), ''), COALESCE(CAST(birth_datetime AS VARCHAR), ''), COALESCE(CAST(race_concept_id AS VARCHAR), ''), COALESCE(CAST(ethnicity_concept_id AS VARCHAR), ''), COALESCE(CAST(location_id AS VARCHAR), ''), COALESCE(CAST(provider_id AS VARCHAR), ''), COALESCE(CAST(care_site_id AS VARCHAR), ''), COALESCE(CAST(person_source_value AS VARCHAR), ''), COALESCE(CAST(gender_source_value AS VARCHAR), ''), COALESCE(CAST(gender_source_concept_id AS VARCHAR), ''), COALESCE(CAST(race_source_value AS VARCHAR), ''), COALESCE(CAST(race_source_concept_id AS VARCHAR), ''), COALESCE(CAST(ethnicity_source_value AS VARCHAR), ''), COALESCE(CAST(ethnicity_source_concept_id AS VARCHAR), ''))) AS UBIGINT) % 9223372036854775807) AS BIGINT)
                     ELSE NULL END AS row_hash
             FROM read_parquet('gs://test-bucket/2025-01-01/person.parquet')
         ;
@@ -44,7 +44,7 @@ CREATE OR REPLACE TABLE row_check AS
         ;
 
         COPY (
-            SELECT * EXCLUDE (row_hash)
+            SELECT * EXCLUDE (row_hash) 
             FROM row_check
             WHERE row_hash IS NULL
         ) TO 'gs://test-bucket/2025-01-01/person.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)

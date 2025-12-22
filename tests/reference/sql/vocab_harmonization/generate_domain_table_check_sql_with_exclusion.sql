@@ -1,6 +1,6 @@
 
             COPY (
-
+                
                     WITH vocab AS (
                         SELECT DISTINCT
                             concept_id,
@@ -47,8 +47,12 @@
                 FROM read_parquet('gs://synthea53/2025-01-01/artifacts/converted_files/condition_occurrence.parquet') AS tbl
                 LEFT JOIN vocab
                     ON tbl.condition_concept_id = vocab.concept_id
-
-
-
+                
+                    
+                WHERE tbl.condition_occurrence_id NOT IN (
+                    SELECT condition_occurrence_id FROM read_parquet('gs://synthea53/2025-01-01/artifacts/harmonized/*.parquet')
+                )
+            
+                
             ) TO 'synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_domain_check.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)
-
+        

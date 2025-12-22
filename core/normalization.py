@@ -240,10 +240,14 @@ class Normalizer:
         # Build SQL fragments
         coalesce_definitions_sql = ",\n                ".join(coalesce_exprs)
 
-        # Ensure row_validity has at least one element
-        if not row_validity:
-            row_validity.append("''")
-        row_validity_sql = ", ".join(row_validity)
+        # Build row validity check: ALL required fields must be non-NULL
+        # Generate: (field1 IS NOT NULL AND field2 IS NOT NULL AND ...)
+        if row_validity:
+            row_validity_checks = [f"({field_expr}) IS NOT NULL" for field_expr in row_validity]
+            row_validity_sql = " AND ".join(row_validity_checks)
+        else:
+            # No required fields - all rows are valid
+            row_validity_sql = "TRUE"
 
         # Generate primary key replacement clause for surrogate key tables
         replace_clause = Normalizer.generate_primary_key_clause(
@@ -264,7 +268,7 @@ class Normalizer:
             SELECT
                 {coalesce_definitions_sql},
                 CASE
-                    WHEN COALESCE({row_validity_sql}) IS NULL THEN CAST((CAST(hash(CONCAT({row_hash_statement})) AS UBIGINT) % 9223372036854775807) AS BIGINT)
+                    WHEN NOT ({row_validity_sql}) THEN CAST((CAST(hash(CONCAT({row_hash_statement})) AS UBIGINT) % 9223372036854775807) AS BIGINT)
                     ELSE NULL END AS row_hash
             FROM read_parquet('{storage.get_uri(file_path)}')
         ;
@@ -364,9 +368,16 @@ class Normalizer:
 
                 # Add to row validity check if required
                 if is_required:
-                    row_validity.append(
-                        f"CAST(TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS VARCHAR)"
-                    )
+                    # Use special date/datetime casting logic for temporal types
+                    if column_type in ["DATE", "TIMESTAMP", "DATETIME"]:
+                        cast_expr = Normalizer.generate_date_datetime_cast(
+                            column_name, column_type, default_value, date_format, datetime_format
+                        )
+                        row_validity.append(f"CAST({cast_expr} AS VARCHAR)")
+                    else:
+                        row_validity.append(
+                            f"CAST(TRY_CAST(COALESCE({column_name}, {default_value}) AS {column_type}) AS VARCHAR)"
+                        )
 
             # Column exists in OMOP but is missing from the file
             else:
@@ -376,6 +387,40 @@ class Normalizer:
                 )
 
         return coalesce_exprs, row_validity
+
+    @staticmethod
+    def generate_date_datetime_cast(
+        column_name: str,
+        column_type: str,
+        default_value: str,
+        date_format: str,
+        datetime_format: str
+    ) -> str:
+        """
+        Generate date/datetime cast expression with format parsing (without column alias).
+
+        This handles DATE, TIMESTAMP, and DATETIME types with special strptime parsing
+        to support custom date/datetime formats from different sites.
+
+        Args:
+            column_name: Name of column
+            column_type: Target data type (DATE, TIMESTAMP, or DATETIME)
+            default_value: Default value to use if all casts fail
+            date_format: Date format string for strptime parsing (e.g., '%Y-%m-%d')
+            datetime_format: Datetime format string for strptime parsing (e.g., '%Y-%m-%d %H:%M:%S')
+
+        Returns:
+            SQL expression (without AS alias) that tries:
+            1. Parse with strptime using the specified format
+            2. Direct cast (for standard formats)
+            3. Default value if both fail
+        """
+        format_to_try = date_format if column_type == "DATE" else datetime_format
+        return f"""COALESCE(
+                        TRY_CAST(TRY_STRPTIME(CAST({column_name} AS VARCHAR), '{format_to_try}') AS {column_type}),
+                        TRY_CAST({column_name} AS {column_type}),
+                        CAST({default_value} AS {column_type})
+                    )"""
 
     @staticmethod
     def generate_column_cast_expression(
@@ -397,12 +442,10 @@ class Normalizer:
         """
         # Special handling for DATE and DATETIME types
         if column_type in ["DATE", "TIMESTAMP", "DATETIME"]:
-            format_to_try = date_format if column_type == "DATE" else datetime_format
-            return f"""COALESCE(
-                        TRY_CAST(TRY_STRPTIME(CAST({column_name} AS VARCHAR), '{format_to_try}') AS {column_type}),
-                        TRY_CAST({column_name} AS {column_type}),
-                        CAST({default_value} AS {column_type})
-                    ) AS {column_name}"""
+            cast_expr = Normalizer.generate_date_datetime_cast(
+                column_name, column_type, default_value, date_format, datetime_format
+            )
+            return f"{cast_expr} AS {column_name}"
 
         # Required fields with default values
         elif default_value != "NULL":

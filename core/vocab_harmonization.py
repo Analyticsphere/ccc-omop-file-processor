@@ -262,6 +262,142 @@ class VocabHarmonizer:
             # Log the error but don't fail the entire process
             utils.logger.error(f"Error generating vocab status report: {str(e)}")
 
+    def generate_same_table_mapping_cardinality_artifacts(self) -> None:
+        """
+        Generate report artifacts showing same-table mapping cardinalities.
+
+        This tracks all cases where source concepts map to target concepts within the SAME
+        target table, including:
+        - 1:1 mappings
+        - 1:N mappings where N >= 2
+
+        For example, if a measurement concept maps to 2 different measurement concepts,
+        this creates 2 rows in the measurement table from a single source row.
+
+        All cardinalities are reported to provide a complete picture and enable validation.
+        """
+        try:
+            utils.logger.info(f"Generating same-table mapping cardinality report for {self.source_table_name}")
+
+            # Get the primary key column for this table
+            primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+            if not primary_key_column:
+                utils.logger.warning(f"No primary key defined for {self.source_table_name}, skipping same-table mapping cardinality report")
+                return
+
+            mapping_cardinality_sql = VocabHarmonizer.generate_same_table_mapping_cardinality_count_sql(
+                self.harmonized_parquet_file,
+                self.source_table_name,
+                primary_key_column
+            )
+            cardinality_counts = utils.execute_duckdb_sql(
+                mapping_cardinality_sql,
+                f"Unable to get same-table mapping cardinality counts from Parquet file {self.file_path}",
+                return_results=True
+            )
+
+            # Get the source table concept_id from the schema
+            schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
+            source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
+
+            # Create a report artifact for each cardinality type
+            for num_targets, num_mappings in cardinality_counts:
+                ra = report_artifact.ReportArtifact(
+                    delivery_date=self.delivery_date,
+                    artifact_bucket=self.bucket,
+                    concept_id=source_table_concept_id,
+                    name=f"Vocab harmonization same-table mapping: {self.source_table_name} - 1:{num_targets}",
+                    value_as_string=None,
+                    value_as_concept_id=None,
+                    value_as_number=num_mappings
+                )
+                ra.save_artifact()
+                utils.logger.info(f"Same-table mapping: {self.source_table_name} - 1:{num_targets} within same table: {num_mappings} source rows")
+
+        except Exception as e:
+            # Log the error but don't fail the entire process
+            utils.logger.error(f"Error generating same-table mapping cardinality report: {str(e)}")
+
+    def generate_row_disposition_artifacts(self) -> None:
+        """
+        Generate report artifacts showing row dispositions during vocabulary harmonization.
+
+        This tracks what happened to each source row:
+        - stayed only: Row remained in source table only (no cross-table copies)
+        - stayed and copied: Row remained in source table AND was copied to other table(s) (1:N mapping)
+        - moved to other tables: Row moved entirely to different table(s) (domain change, no same-table target)
+
+        This distinction is critical for accurate accounting since "stayed and copied" rows
+        don't reduce the source table count, while "moved" rows do.
+        """
+        try:
+            utils.logger.info(f"Generating row disposition report for {self.source_table_name}")
+
+            # Get the primary key column for this table
+            primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+            if not primary_key_column:
+                utils.logger.warning(f"No primary key defined for {self.source_table_name}, skipping row disposition report")
+                return
+
+            disposition_sql = VocabHarmonizer.generate_row_disposition_count_sql(
+                self.harmonized_parquet_file,
+                self.source_table_name,
+                primary_key_column
+            )
+            disposition_counts = utils.execute_duckdb_sql(
+                disposition_sql,
+                f"Unable to get row disposition counts from Parquet file {self.file_path}",
+                return_results=True
+            )
+
+            # Get the source table concept_id from the schema
+            schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
+            source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
+
+            # Create a report artifact for each disposition type
+            for disposition, row_count in disposition_counts:
+                ra = report_artifact.ReportArtifact(
+                    delivery_date=self.delivery_date,
+                    artifact_bucket=self.bucket,
+                    concept_id=source_table_concept_id,
+                    name=f"Vocab harmonization row disposition: {self.source_table_name} - {disposition}",
+                    value_as_string=None,
+                    value_as_concept_id=None,
+                    value_as_number=row_count
+                )
+                ra.save_artifact()
+                utils.logger.info(f"Row disposition: {self.source_table_name} - {disposition}: {row_count} rows")
+
+            # Also generate net impact summary
+            net_impact = 0
+            for disposition, row_count in disposition_counts:
+                if disposition == "stayed and copied":
+                    # These rows add to the table count (duplication)
+                    # The count here is the number of source rows, but each creates multiple result rows
+                    # The actual addition is already captured in same-table mapping cardinality
+                    pass
+                elif disposition == "moved to other tables":
+                    # These rows leave the table entirely
+                    net_impact -= row_count
+
+            # Report net impact (for convenience in report generation)
+            if net_impact != 0:
+                ra = report_artifact.ReportArtifact(
+                    delivery_date=self.delivery_date,
+                    artifact_bucket=self.bucket,
+                    concept_id=source_table_concept_id,
+                    name=f"Vocab harmonization net impact: {self.source_table_name}",
+                    value_as_string=None,
+                    value_as_concept_id=None,
+                    value_as_number=net_impact
+                )
+                ra.save_artifact()
+                utils.logger.info(f"Net impact for {self.source_table_name}: {net_impact} rows")
+
+        except Exception as e:
+            # Log the error but don't fail the entire process
+            utils.logger.error(f"Error generating row disposition report: {str(e)}")
+
     def omop_etl(self) -> None:
         """
         Partition harmonized data and transform to target OMOP tables.
@@ -273,6 +409,8 @@ class VocabHarmonizer:
         # Must be done before OMOP ETL step modifies the data
         self.generate_table_transition_artifacts()
         self.generate_vocab_status_artifacts()
+        self.generate_same_table_mapping_cardinality_artifacts()
+        self.generate_row_disposition_artifacts()
 
         # Generate and execute SQL to get target tables
         target_tables_sql = VocabHarmonizer.generate_get_target_tables_sql(self.harmonized_parquet_file)
@@ -439,7 +577,9 @@ class VocabHarmonizer:
 
     def _build_existing_files_exclusion(self, primary_key_column: str, use_and: bool = True) -> str:
         """Build WHERE/AND clause to exclude already-harmonized rows."""
-        if not utils.valid_parquet_file(self.harmonized_parquet_file):
+        # Check if any harmonized parquet files exist in the directory
+        existing_files = storage.list_files(self.harmonized_parquet_path, pattern=f"*{constants.PARQUET}")
+        if not existing_files:
             return ""
 
         prefix = "AND" if use_and else "WHERE"
@@ -930,8 +1070,9 @@ class VocabHarmonizer:
             select_exprs.append(column_name)
 
         # Add columns to store metadata related to vocab harmonization for later reporting
+        # Use COALESCE to handle cases where concept_id is not in vocabulary
         metadata_columns = [
-            "vocab.concept_id_domain AS target_domain",
+            "COALESCE(vocab.concept_id_domain, 'Unknown') AS target_domain",
             "'domain check' AS vocab_harmonization_status",
             f"{source_concept_id_column} AS source_concept_id",
             f"{target_concept_id_column} AS previous_target_concept_id",
@@ -944,6 +1085,7 @@ class VocabHarmonizer:
         select_exprs.append("CAST(NULL AS BIGINT) AS vh_value_as_concept_id")
 
         # Add target table statement
+        # Default to source table when concept_id is not in vocabulary
         case_when_target_table = f"""
                 CASE
                     WHEN vocab.concept_id_domain = 'Visit' THEN 'visit_occurrence'
@@ -955,6 +1097,7 @@ class VocabHarmonizer:
                     WHEN vocab.concept_id_domain = 'Observation' THEN 'observation'
                     WHEN vocab.concept_id_domain = 'Note' THEN 'note'
                     WHEN vocab.concept_id_domain = 'Specimen' THEN 'specimen'
+                    WHEN vocab.concept_id_domain IS NULL THEN '{source_table_name}'
                 ELSE '{source_table_name}' END AS target_table
         """
         select_exprs.append(case_when_target_table)
@@ -963,7 +1106,7 @@ class VocabHarmonizer:
 
         from_sql = f"""
                 FROM read_parquet('@{source_table_name.upper()}') AS tbl
-                INNER JOIN vocab
+                LEFT JOIN vocab
                     ON {target_concept_id_column} = vocab.concept_id
                 """
 
@@ -1077,6 +1220,90 @@ class VocabHarmonizer:
             FROM read_parquet('{parquet_path}')
             GROUP BY vocab_harmonization_status
             ORDER BY vocab_harmonization_status
+        """
+
+    @staticmethod
+    def generate_same_table_mapping_cardinality_count_sql(parquet_path: str, source_table_name: str, primary_key_column: str) -> str:
+        """
+        Generate SQL to count same-table mapping cardinalities from harmonized parquet files.
+
+        This method uses the PRIMARY KEY to identify unique source rows and count how many rows
+        have each same-table mapping cardinality. This includes:
+        - 1:1 mappings (normal case - primary key maps to single target in same table)
+        - 1:N mappings (duplication case - primary key maps to multiple targets in same table)
+
+        The primary key is the deterministic identifier: for a 1:N mapping, the primary key
+        appears N times in the result (once per target), creating N rows that are all counted.
+
+        The 1:N cases (N >= 2) are particularly important for detecting vocabulary harmonization
+        that causes record duplication within tables. The 1:1 counts are useful for validation.
+
+        For example, if primary key X maps to 2 targets (A and B) in measurement table,
+        the PK appears in 2 rows, and both are counted in the 1:2 category.
+
+        Args:
+            parquet_path: Path or glob pattern to harmonized parquet files
+                         (e.g., 'gs://bucket/path/harmonized/*.parquet')
+            source_table_name: Name of the source table (e.g., 'measurement') to filter on
+            primary_key_column: Name of the primary key column (e.g., 'measurement_id')
+        """
+        return f"""
+            SELECT
+                pk_cardinality.num_same_table_targets,
+                SUM(pk_cardinality.pk_row_count) as num_source_rows
+            FROM (
+                SELECT
+                    {primary_key_column} as primary_key,
+                    COUNT(DISTINCT target_concept_id) as num_same_table_targets,
+                    COUNT(*) as pk_row_count
+                FROM read_parquet('{parquet_path}')
+                WHERE target_table = '{source_table_name}'
+                GROUP BY {primary_key_column}
+            ) as pk_cardinality
+            GROUP BY pk_cardinality.num_same_table_targets
+            ORDER BY pk_cardinality.num_same_table_targets
+        """
+
+    @staticmethod
+    def generate_row_disposition_count_sql(parquet_path: str, source_table_name: str, primary_key_column: str) -> str:
+        """
+        Generate SQL to count row dispositions from harmonized parquet files.
+
+        This method classifies each source row based on where it ended up after harmonization:
+        - "stayed only": Row has targets in source table ONLY (no cross-table transitions)
+        - "stayed and copied": Row has targets in BOTH source table AND other table(s) (1:N with cross-table copy)
+        - "moved to other tables": Row has targets in other table(s) ONLY (complete domain change)
+
+        This distinction is critical for accurate accounting:
+        - "stayed only" and "stayed and copied" rows don't reduce the source table count
+        - "moved to other tables" rows DO reduce the source table count
+        - "stayed and copied" rows create additional rows via duplication
+
+        Args:
+            parquet_path: Path or glob pattern to harmonized parquet files
+                         (e.g., 'gs://bucket/path/harmonized/*.parquet')
+            source_table_name: Name of the source table (e.g., 'measurement')
+            primary_key_column: Name of the primary key column (e.g., 'measurement_id')
+        """
+        return f"""
+            WITH row_analysis AS (
+                SELECT
+                    {primary_key_column} as primary_key,
+                    COUNT(CASE WHEN target_table = '{source_table_name}' THEN 1 END) as same_table_count,
+                    COUNT(CASE WHEN target_table != '{source_table_name}' THEN 1 END) as cross_table_count
+                FROM read_parquet('{parquet_path}')
+                GROUP BY {primary_key_column}
+            )
+            SELECT
+                CASE
+                    WHEN same_table_count > 0 AND cross_table_count = 0 THEN 'stayed only'
+                    WHEN same_table_count > 0 AND cross_table_count > 0 THEN 'stayed and copied'
+                    WHEN same_table_count = 0 AND cross_table_count > 0 THEN 'moved to other tables'
+                END as disposition,
+                COUNT(*) as row_count
+            FROM row_analysis
+            GROUP BY disposition
+            ORDER BY disposition
         """
 
     @staticmethod

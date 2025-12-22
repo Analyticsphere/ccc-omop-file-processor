@@ -113,6 +113,38 @@ class TestGenerateCheckNewTargetsSql:
         expected = load_reference_sql("generate_check_new_targets_sql_target_replacement.sql")
         assert normalize_sql(result) == normalize_sql(expected)
 
+    def test_target_remap_with_exclusion(self):
+        """Test SQL generation for TARGET_REMAP mode includes NOT IN clause when exclusion provided."""
+        schema = utils.get_table_schema('condition_occurrence', '5.4')
+        ordered_omop_columns = list(schema['condition_occurrence']['columns'].keys())
+
+        # Simulate the exclusion clause that would be generated
+        exclusion_clause = """
+                AND tbl.condition_occurrence_id NOT IN (
+                    SELECT condition_occurrence_id FROM read_parquet('gs://synthea53/2025-01-01/artifacts/harmonized/*.parquet')
+                )
+            """
+
+        result = VocabHarmonizer.generate_check_new_targets_sql(
+            source_table_name='condition_occurrence',
+            ordered_omop_columns=ordered_omop_columns,
+            target_concept_id_column='condition_concept_id',
+            source_concept_id_column='tbl.condition_source_concept_id',
+            primary_key_column='condition_occurrence_id',
+            vocab_status_string='existing non-standard target remapped to standard code',
+            mapping_relationships="'Maps to', 'Maps to value'",
+            existing_files_where_clause=exclusion_clause,
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_target_remap.parquet'
+        )
+
+        expected = load_reference_sql("generate_check_new_targets_sql_target_remap_with_exclusion.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
 
 class TestGenerateDomainTableCheckSql:
     """Tests for generate_domain_table_check_sql()."""
@@ -137,6 +169,35 @@ class TestGenerateDomainTableCheckSql:
         )
 
         expected = load_reference_sql("generate_domain_table_check_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+    def test_domain_check_with_exclusion(self):
+        """Test SQL generation for domain table check includes WHERE NOT IN clause when exclusion provided."""
+        schema = utils.get_table_schema('condition_occurrence', '5.4')
+        ordered_omop_columns = list(schema['condition_occurrence']['columns'].keys())
+
+        # Simulate the exclusion clause that would be generated (note: use_and=False for domain check)
+        exclusion_clause = """
+                WHERE tbl.condition_occurrence_id NOT IN (
+                    SELECT condition_occurrence_id FROM read_parquet('gs://synthea53/2025-01-01/artifacts/harmonized/*.parquet')
+                )
+            """
+
+        result = VocabHarmonizer.generate_domain_table_check_sql(
+            source_table_name='condition_occurrence',
+            ordered_omop_columns=ordered_omop_columns,
+            target_concept_id_column='tbl.condition_concept_id',
+            source_concept_id_column='tbl.condition_source_concept_id',
+            existing_files_where_clause=exclusion_clause,
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_domain_check.parquet'
+        )
+
+        expected = load_reference_sql("generate_domain_table_check_sql_with_exclusion.sql")
         assert normalize_sql(result) == normalize_sql(expected)
 
 
@@ -275,4 +336,34 @@ class TestGenerateVocabStatusCountSql:
         )
 
         expected = load_reference_sql("generate_vocab_status_count_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateSameTableMappingCardinalityCountSql:
+    """Tests for generate_same_table_mapping_cardinality_count_sql()."""
+
+    def test_standard_same_table_mapping_cardinality_count(self):
+        """Test SQL generation for counting same-table mapping cardinalities (1:1, 1:2, 1:N) for reporting."""
+        result = VocabHarmonizer.generate_same_table_mapping_cardinality_count_sql(
+            parquet_path='synthea53/2025-01-01/artifacts/harmonized/*.parquet',
+            source_table_name='measurement',
+            primary_key_column='measurement_id'
+        )
+
+        expected = load_reference_sql("generate_mapping_cardinality_count_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateRowDispositionCountSql:
+    """Tests for generate_row_disposition_count_sql()."""
+
+    def test_standard_row_disposition_count(self):
+        """Test SQL generation for counting row dispositions (stayed only, stayed and copied, moved) for reporting."""
+        result = VocabHarmonizer.generate_row_disposition_count_sql(
+            parquet_path='gs://synthea53/2025-01-01/artifacts/harmonized/measurement/*.parquet',
+            source_table_name='measurement',
+            primary_key_column='measurement_id'
+        )
+
+        expected = load_reference_sql("generate_row_disposition_count_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)

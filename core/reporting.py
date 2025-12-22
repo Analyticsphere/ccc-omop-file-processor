@@ -10,10 +10,10 @@ from core.storage_backend import storage
 
 class ReportGenerator:
     """
-    Generates delivery reports for OMOP data processing.
+    Generates delivery report CSV files for OMOP data processing.
 
-    Consolidates temporary report artifacts into a final CSV report
-    and creates metadata entries documenting the delivery and processing.
+    Consolidates temporary report artifacts into a final CSV file that serves
+    as a data source for visual reporting and dashboards.
     """
 
     def __init__(self, report_data: dict):
@@ -44,15 +44,17 @@ class ReportGenerator:
 
     def generate(self) -> None:
         """
-        Generate complete delivery report.
+        Generate complete delivery report CSV file.
 
         Creates report artifacts with metadata and consolidates
-        temporary report files into final CSV.
+        temporary report files into final CSV for downstream reporting.
         """
         # Generate additional reporting artifacts
         self._create_metadata_artifacts()
         self._create_type_concept_breakdown_artifacts()
         self._create_vocabulary_breakdown_artifacts()
+        self._create_date_datetime_default_value_artifacts()
+        self._create_invalid_concept_id_artifacts()
         self._create_final_row_count_artifacts()
 
         # Generate the final, single report CSV file
@@ -60,6 +62,8 @@ class ReportGenerator:
 
     def _create_metadata_artifacts(self) -> None:
         """Create report artifacts documenting delivery and processing metadata."""
+
+        utils.logger.info("Creating metadata report artifacts")
         # Get delivered vocabulary version
         delivered_vocab_version = utils.get_delivery_vocabulary_version(
             self.bucket,
@@ -99,11 +103,14 @@ class ReportGenerator:
             )
             artifact.save_artifact()
 
+            utils.logger.info("Created metadata artifacts")
+
     def _consolidate_report_files(self) -> None:
         """
-        Consolidate temporary report files into final CSV.
+        Consolidate temporary report files into final CSV file.
 
-        Discovers all temporary report parquet files and combines them into a single CSV file.
+        Discovers all temporary report parquet files and combines them into a single
+        CSV file that serves as a data source for visual reporting and dashboards.
         """
         # Find all temporary report files
         report_tmp_dir = f"{self.delivery_date}/{constants.ArtifactPaths.REPORT_TMP.value}"
@@ -164,6 +171,8 @@ class ReportGenerator:
         and their counts, joining with the concept vocabulary table to get concept names.
         Creates one report artifact per table-type_concept pair.
         """
+        utils.logger.info("Creating type concept breakdown report artifacts")
+
         # Get target vocabulary version for this delivery
         target_vocab_version = self.target_vocabulary_version
 
@@ -218,6 +227,8 @@ class ReportGenerator:
             except Exception as e:
                 utils.logger.error(f"Error processing type concept breakdown for {table_name}: {e}")
                 continue
+        
+        utils.logger.info("Created type concept breakdown report artifacts")
 
     def _create_vocabulary_breakdown_artifacts(self) -> None:
         """
@@ -227,6 +238,8 @@ class ReportGenerator:
         for both source and target concepts, joining with the concept vocabulary table
         to get vocabulary names. Creates report artifacts for each table-field-vocabulary combination.
         """
+        utils.logger.info("Creating vocabulary breakdown report artifacts")
+
         # Get target vocabulary version for this delivery
         target_vocab_version = self.target_vocabulary_version
 
@@ -343,6 +356,201 @@ class ReportGenerator:
                     except Exception as e:
                         utils.logger.error(f"Error processing source vocabulary breakdown for {table_name}.{source_concept_id_field}: {e}")
 
+        utils.logger.info("Created vocabulary breakdown report artifacts")
+
+    def _create_date_datetime_default_value_artifacts(self) -> None:
+        """
+        Create report artifacts for date/datetime fields with default values.
+
+        For each table, identifies date and datetime fields from the OMOP schema.
+        For each date/datetime field, counts how many rows have the default placeholder value
+        (e.g., '1970-01-01' for DATE, '1901-01-01 00:00:00' for TIMESTAMP/DATETIME).
+        Creates one report artifact per table-field combination.
+        """
+        utils.logger.info("Creating date/datetime default value report artifacts")
+
+        # Process each table in reporting config
+        for table_name, table_config_obj in constants.REPORTING_TABLE_CONFIG.items():
+            table_config: Any = table_config_obj
+            location = table_config["location"]
+
+            # Construct path to table
+            table_path = self._get_table_path(table_name, location)
+
+            # Check if table exists
+            if not utils.parquet_file_exists(table_path):
+                utils.logger.info(f"Table {table_name} not found, skipping date/datetime default value check")
+                continue
+
+            # Get OMOP schema for this table
+            schema = utils.get_cdm_schema(cdm_version=self.target_cdm_version)
+            if table_name not in schema:
+                utils.logger.warning(f"Table {table_name} not found in CDM schema, skipping")
+                continue
+
+            table_schema = schema[table_name]
+            columns = table_schema.get("columns", {})
+
+            # Find date/datetime fields
+            date_datetime_fields = []
+            for column_name, column_props in columns.items():
+                column_type = column_props.get("type", "")
+                if column_type in ["DATE", "TIMESTAMP", "DATETIME"]:
+                    date_datetime_fields.append((column_name, column_type))
+
+            # Skip if no date/datetime fields
+            if not date_datetime_fields:
+                utils.logger.debug(f"Table {table_name} has no date/datetime fields, skipping")
+                continue
+
+            # Get table concept_id for the artifact
+            table_concept_id = table_schema.get("concept_id", 0)
+
+            # Process each date/datetime field
+            for field_name, field_type in date_datetime_fields:
+                try:
+                    # Get the default value for this field
+                    default_value = utils.get_placeholder_value(field_name, field_type)
+
+                    # Generate and execute SQL to count rows with default value
+                    sql = self.generate_date_datetime_default_count_sql(
+                        table_path,
+                        field_name,
+                        default_value
+                    )
+
+                    result = utils.execute_duckdb_sql(
+                        sql,
+                        f"Unable to query default value count for {table_name}.{field_name}",
+                        return_results=True
+                    )
+
+                    # Extract count from result
+                    default_count = result[0][0] if result else 0
+
+                    # Create report artifact
+                    artifact = report_artifact.ReportArtifact(
+                        delivery_date=self.delivery_date,
+                        artifact_bucket=self.bucket,
+                        concept_id=table_concept_id,
+                        name=f"Date/datetime default value count: {table_name}.{field_name}",
+                        value_as_string=None,
+                        value_as_concept_id=None,
+                        value_as_number=float(default_count)
+                    )
+                    artifact.save_artifact()
+
+                    utils.logger.info(f"Created default value artifact for {table_name}.{field_name}: {default_count} rows")
+
+                except Exception as e:
+                    utils.logger.error(f"Error processing default value count for {table_name}.{field_name}: {e}")
+                    continue
+
+        utils.logger.info("Created date/datetime default value report artifacts")
+
+    def _create_invalid_concept_id_artifacts(self) -> None:
+        """
+        Create report artifacts for concept_id values that don't exist in the OMOP vocabulary.
+
+        For each table with concept_id fields, identifies concept_id values that are:
+        - Not NULL
+        - Not 0 (which represents "No matching concept")
+        - Don't exist in the vocabulary
+
+        Note: Only checks standard concept_id fields and type_concept_id fields.
+        Source concept_id fields (e.g., condition_source_concept_id) are NOT checked.
+
+        Creates one report artifact per table-field combination showing the count of rows
+        with invalid concept_ids. This helps identify data quality issues where concept_ids
+        reference non-existent vocabulary entries.
+        """
+        utils.logger.info("Creating invalid concept_id report artifacts")
+
+        # Get target vocabulary version for this delivery
+        target_vocab_version = self.target_vocabulary_version
+
+        # Construct path to concept table in vocabulary
+        concept_path = storage.get_uri(f"{constants.VOCAB_PATH}/{target_vocab_version}/optimized/concept{constants.PARQUET}")
+
+        # Check if concept table exists
+        if not utils.parquet_file_exists(concept_path):
+            utils.logger.warning(f"Concept table not found at {concept_path}, skipping invalid concept_id check")
+            return
+
+        # Process each table with vocabulary concept fields
+        for table_name, table_config_obj in constants.REPORTING_TABLE_CONFIG.items():
+            table_config: Any = table_config_obj
+            vocabulary_fields = table_config["vocabulary_fields"]
+            type_field = table_config["type_field"]
+
+            # Skip tables without any concept fields
+            if not vocabulary_fields and not type_field:
+                continue
+
+            location = table_config["location"]
+
+            # Construct path to table
+            table_path = self._get_table_path(table_name, location)
+
+            # Check if table exists
+            if not utils.parquet_file_exists(table_path):
+                utils.logger.info(f"Table {table_name} not found, skipping invalid concept_id check")
+                continue
+
+            # Collect all concept_id fields to check (including type_field)
+            concept_fields_to_check = []
+
+            # Add vocabulary fields (excluding source_concept_id fields)
+            if vocabulary_fields:
+                for field_config in vocabulary_fields:
+                    concept_id_field = field_config["concept_id"]
+                    # Only check the standard concept_id field, not source_concept_id
+                    concept_fields_to_check.append(concept_id_field)
+
+            # Add type field if present
+            if type_field:
+                concept_fields_to_check.append(type_field)
+
+            # Check each concept_id field for invalid values
+            for concept_field in concept_fields_to_check:
+                try:
+                    # Generate and execute SQL to find invalid concept_ids
+                    sql = self.generate_invalid_concept_id_sql(
+                        table_path,
+                        concept_path,
+                        concept_field
+                    )
+
+                    result = utils.execute_duckdb_sql(
+                        sql,
+                        f"Unable to query invalid concept_ids for {table_name}.{concept_field}",
+                        return_results=True
+                    )
+
+                    # Get total count of invalid concept_ids
+                    invalid_count = result[0][0] if result else 0
+
+                    # Create report artifact
+                    artifact = report_artifact.ReportArtifact(
+                        delivery_date=self.delivery_date,
+                        artifact_bucket=self.bucket,
+                        concept_id=0,
+                        name=f"Invalid concept_id count: {table_name}.{concept_field}",
+                        value_as_string=f"{table_name}.{concept_field}",
+                        value_as_concept_id=0,
+                        value_as_number=float(invalid_count)
+                    )
+                    artifact.save_artifact()
+
+                    if invalid_count > 0:
+                        utils.logger.warning(f"Found {invalid_count} invalid concept_ids in {table_name}.{concept_field}")
+
+                except Exception as e:
+                    utils.logger.error(f"Error checking invalid concept_ids for {table_name}.{concept_field}: {e}")
+                    continue
+
+        utils.logger.info("Created invalid concept_id report artifacts")
+
     def _create_final_row_count_artifacts(self) -> None:
         """
         Create final row count artifacts for all OMOP CDM tables.
@@ -351,6 +559,8 @@ class ReportGenerator:
         defined in the target CDM schema (5.4). If a table doesn't exist as a parquet
         file, creates an artifact with count = 0.
         """
+        utils.logger.info("Creating final row count report artifacts")
+
         # Get the target CDM schema (always 5.4)
         try:
             schema = utils.get_cdm_schema(self.target_cdm_version)
@@ -422,6 +632,8 @@ class ReportGenerator:
                 except Exception as e:
                     utils.logger.error(f"Error creating zero-count artifact for {table_name}: {e}")
 
+        utils.logger.info("Created final row count report artifacts")
+        
     @staticmethod
     def generate_type_concept_breakdown_sql(table_uri: str, concept_uri: str, type_field: str) -> str:
         """
@@ -481,6 +693,53 @@ class ReportGenerator:
             table_uri: Full URI path to the table's parquet file
         """
         return f"SELECT COUNT(*) as row_count FROM read_parquet('{table_uri}')"
+
+    @staticmethod
+    def generate_date_datetime_default_count_sql(table_uri: str, field_name: str, default_value: str) -> str:
+        """
+        Generate SQL to count rows with default values in date/datetime fields.
+
+        Args:
+            table_uri: Full URI path to the table's parquet file
+            field_name: Name of the date/datetime field to check
+            default_value: Default value to search for (e.g., '1970-01-01' or '1901-01-01 00:00:00')
+
+        Returns:
+            SQL query that counts rows where the field equals the default value
+        """
+        return f"""
+            SELECT COUNT(*) as default_count
+            FROM read_parquet('{table_uri}')
+            WHERE {field_name} = {default_value}
+        """
+
+    @staticmethod
+    def generate_invalid_concept_id_sql(table_uri: str, concept_uri: str, concept_field: str) -> str:
+        """
+        Generate SQL to count rows with invalid concept_id values.
+
+        Identifies concept_id values that are:
+        - Not NULL
+        - Not 0 (which represents "No matching concept" in OMOP)
+        - Don't exist in the vocabulary concept table
+
+        Args:
+            table_uri: Full URI path to the table's parquet file
+            concept_uri: Full URI path to the concept vocabulary parquet file
+            concept_field: Name of the concept_id field to check
+
+        Returns:
+            SQL query that counts rows with invalid concept_ids
+        """
+        return f"""
+            SELECT COUNT(*) as invalid_count
+            FROM read_parquet('{table_uri}') t
+            LEFT JOIN read_parquet('{concept_uri}') c
+                ON t.{concept_field} = c.concept_id
+            WHERE t.{concept_field} IS NOT NULL
+              AND t.{concept_field} != 0
+              AND c.concept_id IS NULL
+        """
 
     @staticmethod
     def generate_report_consolidation_sql(select_statement: str, output_path: str) -> str:

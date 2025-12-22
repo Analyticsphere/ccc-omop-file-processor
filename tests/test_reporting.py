@@ -74,11 +74,13 @@ class TestReportGeneratorGenerate:
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
     @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
+    @patch.object(ReportGenerator, '_create_date_datetime_default_value_artifacts')
     @patch.object(ReportGenerator, '_create_vocabulary_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
+    @patch.object(ReportGenerator, '_create_invalid_concept_id_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_create_final_row_count, mock_consolidate):
-        """Test that generate calls metadata, type concept, vocabulary, final row count, and consolidation methods."""
+    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_final_row_count, mock_consolidate):
+        """Test that generate calls metadata, invalid concept_id, type concept, vocabulary, date/datetime defaults, final row count, and consolidation methods."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -94,18 +96,22 @@ class TestReportGeneratorGenerate:
         generator.generate()
 
         mock_create_metadata.assert_called_once()
+        mock_create_invalid_concept_ids.assert_called_once()
         mock_create_type_concept.assert_called_once()
         mock_create_vocabulary.assert_called_once()
+        mock_create_date_defaults.assert_called_once()
         mock_create_final_row_count.assert_called_once()
         mock_consolidate.assert_called_once()
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
     @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
+    @patch.object(ReportGenerator, '_create_date_datetime_default_value_artifacts')
     @patch.object(ReportGenerator, '_create_vocabulary_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
+    @patch.object(ReportGenerator, '_create_invalid_concept_id_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_type_concept, mock_create_vocabulary, mock_create_final_row_count, mock_consolidate):
-        """Test that methods are called in correct order: metadata, type concept, vocabulary, final row count, consolidation."""
+    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_final_row_count, mock_consolidate):
+        """Test that methods are called in correct order: metadata, type concept, vocabulary, date/datetime defaults, invalid concept_id, final row count, consolidation."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -119,15 +125,17 @@ class TestReportGeneratorGenerate:
 
         call_order = []
         mock_create_metadata.side_effect = lambda: call_order.append('metadata')
+        mock_create_invalid_concept_ids.side_effect = lambda: call_order.append('invalid_concept_ids')
         mock_create_type_concept.side_effect = lambda: call_order.append('type_concept')
         mock_create_vocabulary.side_effect = lambda: call_order.append('vocabulary')
+        mock_create_date_defaults.side_effect = lambda: call_order.append('date_defaults')
         mock_create_final_row_count.side_effect = lambda: call_order.append('final_row_count')
         mock_consolidate.side_effect = lambda: call_order.append('consolidate')
 
         generator = ReportGenerator(report_data)
         generator.generate()
 
-        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'final_row_count', 'consolidate']
+        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'date_defaults', 'invalid_concept_ids', 'final_row_count', 'consolidate']
 
 
 class TestReportGeneratorMetadataArtifacts:
@@ -390,6 +398,50 @@ class TestReportGeneratorConsolidationSQL:
 
         assert isinstance(sql, str)
         assert len(sql) > 0
+
+
+class TestReportGeneratorDateDatetimeDefaultCountSQL:
+    """Tests for generate_date_datetime_default_count_sql static method."""
+
+    def test_matches_golden_file(self):
+        """Test that generated SQL matches the golden file."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+        field_name = "visit_start_date"
+        default_value = "'1970-01-01'"
+
+        sql = ReportGenerator.generate_date_datetime_default_count_sql(table_uri, field_name, default_value)
+
+        # Load golden file
+        with open('tests/reference/sql/reporting/generate_date_datetime_default_count_sql_standard.sql', 'r') as f:
+            expected_sql = f.read()
+
+        # Normalize SQL for whitespace-insensitive comparison
+        def normalize_sql(sql: str) -> str:
+            lines = [line.strip() for line in sql.strip().split('\n')]
+            lines = [line for line in lines if line]
+            return '\n'.join(lines)
+
+        assert normalize_sql(sql) == normalize_sql(expected_sql)
+
+    def test_matches_golden_file_timestamp(self):
+        """Test that generated SQL for TIMESTAMP field matches the golden file."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+        field_name = "visit_start_datetime"
+        default_value = "'1901-01-01 00:00:00'"
+
+        sql = ReportGenerator.generate_date_datetime_default_count_sql(table_uri, field_name, default_value)
+
+        # Load golden file
+        with open('tests/reference/sql/reporting/generate_date_datetime_default_count_sql_timestamp.sql', 'r') as f:
+            expected_sql = f.read()
+
+        # Normalize SQL for whitespace-insensitive comparison
+        def normalize_sql(sql: str) -> str:
+            lines = [line.strip() for line in sql.strip().split('\n')]
+            lines = [line for line in lines if line]
+            return '\n'.join(lines)
+
+        assert normalize_sql(sql) == normalize_sql(expected_sql)
 
 
 class TestReportGeneratorHelpers:
@@ -728,3 +780,241 @@ class TestCreateTypeConceptBreakdownArtifacts:
         assert second_call['concept_id'] == 0
         assert second_call['value_as_string'] == 'No matching concept'
         assert second_call['value_as_number'] == 5.0
+
+
+class TestInvalidConceptIdSQL:
+    """Tests for generate_invalid_concept_id_sql static method."""
+
+    def test_matches_golden_file(self):
+        """Test that generated SQL matches the golden file."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+        concept_uri = "gs://vocab-bucket/v5.0/optimized/concept.parquet"
+        concept_field = "visit_concept_id"
+
+        sql = ReportGenerator.generate_invalid_concept_id_sql(table_uri, concept_uri, concept_field)
+
+        # Load golden file
+        with open('tests/reference/sql/reporting/generate_invalid_concept_id_sql_standard.sql', 'r') as f:
+            expected_sql = f.read()
+
+        assert sql.strip() == expected_sql.strip()
+
+    def test_returns_string(self):
+        """Test that the function returns a string."""
+        table_uri = "gs://test-bucket/table.parquet"
+        concept_uri = "gs://vocab-bucket/concept.parquet"
+        concept_field = "visit_concept_id"
+
+        sql = ReportGenerator.generate_invalid_concept_id_sql(table_uri, concept_uri, concept_field)
+
+        assert isinstance(sql, str)
+        assert len(sql) > 0
+
+    def test_sql_contains_required_components(self):
+        """Test that generated SQL contains all required components."""
+        table_uri = "gs://test-bucket/table.parquet"
+        concept_uri = "gs://vocab-bucket/concept.parquet"
+        concept_field = "measurement_concept_id"
+
+        sql = ReportGenerator.generate_invalid_concept_id_sql(table_uri, concept_uri, concept_field)
+
+        # Check for key SQL components
+        assert "SELECT COUNT(*) as invalid_count" in sql
+        assert f"FROM read_parquet('{table_uri}') t" in sql
+        assert f"LEFT JOIN read_parquet('{concept_uri}') c" in sql
+        assert f"ON t.{concept_field} = c.concept_id" in sql
+        assert f"WHERE t.{concept_field} IS NOT NULL" in sql
+        assert f"AND t.{concept_field} != 0" in sql
+        assert "AND c.concept_id IS NULL" in sql
+
+
+class TestCreateInvalidConceptIdArtifacts:
+    """Tests for _create_invalid_concept_id_artifacts method."""
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.report_artifact.ReportArtifact')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.storage.get_uri')
+    def test_creates_artifacts_for_invalid_concept_ids(self, mock_get_uri, mock_file_exists,
+                                                       mock_artifact, mock_execute_sql):
+        """Test that artifacts are created for tables with invalid concept_ids."""
+        # Setup mocks - concept table exists, and one data table exists
+        def file_exists_side_effect(path):
+            if 'concept.parquet' in path:
+                return True
+            if 'visit_occurrence.parquet' in path:
+                return True
+            return False
+
+        mock_file_exists.side_effect = file_exists_side_effect
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        # Return 15 invalid concept_ids found for visit_concept_id
+        mock_execute_sql.return_value = [(15,)]
+        mock_artifact_instance = MagicMock()
+        mock_artifact.return_value = mock_artifact_instance
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_invalid_concept_id_artifacts()
+
+        # Should have executed SQL and created artifacts
+        assert mock_execute_sql.call_count > 0
+        assert mock_artifact.call_count > 0
+        assert mock_artifact_instance.save_artifact.call_count > 0
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.storage.get_uri')
+    def test_skips_missing_concept_table(self, mock_get_uri, mock_file_exists, mock_execute_sql):
+        """Test that method returns early when concept table doesn't exist."""
+        # Concept table doesn't exist
+        mock_file_exists.return_value = False
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_invalid_concept_id_artifacts()
+
+        # Should not execute any SQL
+        mock_execute_sql.assert_not_called()
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.report_artifact.ReportArtifact')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.storage.get_uri')
+    def test_artifact_values_are_correct(self, mock_get_uri, mock_file_exists,
+                                         mock_artifact, mock_execute_sql):
+        """Test that artifact values are correctly populated."""
+        # Setup mocks - concept table exists, but only one data table with one field
+        def file_exists_side_effect(path):
+            if 'concept.parquet' in path:
+                return True
+            if 'condition_occurrence.parquet' in path:
+                return True
+            return False
+
+        mock_file_exists.side_effect = file_exists_side_effect
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        # Return 42 invalid concept_ids found
+        mock_execute_sql.return_value = [(42,)]
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_invalid_concept_id_artifacts()
+
+        # Get artifact creation calls
+        artifact_calls = mock_artifact.call_args_list
+
+        # Should have created at least one artifact
+        assert len(artifact_calls) > 0
+
+        # Check first artifact values
+        first_call = artifact_calls[0].kwargs
+        assert first_call['delivery_date'] == "2025-01-15"
+        assert first_call['artifact_bucket'] == "test-bucket"
+        assert first_call['concept_id'] == 0
+        assert 'Invalid concept_id count' in first_call['name']
+        assert first_call['value_as_number'] == 42.0
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.report_artifact.ReportArtifact')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.storage.get_uri')
+    def test_checks_all_concept_id_fields(self, mock_get_uri, mock_file_exists,
+                                          mock_artifact, mock_execute_sql):
+        """Test that all concept_id fields in a table are checked."""
+        # Setup mocks - concept table exists, visit_occurrence has multiple concept_id fields
+        def file_exists_side_effect(path):
+            if 'concept.parquet' in path:
+                return True
+            if 'visit_occurrence.parquet' in path:
+                return True
+            return False
+
+        mock_file_exists.side_effect = file_exists_side_effect
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        # Return different counts for each field
+        mock_execute_sql.return_value = [(10,)]
+        mock_artifact_instance = MagicMock()
+        mock_artifact.return_value = mock_artifact_instance
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_invalid_concept_id_artifacts()
+
+        # visit_occurrence has: visit_concept_id, visit_type_concept_id,
+        # admitted_from_concept_id, discharged_to_concept_id
+        # So should check at least 4 concept_id fields (vocabulary_fields + type_field)
+        # Plus other tables that exist
+        assert mock_execute_sql.call_count >= 4
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.storage.get_uri')
+    def test_skips_missing_data_tables(self, mock_get_uri, mock_file_exists, mock_execute_sql):
+        """Test that method skips tables that don't exist."""
+        # Only concept table exists, no data tables
+        def file_exists_side_effect(path):
+            if 'concept.parquet' in path:
+                return True
+            return False
+
+        mock_file_exists.side_effect = file_exists_side_effect
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_invalid_concept_id_artifacts()
+
+        # Should not execute any SQL when no data tables exist
+        mock_execute_sql.assert_not_called()

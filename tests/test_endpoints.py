@@ -607,27 +607,27 @@ class TestParquetToBqEndpoint:
         assert b"Unable to load Parquet file" in response.data
 
 
-class TestGenerateDeliveryReportEndpoint:
-    """Tests for /generate_delivery_report endpoint."""
+class TestGenerateDeliveryReportCsvEndpoint:
+    """Tests for /generate_delivery_report_csv endpoint."""
 
     @patch('core.endpoints.reporting.ReportGenerator')
-    def test_generate_delivery_report_success(self, mock_generator, client):
-        """Test successful delivery report generation."""
+    def test_generate_delivery_report_csv_success(self, mock_generator, client):
+        """Test successful delivery report CSV generation."""
         mock_instance = MagicMock()
         mock_generator.return_value = mock_instance
 
-        response = client.post('/generate_delivery_report', json={
+        response = client.post('/generate_delivery_report_csv', json={
             'delivery_date': '2025-01-01',
             'site': 'test_site',
             'additional_field': 'test'
         })
 
         assert response.status_code == 200
-        assert b"Generated delivery report file" in response.data
+        assert b"Generated delivery report CSV file" in response.data
 
-    def test_generate_delivery_report_missing_parameters(self, client):
+    def test_generate_delivery_report_csv_missing_parameters(self, client):
         """Test missing parameters return 400."""
-        response = client.post('/generate_delivery_report', json={
+        response = client.post('/generate_delivery_report_csv', json={
             'site': 'test_site'
         })
 
@@ -635,17 +635,17 @@ class TestGenerateDeliveryReportEndpoint:
         assert b"Missing required parameters" in response.data
 
     @patch('core.endpoints.reporting.ReportGenerator')
-    def test_generate_delivery_report_exception(self, mock_generator, client):
+    def test_generate_delivery_report_csv_exception(self, mock_generator, client):
         """Test exception handling returns 500."""
         mock_generator.side_effect = Exception("Report generation failed")
 
-        response = client.post('/generate_delivery_report', json={
+        response = client.post('/generate_delivery_report_csv', json={
             'delivery_date': '2025-01-01',
             'site': 'test_site'
         })
 
         assert response.status_code == 500
-        assert b"Unable to generate delivery report" in response.data
+        assert b"Unable to generate delivery report CSV" in response.data
 
 
 class TestCreateMissingTablesEndpoint:
