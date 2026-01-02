@@ -74,13 +74,14 @@ class TestReportGeneratorGenerate:
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
     @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
+    @patch.object(ReportGenerator, '_create_person_id_referential_integrity_artifacts')
     @patch.object(ReportGenerator, '_create_date_datetime_default_value_artifacts')
     @patch.object(ReportGenerator, '_create_vocabulary_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_invalid_concept_id_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_final_row_count, mock_consolidate):
-        """Test that generate calls metadata, invalid concept_id, type concept, vocabulary, date/datetime defaults, final row count, and consolidation methods."""
+    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_person_id_integrity, mock_create_final_row_count, mock_consolidate):
+        """Test that generate calls metadata, invalid concept_id, type concept, vocabulary, date/datetime defaults, person_id referential integrity, final row count, and consolidation methods."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -100,18 +101,20 @@ class TestReportGeneratorGenerate:
         mock_create_type_concept.assert_called_once()
         mock_create_vocabulary.assert_called_once()
         mock_create_date_defaults.assert_called_once()
+        mock_create_person_id_integrity.assert_called_once()
         mock_create_final_row_count.assert_called_once()
         mock_consolidate.assert_called_once()
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
     @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
+    @patch.object(ReportGenerator, '_create_person_id_referential_integrity_artifacts')
     @patch.object(ReportGenerator, '_create_date_datetime_default_value_artifacts')
     @patch.object(ReportGenerator, '_create_vocabulary_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_invalid_concept_id_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_final_row_count, mock_consolidate):
-        """Test that methods are called in correct order: metadata, type concept, vocabulary, date/datetime defaults, invalid concept_id, final row count, consolidation."""
+    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_person_id_integrity, mock_create_final_row_count, mock_consolidate):
+        """Test that methods are called in correct order: metadata, type concept, vocabulary, date/datetime defaults, invalid concept_id, person_id referential integrity, final row count, consolidation."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -129,13 +132,14 @@ class TestReportGeneratorGenerate:
         mock_create_type_concept.side_effect = lambda: call_order.append('type_concept')
         mock_create_vocabulary.side_effect = lambda: call_order.append('vocabulary')
         mock_create_date_defaults.side_effect = lambda: call_order.append('date_defaults')
+        mock_create_person_id_integrity.side_effect = lambda: call_order.append('person_id_integrity')
         mock_create_final_row_count.side_effect = lambda: call_order.append('final_row_count')
         mock_consolidate.side_effect = lambda: call_order.append('consolidate')
 
         generator = ReportGenerator(report_data)
         generator.generate()
 
-        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'date_defaults', 'invalid_concept_ids', 'final_row_count', 'consolidate']
+        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'date_defaults', 'invalid_concept_ids', 'person_id_integrity', 'final_row_count', 'consolidate']
 
 
 class TestReportGeneratorMetadataArtifacts:
@@ -1017,4 +1021,277 @@ class TestCreateInvalidConceptIdArtifacts:
         generator._create_invalid_concept_id_artifacts()
 
         # Should not execute any SQL when no data tables exist
+        mock_execute_sql.assert_not_called()
+
+
+class TestPersonIdReferentialIntegritySQL:
+    """Tests for generate_person_id_referential_integrity_sql static method."""
+
+    def test_matches_golden_file(self):
+        """Test that generated SQL matches the golden file."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+        person_uri = "gs://test-bucket/2025-01-01/artifacts/converted_files/person.parquet"
+
+        sql = ReportGenerator.generate_person_id_referential_integrity_sql(table_uri, person_uri)
+
+        # Load golden file
+        with open('tests/reference/sql/reporting/generate_person_id_referential_integrity_sql_standard.sql', 'r') as f:
+            expected_sql = f.read()
+
+        assert sql.strip() == expected_sql.strip()
+
+    def test_returns_string(self):
+        """Test that the function returns a string."""
+        table_uri = "gs://test-bucket/table.parquet"
+        person_uri = "gs://test-bucket/person.parquet"
+
+        sql = ReportGenerator.generate_person_id_referential_integrity_sql(table_uri, person_uri)
+
+        assert isinstance(sql, str)
+        assert len(sql) > 0
+
+
+class TestCreatePersonIdReferentialIntegrityArtifacts:
+    """Tests for _create_person_id_referential_integrity_artifacts method."""
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.report_artifact.ReportArtifact')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.utils.get_cdm_schema')
+    @patch('core.reporting.storage.get_uri')
+    def test_creates_artifacts_for_tables_with_violations(self, mock_get_uri, mock_get_schema,
+                                                         mock_file_exists, mock_artifact,
+                                                         mock_execute_sql):
+        """Test that artifacts are created for tables with person_id violations."""
+        # Setup mocks
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+
+        # Person table and visit_occurrence table exist
+        def file_exists_side_effect(path):
+            if 'person.parquet' in path or 'visit_occurrence.parquet' in path:
+                return True
+            return False
+
+        mock_file_exists.side_effect = file_exists_side_effect
+
+        # Mock schema with person_id fields
+        mock_get_schema.return_value = {
+            "person": {
+                "columns": {"person_id": {"type": "BIGINT"}},
+                "concept_id": 0
+            },
+            "visit_occurrence": {
+                "columns": {"person_id": {"type": "BIGINT"}},
+                "concept_id": 1234
+            }
+        }
+
+        # First call returns row count (for visit_occurrence), second call returns violation count
+        mock_execute_sql.side_effect = [
+            [(100,)],  # Row count for visit_occurrence
+            [(5,)]     # Violation count for visit_occurrence
+        ]
+
+        mock_artifact_instance = MagicMock()
+        mock_artifact.return_value = mock_artifact_instance
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_person_id_referential_integrity_artifacts()
+
+        # Check that artifact was created
+        mock_artifact.assert_called_once()
+        artifact_call = mock_artifact.call_args.kwargs
+
+        assert artifact_call['delivery_date'] == "2025-01-15"
+        assert artifact_call['artifact_bucket'] == "test-bucket"
+        assert artifact_call['concept_id'] == 1234
+        assert artifact_call['name'] == "Person_id referential integrity violation count: visit_occurrence"
+        assert artifact_call['value_as_string'] == "visit_occurrence"
+        assert artifact_call['value_as_concept_id'] == 1234
+        assert artifact_call['value_as_number'] == 5.0
+
+        mock_artifact_instance.save_artifact.assert_called_once()
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.report_artifact.ReportArtifact')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.utils.get_cdm_schema')
+    @patch('core.reporting.storage.get_uri')
+    def test_creates_artifacts_with_zero_violations(self, mock_get_uri, mock_get_schema,
+                                                    mock_file_exists, mock_artifact,
+                                                    mock_execute_sql):
+        """Test that artifacts are created even when there are no violations."""
+        # Setup mocks
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+
+        # Person table and visit_occurrence table exist
+        def file_exists_side_effect(path):
+            if 'person.parquet' in path or 'visit_occurrence.parquet' in path:
+                return True
+            return False
+
+        mock_file_exists.side_effect = file_exists_side_effect
+
+        # Mock schema with person_id fields
+        mock_get_schema.return_value = {
+            "person": {
+                "columns": {"person_id": {"type": "BIGINT"}},
+                "concept_id": 0
+            },
+            "visit_occurrence": {
+                "columns": {"person_id": {"type": "BIGINT"}},
+                "concept_id": 1234
+            }
+        }
+
+        # First call returns row count, second call returns zero violations
+        mock_execute_sql.side_effect = [
+            [(100,)],  # Row count for visit_occurrence
+            [(0,)]     # No violations
+        ]
+
+        mock_artifact_instance = MagicMock()
+        mock_artifact.return_value = mock_artifact_instance
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_person_id_referential_integrity_artifacts()
+
+        # Check that artifact was created with 0 violations
+        mock_artifact.assert_called_once()
+        artifact_call = mock_artifact.call_args.kwargs
+        assert artifact_call['value_as_number'] == 0.0
+
+        mock_artifact_instance.save_artifact.assert_called_once()
+
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.storage.get_uri')
+    def test_returns_early_when_person_table_missing(self, mock_get_uri, mock_file_exists):
+        """Test that method returns early when person table doesn't exist."""
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_file_exists.return_value = False  # Person table doesn't exist
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        # Should complete without error
+        generator._create_person_id_referential_integrity_artifacts()
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.report_artifact.ReportArtifact')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.utils.get_cdm_schema')
+    @patch('core.reporting.storage.get_uri')
+    def test_skips_empty_tables(self, mock_get_uri, mock_get_schema,
+                               mock_file_exists, mock_artifact, mock_execute_sql):
+        """Test that method skips tables with zero rows."""
+        # Setup mocks
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+
+        # Both tables exist
+        def file_exists_side_effect(path):
+            if 'person.parquet' in path or 'visit_occurrence.parquet' in path:
+                return True
+            return False
+
+        mock_file_exists.side_effect = file_exists_side_effect
+
+        # Mock schema
+        mock_get_schema.return_value = {
+            "person": {
+                "columns": {"person_id": {"type": "BIGINT"}},
+                "concept_id": 0
+            },
+            "visit_occurrence": {
+                "columns": {"person_id": {"type": "BIGINT"}},
+                "concept_id": 1234
+            }
+        }
+
+        # Return 0 rows for visit_occurrence
+        mock_execute_sql.return_value = [(0,)]
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_person_id_referential_integrity_artifacts()
+
+        # Should only call execute_duckdb_sql once for row count, not for violation check
+        assert mock_execute_sql.call_count == 1
+        # Should not create any artifacts
+        mock_artifact.assert_not_called()
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.utils.get_cdm_schema')
+    @patch('core.reporting.storage.get_uri')
+    def test_skips_person_table_itself(self, mock_get_uri, mock_get_schema,
+                                      mock_file_exists, mock_execute_sql):
+        """Test that method doesn't check person table against itself."""
+        # Setup mocks
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_file_exists.return_value = True
+
+        # Only person table in schema
+        mock_get_schema.return_value = {
+            "person": {
+                "columns": {"person_id": {"type": "BIGINT"}},
+                "concept_id": 0
+            }
+        }
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_person_id_referential_integrity_artifacts()
+
+        # Should not execute any SQL (person table is skipped)
         mock_execute_sql.assert_not_called()

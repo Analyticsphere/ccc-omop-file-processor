@@ -367,33 +367,6 @@ class VocabHarmonizer:
                 )
                 ra.save_artifact()
                 utils.logger.info(f"Row disposition: {self.source_table_name} - {disposition}: {row_count} rows")
-
-            # Also generate net impact summary
-            net_impact = 0
-            for disposition, row_count in disposition_counts:
-                if disposition == "stayed and copied":
-                    # These rows add to the table count (duplication)
-                    # The count here is the number of source rows, but each creates multiple result rows
-                    # The actual addition is already captured in same-table mapping cardinality
-                    pass
-                elif disposition == "moved to other tables":
-                    # These rows leave the table entirely
-                    net_impact -= row_count
-
-            # Report net impact (for convenience in report generation)
-            if net_impact != 0:
-                ra = report_artifact.ReportArtifact(
-                    delivery_date=self.delivery_date,
-                    artifact_bucket=self.bucket,
-                    concept_id=source_table_concept_id,
-                    name=f"Vocab harmonization net impact: {self.source_table_name}",
-                    value_as_string=None,
-                    value_as_concept_id=None,
-                    value_as_number=net_impact
-                )
-                ra.save_artifact()
-                utils.logger.info(f"Net impact for {self.source_table_name}: {net_impact} rows")
-
         except Exception as e:
             # Log the error but don't fail the entire process
             utils.logger.error(f"Error generating row disposition report: {str(e)}")
