@@ -55,6 +55,7 @@ class ReportGenerator:
         self._create_vocabulary_breakdown_artifacts()
         self._create_date_datetime_default_value_artifacts()
         self._create_invalid_concept_id_artifacts()
+        self._create_person_id_referential_integrity_artifacts()
         self._create_final_row_count_artifacts()
 
         # Generate the final, single report CSV file
@@ -551,6 +552,131 @@ class ReportGenerator:
 
         utils.logger.info("Created invalid concept_id report artifacts")
 
+    def _create_person_id_referential_integrity_artifacts(self) -> None:
+        """
+        Create report artifacts for person_id referential integrity violations.
+
+        For each table with a person_id field, identifies rows where:
+        - person_id IS NOT NULL
+        - person_id does not exist in the person table
+
+        This helps identify data quality issues where records reference non-existent persons.
+        Even if no violations are found (count = 0), a report artifact is created.
+        Only processes tables that exist and have at least one row.
+        """
+        utils.logger.info("Creating person_id referential integrity report artifacts")
+
+        # Get path to person table
+        person_table_config: Any = constants.REPORTING_TABLE_CONFIG.get("person")
+        if person_table_config is None:
+            utils.logger.error("Person table not found in REPORTING_TABLE_CONFIG, skipping referential integrity check")
+            return
+
+        person_location = person_table_config["location"]
+        person_path = self._get_table_path("person", person_location)
+
+        # Check if person table exists
+        if not utils.parquet_file_exists(person_path):
+            utils.logger.warning(f"Person table not found at {person_path}, skipping person_id referential integrity check")
+            return
+
+        # Get CDM schema to find tables with person_id
+        try:
+            schema = utils.get_cdm_schema(self.target_cdm_version)
+        except Exception as e:
+            utils.logger.error(f"Unable to load CDM schema version {self.target_cdm_version}: {e}")
+            return
+
+        # Find all tables with person_id column
+        tables_with_person_id = [
+            table_name for table_name, table_schema in schema.items()
+            if 'person_id' in table_schema.get('columns', {})
+        ]
+
+        # Process each table with person_id (except person itself)
+        for table_name in tables_with_person_id:
+            # Skip the person table itself
+            if table_name == "person":
+                continue
+
+            table_config: Any = constants.REPORTING_TABLE_CONFIG.get(table_name)
+
+            # Skip if table not in config
+            if table_config is None:
+                utils.logger.warning(f"Table {table_name} not in REPORTING_TABLE_CONFIG, skipping referential integrity check")
+                continue
+
+            location = table_config["location"]
+
+            # Construct path to table
+            table_path = self._get_table_path(table_name, location)
+
+            # Check if table exists
+            if not utils.parquet_file_exists(table_path):
+                utils.logger.info(f"Table {table_name} not found, skipping person_id referential integrity check")
+                continue
+
+            # Check if table has at least one row
+            try:
+                row_count_sql = self.generate_row_count_sql(table_path)
+                row_count_result = utils.execute_duckdb_sql(
+                    row_count_sql,
+                    f"Unable to count rows for {table_name}",
+                    return_results=True
+                )
+                row_count = row_count_result[0][0] if row_count_result else 0
+
+                # Skip tables with no rows
+                if row_count == 0:
+                    utils.logger.info(f"Table {table_name} has no rows, skipping person_id referential integrity check")
+                    continue
+
+            except Exception as e:
+                utils.logger.error(f"Error checking row count for {table_name}: {e}")
+                continue
+
+            # Generate and execute SQL to find person_id referential integrity violations
+            try:
+                sql = self.generate_person_id_referential_integrity_sql(
+                    table_path,
+                    person_path
+                )
+
+                result = utils.execute_duckdb_sql(
+                    sql,
+                    f"Unable to check person_id referential integrity for {table_name}",
+                    return_results=True
+                )
+
+                # Get count of violations
+                violation_count = result[0][0] if result else 0
+
+                # Get table concept_id from schema
+                table_concept_id = int(schema[table_name].get('concept_id', 0))
+
+                # Create report artifact
+                artifact = report_artifact.ReportArtifact(
+                    delivery_date=self.delivery_date,
+                    artifact_bucket=self.bucket,
+                    concept_id=table_concept_id,
+                    name=f"Person_id referential integrity violation count: {table_name}",
+                    value_as_string=table_name,
+                    value_as_concept_id=table_concept_id,
+                    value_as_number=float(violation_count)
+                )
+                artifact.save_artifact()
+
+                if violation_count > 0:
+                    utils.logger.warning(f"Found {violation_count} person_id referential integrity violations in {table_name}")
+                else:
+                    utils.logger.info(f"No person_id referential integrity violations in {table_name}")
+
+            except Exception as e:
+                utils.logger.error(f"Error checking person_id referential integrity for {table_name}: {e}")
+                continue
+
+        utils.logger.info("Created person_id referential integrity report artifacts")
+
     def _create_final_row_count_artifacts(self) -> None:
         """
         Create final row count artifacts for all OMOP CDM tables.
@@ -739,6 +865,30 @@ class ReportGenerator:
             WHERE t.{concept_field} IS NOT NULL
               AND t.{concept_field} != 0
               AND c.concept_id IS NULL
+        """
+
+    @staticmethod
+    def generate_person_id_referential_integrity_sql(table_uri: str, person_uri: str) -> str:
+        """
+        Generate SQL to count rows with person_id values that don't exist in the person table.
+
+        Identifies person_id values that are:
+        - Not NULL
+        - Don't exist in the person table
+
+        This checks referential integrity for the person_id foreign key relationship.
+
+        Args:
+            table_uri: Full URI path to the table's parquet file
+            person_uri: Full URI path to the person table parquet file
+        """
+        return f"""
+            SELECT COUNT(*) as violation_count
+            FROM read_parquet('{table_uri}') t
+            LEFT JOIN read_parquet('{person_uri}') p
+                ON t.person_id = p.person_id
+            WHERE t.person_id IS NOT NULL
+              AND p.person_id IS NULL
         """
 
     @staticmethod
