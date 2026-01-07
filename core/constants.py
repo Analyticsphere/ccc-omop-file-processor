@@ -137,9 +137,10 @@ class ArtifactPaths(str, Enum):
 #   as these are uncommon values in real data
 # Using date 1970-01-01 because it's the Unix epoch, and it's
 #   unlikely that this date will appear in real data
+DEFAULT_DATE = "1970-01-01"
 DEFAULT_COLUMN_VALUES = {
         "VARCHAR": "''",
-        "DATE": "'1970-01-01'",
+        "DATE": f"'{DEFAULT_DATE}'",
         "BIGINT": "'-1'",
         "DOUBLE": "'-1.0'",
         "TIMESTAMP": "'1901-01-01 00:00:00'"
