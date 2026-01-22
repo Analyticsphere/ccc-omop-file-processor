@@ -132,6 +132,7 @@ class ArtifactPaths(str, Enum):
     DQD = f"{ARTIFACTS}dqd/"
     ACHILLES = f"{ARTIFACTS}achilles/"
     INVALID_ROWS = f"{ARTIFACTS}invalid_rows/"
+    PASS = f"{ARTIFACTS}PASS/"
 
 # Using -1 as place/holder default value for numeric columns 
 #   as these are uncommon values in real data
