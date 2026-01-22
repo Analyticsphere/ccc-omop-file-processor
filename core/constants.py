@@ -131,8 +131,8 @@ class ArtifactPaths(str, Enum):
     REPORT_TMP = f"{ARTIFACTS}delivery_report/tmp/"
     DQD = f"{ARTIFACTS}dqd/"
     ACHILLES = f"{ARTIFACTS}achilles/"
+    PASS_ANALYSIS = f"{ARTIFACTS}pass/"
     INVALID_ROWS = f"{ARTIFACTS}invalid_rows/"
-    PASS = f"{ARTIFACTS}PASS/"
 
 # Using -1 as place/holder default value for numeric columns 
 #   as these are uncommon values in real data
