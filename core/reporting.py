@@ -770,21 +770,6 @@ class ReportGenerator:
         """
         utils.logger.info("Creating time series row count report artifacts")
 
-        # Define the tables and their primary date fields for time series analysis
-        # Using start_date fields for tables with both start and end dates
-        time_series_tables = {
-            "visit_occurrence": "visit_start_date",
-            "visit_detail": "visit_detail_start_date",
-            "condition_occurrence": "condition_start_date",
-            "drug_exposure": "drug_exposure_start_date",
-            "procedure_occurrence": "procedure_date",
-            "device_exposure": "device_exposure_start_date",
-            "measurement": "measurement_date",
-            "observation": "observation_date",
-            "note": "note_date",
-            "specimen": "specimen_date"
-        }
-
         # Time series range: 1970-01-01/default pipeline date to delivery_date
         start_date = constants.DEFAULT_DATE
         end_date = self.delivery_date
@@ -797,7 +782,7 @@ class ReportGenerator:
             return
 
         # Process each table
-        for table_name, date_field in time_series_tables.items():
+        for table_name, date_field in constants.TIME_SERIES_TABLES.items():
             # Get table configuration
             table_config: Any = constants.REPORTING_TABLE_CONFIG.get(table_name)
 

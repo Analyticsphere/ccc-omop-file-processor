@@ -477,6 +477,21 @@ REPORTING_TABLE_CONFIG = {
     }
 }
 
+# Tables and their primary date fields for time series analysis
+# Using start_date fields for tables with both start and end dates
+TIME_SERIES_TABLES = {
+    "visit_occurrence": "visit_start_date",
+    "visit_detail": "visit_detail_start_date",
+    "condition_occurrence": "condition_start_date",
+    "drug_exposure": "drug_exposure_start_date",
+    "procedure_occurrence": "procedure_date",
+    "device_exposure": "device_exposure_start_date",
+    "measurement": "measurement_date",
+    "observation": "observation_date",
+    "note": "note_date",
+    "specimen": "specimen_date"
+}
+
 SOURCE_TARGET = "source_target"
 DOMAIN_CHECK = "domain_check"
 TARGET_REMAP = "target_remap"
