@@ -143,8 +143,8 @@ DEFAULT_COLUMN_VALUES = {
         "DATE": f"'{DEFAULT_DATE}'",
         "BIGINT": "'-1'",
         "DOUBLE": "'-1.0'",
-        "TIMESTAMP": "'1970-01-01 00:00:00'",
-        "DATETIME": "'1970-01-01 00:00:00'"
+        "TIMESTAMP": f"'{DEFAULT_DATE} 00:00:00'",
+        "DATETIME": f"'{DEFAULT_DATE} 00:00:00'"
     }
 
 CHANGED = "changed"
