@@ -282,7 +282,7 @@ class TestNormalizerGenerateColumnCastExpression:
         result = Normalizer.generate_column_cast_expression(
             column_name="visit_start_datetime",
             column_type="DATETIME",
-            default_value="'1901-01-01 00:00:00'",
+            default_value="'1970-01-01 00:00:00'",
             date_format="%Y-%m-%d",
             datetime_format="%Y-%m-%d %H:%M:%S"
         )

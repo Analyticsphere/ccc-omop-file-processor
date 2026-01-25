@@ -366,7 +366,7 @@ class ReportGenerator:
 
         For each table, identifies date and datetime fields from the OMOP schema.
         For each date/datetime field, counts how many rows have the default placeholder value
-        (e.g., '1970-01-01' for DATE, '1901-01-01 00:00:00' for TIMESTAMP/DATETIME).
+        (e.g., '1970-01-01' for DATE, '1970-01-01 00:00:00' for TIMESTAMP/DATETIME).
         Creates one report artifact per table-field combination.
         """
         utils.logger.info("Creating date/datetime default value report artifacts")
@@ -924,7 +924,7 @@ class ReportGenerator:
         Args:
             table_uri: Full URI path to the table's parquet file
             field_name: Name of the date/datetime field to check
-            default_value: Default value to search for (e.g., '1970-01-01' or '1901-01-01 00:00:00')
+            default_value: Default value to search for (e.g., '1970-01-01' or '1970-01-01 00:00:00')
 
         Returns:
             SQL query that counts rows where the field equals the default value

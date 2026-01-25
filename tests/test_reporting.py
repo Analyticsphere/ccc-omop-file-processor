@@ -435,7 +435,7 @@ class TestReportGeneratorDateDatetimeDefaultCountSQL:
         """Test that generated SQL for TIMESTAMP field matches the golden file."""
         table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
         field_name = "visit_start_datetime"
-        default_value = "'1901-01-01 00:00:00'"
+        default_value = "'1970-01-01 00:00:00'"
 
         sql = ReportGenerator.generate_date_datetime_default_count_sql(table_uri, field_name, default_value)
 
