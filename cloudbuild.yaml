@@ -25,7 +25,7 @@ steps:
     '--service-account=$SERVICE_ACCOUNT_EMAIL', # Directly use the substitution variable
     '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
     '--concurrency=1',
-    '--timeout=3600',
+    '--timeout=3600s',
     '--execution-environment=gen2',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
     '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data'
@@ -137,7 +137,7 @@ steps:
     '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
     '--cpu=4',
     '--memory=16Gi',
-    '--task-timeout=1800s',
+    '--task-timeout=3600s',
     '--max-retries=0',
     '--parallelism=1',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',

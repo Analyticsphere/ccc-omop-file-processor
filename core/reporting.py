@@ -57,6 +57,7 @@ class ReportGenerator:
         self._create_invalid_concept_id_artifacts()
         self._create_person_id_referential_integrity_artifacts()
         self._create_final_row_count_artifacts()
+        self._create_time_series_row_count_artifacts()
 
         # Generate the final, single report CSV file
         self._consolidate_report_files()
@@ -759,7 +760,102 @@ class ReportGenerator:
                     utils.logger.error(f"Error creating zero-count artifact for {table_name}: {e}")
 
         utils.logger.info("Created final row count report artifacts")
-        
+
+    def _create_time_series_row_count_artifacts(self) -> None:
+        """
+        Create time series row count artifacts showing rows per year for OMOP clinical tables (minus person and death).
+
+        For each specified table with date fields, counts the number of rows per year from 1970-01-01 up to the delivery date. 
+        Creates one report artifact per table-year combination with the row count for that year.
+        """
+        utils.logger.info("Creating time series row count report artifacts")
+
+        # Define the tables and their primary date fields for time series analysis
+        # Using start_date fields for tables with both start and end dates
+        time_series_tables = {
+            "visit_occurrence": "visit_start_date",
+            "visit_detail": "visit_detail_start_date",
+            "condition_occurrence": "condition_start_date",
+            "drug_exposure": "drug_exposure_start_date",
+            "procedure_occurrence": "procedure_date",
+            "device_exposure": "device_exposure_start_date",
+            "measurement": "measurement_date",
+            "observation": "observation_date",
+            "note": "note_date",
+            "specimen": "specimen_date"
+        }
+
+        # Time series range: 1970-01-01/default pipeline date to delivery_date
+        start_date = constants.DEFAULT_DATE
+        end_date = self.delivery_date
+
+        # Get CDM schema for table concept_ids
+        try:
+            schema = utils.get_cdm_schema(self.target_cdm_version)
+        except Exception as e:
+            utils.logger.error(f"Unable to load CDM schema version {self.target_cdm_version}: {e}")
+            return
+
+        # Process each table
+        for table_name, date_field in time_series_tables.items():
+            # Get table configuration
+            table_config: Any = constants.REPORTING_TABLE_CONFIG.get(table_name)
+
+            if table_config is None:
+                utils.logger.warning(f"Table {table_name} not in REPORTING_TABLE_CONFIG, skipping time series")
+                continue
+
+            location = table_config["location"]
+
+            # Construct path to table
+            table_path = self._get_table_path(table_name, location)
+
+            # Check if table exists
+            if not utils.parquet_file_exists(table_path):
+                utils.logger.info(f"Table {table_name} not found, skipping time series row count")
+                continue
+
+            # Get table concept_id from schema
+            table_concept_id = int(schema.get(table_name, {}).get('concept_id', 0))
+
+            # Generate and execute SQL to get row counts by year
+            try:
+                sql = self.generate_time_series_row_count_sql(
+                    table_path,
+                    date_field,
+                    start_date,
+                    end_date
+                )
+
+                result = utils.execute_duckdb_sql(
+                    sql,
+                    f"Unable to query time series row count for {table_name}",
+                    return_results=True
+                )
+
+                # Create one artifact per year
+                for row in result:
+                    year, row_count = row
+
+                    artifact = report_artifact.ReportArtifact(
+                        delivery_date=self.delivery_date,
+                        artifact_bucket=self.bucket,
+                        concept_id=table_concept_id,
+                        name=f"Time series row count: {table_name}.{int(year)}",
+                        value_as_string=f"{table_name}.{int(year)}",
+                        value_as_concept_id=table_concept_id,
+                        value_as_number=float(row_count)
+                    )
+                    artifact.save_artifact()
+
+                utils.logger.info(f"Created {len(result)} time series artifacts for {table_name} ({start_date} to {end_date})")
+
+            except Exception as e:
+                utils.logger.error(f"Error creating time series row count for {table_name}: {e}")
+                continue
+
+        utils.logger.info("Created time series row count report artifacts")
+
     @staticmethod
     def generate_type_concept_breakdown_sql(table_uri: str, concept_uri: str, type_field: str) -> str:
         """
@@ -889,6 +985,32 @@ class ReportGenerator:
                 ON t.person_id = p.person_id
             WHERE t.person_id IS NOT NULL
               AND p.person_id IS NULL
+        """
+
+    @staticmethod
+    def generate_time_series_row_count_sql(table_uri: str, date_field: str, start_date: str, end_date: str) -> str:
+        """
+        Generate SQL to count rows per year for a table's date field.
+
+        Groups rows by year extracted from the specified date field, counting
+        rows for each year between start_date and end_date (inclusive).
+
+        Args:
+            table_uri: Full URI path to the table's parquet file
+            date_field: Name of the date field to use for yearly grouping
+            start_date: Start date for time series (format: 'YYYY-MM-DD')
+            end_date: End date for time series (format: 'YYYY-MM-DD')
+        """
+        return f"""
+            SELECT
+                EXTRACT(YEAR FROM {date_field}) as year,
+                COUNT(*) as row_count
+            FROM read_parquet('{table_uri}')
+            WHERE {date_field} IS NOT NULL
+              AND {date_field} >= '{start_date}'
+              AND {date_field} <= '{end_date}'
+            GROUP BY EXTRACT(YEAR FROM {date_field})
+            ORDER BY year
         """
 
     @staticmethod

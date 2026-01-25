@@ -73,6 +73,7 @@ class TestReportGeneratorGenerate:
     """Tests for generate orchestration method."""
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
+    @patch.object(ReportGenerator, '_create_time_series_row_count_artifacts')
     @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
     @patch.object(ReportGenerator, '_create_person_id_referential_integrity_artifacts')
     @patch.object(ReportGenerator, '_create_date_datetime_default_value_artifacts')
@@ -80,8 +81,8 @@ class TestReportGeneratorGenerate:
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_invalid_concept_id_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_person_id_integrity, mock_create_final_row_count, mock_consolidate):
-        """Test that generate calls metadata, invalid concept_id, type concept, vocabulary, date/datetime defaults, person_id referential integrity, final row count, and consolidation methods."""
+    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_person_id_integrity, mock_create_final_row_count, mock_create_time_series, mock_consolidate):
+        """Test that generate calls metadata, invalid concept_id, type concept, vocabulary, date/datetime defaults, person_id referential integrity, final row count, time series row count, and consolidation methods."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -103,9 +104,11 @@ class TestReportGeneratorGenerate:
         mock_create_date_defaults.assert_called_once()
         mock_create_person_id_integrity.assert_called_once()
         mock_create_final_row_count.assert_called_once()
+        mock_create_time_series.assert_called_once()
         mock_consolidate.assert_called_once()
 
     @patch.object(ReportGenerator, '_consolidate_report_files')
+    @patch.object(ReportGenerator, '_create_time_series_row_count_artifacts')
     @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
     @patch.object(ReportGenerator, '_create_person_id_referential_integrity_artifacts')
     @patch.object(ReportGenerator, '_create_date_datetime_default_value_artifacts')
@@ -113,8 +116,8 @@ class TestReportGeneratorGenerate:
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_invalid_concept_id_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_person_id_integrity, mock_create_final_row_count, mock_consolidate):
-        """Test that methods are called in correct order: metadata, type concept, vocabulary, date/datetime defaults, invalid concept_id, person_id referential integrity, final row count, consolidation."""
+    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_person_id_integrity, mock_create_final_row_count, mock_create_time_series, mock_consolidate):
+        """Test that methods are called in correct order: metadata, type concept, vocabulary, date/datetime defaults, invalid concept_id, person_id referential integrity, final row count, time series row count, consolidation."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -134,12 +137,13 @@ class TestReportGeneratorGenerate:
         mock_create_date_defaults.side_effect = lambda: call_order.append('date_defaults')
         mock_create_person_id_integrity.side_effect = lambda: call_order.append('person_id_integrity')
         mock_create_final_row_count.side_effect = lambda: call_order.append('final_row_count')
+        mock_create_time_series.side_effect = lambda: call_order.append('time_series')
         mock_consolidate.side_effect = lambda: call_order.append('consolidate')
 
         generator = ReportGenerator(report_data)
         generator.generate()
 
-        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'date_defaults', 'invalid_concept_ids', 'person_id_integrity', 'final_row_count', 'consolidate']
+        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'date_defaults', 'invalid_concept_ids', 'person_id_integrity', 'final_row_count', 'time_series', 'consolidate']
 
 
 class TestReportGeneratorMetadataArtifacts:
@@ -1295,3 +1299,252 @@ class TestCreatePersonIdReferentialIntegrityArtifacts:
 
         # Should not execute any SQL (person table is skipped)
         mock_execute_sql.assert_not_called()
+
+
+class TestTimeSeriesRowCountSQL:
+    """Tests for generate_time_series_row_count_sql static method."""
+
+    def test_matches_golden_file(self):
+        """Test that generated SQL matches the golden file."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+        date_field = "visit_start_date"
+        start_date = "1970-01-01"
+        end_date = "2025-01-01"
+
+        sql = ReportGenerator.generate_time_series_row_count_sql(
+            table_uri, date_field, start_date, end_date
+        )
+
+        # Load golden file
+        with open('tests/reference/sql/reporting/generate_time_series_row_count_sql_standard.sql', 'r') as f:
+            expected_sql = f.read()
+
+        # Normalize SQL for whitespace-insensitive comparison
+        def normalize_sql(sql: str) -> str:
+            lines = [line.strip() for line in sql.strip().split('\n')]
+            lines = [line for line in lines if line]
+            return '\n'.join(lines)
+
+        assert normalize_sql(sql) == normalize_sql(expected_sql)
+
+    def test_uses_correct_date_field(self):
+        """Test that SQL uses the specified date field."""
+        table_uri = "gs://bucket/table.parquet"
+        date_field = "measurement_date"
+        start_date = "1970-01-01"
+        end_date = "2025-01-01"
+
+        sql = ReportGenerator.generate_time_series_row_count_sql(
+            table_uri, date_field, start_date, end_date
+        )
+
+        # Verify the date field appears in the SQL
+        assert "measurement_date" in sql
+        assert "EXTRACT(YEAR FROM measurement_date)" in sql
+
+    def test_includes_date_range_filter(self):
+        """Test that SQL includes proper date range filtering."""
+        table_uri = "gs://bucket/table.parquet"
+        date_field = "observation_date"
+        start_date = "1970-01-01"
+        end_date = "2025-12-31"
+
+        sql = ReportGenerator.generate_time_series_row_count_sql(
+            table_uri, date_field, start_date, end_date
+        )
+
+        # Verify date range filters are present
+        assert ">= '1970-01-01'" in sql
+        assert "<= '2025-12-31'" in sql
+        assert "IS NOT NULL" in sql
+
+
+class TestCreateTimeSeriesRowCountArtifacts:
+    """Tests for _create_time_series_row_count_artifacts method."""
+
+    @patch('core.reporting.report_artifact.ReportArtifact')
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.utils.get_cdm_schema')
+    @patch('core.reporting.storage.get_uri')
+    def test_creates_artifacts_for_each_year(self, mock_get_uri, mock_get_schema,
+                                            mock_file_exists, mock_execute_sql, mock_artifact):
+        """Test that method creates one artifact per year with data."""
+        # Setup mocks
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_file_exists.return_value = True
+
+        # Mock schema
+        mock_get_schema.return_value = {
+            "visit_occurrence": {
+                "columns": {"visit_occurrence_id": {"type": "BIGINT"}},
+                "concept_id": 1147332
+            }
+        }
+
+        # Mock SQL result: 3 years with data
+        mock_execute_sql.return_value = [
+            (2020, 100),
+            (2021, 150),
+            (2022, 200)
+        ]
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_time_series_row_count_artifacts()
+
+        # Should create 3 artifacts (one per year) for each of the 10 tables
+        # But since only visit_occurrence exists in the mock, we get 3 artifacts
+        artifact_call_count = sum(1 for call in mock_artifact.call_args_list if call[1].get('name', '').startswith('Time series row count:'))
+        assert artifact_call_count >= 3
+
+    @patch('core.reporting.report_artifact.ReportArtifact')
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.utils.get_cdm_schema')
+    @patch('core.reporting.storage.get_uri')
+    def test_artifact_naming_format(self, mock_get_uri, mock_get_schema,
+                                   mock_file_exists, mock_execute_sql, mock_artifact):
+        """Test that artifacts use correct naming format."""
+        # Setup mocks
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_file_exists.return_value = True
+
+        mock_get_schema.return_value = {
+            "measurement": {
+                "columns": {"measurement_id": {"type": "BIGINT"}},
+                "concept_id": 1147314
+            }
+        }
+
+        # Mock SQL result
+        mock_execute_sql.return_value = [(2023, 50)]
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_time_series_row_count_artifacts()
+
+        # Find the measurement artifact
+        measurement_artifact_calls = [
+            call for call in mock_artifact.call_args_list
+            if 'measurement.2023' in str(call)
+        ]
+        assert len(measurement_artifact_calls) > 0
+
+        # Verify the artifact was created with correct name format
+        found = False
+        for call in mock_artifact.call_args_list:
+            if call[1].get('name') == 'Time series row count: measurement.2023':
+                found = True
+                assert call[1]['value_as_string'] == 'measurement.2023'
+                assert call[1]['value_as_number'] == 50.0
+                assert call[1]['concept_id'] == 1147314
+        assert found
+
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.utils.get_cdm_schema')
+    @patch('core.reporting.storage.get_uri')
+    def test_skips_nonexistent_tables(self, mock_get_uri, mock_get_schema,
+                                     mock_file_exists, mock_execute_sql):
+        """Test that method skips tables that don't exist."""
+        # Setup mocks
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_file_exists.return_value = False  # No tables exist
+
+        mock_get_schema.return_value = {
+            "visit_occurrence": {
+                "columns": {"visit_occurrence_id": {"type": "BIGINT"}},
+                "concept_id": 1147332
+            }
+        }
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_time_series_row_count_artifacts()
+
+        # Should not execute any SQL if tables don't exist
+        mock_execute_sql.assert_not_called()
+
+    @patch('core.reporting.report_artifact.ReportArtifact')
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    @patch('core.reporting.utils.parquet_file_exists')
+    @patch('core.reporting.utils.get_cdm_schema')
+    @patch('core.reporting.storage.get_uri')
+    def test_uses_correct_date_fields_per_table(self, mock_get_uri, mock_get_schema,
+                                               mock_file_exists, mock_execute_sql, mock_artifact):
+        """Test that method uses the correct start date field for each table."""
+        # Setup mocks
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_file_exists.return_value = True
+
+        # Define schema for multiple tables
+        mock_get_schema.return_value = {
+            "visit_occurrence": {
+                "columns": {"visit_occurrence_id": {"type": "BIGINT"}},
+                "concept_id": 1147332
+            },
+            "drug_exposure": {
+                "columns": {"drug_exposure_id": {"type": "BIGINT"}},
+                "concept_id": 1147330
+            },
+            "measurement": {
+                "columns": {"measurement_id": {"type": "BIGINT"}},
+                "concept_id": 1147314
+            }
+        }
+
+        # Mock SQL result
+        mock_execute_sql.return_value = [(2023, 10)]
+
+        report_data = {
+            "site": "test_site",
+            "bucket": "test-bucket",
+            "delivery_date": "2025-01-15",
+            "site_display_name": "Test Site",
+            "file_delivery_format": "parquet",
+            "delivered_cdm_version": "5.3",
+            "target_vocabulary_version": "v5.0_20-MAR-24",
+            "target_cdm_version": "5.4"
+        }
+
+        generator = ReportGenerator(report_data)
+        generator._create_time_series_row_count_artifacts()
+
+        # Verify SQL was generated with correct date fields
+        sql_calls = [str(call) for call in mock_execute_sql.call_args_list]
+
+        # Check that appropriate date fields were used
+        assert any('visit_start_date' in call for call in sql_calls)
+        assert any('drug_exposure_start_date' in call for call in sql_calls)
+        assert any('measurement_date' in call for call in sql_calls)
