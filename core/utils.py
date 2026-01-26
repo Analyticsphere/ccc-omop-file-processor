@@ -39,9 +39,13 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         local_db_file = f"{tmp_dir}{random_string}.db"
 
         conn = duckdb.connect(local_db_file)
+        # Set memory and temp directory settings
         conn.execute(f"SET temp_directory='{tmp_dir}'")
         conn.execute(f"SET memory_limit='{constants.DUCKDB_MEMORY_LIMIT}'")
         conn.execute(f"SET max_memory='{constants.DUCKDB_MEMORY_LIMIT}'")
+
+        # Increase max expression depth to handle merging large number of files
+        conn.execute("SET max_expression_depth TO 1000000")
 
         # Improves performance for large queries
         conn.execute("SET preserve_insertion_order = false")

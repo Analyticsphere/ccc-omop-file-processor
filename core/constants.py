@@ -138,12 +138,14 @@ class ArtifactPaths(str, Enum):
 #   as these are uncommon values in real data
 # Using date 1970-01-01 because it's the Unix epoch, and it's
 #   unlikely that this date will appear in real data
+DEFAULT_DATE = "1970-01-01"
 DEFAULT_COLUMN_VALUES = {
         "VARCHAR": "''",
-        "DATE": "'1970-01-01'",
+        "DATE": f"'{DEFAULT_DATE}'",
         "BIGINT": "'-1'",
         "DOUBLE": "'-1.0'",
-        "TIMESTAMP": "'1901-01-01 00:00:00'"
+        "TIMESTAMP": f"'{DEFAULT_DATE} 00:00:00'",
+        "DATETIME": f"'{DEFAULT_DATE} 00:00:00'"
     }
 
 CHANGED = "changed"
@@ -474,6 +476,21 @@ REPORTING_TABLE_CONFIG = {
         "type_field": None,
         "vocabulary_fields": []
     }
+}
+
+# Tables and their primary date fields for time series analysis
+# Using start_date fields for tables with both start and end dates
+TIME_SERIES_TABLES = {
+    "visit_occurrence": "visit_start_date",
+    "visit_detail": "visit_detail_start_date",
+    "condition_occurrence": "condition_start_date",
+    "drug_exposure": "drug_exposure_start_date",
+    "procedure_occurrence": "procedure_date",
+    "device_exposure": "device_exposure_start_date",
+    "measurement": "measurement_date",
+    "observation": "observation_date",
+    "note": "note_date",
+    "specimen": "specimen_date"
 }
 
 SOURCE_TARGET = "source_target"
