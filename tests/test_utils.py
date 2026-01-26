@@ -211,7 +211,7 @@ def test_clean_column_name_for_sql(column_name, expected):
         ("visit_date", "DATE", "'1970-01-01'"),
         ("person_id", "BIGINT", "'-1'"),
         ("measurement_value", "DOUBLE", "'-1.0'"),
-        ("birth_datetime", "TIMESTAMP", "'1901-01-01 00:00:00'"),
+        ("birth_datetime", "TIMESTAMP", "'1970-01-01 00:00:00'"),
 
         # Test with different column names using same types
         ("care_site_id", "BIGINT", "'-1'"),
