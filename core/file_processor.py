@@ -91,6 +91,8 @@ class FileProcessor:
         except Exception as e:
             if not retry:
                 # On error on first attempt, retry with more permissive settings
+                utils.logger.info(f"Retrying {storage.get_uri(self.file_path)} CSV to Parquet conversion with more permissive settings")
+
                 return self._process_csv(
                     retry=True,
                     conversion_options=['store_rejects=True, ignore_errors=True, parallel=False']
