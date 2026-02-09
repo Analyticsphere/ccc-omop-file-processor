@@ -203,7 +203,7 @@ class FileProcessor:
             items: List of items to format
 
         Returns:
-            Empty string if list is empty, otherwise comma-prefixed string
+            Empty string if list is empty, otherwise comma-prefixed string 
         """
         if not items:
             return ''
