@@ -95,7 +95,7 @@ class FileProcessor:
 
                 return self._process_csv(
                     retry=True,
-                    conversion_options=['store_rejects=True, ignore_errors=True, parallel=False']
+                    conversion_options=[f"store_rejects=True, ignore_errors=True, parallel=False, encoding = '{utils.get_csv_file_encoding(storage.get_uri(self.file_path))}'"]
                 )
             else:
                 raise
