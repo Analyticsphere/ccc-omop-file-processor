@@ -178,7 +178,7 @@ def get_bucket_and_delivery_date_from_path(file_path: str) -> Tuple[str, str]:
     bucket_name, delivery_date = path_parts[0], path_parts[1]
     return bucket_name, delivery_date
 
-def get_columns_from_file(file_path: str) -> list:
+def get_columns_from_file(file_path: str, encoding: str = 'utf-8') -> list:
     """
     Reads file schema from the specified file path using DuckDB
     to introspect its columns. Supports both Parquet and CSV files.
@@ -215,7 +215,8 @@ def get_columns_from_file(file_path: str) -> list:
                                           null_padding=True,
                                           ALL_VARCHAR=True,
                                           strict_mode=False,
-                                          ignore_errors=True)
+                                          ignore_errors=True,
+                                          encoding='{encoding}')
                     LIMIT 0
                 """
 

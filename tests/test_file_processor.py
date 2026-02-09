@@ -141,9 +141,10 @@ class TestFileProcessorProcessParquet:
 class TestFileProcessorProcessCSV:
     """Tests for _process_csv method."""
 
+    @patch('core.file_processor.utils.get_csv_file_encoding', return_value='utf-8')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
-    def test_process_csv_success_first_attempt(self, mock_get_columns, mock_execute):
+    def test_process_csv_success_first_attempt(self, mock_get_columns, mock_execute, mock_encoding):
         """Test successful CSV conversion on first attempt."""
         mock_get_columns.return_value = ['person_id', 'gender_concept_id']
 
@@ -154,13 +155,14 @@ class TestFileProcessorProcessCSV:
 
         result = processor._process_csv()
 
-        mock_get_columns.assert_called_once_with("bucket/2025-01-01/person.csv")
+        mock_get_columns.assert_called_once_with("bucket/2025-01-01/person.csv", encoding='utf-8')
         mock_execute.assert_called_once()
         assert result == processor.output_path
 
+    @patch('core.file_processor.utils.get_csv_file_encoding', return_value='utf-8')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
-    def test_process_csv_retries_on_failure(self, mock_get_columns, mock_execute):
+    def test_process_csv_retries_on_failure(self, mock_get_columns, mock_execute, mock_encoding):
         """Test that CSV conversion retries with permissive settings on failure."""
         mock_get_columns.return_value = ['person_id', 'gender_concept_id']
 
@@ -181,9 +183,10 @@ class TestFileProcessorProcessCSV:
         second_call_sql = mock_execute.call_args_list[1][0][0]
         assert "store_rejects=True" in second_call_sql or "ignore_errors=True" in second_call_sql
 
+    @patch('core.file_processor.utils.get_csv_file_encoding', return_value='utf-8')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
-    def test_process_csv_raises_after_retry_fails(self, mock_get_columns, mock_execute):
+    def test_process_csv_raises_after_retry_fails(self, mock_get_columns, mock_execute, mock_encoding):
         """Test that exception is raised if retry also fails."""
         mock_get_columns.return_value = ['person_id', 'gender_concept_id']
 
@@ -200,9 +203,10 @@ class TestFileProcessorProcessCSV:
 
         assert "Still failing" in str(exc_info.value)
 
+    @patch('core.file_processor.utils.get_csv_file_encoding', return_value='utf-8')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
-    def test_process_csv_with_conversion_options(self, mock_get_columns, mock_execute):
+    def test_process_csv_with_conversion_options(self, mock_get_columns, mock_execute, mock_encoding):
         """Test CSV processing with explicit conversion options."""
         mock_get_columns.return_value = ['person_id', 'gender_concept_id']
 
@@ -310,9 +314,10 @@ class TestFileProcessorIntegration:
         assert mock_execute.called
         assert result == processor.output_path
 
+    @patch('core.file_processor.utils.get_csv_file_encoding', return_value='utf-8')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
-    def test_full_csv_processing_flow_with_retry(self, mock_get_columns, mock_execute):
+    def test_full_csv_processing_flow_with_retry(self, mock_get_columns, mock_execute, mock_encoding):
         """Test complete CSV processing flow with retry on failure."""
         mock_get_columns.return_value = ['person_id', 'gender_concept_id']
 
