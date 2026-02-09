@@ -74,12 +74,16 @@ class FileProcessor:
             retry: Whether this is a retry attempt
             conversion_options: Additional DuckDB CSV read options
         """
-        # Get column names from CSV
-        csv_column_names = utils.get_columns_from_file(self.file_path)
+        # Detect file encoding once upfront so it's used for both column
+        # introspection and the actual CSV read
+        encoding = utils.get_csv_file_encoding(storage.get_uri(self.file_path))
 
-        # Generate SQL
+        # Get column names from CSV using detected encoding
+        csv_column_names = utils.get_columns_from_file(self.file_path, encoding=encoding)
+
+        # Generate SQL — always include detected encoding
         convert_statement = self.generate_csv_to_parquet_sql(
-            self.file_path, csv_column_names, conversion_options
+            self.file_path, csv_column_names, [f"encoding='{encoding}'"] + conversion_options
         )
 
         # Execute SQL with retry logic
@@ -95,7 +99,7 @@ class FileProcessor:
 
                 return self._process_csv(
                     retry=True,
-                    conversion_options=['store_rejects=True, ignore_errors=True, parallel=False']
+                    conversion_options=["store_rejects=True, ignore_errors=True, parallel=False"]
                 )
             else:
                 raise

@@ -8,7 +8,9 @@ import uuid
 from datetime import datetime
 from typing import Optional, Tuple
 
+import chardet  # type: ignore
 import duckdb  # type: ignore
+import fsspec  # type: ignore
 from fsspec import filesystem  # type: ignore
 
 import core.constants as constants
@@ -56,6 +58,9 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
 
         # Set max size to allow on disk
         conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
+
+        # Install encodings extension to handle 1000+ CSV encodings
+        conn.execute("INSTALL encodings; LOAD encodings")
 
         # Register filesystem for cloud storage if using GCS backend
         if constants.STORAGE_BACKEND == constants.GCS_BACKEND:
@@ -173,7 +178,7 @@ def get_bucket_and_delivery_date_from_path(file_path: str) -> Tuple[str, str]:
     bucket_name, delivery_date = path_parts[0], path_parts[1]
     return bucket_name, delivery_date
 
-def get_columns_from_file(file_path: str) -> list:
+def get_columns_from_file(file_path: str, encoding: str = 'utf-8') -> list:
     """
     Reads file schema from the specified file path using DuckDB
     to introspect its columns. Supports both Parquet and CSV files.
@@ -210,7 +215,8 @@ def get_columns_from_file(file_path: str) -> list:
                                           null_padding=True,
                                           ALL_VARCHAR=True,
                                           strict_mode=False,
-                                          ignore_errors=True)
+                                          ignore_errors=True,
+                                          encoding='{encoding}')
                     LIMIT 0
                 """
 
@@ -522,3 +528,38 @@ def get_placeholder_value(column_name: str, column_type: str) -> str:
     default_value = constants.DEFAULT_COLUMN_VALUES[column_type]
     
     return default_value
+
+def get_csv_file_encoding(file_path: str) -> str:
+    """
+    Detect encoding of a CSV file by reading a small sample.
+
+    Returns:
+        Detected encoding string (e.g., 'utf-8', 'latin-1'). Defaults to 'utf-8' if detection fails.
+    """
+    
+    SAMPLE_SIZE = 102400  # 100KB — sufficient for encoding detection
+
+    try:
+        # Decompress on-the-fly for .csv.gz so we detect encoding of the text content
+        compression = 'gzip' if file_path.lower().endswith('.gz') else None
+
+        with fsspec.open(file_path, 'rb', compression=compression) as f:
+            sample = f.read(SAMPLE_SIZE)
+
+        if not sample:
+            return 'utf-8'
+
+        result = chardet.detect(sample)
+        encoding = result.get('encoding')
+
+        if encoding:
+            encoding = encoding.lower()
+            logger.info(f"Detected encoding '{encoding}' (confidence: {result.get('confidence', 0):.2f}) for {file_path}")
+            return encoding
+
+        logger.warning(f"Could not detect encoding for {file_path}, defaulting to utf-8")
+        return 'utf-8'
+
+    except Exception as e:
+        logger.warning(f"Error detecting encoding for {file_path}: {e}, defaulting to utf-8")
+        return 'utf-8'
