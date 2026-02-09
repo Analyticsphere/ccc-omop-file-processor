@@ -99,7 +99,7 @@ class FileProcessor:
 
                 return self._process_csv(
                     retry=True,
-                    conversion_options=[f"store_rejects=True, ignore_errors=True, parallel=False"]
+                    conversion_options=["store_rejects=True, ignore_errors=True, parallel=False"]
                 )
             else:
                 raise
@@ -203,7 +203,7 @@ class FileProcessor:
             items: List of items to format
 
         Returns:
-            Empty string if list is empty, otherwise comma-prefixed string 
+            Empty string if list is empty, otherwise comma-prefixed string
         """
         if not items:
             return ''
