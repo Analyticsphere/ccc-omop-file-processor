@@ -198,9 +198,36 @@ def validate_file() -> tuple[str, int]:
         return f"Unable to run file validation: {str(e)}", 500
     
 
+@app.route('/get_connect_data', methods=['POST'])
+def get_connect_data() -> tuple[str, int]:
+    """Get Connect study data for participants from BigQuery."""
+    data: dict[str, Any] = request.get_json() or {}
+    project_id: Optional[str] = data.get('project_id')
+    dataset_id: Optional[str] = data.get('dataset_id')
+
+    # Validate required parameters
+    if not all([project_id, dataset_id]):
+        return "Missing a required parameter to 'get_connect_data' endpoint. Required: project_id, dataset_id", 400
+
+    try:
+        assert project_id is not None
+        assert dataset_id is not None
+
+        # TODO: Implement the logic to retrieve Connect study data from BigQuery and save it to a Parquet file in ArtifactPaths.CONNECT_DATA
+        # Will involve 
+        #   1) replacing the project_id and dataset_id placeholders in reference/sql/connect_data/participant_status.sql with the provided values
+        #   2) executing the SQL query to retrieve the data
+        #   3) saving the results to a Parquet file in the ArtifactPaths.CONNECT_DATA directory in the storage backend
+
+        
+        return "Retrieved Connect study data", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to retrieve Connect study data: {str(e)}")
+        return f"Unable to retrieve Connect study data: {str(e)}", 500
+    
 @app.route('/normalize_parquet', methods=['POST'])
 def normalize_parquet_file() -> tuple[str, int]:
-    """Normalize Parquet file to conform to OMOP CDM schema with type conversions and constraints."""
+    """Normalize Parquet file to conform to OMOP CDM schema with type conversions and constraints, and Connect data requirements"""
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     omop_version: Optional[str] = data.get('omop_version')
