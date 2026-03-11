@@ -9,7 +9,7 @@ WITH status_map AS (
         d_747006172,
         d_773707518,
         d_831041022
-    FROM `(TODO: use project_id from get_connect_data endpoint).(TODO: use dataset_id from get_connect_data endpoint).participants`
+    FROM `@PROJECT_ID.@DATASET_ID.participants`
 ), cleaned_datapoints AS (
     SELECT DISTINCT
         Connect_ID,
