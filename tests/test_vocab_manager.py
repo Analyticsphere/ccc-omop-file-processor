@@ -129,12 +129,16 @@ class TestVocabularyManagerCreateOptimizedVocabFile:
 
         mock_execute.assert_called_once()
 
+    @patch('core.vocab_manager.utils.execute_duckdb_sql')
+    @patch('core.vocab_manager.utils.valid_parquet_file')
     @patch('core.vocab_manager.utils.parquet_file_exists')
     @patch('core.vocab_manager.utils.get_optimized_vocab_file_path')
-    def test_create_optimized_vocab_file_skips_existing(self, mock_get_path, mock_file_exists):
+    def test_create_optimized_vocab_file_skips_existing(self, mock_get_path, mock_file_exists,
+                                                        mock_valid, mock_execute):
         """Test that existing optimized vocab file is skipped."""
         mock_get_path.return_value = "gs://vocab-bucket/vocab/v5.0/optimized_vocab_file.parquet"
         mock_file_exists.return_value = True
+        mock_valid.return_value = True
 
         manager = VocabularyManager(
             vocab_version="v5.0_23-JAN-23",
@@ -143,6 +147,29 @@ class TestVocabularyManagerCreateOptimizedVocabFile:
 
         # Should return early without error
         manager.create_optimized_vocab_file()
+        mock_execute.assert_not_called()
+
+    @patch('core.vocab_manager.utils.execute_duckdb_sql')
+    @patch('core.vocab_manager.storage.file_exists')
+    @patch('core.vocab_manager.utils.valid_parquet_file')
+    @patch('core.vocab_manager.utils.parquet_file_exists')
+    @patch('core.vocab_manager.utils.get_optimized_vocab_file_path')
+    def test_create_optimized_vocab_file_rebuilds_existing_invalid(self, mock_get_path, mock_file_exists,
+                                                                   mock_valid, mock_storage_exists, mock_execute):
+        """Test that an existing but invalid optimized vocab file is rebuilt."""
+        mock_get_path.return_value = "gs://vocab-bucket/vocab/v5.0/optimized_vocab_file.parquet"
+        mock_file_exists.return_value = True
+        mock_valid.return_value = False
+        mock_storage_exists.return_value = True
+
+        manager = VocabularyManager(
+            vocab_version="v5.0_23-JAN-23",
+            vocab_path="gs://vocab-bucket/vocab"
+        )
+
+        manager.create_optimized_vocab_file()
+
+        mock_execute.assert_called_once()
 
     @patch('core.vocab_manager.storage.file_exists')
     @patch('core.vocab_manager.utils.valid_parquet_file')

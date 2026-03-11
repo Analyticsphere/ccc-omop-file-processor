@@ -67,27 +67,25 @@ class VocabularyManager:
         optimized_file_path = utils.get_optimized_vocab_file_path(self.vocab_version, self.vocab_path)
 
         # Create the optimized vocabulary file if it doesn't exist
-        if utils.parquet_file_exists(optimized_file_path):
+        if utils.parquet_file_exists(optimized_file_path) and utils.valid_parquet_file(optimized_file_path):
             return
 
-        # Ensure existing vocab file can be read
-        if not utils.valid_parquet_file(optimized_file_path):
-            # Ensure vocabulary version actually exists by checking if concept file exists
-            concept_check_path = f"{self.optimized_vocab_folder_path}concept{constants.PARQUET}"
+        # Ensure vocabulary version actually exists by checking if concept file exists
+        concept_check_path = f"{self.optimized_vocab_folder_path}concept{constants.PARQUET}"
 
-            if not storage.file_exists(concept_check_path):
-                raise Exception(f"Vocabulary path {self.vocab_root_path} not found")
+        if not storage.file_exists(concept_check_path):
+            raise Exception(f"Vocabulary path {self.vocab_root_path} not found")
 
-            # Build paths for read_parquet statements
-            concept_path = storage.get_uri(f"{self.optimized_vocab_folder_path}concept{constants.PARQUET}")
-            concept_relationship_path = storage.get_uri(f"{self.optimized_vocab_folder_path}concept_relationship{constants.PARQUET}")
-            output_path = storage.get_uri(optimized_file_path)
+        # Build paths for read_parquet statements
+        concept_path = storage.get_uri(f"{self.optimized_vocab_folder_path}concept{constants.PARQUET}")
+        concept_relationship_path = storage.get_uri(f"{self.optimized_vocab_folder_path}concept_relationship{constants.PARQUET}")
+        output_path = storage.get_uri(optimized_file_path)
 
-            # Generate SQL
-            transform_query = self.generate_optimized_vocab_sql(concept_path, concept_relationship_path, output_path)
+        # Generate SQL
+        transform_query = self.generate_optimized_vocab_sql(concept_path, concept_relationship_path, output_path)
 
-            # Execute SQL
-            utils.execute_duckdb_sql(transform_query, "Unable to create optimized vocab file")
+        # Execute SQL
+        utils.execute_duckdb_sql(transform_query, "Unable to create optimized vocab file")
 
     def load_vocabulary_table_to_bq(self, table_file_name: str, project_id: str, dataset_id: str) -> None:
         """
