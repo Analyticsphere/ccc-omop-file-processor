@@ -527,10 +527,21 @@ def create_missing_omop_tables() -> tuple[str, int]:
 def populate_cdm_source_file() -> tuple[str, int]:
     """Populate cdm_source Parquet file with metadata if empty or non-existent."""
     cdm_source_data: dict[str, Any] = request.get_json() or {}
+    required_fields = [
+        'bucket',
+        'source_release_date',
+        'cdm_source_name',
+        'cdm_source_abbreviation',
+        'cdm_holder',
+        'source_description',
+        'cdm_version',
+        'cdm_release_date',
+    ]
+    missing_fields = [field for field in required_fields if not cdm_source_data.get(field)]
 
     # Validate required parameters
-    if not cdm_source_data.get('source_release_date') or not cdm_source_data.get('cdm_source_abbreviation'):
-        return "Missing required parameters: source_release_date and cdm_source_abbreviation", 400
+    if missing_fields:
+        return f"Missing required parameters: {', '.join(missing_fields)}", 400
 
     try:
         utils.logger.info(f"Checking cdm_source file for {cdm_source_data['source_release_date']} delivery from {cdm_source_data['cdm_source_abbreviation']}")

@@ -690,17 +690,25 @@ class TestCreateMissingTablesEndpoint:
 class TestPopulateCdmSourceFileEndpoint:
     """Tests for /populate_cdm_source_file endpoint."""
 
+    PAYLOAD = {
+        'bucket': 'test-bucket',
+        'source_release_date': '2025-01-01',
+        'cdm_source_name': 'Test CDM Source',
+        'cdm_source_abbreviation': 'TEST_SITE',
+        'cdm_holder': 'Test Holder',
+        'source_description': 'Test description',
+        'cdm_version': '5.4',
+        'cdm_release_date': '2025-01-01',
+    }
+
     @patch('core.endpoints.omop_client.OMOPClient.populate_cdm_source_file')
     def test_populate_cdm_source_file_success(self, mock_populate, client):
         """Test successful cdm_source file population."""
-        response = client.post('/populate_cdm_source_file', json={
-            'source_release_date': '2025-01-01',
-            'cdm_source_abbreviation': 'TEST_SITE',
-            'additional_field': 'test'
-        })
+        response = client.post('/populate_cdm_source_file', json=self.PAYLOAD)
 
         assert response.status_code == 200
         assert b"cdm_source file populated if needed" in response.data
+        mock_populate.assert_called_once_with(self.PAYLOAD)
 
     def test_populate_cdm_source_file_missing_parameters(self, client):
         """Test missing parameters return 400."""
@@ -710,16 +718,15 @@ class TestPopulateCdmSourceFileEndpoint:
 
         assert response.status_code == 400
         assert b"Missing required parameters" in response.data
+        assert b"bucket" in response.data
+        assert b"cdm_source_name" in response.data
 
     @patch('core.endpoints.omop_client.OMOPClient.populate_cdm_source_file')
     def test_populate_cdm_source_file_exception(self, mock_populate, client):
         """Test exception handling returns 500."""
         mock_populate.side_effect = Exception("Population failed")
 
-        response = client.post('/populate_cdm_source_file', json={
-            'source_release_date': '2025-01-01',
-            'cdm_source_abbreviation': 'TEST_SITE'
-        })
+        response = client.post('/populate_cdm_source_file', json=self.PAYLOAD)
 
         assert response.status_code == 500
         assert b"Unable to populate cdm_source file" in response.data
