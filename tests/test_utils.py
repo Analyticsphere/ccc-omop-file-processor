@@ -73,8 +73,33 @@ def test_get_bucket_and_delivery_date_from_path(gcs_path, expected_bucket, expec
         ),
     ]
 )
-def test_get_parquet_artifact_location(gcs_path, expected_artifact_path):
+def test_get_converted_parquet_artifact_location(gcs_path, expected_artifact_path):
     assert utils.get_converted_parquet_artifact_location(gcs_path) == expected_artifact_path
+
+
+@pytest.mark.parametrize(
+    "gcs_path,expected_artifact_path",
+    [
+        (
+            "synthea53/2024-12-31/care_site.parquet",
+            f"synthea53/2024-12-31/artifacts/normalized_files/care_site.parquet"
+        ),
+        (
+            "bucket/folder/person.csv",
+            f"bucket/folder/artifacts/normalized_files/person.parquet"
+        ),
+        (
+            "bucket/folder/observation.csv",
+            f"bucket/folder/artifacts/normalized_files/observation.parquet"
+        ),
+        (
+            "bucket/2025-01-01/observation.csv.gz",
+            f"bucket/2025-01-01/artifacts/normalized_files/observation.parquet"
+        ),
+    ]
+)
+def test_get_normalized_parquet_artifact_location(gcs_path, expected_artifact_path):
+    assert utils.get_normalized_parquet_artifact_location(gcs_path) == expected_artifact_path
 
 
 @pytest.mark.parametrize(

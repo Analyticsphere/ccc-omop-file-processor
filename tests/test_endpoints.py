@@ -266,7 +266,7 @@ class TestNormalizeParquetEndpoint:
     """Tests for /normalize_parquet endpoint."""
 
     @patch('core.endpoints.normalization.Normalizer')
-    @patch('core.endpoints.utils.get_parquet_artifact_location')
+    @patch('core.endpoints.utils.get_converted_parquet_artifact_location')
     def test_normalize_parquet_success(self, mock_get_path, mock_normalizer, client):
         """Test successful parquet normalization."""
         mock_get_path.return_value = 'bucket/2025-01-01/parquet/person.parquet'
@@ -293,7 +293,7 @@ class TestNormalizeParquetEndpoint:
         assert_missing_fields(response, 'omop_version', 'date_format', 'datetime_format')
 
     @patch('core.endpoints.normalization.Normalizer')
-    @patch('core.endpoints.utils.get_parquet_artifact_location')
+    @patch('core.endpoints.utils.get_converted_parquet_artifact_location')
     def test_normalize_parquet_exception(self, mock_get_path, mock_normalizer, client):
         """Test exception handling returns 500."""
         mock_get_path.return_value = 'bucket/2025-01-01/parquet/person.parquet'

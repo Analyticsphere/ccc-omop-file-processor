@@ -124,6 +124,7 @@ VOCAB_PATH_PLACEHOLDERS = {
 class ArtifactPaths(str, Enum):
     ARTIFACTS = "artifacts/"
     CONVERTED_FILES = f"{ARTIFACTS}converted_files/"
+    NORMALIZED_FILES = f"{ARTIFACTS}normalized_files/"
     HARMONIZED_FILES = f"{ARTIFACTS}harmonized_files/"
     OMOP_ETL = f"{ARTIFACTS}omop_etl/"
     DERIVED_FILES = f"{ARTIFACTS}derived_files/"

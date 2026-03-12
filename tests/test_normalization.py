@@ -378,7 +378,7 @@ class TestNormalizerCreateRowCountArtifacts:
     @patch('core.normalization.utils.execute_duckdb_sql')
     @patch('core.normalization.storage.get_uri')
     @patch('core.normalization.utils.get_invalid_rows_path_from_path')
-    @patch('core.normalization.utils.get_parquet_artifact_location')
+    @patch('core.normalization.utils.get_converted_parquet_artifact_location')
     @patch('core.normalization.utils.get_cdm_schema')
     def test_creates_artifacts_for_valid_and_invalid_rows(
         self, mock_get_schema, mock_get_valid_path, mock_get_invalid_path,

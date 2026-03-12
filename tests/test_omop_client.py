@@ -18,7 +18,7 @@ class TestOMOPClientUpgradeFile:
 
     @patch('core.omop_client.storage.delete_file')
     @patch('core.omop_client.utils.get_table_name_from_path')
-    @patch('core.omop_client.utils.get_parquet_artifact_location')
+    @patch('core.omop_client.utils.get_converted_parquet_artifact_location')
     def test_upgrade_file_no_upgrade_needed(self, mock_get_location, mock_get_table_name, mock_delete):
         """Test that no upgrade happens when versions match."""
         mock_get_location.return_value = "bucket/2025-01-01/artifacts/converted_files/person.parquet"
@@ -35,7 +35,7 @@ class TestOMOPClientUpgradeFile:
 
     @patch('core.omop_client.storage.delete_file')
     @patch('core.omop_client.utils.get_table_name_from_path')
-    @patch('core.omop_client.utils.get_parquet_artifact_location')
+    @patch('core.omop_client.utils.get_converted_parquet_artifact_location')
     def test_upgrade_file_table_removed(self, mock_get_location, mock_get_table_name, mock_delete):
         """Test that table is deleted when marked as REMOVED in upgrade."""
         mock_get_location.return_value = "bucket/2025-01-01/artifacts/converted_files/attribute_definition.parquet"
@@ -53,7 +53,7 @@ class TestOMOPClientUpgradeFile:
     @patch('core.omop_client.utils.execute_duckdb_sql')
     @patch('builtins.open', new_callable=mock_open, read_data="SELECT * FROM table")
     @patch('core.omop_client.utils.get_table_name_from_path')
-    @patch('core.omop_client.utils.get_parquet_artifact_location')
+    @patch('core.omop_client.utils.get_converted_parquet_artifact_location')
     def test_upgrade_file_table_changed(self, mock_get_location, mock_get_table_name, mock_file, mock_execute):
         """Test that SQL upgrade script is applied when table is marked as CHANGED."""
         mock_get_location.return_value = "bucket/2025-01-01/artifacts/converted_files/measurement.parquet"
@@ -70,7 +70,7 @@ class TestOMOPClientUpgradeFile:
         mock_execute.assert_called_once()
 
     @patch('core.omop_client.utils.get_table_name_from_path')
-    @patch('core.omop_client.utils.get_parquet_artifact_location')
+    @patch('core.omop_client.utils.get_converted_parquet_artifact_location')
     def test_upgrade_file_unsupported_version(self, mock_get_location, mock_get_table_name):
         """Test that exception is raised for unsupported CDM version."""
         mock_get_location.return_value = "bucket/2025-01-01/artifacts/converted_files/person.parquet"
