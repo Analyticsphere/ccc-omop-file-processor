@@ -221,7 +221,8 @@ def get_connect_data() -> tuple[str, int]:
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
     delivery_bucket: Optional[str] = data.get('delivery_bucket')
-    missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id'])
+    site_connect_id: Optional[str] = data.get('site_connect_id')
+    missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id', 'site_connect_id'])
 
     # Validate required parameters
     if missing_fields:
@@ -230,8 +231,9 @@ def get_connect_data() -> tuple[str, int]:
     try:
         assert project_id is not None
         assert dataset_id is not None
+        assert site_connect_id is not None
 
-        gcp_services.export_connect_data_to_parquet(project_id, dataset_id, delivery_bucket)
+        gcp_services.export_connect_data_to_parquet(project_id, dataset_id, delivery_bucket, site_connect_id)
         return "Retrieved Connect study data", 200
     except Exception as e:
         utils.logger.error(f"Unable to retrieve Connect study data: {str(e)}")

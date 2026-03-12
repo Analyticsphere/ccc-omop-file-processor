@@ -156,7 +156,7 @@ def write_query_results_to_parquet(
     utils.logger.info(f"Saved query results to {output_uri}")
     return output_uri
 
-def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bucket: Optional[str] = None) -> str:
+def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bucket: str, site_connect_id: str) -> str:
     """Build the Connect participant-status query and export the results to Parquet."""
     sql_path = os.path.join(constants.SQL_PATH, "connect_data", "participant_status.sql")
     with open(sql_path, 'r') as sql_file:
@@ -164,6 +164,7 @@ def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bu
 
     sql_script = sql_script.replace("@PROJECT_ID", project_id)
     sql_script = sql_script.replace("@DATASET_ID", dataset_id)
+    sql_script = sql_script.replace("@SITE_CONNECT_ID", site_connect_id)
 
     output_path = f"{constants.ArtifactPaths.CONNECT_DATA.value}participant_status{constants.PARQUET}"
     if delivery_bucket:
