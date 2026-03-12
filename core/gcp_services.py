@@ -8,6 +8,7 @@ from google.cloud.exceptions import NotFound  # type: ignore
 import pyarrow.parquet as pq  # type: ignore
 
 import core.constants as constants
+import core.helpers.report_artifact as report_artifact
 import core.utils as utils
 from core.storage_backend import storage
 
@@ -156,7 +157,7 @@ def write_query_results_to_parquet(
     utils.logger.info(f"Saved query results to {output_uri}")
     return output_uri
 
-def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bucket: str, site_connect_id: str) -> str:
+def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bucket: Optional[str], site_connect_id: str) -> str:
     """Build the Connect participant-status query and export the results to Parquet."""
     sql_path = os.path.join(constants.SQL_PATH, "connect_data", "participant_status.sql")
     with open(sql_path, 'r') as sql_file:
@@ -171,11 +172,74 @@ def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bu
     if delivery_bucket:
         output_path = f"{delivery_bucket}/{output_path}"
 
-    return write_query_results_to_parquet(
+    output_uri = write_query_results_to_parquet(
         sql_script=sql_script,
         output_path=output_path,
         project_id=project_id
     )
+
+    if delivery_bucket:
+        _create_connect_data_report_artifacts(output_uri, delivery_bucket)
+    else:
+        utils.logger.warning("Skipping Connect data report artifacts because delivery_bucket was not provided")
+    return output_uri
+
+def _create_connect_data_report_artifacts(connect_data_path: str, delivery_bucket: str) -> None:
+    """Create delivery report artifacts summarizing Connect participant status counts."""
+    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(delivery_bucket)
+    connect_data_uri = storage.get_uri(connect_data_path)
+
+    report_configs = [
+        (
+            "Connect participant breakdown: Study status",
+            "verified_status",
+            "verified_status_concept_id"
+        ),
+        (
+            "Connect participant breakdown: HIPAA revoked status",
+            "hipaa_revoked",
+            "hipaa_revoked_concept_id"
+        ),
+        (
+            "Connect participant breakdown: Consent withdrawn status",
+            "consent_withdrawn",
+            "consent_withdrawn_concept_id"
+        ),
+        (
+            "Connect participant breakdown: Data destruction status",
+            "data_destruction_requested",
+            "data_destruction_requested_concept_id"
+        )
+    ]
+
+    for artifact_name, status_column, concept_id_column in report_configs:
+        status_count_sql = f"""
+        SELECT
+            COALESCE(NULLIF(TRIM(CAST({status_column} AS VARCHAR)), ''), 'UNKNOWN') AS status_value,
+            TRY_CAST({concept_id_column} AS BIGINT) AS status_concept_id,
+            COUNT(DISTINCT Connect_ID) AS patient_count
+        FROM read_parquet('{connect_data_uri}')
+        GROUP BY 1, 2
+        ORDER BY 1, 2
+        """
+
+        status_counts = utils.execute_duckdb_sql(
+            status_count_sql,
+            f"Unable to create Connect data report artifacts for {status_column}",
+            return_results=True
+        )
+
+        for status_value, status_concept_id, patient_count in status_counts:
+            artifact = report_artifact.ReportArtifact(
+                delivery_date=delivery_date,
+                artifact_bucket=bucket,
+                concept_id=0,
+                name=artifact_name,
+                value_as_string=status_value,
+                value_as_concept_id=status_concept_id,
+                value_as_number=float(patient_count)
+            )
+            artifact.save_artifact()
 
 def list_gcs_subdirectories(gcs_path: str) -> list:
     """
