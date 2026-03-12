@@ -164,7 +164,8 @@ def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bu
 
     sql_script = sql_script.replace("@PROJECT_ID", project_id)
     sql_script = sql_script.replace("@DATASET_ID", dataset_id)
-    sql_script = sql_script.replace("@SITE_CONNECT_ID", site_connect_id)
+    # connect_id's are integers but are stored as strings in table
+    sql_script = sql_script.replace("@SITE_CONNECT_ID", str(site_connect_id)) 
 
     output_path = f"{constants.ArtifactPaths.CONNECT_DATA.value}participant_status{constants.PARQUET}"
     if delivery_bucket:
