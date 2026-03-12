@@ -22,7 +22,7 @@ class FileProcessor:
         """
         self.file_path = file_path
         self.file_type = file_type
-        self.output_path = utils.get_parquet_artifact_location(file_path)
+        self.output_path = utils.get_converted_parquet_artifact_location(file_path)
         self.table_name = utils.get_table_name_from_path(file_path)
 
     def process(self) -> str:
@@ -140,7 +140,7 @@ class FileProcessor:
             SELECT {select_clause}
             FROM read_parquet('{storage.get_uri(file_path)}')
         )
-        TO '{storage.get_uri(utils.get_parquet_artifact_location(file_path))}' {constants.DUCKDB_FORMAT_STRING}
+        TO '{storage.get_uri(utils.get_converted_parquet_artifact_location(file_path))}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         return select_statement
@@ -160,7 +160,7 @@ class FileProcessor:
             csv_column_names: List of column names from the CSV file
             conversion_options: List of additional DuckDB CSV read options (e.g., ['ignore_errors=True'])
         """
-        parquet_path = utils.get_parquet_artifact_location(file_path)
+        parquet_path = utils.get_converted_parquet_artifact_location(file_path)
 
         select_list = []
         for column in csv_column_names:

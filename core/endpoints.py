@@ -222,7 +222,7 @@ def get_connect_data() -> tuple[str, int]:
     dataset_id: Optional[str] = data.get('dataset_id')
     delivery_bucket: Optional[str] = data.get('delivery_bucket')
     site_connect_id: Optional[str] = data.get('site_connect_id')
-    missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id', 'site_connect_id'])
+    missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id', 'delivery_bucket', 'site_connect_id'])
 
     # Validate required parameters
     if missing_fields:
@@ -231,6 +231,7 @@ def get_connect_data() -> tuple[str, int]:
     try:
         assert project_id is not None
         assert dataset_id is not None
+        assert delivery_bucket is not None
         assert site_connect_id is not None
 
         gcp_services.export_connect_data_to_parquet(project_id, dataset_id, delivery_bucket, site_connect_id)
@@ -259,7 +260,7 @@ def normalize_parquet_file() -> tuple[str, int]:
         assert date_format is not None
         assert datetime_format is not None
         
-        parquet_file_path: str = utils.get_parquet_artifact_location(file_path)
+        parquet_file_path: str = utils.get_converted_parquet_artifact_location(file_path)
         utils.logger.info(f"Attempting to normalize Parquet file {parquet_file_path}")
         normalizer = normalization.Normalizer(parquet_file_path, omop_version, date_format, datetime_format)
         normalizer.normalize()

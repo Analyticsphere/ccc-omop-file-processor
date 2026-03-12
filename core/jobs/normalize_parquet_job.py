@@ -62,7 +62,7 @@ def main():
 
     try:
         # Get the parquet artifact location
-        parquet_file_path = utils.get_parquet_artifact_location(env_values['FILE_PATH'])
+        parquet_file_path = utils.get_converted_parquet_artifact_location(env_values['FILE_PATH'])
         utils.logger.info(f"Parquet artifact path: {parquet_file_path}")
 
         # Execute normalization

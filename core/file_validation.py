@@ -145,7 +145,7 @@ class FileValidator:
 
     def _get_parquet_columns(self) -> set:
         """Get column names from a Parquet file."""
-        parquet_path = utils.get_parquet_artifact_location(self.file_path)
+        parquet_path = utils.get_converted_parquet_artifact_location(self.file_path)
         columns = utils.get_columns_from_file(parquet_path)
         return set(columns)
 

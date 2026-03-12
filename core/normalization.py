@@ -81,7 +81,7 @@ class Normalizer:
         """
         table_concept_id = utils.get_cdm_schema(self.cdm_version)[self.table_name]['concept_id']
 
-        valid_rows_file = (utils.get_parquet_artifact_location(self.file_path), 'Valid row count')
+        valid_rows_file = (utils.get_converted_parquet_artifact_location(self.file_path), 'Valid row count')
         invalid_rows_file = (utils.get_invalid_rows_path_from_path(self.file_path), 'Invalid row count')
 
         files = [valid_rows_file, invalid_rows_file]

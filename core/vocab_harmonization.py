@@ -26,7 +26,7 @@ class VocabHarmonizer:
         self.source_table_name = utils.get_table_name_from_path(file_path)
         self.bucket = utils.get_bucket_and_delivery_date_from_path(file_path)[0]
         self.delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)[1]
-        self.source_parquet_path = utils.get_parquet_artifact_location(file_path)
+        self.source_parquet_path = utils.get_converted_parquet_artifact_location(file_path)
         self.harmonized_parquet_path = utils.get_parquet_harmonized_path(file_path)
         self.harmonized_parquet_file = storage.get_uri(f"{self.harmonized_parquet_path}*{constants.PARQUET}")
         self.project_id = project_id

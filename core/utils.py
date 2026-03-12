@@ -269,7 +269,7 @@ def valid_parquet_file(file_path: str) -> bool:
         if conn is not None:
             close_duckdb_connection(conn, local_db_file)
 
-def get_parquet_artifact_location(file_path: str) -> str:
+def get_converted_parquet_artifact_location(file_path: str) -> str:
     """Get path to processed Parquet artifact in converted_files directory."""
     file_name = get_table_name_from_path(file_path)
     base_directory, delivery_date = get_bucket_and_delivery_date_from_path(file_path)
@@ -282,6 +282,22 @@ def get_parquet_artifact_location(file_path: str) -> str:
     
     # Construct the final parquet path
     parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
+
+    return parquet_path
+
+def get_normalized_parquet_artifact_location(file_path: str) -> str:
+    """Get path to processed Parquet artifact in normalized_files directory."""
+    file_name = get_table_name_from_path(file_path)
+    base_directory, delivery_date = get_bucket_and_delivery_date_from_path(file_path)
+    
+    # Remove trailing slash if present
+    base_directory = base_directory.rstrip('/')
+    
+    # Create the parquet file name
+    parquet_file_name = f"{file_name.lower()}{constants.PARQUET}"
+    
+    # Construct the final parquet path
+    parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.NORMALIZED_FILES.value}{parquet_file_name}"
 
     return parquet_path
 

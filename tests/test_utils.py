@@ -74,7 +74,7 @@ def test_get_bucket_and_delivery_date_from_path(gcs_path, expected_bucket, expec
     ]
 )
 def test_get_parquet_artifact_location(gcs_path, expected_artifact_path):
-    assert utils.get_parquet_artifact_location(gcs_path) == expected_artifact_path
+    assert utils.get_converted_parquet_artifact_location(gcs_path) == expected_artifact_path
 
 
 @pytest.mark.parametrize(

@@ -33,7 +33,7 @@ class OMOPClient:
             cdm_version: Current CDM version of the file
             target_omop_version: Target CDM version to upgrade to
         """
-        normalized_file_path = utils.get_parquet_artifact_location(file_path)
+        normalized_file_path = utils.get_converted_parquet_artifact_location(file_path)
         table_name = utils.get_table_name_from_path(file_path)
 
         if cdm_version == target_omop_version:
