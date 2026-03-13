@@ -17,7 +17,7 @@ class ParticipantFilter:
     - has requested data destruction (d_831041022 = 353358909) -OR-
     - does not exist in the Connect database
 
-    An earlier step in the pipeline removes rows without a Connect or person_id value.
+    An earlier step in the pipeline removes rows without a Connect ID or person_id value.
     """
 
     VERIFIED_STATUS_CONCEPT_ID = 197316935
@@ -116,10 +116,7 @@ class ParticipantFilter:
     @staticmethod
     def create_connect_eligibility_report_artifacts(connect_data_path: str, delivery_bucket: str) -> None:
         """
-        Create Connect-specific report artifacts used to review participant inclusion.
-
-        These artifacts are built from the Connect participant-status parquet and the
-        normalized person parquet after Connect data export. They summarize:
+        Create Connect study report artifacts used to review participant inclusion status. They summarize:
         - status breakdowns for delivery-matched participants
         - delivery-matched participants who meet review/exclusion conditions
         - Connect IDs present only in Connect data
