@@ -249,7 +249,7 @@ class TestCreateConnectEligibilityReportArtifacts:
                 artifact_bucket="test-bucket",
                 concept_id=0,
                 name="Number of Connect patients not in delivery",
-                value_as_string=None,
+                value_as_string="9001",
                 value_as_concept_id=None,
                 value_as_number=1.0
             ),
@@ -257,17 +257,8 @@ class TestCreateConnectEligibilityReportArtifacts:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Connect patient IDs not in delivery",
-                value_as_string="9001",
-                value_as_concept_id=None,
-                value_as_number=None
-            ),
-            call(
-                delivery_date="2025-01-15",
-                artifact_bucket="test-bucket",
-                concept_id=0,
                 name="Number of delivery patients not in Connect data",
-                value_as_string=None,
+                value_as_string="8001|8002",
                 value_as_concept_id=None,
                 value_as_number=2.0
             ),
@@ -283,4 +274,4 @@ class TestCreateConnectEligibilityReportArtifacts:
         ]
 
         assert mock_artifact.call_args_list == expected_artifact_calls
-        assert mock_artifact_instance.save_artifact.call_count == 10
+        assert mock_artifact_instance.save_artifact.call_count == 9

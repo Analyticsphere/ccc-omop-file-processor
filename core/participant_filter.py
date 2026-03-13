@@ -261,11 +261,8 @@ class ParticipantFilter:
         connect_only_count, connect_only_ids = connect_not_in_delivery[0] if connect_not_in_delivery else (0, "")
         save_artifact(
             name="Number of Connect patients not in delivery",
+            value_as_string=connect_only_ids or "",
             value_as_number=float(connect_only_count)
-        )
-        save_artifact(
-            name="Connect patient IDs not in delivery",
-            value_as_string=connect_only_ids or ""
         )
 
         delivery_not_in_connect_sql = f"""
@@ -290,6 +287,7 @@ class ParticipantFilter:
         delivery_only_count, delivery_only_ids = delivery_not_in_connect[0] if delivery_not_in_connect else (0, "")
         save_artifact(
             name="Number of delivery patients not in Connect data",
+            value_as_string=delivery_only_ids or "",
             value_as_number=float(delivery_only_count)
         )
         save_artifact(
