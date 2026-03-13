@@ -22,6 +22,14 @@ def client():
         yield client
 
 
+def assert_missing_fields(response, *fields):
+    """Assert that a 400 response lists the expected missing request fields."""
+    assert response.status_code == 400
+    assert b"Missing required parameters" in response.data
+    for field in fields:
+        assert field.encode() in response.data
+
+
 class TestHeartbeatEndpoint:
     """Tests for /heartbeat endpoint."""
 
@@ -58,8 +66,7 @@ class TestCreateOptimizedVocabEndpoint:
         """Test missing vocab_version parameter returns 400."""
         response = client.post('/create_optimized_vocab', json={})
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'vocab_version')
 
     @patch('core.endpoints.vocab_manager.VocabularyManager')
     def test_create_optimized_vocab_exception(self, mock_manager, client):
@@ -93,8 +100,7 @@ class TestCreateArtifactDirectoriesEndpoint:
         """Test missing delivery_bucket returns 400."""
         response = client.post('/create_artifact_directories', json={})
 
-        assert response.status_code == 400
-        assert b"Missing required parameter" in response.data
+        assert_missing_fields(response, 'delivery_bucket')
 
     @patch('core.endpoints.storage.create_directory')
     def test_create_artifact_directories_exception(self, mock_create, client):
@@ -128,8 +134,7 @@ class TestGetLogRowEndpoint:
         """Test missing parameters return 400."""
         response = client.get('/get_log_row?site=site1')
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'delivery_date')
 
     @patch('core.endpoints.gcp_services.get_bq_log_row')
     def test_get_log_row_exception(self, mock_get_row, client):
@@ -160,8 +165,7 @@ class TestGetFileListEndpoint:
         """Test missing parameters return 400."""
         response = client.get('/get_file_list?bucket=test-bucket')
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'folder', 'file_format')
 
     @patch('core.endpoints.utils.list_files')
     def test_get_file_list_exception(self, mock_list, client):
@@ -198,8 +202,7 @@ class TestProcessIncomingFileEndpoint:
             'file_type': 'csv'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'file_path')
 
     @patch('core.endpoints.file_processor.FileProcessor')
     def test_process_file_exception(self, mock_processor, client):
@@ -241,8 +244,7 @@ class TestValidateFileEndpoint:
             'file_path': 'bucket/2025-01-01/person.parquet'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'omop_version', 'delivery_date', 'storage_path')
 
     @patch('core.endpoints.file_validation.FileValidator')
     def test_validate_file_exception(self, mock_validator, client):
@@ -288,8 +290,7 @@ class TestNormalizeParquetEndpoint:
             'file_path': 'bucket/2025-01-01/person.parquet'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'omop_version', 'date_format', 'datetime_format')
 
     @patch('core.endpoints.normalization.Normalizer')
     @patch('core.endpoints.utils.get_parquet_artifact_location')
@@ -331,8 +332,7 @@ class TestUpgradeCdmEndpoint:
             'file_path': 'bucket/2025-01-01/person.parquet'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'omop_version', 'target_omop_version')
 
     @patch('core.endpoints.omop_client.OMOPClient.upgrade_file')
     def test_upgrade_cdm_exception(self, mock_upgrade, client):
@@ -370,8 +370,7 @@ class TestClearBqDatasetEndpoint:
             'project_id': 'test-project'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'dataset_id')
 
     @patch('core.endpoints.gcp_services.remove_all_tables')
     def test_clear_bq_dataset_exception(self, mock_remove, client):
@@ -442,8 +441,7 @@ class TestHarmonizeVocabEndpoint:
             'file_path': 'bucket/2025-01-01/observation.parquet'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'vocab_version', 'omop_version', 'site', 'project_id', 'dataset_id', 'step')
 
     @patch('core.endpoints.vocab_harmonization.VocabHarmonizer')
     def test_harmonize_vocab_exception(self, mock_harmonizer, client):
@@ -487,8 +485,7 @@ class TestGenerateDerivedTablesEndpoint:
             'site': 'test_site'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'bucket', 'delivery_date', 'table_name', 'vocab_version')
 
     @patch('core.endpoints.omop_client.OMOPClient.generate_derived_data_from_harmonized')
     def test_generate_derived_tables_exception(self, mock_generate, client):
@@ -532,8 +529,7 @@ class TestLoadTargetVocabEndpoint:
             'vocab_version': 'v5.0_24-JAN-25'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'table_file_name', 'project_id', 'dataset_id')
 
     @patch('core.endpoints.vocab_manager.VocabularyManager')
     def test_load_target_vocab_exception(self, mock_manager, client):
@@ -587,8 +583,7 @@ class TestParquetToBqEndpoint:
             'file_path': 'bucket/2025-01-01/person.parquet'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'project_id', 'dataset_id', 'table_name', 'write_type')
 
     @patch('core.endpoints.gcp_services.load_parquet_to_bigquery')
     def test_parquet_to_bq_exception(self, mock_load, client):
@@ -669,8 +664,7 @@ class TestCreateMissingTablesEndpoint:
             'project_id': 'test-project'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'dataset_id', 'omop_version')
 
     @patch('core.endpoints.omop_client.OMOPClient.create_missing_bq_tables')
     def test_create_missing_tables_exception(self, mock_create, client):
@@ -694,9 +688,14 @@ class TestPopulateCdmSourceFileEndpoint:
     def test_populate_cdm_source_file_success(self, mock_populate, client):
         """Test successful cdm_source file population."""
         response = client.post('/populate_cdm_source_file', json={
+            'bucket': 'test-bucket',
             'source_release_date': '2025-01-01',
+            'cdm_source_name': 'Test Source',
             'cdm_source_abbreviation': 'TEST_SITE',
-            'additional_field': 'test'
+            'cdm_holder': 'Test Holder',
+            'source_description': 'Test description',
+            'cdm_version': '5.4',
+            'cdm_release_date': '2025-01-01'
         })
 
         assert response.status_code == 200
@@ -708,8 +707,16 @@ class TestPopulateCdmSourceFileEndpoint:
             'source_release_date': '2025-01-01'
         })
 
-        assert response.status_code == 400
-        assert b"Missing required parameters" in response.data
+        assert_missing_fields(
+            response,
+            'bucket',
+            'cdm_source_name',
+            'cdm_source_abbreviation',
+            'cdm_holder',
+            'source_description',
+            'cdm_version',
+            'cdm_release_date'
+        )
 
     @patch('core.endpoints.omop_client.OMOPClient.populate_cdm_source_file')
     def test_populate_cdm_source_file_exception(self, mock_populate, client):
@@ -717,8 +724,14 @@ class TestPopulateCdmSourceFileEndpoint:
         mock_populate.side_effect = Exception("Population failed")
 
         response = client.post('/populate_cdm_source_file', json={
+            'bucket': 'test-bucket',
             'source_release_date': '2025-01-01',
-            'cdm_source_abbreviation': 'TEST_SITE'
+            'cdm_source_name': 'Test Source',
+            'cdm_source_abbreviation': 'TEST_SITE',
+            'cdm_holder': 'Test Holder',
+            'source_description': 'Test description',
+            'cdm_version': '5.4',
+            'cdm_release_date': '2025-01-01'
         })
 
         assert response.status_code == 500
@@ -751,8 +764,7 @@ class TestHarmonizedParquetsToBqEndpoint:
             'bucket': 'test-bucket'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'delivery_date', 'project_id', 'dataset_id')
 
     @patch('core.endpoints.gcp_services.load_harmonized_parquets_to_bq')
     def test_harmonized_parquets_to_bq_exception(self, mock_load, client):
@@ -815,8 +827,7 @@ class TestLoadDerivedTablesToBqEndpoint:
             'bucket': 'test-bucket'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'delivery_date', 'project_id', 'dataset_id')
 
     @patch('core.endpoints.gcp_services.load_derived_tables_to_bq')
     def test_load_derived_tables_to_bq_exception(self, mock_load, client):
@@ -863,8 +874,7 @@ class TestPipelineLogEndpoint:
             'delivery_date': '2025-01-01'
         })
 
-        assert response.status_code == 400
-        assert b"Missing a required parameter" in response.data
+        assert_missing_fields(response, 'status', 'run_id')
 
     @patch('core.endpoints.pipeline_log.PipelineLog')
     def test_pipeline_log_exception(self, mock_log, client):
