@@ -2,14 +2,14 @@ import os
 from typing import Optional
 
 import fsspec  # type: ignore
+import pyarrow.parquet as pq  # type: ignore
 from google.cloud import bigquery  # type: ignore
 from google.cloud import storage as gcs_storage  # type: ignore
 from google.cloud.exceptions import NotFound  # type: ignore
-import pyarrow.parquet as pq  # type: ignore
 
 import core.constants as constants
+import core.participant_filter as participant_filter
 import core.utils as utils
-import core.reporting as reporting
 from core.storage_backend import storage
 
 
@@ -168,8 +168,8 @@ def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bu
     # connect_id's are integers but are stored as strings in table
     sql_script = sql_script.replace("@SITE_CONNECT_ID", str(site_connect_id)) 
 
-    output_path = f"{constants.ArtifactPaths.CONNECT_DATA.value}participant_status{constants.PARQUET}"
-    output_path = f"{delivery_bucket}/{output_path}"
+    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(delivery_bucket)
+    output_path = utils.get_connect_data_path(bucket, delivery_date)
 
     output_uri = write_query_results_to_parquet(
         sql_script=sql_script,
@@ -177,7 +177,7 @@ def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bu
         project_id=project_id
     )
 
-    reporting._create_connect_data_report_artifacts(output_uri, delivery_bucket)
+    participant_filter.ParticipantFilter.create_connect_eligibility_report_artifacts(output_uri, delivery_bucket)
     return output_uri
 
 def list_gcs_subdirectories(gcs_path: str) -> list:

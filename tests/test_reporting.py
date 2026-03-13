@@ -12,74 +12,7 @@ import pytest
 
 import core.constants as constants
 import core.utils as utils
-from core.reporting import ReportGenerator, _create_connect_data_report_artifacts
-
-
-class TestCreateConnectDataReportArtifacts:
-    """Tests for Connect-specific delivery report artifacts."""
-
-    @patch('core.reporting.report_artifact.ReportArtifact')
-    @patch('core.reporting.utils.execute_duckdb_sql')
-    @patch('core.reporting.storage.get_uri')
-    @patch('core.reporting.utils.parquet_file_exists')
-    @patch('core.reporting.utils.get_parquet_artifact_location')
-    @patch('core.reporting.utils.get_bucket_and_delivery_date_from_path')
-    def test_creates_flagged_connect_id_artifacts(
-        self,
-        mock_get_bucket_and_date,
-        mock_get_parquet_path,
-        mock_parquet_exists,
-        mock_get_uri,
-        mock_execute_sql,
-        mock_artifact
-    ):
-        """Test that delivery-matched Connect IDs are captured for the new review conditions."""
-        mock_get_bucket_and_date.return_value = ("test-bucket", "2025-01-15")
-        mock_get_parquet_path.return_value = "test-bucket/2025-01-15/artifacts/converted_files/person.parquet"
-        mock_parquet_exists.return_value = True
-        mock_get_uri.side_effect = lambda path: path if path.startswith("gs://") else f"gs://{path}"
-
-        mock_artifact_instance = MagicMock()
-        mock_artifact.return_value = mock_artifact_instance
-
-        mock_execute_sql.side_effect = [
-            [("Verified", 197316935, 10)],
-            [("No", 104430631, 9), ("Yes", 353358909, 1)],
-            [("No", 104430631, 8), ("Yes", 353358909, 2)],
-            [("No", 104430631, 10)],
-            [(3, "1001|1002|1003")],
-            [(1, "9001")],
-            [(2, "8001|8002")],
-        ]
-
-        _create_connect_data_report_artifacts(
-            connect_data_path="gs://test-bucket/2025-01-15/artifacts/connect_data/participant_status.parquet",
-            delivery_bucket="test-bucket/2025-01-15"
-        )
-
-        assert mock_execute_sql.call_count == 7
-
-        flagged_query = mock_execute_sql.call_args_list[4].args[0]
-        assert "FROM matched_patients" in flagged_query
-        assert "verified_status_concept_id != 197316935" in flagged_query
-        assert "consent_withdrawn_concept_id = 353358909" in flagged_query
-        assert "hipaa_revoked_concept_id = 353358909" in flagged_query
-        assert "data_destruction_requested_concept_id = 353358909" in flagged_query
-
-        assert mock_artifact.call_count == 12
-        assert mock_artifact_instance.save_artifact.call_count == 12
-
-        flagged_count_call = next(
-            call_args for call_args in mock_artifact.call_args_list
-            if call_args.kwargs['name'] == "Number of Connect patients in delivery meeting review conditions"
-        )
-        assert flagged_count_call.kwargs['value_as_number'] == 3.0
-
-        flagged_ids_call = next(
-            call_args for call_args in mock_artifact.call_args_list
-            if call_args.kwargs['name'] == "Connect patient IDs in delivery meeting review conditions"
-        )
-        assert flagged_ids_call.kwargs['value_as_string'] == "1001|1002|1003"
+from core.reporting import ReportGenerator
 
 
 class TestReportGeneratorInit:

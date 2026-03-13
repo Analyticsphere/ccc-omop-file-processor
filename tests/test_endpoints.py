@@ -349,6 +349,57 @@ class TestUpgradeCdmEndpoint:
         assert b"Unable to upgrade file" in response.data
 
 
+class TestFilterConnectParticipantsEndpoint:
+    """Tests for /filter_connect_participants endpoint."""
+
+    @patch('core.endpoints.participant_filter.ParticipantFilter')
+    def test_filter_connect_participants_success(self, mock_filter, client):
+        """Test successful Connect participant filtering."""
+        mock_instance = MagicMock()
+        mock_instance.apply_exclusions.return_value = True
+        mock_filter.return_value = mock_instance
+
+        response = client.post('/filter_connect_participants', json={
+            'file_path': 'bucket/2025-01-01/condition_occurrence.parquet'
+        })
+
+        assert response.status_code == 200
+        assert b"Applied Connect participant filtering" in response.data
+        mock_instance.apply_exclusions.assert_called_once()
+
+    @patch('core.endpoints.participant_filter.ParticipantFilter')
+    def test_filter_connect_participants_skips_tables_without_person_id(self, mock_filter, client):
+        """Test skip response for tables without person_id."""
+        mock_instance = MagicMock()
+        mock_instance.apply_exclusions.return_value = False
+        mock_filter.return_value = mock_instance
+
+        response = client.post('/filter_connect_participants', json={
+            'file_path': 'bucket/2025-01-01/vocabulary.parquet'
+        })
+
+        assert response.status_code == 200
+        assert b"Skipped Connect participant filtering for table without person_id" in response.data
+
+    def test_filter_connect_participants_missing_parameters(self, client):
+        """Test missing file_path returns 400."""
+        response = client.post('/filter_connect_participants', json={})
+
+        assert_missing_fields(response, 'file_path')
+
+    @patch('core.endpoints.participant_filter.ParticipantFilter')
+    def test_filter_connect_participants_exception(self, mock_filter, client):
+        """Test exception handling returns 500."""
+        mock_filter.side_effect = Exception("Connect filtering failed")
+
+        response = client.post('/filter_connect_participants', json={
+            'file_path': 'bucket/2025-01-01/person.parquet'
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to apply Connect participant filtering" in response.data
+
+
 class TestClearBqDatasetEndpoint:
     """Tests for /clear_bq_dataset endpoint."""
 

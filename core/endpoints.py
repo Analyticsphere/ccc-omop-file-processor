@@ -11,6 +11,7 @@ import core.gcp_services as gcp_services
 import core.helpers.pipeline_log as pipeline_log
 import core.normalization as normalization
 import core.omop_client as omop_client
+import core.participant_filter as participant_filter
 import core.reporting as reporting
 import core.utils as utils
 import core.vocab_harmonization as vocab_harmonization
@@ -297,6 +298,36 @@ def cdm_upgrade() -> tuple[str, int]:
     except Exception as e:
         utils.logger.error(f"Unable to upgrade file: {str(e)}")
         return f"Unable to upgrade file: {str(e)}", 500
+
+
+@app.route('/filter_connect_participants', methods=['POST'])
+def filter_connect_participants() -> tuple[str, int]:
+    """
+    Remove rows whose person_id/connect_id is excluded by Connect participant-status rules.
+
+    This step is intended to run after normalization/CDM upgrade and before
+    vocabulary harmonization. Tables without a person_id column are skipped.
+    """
+    data: dict[str, Any] = request.get_json() or {}
+    file_path: Optional[str] = data.get('file_path')
+    missing_fields = _get_missing_fields(data, ['file_path'])
+
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert file_path is not None
+
+        connect_filter = participant_filter.ParticipantFilter(file_path)
+        was_applied = connect_filter.apply_exclusions()
+
+        if not was_applied:
+            return "Skipped Connect participant filtering for table without person_id", 200
+
+        return "Applied Connect participant filtering", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to apply Connect participant filtering: {str(e)}")
+        return f"Unable to apply Connect participant filtering: {str(e)}", 500
 
 
 @app.route('/clear_bq_dataset', methods=['POST'])
