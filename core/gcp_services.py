@@ -2,14 +2,14 @@ import os
 from typing import Optional
 
 import fsspec  # type: ignore
-import pyarrow.parquet as pq  # type: ignore
 from google.cloud import bigquery  # type: ignore
 from google.cloud import storage as gcs_storage  # type: ignore
 from google.cloud.exceptions import NotFound  # type: ignore
+import pyarrow.parquet as pq  # type: ignore
 
 import core.constants as constants
-import core.reporting as reporting
 import core.utils as utils
+import core.reporting as reporting
 from core.storage_backend import storage
 
 
@@ -177,7 +177,7 @@ def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bu
         project_id=project_id
     )
 
-    reporting.create_connect_data_report_artifacts(output_uri, delivery_bucket)
+    reporting._create_connect_data_report_artifacts(output_uri, delivery_bucket)
     return output_uri
 
 def list_gcs_subdirectories(gcs_path: str) -> list:

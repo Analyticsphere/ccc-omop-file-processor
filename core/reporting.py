@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
@@ -1018,7 +1018,7 @@ class ReportGenerator:
         return consolidation_statement
 
 
-def create_connect_data_report_artifacts(connect_data_path: str, delivery_bucket: str) -> None:
+def _create_connect_data_report_artifacts(connect_data_path: str, delivery_bucket: str) -> None:
     """Create delivery report artifacts from Connect data joined to the normalized person parquet."""
     bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(delivery_bucket)
     person_parquet_path = utils.get_normalized_parquet_artifact_location(f"{delivery_bucket}/person.parquet")
@@ -1028,6 +1028,9 @@ def create_connect_data_report_artifacts(connect_data_path: str, delivery_bucket
 
     person_uri = storage.get_uri(person_parquet_path)
     connect_data_uri = storage.get_uri(connect_data_path)
+
+    print("person_uri", person_uri)
+    print("connect_data_uri", connect_data_uri)
 
     base_cte = f"""
     WITH person_delivery AS (
