@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
 from flask import Flask, jsonify, request  # type: ignore
 
@@ -18,6 +18,16 @@ import core.vocab_manager as vocab_manager
 from core.storage_backend import storage
 
 app = Flask(__name__)
+
+
+def _get_missing_fields(data: Mapping[str, Any], required_fields: list[str]) -> list[str]:
+    """Return required field names that are missing or blank in request data."""
+    return [field for field in required_fields if not data.get(field)]
+
+
+def _missing_fields_response(missing_fields: list[str]) -> tuple[str, int]:
+    """Build a consistent 400 response for missing request fields."""
+    return f"Missing required parameters: {', '.join(missing_fields)}", 400
 
 @app.route('/heartbeat', methods=['GET'])
 def heartbeat() -> tuple[Any, int]:
@@ -37,10 +47,11 @@ def create_optimized_vocab() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_path: str = constants.VOCAB_PATH
+    missing_fields = _get_missing_fields(data, ['vocab_version'])
 
     # Validate required parameters
-    if not all([vocab_version, vocab_path]):
-        return "Missing a required parameter to 'create_optimized_vocab' endpoint. Required: vocab_version, vocab_path", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         assert vocab_version is not None
@@ -60,11 +71,13 @@ def create_artifact_directories() -> tuple[str, int]:
     """Create directories for storing processing artifacts (converted files, reports, etc.)."""
     data: dict[str, Any] = request.get_json() or {}
     delivery_bucket: Optional[str] = data.get('delivery_bucket')
+    missing_fields = _get_missing_fields(data, ['delivery_bucket'])
 
     # Validate required parameters
-    if not delivery_bucket:
-        return "Missing required parameter to 'create_artifact_directories' endpoint: delivery_bucket", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
+    assert delivery_bucket is not None
     utils.logger.info(f"Creating artifact directories in {storage.get_uri(delivery_bucket)}")
 
     directories: list[str] = []
@@ -90,10 +103,11 @@ def get_log_row() -> tuple[Any, int]:
     """Retrieve pipeline log entries from BigQuery for specified site and delivery date."""
     site: Optional[str] = request.args.get('site')
     delivery_date: Optional[str] = request.args.get('delivery_date')
+    missing_fields = _get_missing_fields(request.args, ['site', 'delivery_date'])
 
     # Validate required parameters
-    if not all([site, delivery_date]):
-        return "Missing a required parameter to 'get_log_row' endpoint. Required: site, delivery_date", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
     
     try:
         assert site is not None
@@ -116,10 +130,11 @@ def get_files() -> tuple[Any, int]:
     bucket: Optional[str] = request.args.get('bucket')
     folder: Optional[str] = request.args.get('folder')
     file_format: Optional[str] = request.args.get('file_format')
+    missing_fields = _get_missing_fields(request.args, ['bucket', 'folder', 'file_format'])
    
     # Validate required parameters
-    if not all([bucket, folder, file_format]):
-        return "Missing a required parameter to 'get_file_list' endpoint. Required: bucket, folder, file_format", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         assert bucket is not None
@@ -144,10 +159,11 @@ def process_file() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     file_type: Optional[str] = data.get('file_type')
     file_path: Optional[str] = data.get('file_path')
+    missing_fields = _get_missing_fields(data, ['file_type', 'file_path'])
 
     # Validate required parameters
-    if not all([file_type, file_path]):
-        return "Missing a required parameter to 'process_incoming_file' endpoint. Required: file_type, file_path", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         assert file_type is not None
@@ -171,10 +187,11 @@ def validate_file() -> tuple[str, int]:
     omop_version: Optional[str] = data.get('omop_version')
     delivery_date: Optional[str] = data.get('delivery_date')
     storage_path: Optional[str] = data.get('storage_path')
+    missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'delivery_date', 'storage_path'])
 
     # Validate required parameters
-    if not all([file_path, omop_version, delivery_date, storage_path]):
-        return "Missing a required parameter to 'validate_file' endpoint. Required: file_path, omop_version, delivery_date, storage_path", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
     
     try:
         assert file_path is not None
@@ -198,18 +215,45 @@ def validate_file() -> tuple[str, int]:
         return f"Unable to run file validation: {str(e)}", 500
     
 
+@app.route('/get_connect_data', methods=['POST'])
+def get_connect_data() -> tuple[str, int]:
+    """Get Connect study data for participants from BigQuery."""
+    data: dict[str, Any] = request.get_json() or {}
+    project_id: Optional[str] = data.get('project_id')
+    dataset_id: Optional[str] = data.get('dataset_id')
+    delivery_bucket: Optional[str] = data.get('delivery_bucket')
+    site_connect_id: Optional[str] = data.get('site_connect_id')
+    missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id', 'delivery_bucket', 'site_connect_id'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert project_id is not None
+        assert dataset_id is not None
+        assert delivery_bucket is not None
+        assert site_connect_id is not None
+
+        gcp_services.export_connect_data_to_parquet(project_id, dataset_id, delivery_bucket, site_connect_id)
+        return "Retrieved Connect study data", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to retrieve Connect study data: {str(e)}")
+        return f"Unable to retrieve Connect study data: {str(e)}", 500
+    
 @app.route('/normalize_parquet', methods=['POST'])
 def normalize_parquet_file() -> tuple[str, int]:
-    """Normalize Parquet file to conform to OMOP CDM schema with type conversions and constraints."""
+    """Normalize Parquet file to conform to OMOP CDM schema with type conversions and constraints, and Connect data requirements"""
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
     omop_version: Optional[str] = data.get('omop_version')
     date_format: Optional[str] = data.get('date_format')
     datetime_format: Optional[str] = data.get('datetime_format')
+    missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'date_format', 'datetime_format'])
 
     # Validate required parameters
-    if not all([file_path, omop_version, date_format, datetime_format]):
-        return "Missing a required parameter to 'normalize_parquet' endpoint. Required: file_path, omop_version, date_format, datetime_format", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         assert file_path is not None
@@ -217,7 +261,7 @@ def normalize_parquet_file() -> tuple[str, int]:
         assert date_format is not None
         assert datetime_format is not None
         
-        parquet_file_path: str = utils.get_parquet_artifact_location(file_path)
+        parquet_file_path: str = utils.get_converted_parquet_artifact_location(file_path)
         utils.logger.info(f"Attempting to normalize Parquet file {parquet_file_path}")
         normalizer = normalization.Normalizer(parquet_file_path, omop_version, date_format, datetime_format)
         normalizer.normalize()
@@ -235,10 +279,11 @@ def cdm_upgrade() -> tuple[str, int]:
     file_path: Optional[str] = data.get('file_path')
     omop_version: Optional[str] = data.get('omop_version')
     target_omop_version: Optional[str] = data.get('target_omop_version')
+    missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'target_omop_version'])
 
     # Validate required parameters
-    if not all([file_path, omop_version, target_omop_version]):
-        return "Missing a required parameter to 'upgrade_cdm' endpoint. Required: file_path, omop_version, target_omop_version", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         assert file_path is not None
@@ -260,10 +305,11 @@ def clear_bq_tables() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
+    missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id'])
 
     # Validate required parameters
-    if not all([project_id, dataset_id]):
-        return "Missing a required parameter to 'clear_bq_dataset' endpoint. Required: project_id, dataset_id", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         assert project_id is not None
@@ -293,10 +339,14 @@ def harmonize_vocab() -> tuple[Any, int]:
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
     step: Optional[str] = data.get('step')
+    missing_fields = _get_missing_fields(
+        data,
+        ['file_path', 'vocab_version', 'omop_version', 'site', 'project_id', 'dataset_id', 'step']
+    )
 
     # Validate required parameters
-    if not all([file_path, vocab_version, vocab_path, omop_version, site, project_id, dataset_id, step]):
-        return "Missing a required parameter to 'harmonize_vocab' endpoint. Required: file_path, vocab_version, vocab_path, omop_version, site, project_id, dataset_id, step", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         utils.logger.info(f"Harmonizing vocabulary for {file_path} to version {vocab_version}, step: {step}")
@@ -361,10 +411,14 @@ def generate_derived_tables_from_harmonized() -> tuple[str, int]:
     table_name: Optional[str] = data.get('table_name')
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_path: str = constants.VOCAB_PATH
+    missing_fields = _get_missing_fields(
+        data,
+        ['site', 'bucket', 'delivery_date', 'table_name', 'vocab_version']
+    )
 
     # Validate required parameters
-    if not all([site, delivery_date, table_name, vocab_version, vocab_path, bucket]):
-        return "Missing a required parameter to 'generate_derived_tables_from_harmonized' endpoint. Required: site, delivery_date, table_name, vocab_version, vocab_path, bucket", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         assert site is not None
@@ -390,10 +444,11 @@ def target_vocab_to_bq() -> tuple[str, int]:
     vocab_bucket: str = constants.VOCAB_PATH
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
+    missing_fields = _get_missing_fields(data, ['table_file_name', 'vocab_version', 'project_id', 'dataset_id'])
 
     # Validate required parameters
-    if not all([vocab_version, vocab_bucket, project_id, dataset_id, table_file_name]):
-        return "Missing a required parameter to 'load_target_vocab' endpoint. Required: vocab_version, vocab_bucket, project_id, dataset_id, table_file_name", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
     
     try:
         assert vocab_version is not None
@@ -419,10 +474,11 @@ def parquet_gcs_to_bq() -> tuple[str, int]:
     dataset_id: Optional[str] = data.get('dataset_id')
     table_name: Optional[str] = data.get('table_name')
     write_type: Optional[str] = data.get('write_type')
+    missing_fields = _get_missing_fields(data, ['file_path', 'project_id', 'dataset_id', 'table_name', 'write_type'])
 
     # Validate required parameters
-    if not all([file_path, project_id, dataset_id, write_type, table_name]):
-        return "Missing a required parameter to 'parquet_to_bq' endpoint. Required: file_path, project_id, dataset_id, write_type, table_name", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
     
     try:
         assert file_path is not None
@@ -454,10 +510,11 @@ def generate_delivery_report_csv() -> tuple[str, int]:
     Includes metadata, row counts, vocabulary breakdowns, and type concept distributions.
     """
     report_data: dict[str, Any] = request.get_json() or {}
+    missing_fields = _get_missing_fields(report_data, ['delivery_date', 'site'])
 
     # Validate required parameters
-    if not report_data.get('delivery_date') or not report_data.get('site'):
-        return "Missing required parameters to 'generate_delivery_report_csv' endpoint JSON: delivery_date and site", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         utils.logger.info(f"Generating delivery report CSV for {report_data['delivery_date']} delivery from {report_data['site']}")
@@ -477,10 +534,11 @@ def create_missing_omop_tables() -> tuple[str, int]:
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
     omop_version: Optional[str] = data.get('omop_version')
+    missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id', 'omop_version'])
 
     # Validate required parameters
-    if not all([project_id, dataset_id, omop_version]):
-        return "Missing a required parameter to 'create_missing_tables' endpoint. Required: project_id, dataset_id, omop_version", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         assert project_id is not None
@@ -500,10 +558,21 @@ def create_missing_omop_tables() -> tuple[str, int]:
 def populate_cdm_source_file() -> tuple[str, int]:
     """Populate cdm_source Parquet file with metadata if empty or non-existent."""
     cdm_source_data: dict[str, Any] = request.get_json() or {}
+    required_fields = [
+        'bucket',
+        'source_release_date',
+        'cdm_source_name',
+        'cdm_source_abbreviation',
+        'cdm_holder',
+        'source_description',
+        'cdm_version',
+        'cdm_release_date',
+    ]
+    missing_fields = _get_missing_fields(cdm_source_data, required_fields)
 
     # Validate required parameters
-    if not cdm_source_data.get('source_release_date') or not cdm_source_data.get('cdm_source_abbreviation'):
-        return "Missing required parameters: source_release_date and cdm_source_abbreviation", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         utils.logger.info(f"Checking cdm_source file for {cdm_source_data['source_release_date']} delivery from {cdm_source_data['cdm_source_abbreviation']}")
@@ -528,10 +597,11 @@ def harmonized_parquets_to_bq() -> tuple[str, int]:
     delivery_date: Optional[str] = data.get('delivery_date')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
+    missing_fields = _get_missing_fields(data, ['bucket', 'delivery_date', 'project_id', 'dataset_id'])
 
     # Validate required parameters
-    if not all([bucket, delivery_date, project_id, dataset_id]):
-        return "Missing a required parameter to 'harmonized_parquets_to_bq' endpoint. Required: bucket, delivery_date, project_id, dataset_id", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         assert bucket is not None
@@ -577,10 +647,11 @@ def load_derived_tables_to_bq() -> tuple[str, int]:
     delivery_date: Optional[str] = data.get('delivery_date')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
+    missing_fields = _get_missing_fields(data, ['bucket', 'delivery_date', 'project_id', 'dataset_id'])
 
     # Validate required parameters
-    if not all([bucket, delivery_date, project_id, dataset_id]):
-        return "Missing a required parameter to 'load_derived_tables_to_bq' endpoint. Required: bucket, delivery_date, project_id, dataset_id", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
 
     try:
         assert bucket is not None
@@ -619,7 +690,7 @@ def load_derived_tables_to_bq() -> tuple[str, int]:
 @app.route('/pipeline_log', methods=['POST'])
 def log_pipeline_state() -> tuple:
     """Log pipeline execution state to BigQuery logging table."""
-    data: dict = request.get_json()
+    data: dict[str, Any] = request.get_json() or {}
     logging_table: str = constants.BQ_LOGGING_TABLE
     site_name: Optional[str] = data.get('site_name')
     delivery_date: Optional[str] = data.get('delivery_date')
@@ -628,10 +699,11 @@ def log_pipeline_state() -> tuple:
     file_type: Optional[str] = data.get('file_type')
     omop_version: Optional[str] = data.get('omop_version')
     run_id: Optional[str] = data.get('run_id')
+    missing_fields = _get_missing_fields(data, ['site_name', 'delivery_date', 'status', 'run_id'])
 
     # Validate required parameters
-    if not all([site_name, delivery_date, status, run_id]):
-        return "Missing a required parameter to 'pipeline_log' endpoint. Required: site_name, delivery_date, status, run_id", 400
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
     
     try:
         assert site_name is not None
