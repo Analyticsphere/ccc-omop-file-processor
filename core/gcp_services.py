@@ -1,11 +1,15 @@
+import os
 from typing import Optional
 
+import fsspec  # type: ignore
 from google.cloud import bigquery  # type: ignore
 from google.cloud import storage as gcs_storage  # type: ignore
 from google.cloud.exceptions import NotFound  # type: ignore
+import pyarrow.parquet as pq  # type: ignore
 
 import core.constants as constants
 import core.utils as utils
+import core.reporting as reporting
 from core.storage_backend import storage
 
 
@@ -39,7 +43,7 @@ def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, t
     # PROCESSED_FILE -> overwrite table with the pipeline-processed version of the file in file_path
     elif write_type == constants.BQWriteTypes.PROCESSED_FILE:
         write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-        parquet_path = storage.get_uri(utils.get_parquet_artifact_location(file_path))
+        parquet_path = storage.get_uri(utils.get_converted_parquet_artifact_location(file_path))
         
     # When upgrading to 5.4, some Parquet files may get deleted
     # First confirm that Parquet file does exist before trying to load to BQ
@@ -124,6 +128,57 @@ def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig
 
     except Exception as e:
         raise Exception(f"Error executing BigQuery SQL: {e}")
+
+def write_query_results_to_parquet(
+    sql_script: str,
+    output_path: str,
+    project_id: Optional[str] = None,
+    job_config: Optional[bigquery.QueryJobConfig] = None
+) -> str:
+    """Execute a BigQuery SQL query and write the result set to a Parquet file."""
+    client = bigquery.Client(project=project_id)
+    query_job = client.query(sql_script, job_config=job_config)
+    results = query_job.result()
+    result_table = results.to_arrow(create_bqstorage_client=False)
+
+    output_uri = storage.get_uri(output_path)
+
+    if constants.STORAGE_BACKEND == constants.LOCAL_BACKEND:
+        os.makedirs(os.path.dirname(storage.strip_scheme(output_uri)), exist_ok=True)
+
+    with fsspec.open(output_uri, 'wb') as parquet_file:
+        pq.write_table(
+            result_table,
+            parquet_file,
+            compression='zstd',
+            compression_level=1
+        )
+
+    utils.logger.info(f"Saved query results to {output_uri}")
+    return output_uri
+
+def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bucket: str, site_connect_id: str) -> str:
+    """Build the Connect participant-status query and export the results to Parquet."""
+    sql_path = os.path.join(constants.SQL_PATH, "connect_data", "participant_status.sql")
+    with open(sql_path, 'r') as sql_file:
+        sql_script = sql_file.read()
+
+    sql_script = sql_script.replace("@PROJECT_ID", project_id)
+    sql_script = sql_script.replace("@DATASET_ID", dataset_id)
+    # connect_id's are integers but are stored as strings in table
+    sql_script = sql_script.replace("@SITE_CONNECT_ID", str(site_connect_id)) 
+
+    output_path = f"{constants.ArtifactPaths.CONNECT_DATA.value}participant_status{constants.PARQUET}"
+    output_path = f"{delivery_bucket}/{output_path}"
+
+    output_uri = write_query_results_to_parquet(
+        sql_script=sql_script,
+        output_path=output_path,
+        project_id=project_id
+    )
+
+    reporting._create_connect_data_report_artifacts(output_uri, delivery_bucket)
+    return output_uri
 
 def list_gcs_subdirectories(gcs_path: str) -> list:
     """

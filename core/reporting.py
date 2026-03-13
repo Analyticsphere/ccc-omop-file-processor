@@ -1,12 +1,188 @@
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
 import core.utils as utils
 from core.storage_backend import storage
 
+def _create_connect_data_report_artifacts(connect_data_path: str, delivery_bucket: str) -> None:
+    """Create delivery report artifacts from Connect data joined to the normalized person parquet."""
+    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(delivery_bucket)
+    person_parquet_path = utils.get_parquet_artifact_location(f"{delivery_bucket}/person.parquet")
+
+    if not utils.parquet_file_exists(person_parquet_path):
+        raise Exception(f"Normalized person parquet not found at {person_parquet_path}")
+
+    person_uri = storage.get_uri(person_parquet_path)
+    connect_data_uri = storage.get_uri(connect_data_path)
+
+    print("person_uri", person_uri)
+    print("connect_data_uri", connect_data_uri)
+
+    base_cte = f"""
+    WITH person_delivery AS (
+        SELECT DISTINCT
+            TRY_CAST(person_id AS BIGINT) AS person_id
+        FROM read_parquet('{person_uri}')
+        WHERE TRY_CAST(person_id AS BIGINT) IS NOT NULL
+    ),
+    connect_data AS (
+        SELECT DISTINCT
+            TRY_CAST(Connect_ID AS BIGINT) AS connect_id,
+            COALESCE(NULLIF(TRIM(CAST(verified_status AS VARCHAR)), ''), 'UNKNOWN') AS verified_status,
+            TRY_CAST(verified_status_concept_id AS BIGINT) AS verified_status_concept_id,
+            COALESCE(NULLIF(TRIM(CAST(consent_withdrawn AS VARCHAR)), ''), 'UNKNOWN') AS consent_withdrawn,
+            TRY_CAST(consent_withdrawn_concept_id AS BIGINT) AS consent_withdrawn_concept_id,
+            COALESCE(NULLIF(TRIM(CAST(hipaa_revoked AS VARCHAR)), ''), 'UNKNOWN') AS hipaa_revoked,
+            TRY_CAST(hipaa_revoked_concept_id AS BIGINT) AS hipaa_revoked_concept_id,
+            COALESCE(NULLIF(TRIM(CAST(data_destruction_requested AS VARCHAR)), ''), 'UNKNOWN') AS data_destruction_requested,
+            TRY_CAST(data_destruction_requested_concept_id AS BIGINT) AS data_destruction_requested_concept_id
+        FROM read_parquet('{connect_data_uri}')
+        WHERE TRY_CAST(Connect_ID AS BIGINT) IS NOT NULL
+    ),
+    matched_patients AS (
+        SELECT DISTINCT
+            p.person_id,
+            cd.connect_id,
+            cd.verified_status,
+            cd.verified_status_concept_id,
+            cd.consent_withdrawn,
+            cd.consent_withdrawn_concept_id,
+            cd.hipaa_revoked,
+            cd.hipaa_revoked_concept_id,
+            cd.data_destruction_requested,
+            cd.data_destruction_requested_concept_id
+        FROM person_delivery p
+        INNER JOIN connect_data cd
+            ON p.person_id = cd.connect_id
+    )
+    """
+
+    def save_artifact(
+        name: str,
+        value_as_number: Optional[float] = None,
+        value_as_string: Optional[str] = None,
+        value_as_concept_id: Optional[int] = None
+    ) -> None:
+        artifact = report_artifact.ReportArtifact(
+            delivery_date=delivery_date,
+            artifact_bucket=bucket,
+            concept_id=0,
+            name=name,
+            value_as_string=value_as_string,
+            value_as_concept_id=value_as_concept_id,
+            value_as_number=value_as_number
+        )
+        artifact.save_artifact()
+
+    report_configs = [
+        (
+            "Connect participant breakdown: Study status",
+            "verified_status",
+            "verified_status_concept_id"
+        ),
+        (
+            "Connect participant breakdown: HIPAA revoked status",
+            "hipaa_revoked",
+            "hipaa_revoked_concept_id"
+        ),
+        (
+            "Connect participant breakdown: Consent withdrawn status",
+            "consent_withdrawn",
+            "consent_withdrawn_concept_id"
+        ),
+        (
+            "Connect participant breakdown: Data destruction status",
+            "data_destruction_requested",
+            "data_destruction_requested_concept_id"
+        )
+    ]
+
+    for artifact_name, status_column, concept_id_column in report_configs:
+        status_count_sql = f"""
+        {base_cte}
+        SELECT
+            {status_column} AS status_value,
+            {concept_id_column} AS status_concept_id,
+            COUNT(DISTINCT person_id) AS patient_count
+        FROM matched_patients
+        GROUP BY 1, 2
+        ORDER BY 1, 2
+        """
+
+        status_counts = utils.execute_duckdb_sql(
+            status_count_sql,
+            f"Unable to create Connect data report artifacts for {status_column}",
+            return_results=True
+        )
+
+        for status_value, status_concept_id, patient_count in status_counts:
+            save_artifact(
+                name=artifact_name,
+                value_as_string=status_value,
+                value_as_concept_id=status_concept_id,
+                value_as_number=float(patient_count)
+            )
+
+    connect_not_in_delivery_sql = f"""
+    {base_cte}
+    SELECT
+        COUNT(*) AS patient_count,
+        COALESCE(STRING_AGG(CAST(connect_id AS VARCHAR), '|' ORDER BY connect_id), '') AS patient_ids
+    FROM (
+        SELECT DISTINCT cd.connect_id
+        FROM connect_data cd
+        LEFT JOIN person_delivery p
+            ON p.person_id = cd.connect_id
+        WHERE p.person_id IS NULL
+    ) unmatched_connect
+    """
+    connect_not_in_delivery = utils.execute_duckdb_sql(
+        connect_not_in_delivery_sql,
+        "Unable to create Connect-vs-delivery reconciliation artifacts for Connect-only patients",
+        return_results=True
+    )
+
+    connect_only_count, connect_only_ids = connect_not_in_delivery[0] if connect_not_in_delivery else (0, "")
+    save_artifact(
+        name="Number of Connect patients not in delivery",
+        value_as_number=float(connect_only_count)
+    )
+    save_artifact(
+        name="Connect patient IDs not in delivery",
+        value_as_string=connect_only_ids or ""
+    )
+
+    delivery_not_in_connect_sql = f"""
+    {base_cte}
+    SELECT
+        COUNT(*) AS patient_count,
+        COALESCE(STRING_AGG(CAST(person_id AS VARCHAR), '|' ORDER BY person_id), '') AS patient_ids
+    FROM (
+        SELECT DISTINCT p.person_id
+        FROM person_delivery p
+        LEFT JOIN connect_data cd
+            ON p.person_id = cd.connect_id
+        WHERE cd.connect_id IS NULL
+    ) unmatched_delivery
+    """
+    delivery_not_in_connect = utils.execute_duckdb_sql(
+        delivery_not_in_connect_sql,
+        "Unable to create Connect-vs-delivery reconciliation artifacts for delivery-only patients",
+        return_results=True
+    )
+
+    delivery_only_count, delivery_only_ids = delivery_not_in_connect[0] if delivery_not_in_connect else (0, "")
+    save_artifact(
+        name="Number of delivery patients not in Connect data",
+        value_as_number=float(delivery_only_count)
+    )
+    save_artifact(
+        name="Delivery patient IDs not in Connect data",
+        value_as_string=delivery_only_ids or ""
+    )
 
 class ReportGenerator:
     """
@@ -1016,3 +1192,4 @@ class ReportGenerator:
         """
 
         return consolidation_statement
+
