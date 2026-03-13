@@ -76,12 +76,12 @@ class Normalizer:
         """
         Create report artifacts with row counts for valid and invalid rows.
 
-        Reads the normalized parquet files and counts rows in each.
+        Reads the normalized parquet file (which contains only valid rows) and the invalid rows parquet file to count rows in each.
         Creates two report artifacts: one for valid rows, one for invalid rows.
         """
         table_concept_id = utils.get_cdm_schema(self.cdm_version)[self.table_name]['concept_id']
 
-        valid_rows_file = (utils.get_parquet_artifact_location(self.file_path), 'Valid row count')
+        valid_rows_file = (utils.get_normalized_parquet_artifact_location(self.file_path), 'Valid row count')
         invalid_rows_file = (utils.get_invalid_rows_path_from_path(self.file_path), 'Invalid row count')
 
         files = [valid_rows_file, invalid_rows_file]
