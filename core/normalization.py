@@ -30,7 +30,6 @@ class Normalizer:
             datetime_format: Datetime format string (e.g., "%Y-%m-%d %H:%M:%S")
         """
         self.file_path = file_path
-        self.output_file_path = utils.get_normalized_parquet_artifact_location(file_path)
         self.cdm_version = cdm_version
         self.date_format = date_format
         self.datetime_format = datetime_format
@@ -54,7 +53,6 @@ class Normalizer:
         # Generate normalization SQL
         normalization_sql = Normalizer.generate_normalization_sql(
             file_path=self.file_path,
-            output_file_path=self.output_file_path,
             table_name=self.table_name,
             cdm_version=self.cdm_version,
             date_format=self.date_format,
@@ -83,7 +81,7 @@ class Normalizer:
         """
         table_concept_id = utils.get_cdm_schema(self.cdm_version)[self.table_name]['concept_id']
 
-        valid_rows_file = (self.output_file_path, 'Valid row count')
+        valid_rows_file = (utils.get_parquet_artifact_location(self.file_path), 'Valid row count')
         invalid_rows_file = (utils.get_invalid_rows_path_from_path(self.file_path), 'Invalid row count')
 
         files = [valid_rows_file, invalid_rows_file]
@@ -146,7 +144,7 @@ class Normalizer:
             # Count rows with missing person_id (-1)
             count_query = f"""
             SELECT COUNT(*)
-            FROM read_parquet('{storage.get_uri(self.output_file_path)}')
+            FROM read_parquet('{storage.get_uri(self.file_path)}')
             WHERE person_id = -1
             """
             result = utils.execute_duckdb_sql(count_query, "Unable to count missing person_id rows", return_results=True)
@@ -160,11 +158,11 @@ class Normalizer:
                 filter_sql = f"""
                 COPY (
                     SELECT *
-                    FROM read_parquet('{storage.get_uri(self.output_file_path)}')
+                    FROM read_parquet('{storage.get_uri(self.file_path)}')
                     WHERE person_id != -1
-                ) TO '{storage.get_uri(self.output_file_path)}' {constants.DUCKDB_FORMAT_STRING}
+                ) TO '{storage.get_uri(self.file_path)}' {constants.DUCKDB_FORMAT_STRING}
                 """
-                utils.execute_duckdb_sql(filter_sql, f"Unable to filter missing person_id rows from {self.output_file_path}")
+                utils.execute_duckdb_sql(filter_sql, f"Unable to filter missing person_id rows from {self.file_path}")
 
             # Create reporting artifact (even if count is 0)
             table_concept_id = utils.get_cdm_schema(self.cdm_version)[self.table_name]['concept_id']
@@ -191,7 +189,6 @@ class Normalizer:
     @staticmethod
     def generate_normalization_sql(
         file_path: str,
-        output_file_path: Optional[str],
         table_name: str,
         cdm_version: str,
         date_format: str,
@@ -211,8 +208,6 @@ class Normalizer:
 
         Args:
             file_path: Path to parquet file to normalize
-            output_file_path: Path where the normalized parquet should be written.
-                If not provided, the input file is overwritten.
             table_name: Name of the OMOP table
             cdm_version: OMOP CDM version (e.g., "5.4")
             date_format: Date format string (e.g., "%Y-%m-%d")
@@ -224,8 +219,6 @@ class Normalizer:
         if not schema or table_name not in schema:
             utils.logger.warning(f"No schema found for table {table_name}")
             return ""
-
-        valid_output_path = output_file_path or file_path
 
         columns = schema[table_name]["columns"]
         ordered_omop_columns = list(columns.keys())
@@ -293,7 +286,7 @@ class Normalizer:
             SELECT * EXCLUDE (row_hash) {replace_clause}
             FROM row_check
             WHERE row_hash IS NULL
-        ) TO '{storage.get_uri(valid_output_path)}' {constants.DUCKDB_FORMAT_STRING}
+        ) TO '{storage.get_uri(file_path)}' {constants.DUCKDB_FORMAT_STRING}
         ;
 
         """.strip()
