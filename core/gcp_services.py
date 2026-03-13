@@ -43,7 +43,7 @@ def load_parquet_to_bigquery(file_path: str, project_id: str, dataset_id: str, t
     # PROCESSED_FILE -> overwrite table with the pipeline-processed version of the file in file_path
     elif write_type == constants.BQWriteTypes.PROCESSED_FILE:
         write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-        parquet_path = storage.get_uri(utils.get_converted_parquet_artifact_location(file_path))
+        parquet_path = storage.get_uri(utils.get_parquet_artifact_location(file_path))
         
     # When upgrading to 5.4, some Parquet files may get deleted
     # First confirm that Parquet file does exist before trying to load to BQ

@@ -261,7 +261,7 @@ def normalize_parquet_file() -> tuple[str, int]:
         assert date_format is not None
         assert datetime_format is not None
         
-        parquet_file_path: str = utils.get_converted_parquet_artifact_location(file_path)
+        parquet_file_path: str = utils.get_parquet_artifact_location(file_path)
         utils.logger.info(f"Attempting to normalize Parquet file {parquet_file_path}")
         normalizer = normalization.Normalizer(parquet_file_path, omop_version, date_format, datetime_format)
         normalizer.normalize()
