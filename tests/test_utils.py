@@ -103,6 +103,30 @@ def test_get_normalized_parquet_artifact_location(gcs_path, expected_artifact_pa
 
 
 @pytest.mark.parametrize(
+    "gcs_path,artifact_type,expected_artifact_path",
+    [
+        (
+            "synthea53/2024-12-31/care_site.parquet",
+            utils.constants.ArtifactPaths.CONVERTED_FILES,
+            f"synthea53/2024-12-31/artifacts/converted_files/care_site.parquet"
+        ),
+        (
+            "bucket/folder/person.csv",
+            utils.constants.ArtifactPaths.NORMALIZED_FILES,
+            f"bucket/folder/artifacts/normalized_files/person.parquet"
+        ),
+    ]
+)
+def test_get_parquet_artifact_location(gcs_path, artifact_type, expected_artifact_path):
+    assert utils.get_parquet_artifact_location(gcs_path, artifact_type) == expected_artifact_path
+
+
+def test_get_parquet_artifact_location_requires_artifactpaths_enum():
+    with pytest.raises(TypeError, match="ArtifactPaths"):
+        utils.get_parquet_artifact_location("bucket/folder/person.csv", "normalized_files")
+
+
+@pytest.mark.parametrize(
     "gcs_path,expected_harmonized_path",
     [
         (

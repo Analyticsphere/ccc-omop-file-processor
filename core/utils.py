@@ -271,22 +271,17 @@ def valid_parquet_file(file_path: str) -> bool:
 
 def get_converted_parquet_artifact_location(file_path: str) -> str:
     """Get path to processed Parquet artifact in converted_files directory."""
-    file_name = get_table_name_from_path(file_path)
-    base_directory, delivery_date = get_bucket_and_delivery_date_from_path(file_path)
-    
-    # Remove trailing slash if present
-    base_directory = base_directory.rstrip('/')
-    
-    # Create the parquet file name
-    parquet_file_name = f"{file_name.lower()}{constants.PARQUET}"
-    
-    # Construct the final parquet path
-    parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{parquet_file_name}"
-
-    return parquet_path
+    return get_parquet_artifact_location(file_path, constants.ArtifactPaths.CONVERTED_FILES)
 
 def get_normalized_parquet_artifact_location(file_path: str) -> str:
     """Get path to processed Parquet artifact in normalized_files directory."""
+    return get_parquet_artifact_location(file_path, constants.ArtifactPaths.NORMALIZED_FILES)
+
+def get_parquet_artifact_location(file_path: str, artifact_type: constants.ArtifactPaths) -> str:
+    """Get path to processed Parquet artifact in specified directory."""
+    if not isinstance(artifact_type, constants.ArtifactPaths):
+        raise TypeError("artifact_type must be a constants.ArtifactPaths value")
+
     file_name = get_table_name_from_path(file_path)
     base_directory, delivery_date = get_bucket_and_delivery_date_from_path(file_path)
     
@@ -297,7 +292,7 @@ def get_normalized_parquet_artifact_location(file_path: str) -> str:
     parquet_file_name = f"{file_name.lower()}{constants.PARQUET}"
     
     # Construct the final parquet path
-    parquet_path = f"{base_directory}/{delivery_date}/{constants.ArtifactPaths.NORMALIZED_FILES.value}{parquet_file_name}"
+    parquet_path = f"{base_directory}/{delivery_date}/{artifact_type.value}{parquet_file_name}"
 
     return parquet_path
 
