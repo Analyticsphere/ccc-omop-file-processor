@@ -126,6 +126,38 @@ def _create_connect_data_report_artifacts(connect_data_path: str, delivery_bucke
                 value_as_number=float(patient_count)
             )
 
+    # Capture delivery-matched Connect IDs that are not verified or have a
+    # positive status flag for consent withdrawn, HIPAA revoked, or data destruction.
+    flagged_connect_ids_sql = f"""
+    {base_cte}
+    SELECT
+        COUNT(*) AS patient_count,
+        COALESCE(STRING_AGG(CAST(connect_id AS VARCHAR), '|' ORDER BY connect_id), '') AS patient_ids
+    FROM (
+        SELECT DISTINCT connect_id
+        FROM matched_patients
+        WHERE verified_status_concept_id != 197316935
+           OR consent_withdrawn_concept_id = 353358909
+           OR hipaa_revoked_concept_id = 353358909
+           OR data_destruction_requested_concept_id = 353358909
+    ) flagged_connect
+    """
+    flagged_connect_ids = utils.execute_duckdb_sql(
+        flagged_connect_ids_sql,
+        "Unable to create Connect status-flag artifacts for delivery-matched patients",
+        return_results=True
+    )
+
+    flagged_count, flagged_ids = flagged_connect_ids[0] if flagged_connect_ids else (0, "")
+    save_artifact(
+        name="Number of Connect patients in delivery meeting review conditions",
+        value_as_number=float(flagged_count)
+    )
+    save_artifact(
+        name="Connect patient IDs in delivery meeting review conditions",
+        value_as_string=flagged_ids or ""
+    )
+
     connect_not_in_delivery_sql = f"""
     {base_cte}
     SELECT
@@ -1192,4 +1224,3 @@ class ReportGenerator:
         """
 
         return consolidation_statement
-
