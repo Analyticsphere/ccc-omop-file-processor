@@ -11,26 +11,27 @@ class ParticipantFilter:
     Filters a normalized OMOP parquet file using Connect for Cancer Prevention Study participant eligibility rules.
 
     This functionality removes a participant's data from an OMOP table if that participant:
+    - does not have a valid person_id value (NULL, non-numeric, or -1) -OR-
     - does not have a "Verified" study status (d_821247024 != 197316935) -OR-
     - has consent withdrawn (d_747006172 = 353358909) -OR-
     - has revoked HIPAA (d_773707518 = 353358909) -OR-
     - has requested data destruction (d_831041022 = 353358909) -OR-
     - does not exist in the Connect database
-
-    An earlier step in the pipeline removes rows without a Connect ID or person_id value.
     """
 
     VERIFIED_STATUS_CONCEPT_ID = 197316935
     YES_STATUS_CONCEPT_ID = 353358909
 
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str, omop_version: str):
         """
         Initialize the table-level Connect participant filter.
 
         Args:
             file_path: Path to delivered OMOP file.
+            omop_version: OMOP CDM version used to look up table concept IDs.
         """
         self.file_path = file_path
+        self.omop_version = omop_version
         self.table_name = utils.get_table_name_from_path(file_path).lower()
         self.bucket, self.delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)
         self.parquet_file_path = utils.get_parquet_artifact_location(file_path)
@@ -56,8 +57,12 @@ class ParticipantFilter:
             utils.logger.info(f"Skipping Connect participant exclusions for {self.table_name}: no person_id column present")
             return False
 
+        table_uri = storage.get_uri(self.parquet_file_path)
+        missing_person_id_count = self._count_missing_person_ids(table_uri)
+        self._create_missing_person_id_artifact(missing_person_id_count)
+
         filter_sql = ParticipantFilter.generate_filter_sql(
-            table_uri=storage.get_uri(self.parquet_file_path),
+            table_uri=table_uri,
             connect_data_uri=storage.get_uri(self.connect_data_path)
         )
 
@@ -68,6 +73,42 @@ class ParticipantFilter:
 
         utils.logger.info(f"Applied Connect participant exclusions to {self.parquet_file_path}")
         return True
+
+    def _count_missing_person_ids(self, table_uri: str) -> int:
+        """Count rows whose person_id is NULL, non-numeric, or the default -1 value."""
+        count_sql = f"""
+        SELECT COUNT(*)
+        FROM read_parquet('{table_uri}')
+        WHERE TRY_CAST(person_id AS BIGINT) IS NULL
+           OR TRY_CAST(person_id AS BIGINT) = -1
+        """
+
+        result = utils.execute_duckdb_sql(
+            count_sql,
+            f"Unable to count missing person_id rows in {self.parquet_file_path}",
+            return_results=True
+        )
+        return int(result[0][0]) if result else 0
+
+    def _create_missing_person_id_artifact(self, missing_count: int) -> None:
+        """Save the existing missing-person_id artifact for the current OMOP table."""
+        schema = utils.get_cdm_schema(self.omop_version)
+        table_concept_id = int(schema[self.table_name]['concept_id'])
+
+        artifact_name = "Number of persons with missing person_id"
+        if self.table_name != "person":
+            artifact_name = f"Number of rows removed due to missing person_id values: {self.table_name}"
+
+        artifact = report_artifact.ReportArtifact(
+            delivery_date=self.delivery_date,
+            artifact_bucket=self.bucket,
+            concept_id=table_concept_id,
+            name=artifact_name,
+            value_as_string=None,
+            value_as_concept_id=None,
+            value_as_number=missing_count
+        )
+        artifact.save_artifact()
 
     @staticmethod
     def _has_person_id_column(actual_columns: Sequence[str]) -> bool:
@@ -85,7 +126,13 @@ class ParticipantFilter:
         """
         return f"""
         COPY (
-            WITH known_connect_ids AS (
+            WITH filtered_source AS (
+                SELECT *
+                FROM read_parquet('{table_uri}')
+                WHERE TRY_CAST(person_id AS BIGINT) IS NOT NULL
+                  AND TRY_CAST(person_id AS BIGINT) != -1
+            ),
+            known_connect_ids AS (
                 SELECT DISTINCT
                     TRY_CAST(Connect_ID AS BIGINT) AS connect_id
                 FROM read_parquet('{connect_data_uri}')
@@ -104,7 +151,7 @@ class ParticipantFilter:
                   )
             )
             SELECT src.*
-            FROM read_parquet('{table_uri}') src
+            FROM filtered_source src
             INNER JOIN known_connect_ids known
                 ON TRY_CAST(src.person_id AS BIGINT) = known.connect_id
             LEFT JOIN excluded_connect_ids excluded
@@ -190,9 +237,9 @@ class ParticipantFilter:
         def should_save_status_ids(status_column: str, status_concept_id: Optional[int]) -> bool:
             """Return True when a status bucket represents an exclusion-driving condition."""
             if status_column == "verified_status":
-                return status_concept_id is not None and status_concept_id != 197316935
+                return status_concept_id is not None and status_concept_id != ParticipantFilter.VERIFIED_STATUS_CONCEPT_ID
 
-            return status_concept_id == 353358909
+            return status_concept_id == ParticipantFilter.YES_STATUS_CONCEPT_ID
 
         report_configs = [
             (

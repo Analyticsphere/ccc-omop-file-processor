@@ -1,5 +1,11 @@
 COPY (
-    WITH known_connect_ids AS (
+    WITH filtered_source AS (
+        SELECT *
+        FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/converted_files/person.parquet')
+        WHERE TRY_CAST(person_id AS BIGINT) IS NOT NULL
+          AND TRY_CAST(person_id AS BIGINT) != -1
+    ),
+    known_connect_ids AS (
         SELECT DISTINCT
             TRY_CAST(Connect_ID AS BIGINT) AS connect_id
         FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/connect_data/participant_status.parquet')
@@ -18,7 +24,7 @@ COPY (
           )
     )
     SELECT src.*
-    FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/converted_files/person.parquet') src
+    FROM filtered_source src
     INNER JOIN known_connect_ids known
         ON TRY_CAST(src.person_id AS BIGINT) = known.connect_id
     LEFT JOIN excluded_connect_ids excluded

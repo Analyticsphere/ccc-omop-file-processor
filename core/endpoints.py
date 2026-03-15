@@ -303,22 +303,24 @@ def cdm_upgrade() -> tuple[str, int]:
 @app.route('/filter_connect_participants', methods=['POST'])
 def filter_connect_participants() -> tuple[str, int]:
     """
-    Remove rows whose person_id/connect_id is excluded by Connect participant-status rules.
+    Remove rows whose person_id/connect_id is missing or excluded by Connect participant-status rules.
 
     This step is intended to run after normalization/CDM upgrade and before
     vocabulary harmonization. Tables without a person_id column are skipped.
     """
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
-    missing_fields = _get_missing_fields(data, ['file_path'])
+    omop_version: Optional[str] = data.get('omop_version')
+    missing_fields = _get_missing_fields(data, ['file_path', 'omop_version'])
 
     if missing_fields:
         return _missing_fields_response(missing_fields)
 
     try:
         assert file_path is not None
+        assert omop_version is not None
 
-        connect_filter = participant_filter.ParticipantFilter(file_path)
+        connect_filter = participant_filter.ParticipantFilter(file_path=file_path, omop_version=omop_version)
         was_applied = connect_filter.apply_exclusions()
 
         if not was_applied:

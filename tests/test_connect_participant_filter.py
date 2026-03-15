@@ -34,12 +34,14 @@ class TestParticipantFilterInit:
     def test_init_computes_derived_paths(self):
         """Test that initialization derives parquet and Connect artifact paths."""
         connect_filter = ParticipantFilter(
-            file_path="test-bucket/2025-01-15/condition_occurrence.parquet"
+            file_path="test-bucket/2025-01-15/condition_occurrence.parquet",
+            omop_version="5.4"
         )
 
         assert connect_filter.table_name == "condition_occurrence"
         assert connect_filter.bucket == "test-bucket"
         assert connect_filter.delivery_date == "2025-01-15"
+        assert connect_filter.omop_version == "5.4"
         assert (
             connect_filter.parquet_file_path
             == "test-bucket/2025-01-15/artifacts/converted_files/condition_occurrence.parquet"
@@ -53,6 +55,8 @@ class TestParticipantFilterInit:
 class TestParticipantFilterApplyExclusions:
     """Tests for applying Connect participant exclusions."""
 
+    @patch('core.participant_filter.report_artifact.ReportArtifact')
+    @patch('core.participant_filter.utils.get_cdm_schema')
     @patch('core.participant_filter.utils.execute_duckdb_sql')
     @patch('core.participant_filter.storage.get_uri')
     @patch('core.participant_filter.utils.get_columns_from_file')
@@ -62,29 +66,56 @@ class TestParticipantFilterApplyExclusions:
         mock_parquet_exists,
         mock_get_columns,
         mock_get_uri,
-        mock_execute_sql
+        mock_execute_sql,
+        mock_get_cdm_schema,
+        mock_artifact
     ):
         """Test that parquet rewrite runs for tables with a person_id column."""
         mock_parquet_exists.side_effect = [True, True]
         mock_get_columns.return_value = ['person_id', 'condition_concept_id']
         mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_get_cdm_schema.return_value = {
+            'condition_occurrence': {'concept_id': 789012}
+        }
+        mock_execute_sql.side_effect = [[[2]], None]
+        mock_artifact_instance = MagicMock()
+        mock_artifact.return_value = mock_artifact_instance
 
         connect_filter = ParticipantFilter(
-            file_path="test-bucket/2025-01-15/condition_occurrence.parquet"
+            file_path="test-bucket/2025-01-15/condition_occurrence.parquet",
+            omop_version="5.4"
         )
 
         result = connect_filter.apply_exclusions()
 
         assert result is True
         mock_get_columns.assert_called_once_with(connect_filter.parquet_file_path)
-        mock_execute_sql.assert_called_once()
+        assert mock_execute_sql.call_count == 2
 
-        sql = mock_execute_sql.call_args[0][0]
-        assert "FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/connect_data/participant_status.parquet')" in sql
-        assert "INNER JOIN known_connect_ids known" in sql
-        assert "LEFT JOIN excluded_connect_ids excluded" in sql
-        assert "TRY_CAST(verified_status_concept_id AS BIGINT) != 197316935" in sql
-        assert "consent_withdrawn_concept_id AS BIGINT) = 353358909" in sql
+        count_sql = mock_execute_sql.call_args_list[0][0][0]
+        assert "WHERE TRY_CAST(person_id AS BIGINT) IS NULL" in count_sql
+        assert "OR TRY_CAST(person_id AS BIGINT) = -1" in count_sql
+
+        filter_sql = mock_execute_sql.call_args_list[1][0][0]
+        assert "FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/connect_data/participant_status.parquet')" in filter_sql
+        assert "FROM filtered_source src" in filter_sql
+        assert "WHERE TRY_CAST(person_id AS BIGINT) IS NOT NULL" in filter_sql
+        assert "AND TRY_CAST(person_id AS BIGINT) != -1" in filter_sql
+        assert "INNER JOIN known_connect_ids known" in filter_sql
+        assert "LEFT JOIN excluded_connect_ids excluded" in filter_sql
+        assert "TRY_CAST(verified_status_concept_id AS BIGINT) != 197316935" in filter_sql
+        assert "consent_withdrawn_concept_id AS BIGINT) = 353358909" in filter_sql
+
+        mock_artifact.assert_called_once_with(
+            delivery_date="2025-01-15",
+            artifact_bucket="test-bucket",
+            concept_id=789012,
+            name="Number of rows removed due to missing person_id values: condition_occurrence",
+            value_as_string=None,
+            value_as_concept_id=None,
+            value_as_number=2
+        )
+        mock_artifact_instance.save_artifact.assert_called_once()
 
     @patch('core.participant_filter.utils.execute_duckdb_sql')
     @patch('core.participant_filter.utils.get_columns_from_file')
@@ -100,7 +131,8 @@ class TestParticipantFilterApplyExclusions:
         mock_get_columns.return_value = ['visit_occurrence_id', 'visit_concept_id']
 
         connect_filter = ParticipantFilter(
-            file_path="test-bucket/2025-01-15/visit_occurrence.parquet"
+            file_path="test-bucket/2025-01-15/visit_occurrence.parquet",
+            omop_version="5.4"
         )
 
         result = connect_filter.apply_exclusions()
@@ -108,19 +140,113 @@ class TestParticipantFilterApplyExclusions:
         assert result is False
         mock_execute_sql.assert_not_called()
 
+    @patch('core.participant_filter.utils.get_columns_from_file')
     @patch('core.participant_filter.utils.parquet_file_exists')
-    def test_raises_when_connect_data_parquet_is_missing(self, mock_parquet_exists):
+    def test_raises_when_connect_data_parquet_is_missing(self, mock_parquet_exists, mock_get_columns):
         """Test that missing Connect participant-status parquet raises an error."""
         mock_parquet_exists.side_effect = [True, False]
+        mock_get_columns.return_value = ['person_id']
 
         connect_filter = ParticipantFilter(
-            file_path="test-bucket/2025-01-15/person.parquet"
+            file_path="test-bucket/2025-01-15/person.parquet",
+            omop_version="5.4"
         )
 
         with pytest.raises(Exception) as exc_info:
             connect_filter.apply_exclusions()
 
         assert "Connect data parquet not found" in str(exc_info.value)
+
+    @patch('core.participant_filter.report_artifact.ReportArtifact')
+    @patch('core.participant_filter.utils.get_cdm_schema')
+    @patch('core.participant_filter.utils.execute_duckdb_sql')
+    @patch('core.participant_filter.storage.get_uri')
+    @patch('core.participant_filter.utils.get_columns_from_file')
+    @patch('core.participant_filter.utils.parquet_file_exists')
+    def test_creates_person_missing_person_id_artifact(
+        self,
+        mock_parquet_exists,
+        mock_get_columns,
+        mock_get_uri,
+        mock_execute_sql,
+        mock_get_cdm_schema,
+        mock_artifact
+    ):
+        """Test that the person table keeps its existing missing-person_id artifact name."""
+        mock_parquet_exists.side_effect = [True, True]
+        mock_get_columns.return_value = ['person_id', 'gender_concept_id']
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_get_cdm_schema.return_value = {
+            'person': {'concept_id': 123456}
+        }
+        mock_execute_sql.side_effect = [[[5]], None]
+        mock_artifact_instance = MagicMock()
+        mock_artifact.return_value = mock_artifact_instance
+
+        connect_filter = ParticipantFilter(
+            file_path="test-bucket/2025-01-15/person.parquet",
+            omop_version="5.4"
+        )
+
+        result = connect_filter.apply_exclusions()
+
+        assert result is True
+        mock_artifact.assert_called_once_with(
+            delivery_date="2025-01-15",
+            artifact_bucket="test-bucket",
+            concept_id=123456,
+            name="Number of persons with missing person_id",
+            value_as_string=None,
+            value_as_concept_id=None,
+            value_as_number=5
+        )
+        mock_artifact_instance.save_artifact.assert_called_once()
+
+    @patch('core.participant_filter.report_artifact.ReportArtifact')
+    @patch('core.participant_filter.utils.get_cdm_schema')
+    @patch('core.participant_filter.utils.execute_duckdb_sql')
+    @patch('core.participant_filter.storage.get_uri')
+    @patch('core.participant_filter.utils.get_columns_from_file')
+    @patch('core.participant_filter.utils.parquet_file_exists')
+    def test_creates_missing_person_id_artifact_even_when_count_is_zero(
+        self,
+        mock_parquet_exists,
+        mock_get_columns,
+        mock_get_uri,
+        mock_execute_sql,
+        mock_get_cdm_schema,
+        mock_artifact
+    ):
+        """Test that the missing-person_id artifact is still created when no rows are removed."""
+        mock_parquet_exists.side_effect = [True, True]
+        mock_get_columns.return_value = ['person_id', 'condition_concept_id']
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+        mock_get_cdm_schema.return_value = {
+            'condition_occurrence': {'concept_id': 789012}
+        }
+        mock_execute_sql.side_effect = [[[0]], None]
+        mock_artifact_instance = MagicMock()
+        mock_artifact.return_value = mock_artifact_instance
+
+        connect_filter = ParticipantFilter(
+            file_path="test-bucket/2025-01-15/condition_occurrence.parquet",
+            omop_version="5.4"
+        )
+
+        result = connect_filter.apply_exclusions()
+
+        assert result is True
+        assert mock_execute_sql.call_count == 2
+        mock_artifact.assert_called_once_with(
+            delivery_date="2025-01-15",
+            artifact_bucket="test-bucket",
+            concept_id=789012,
+            name="Number of rows removed due to missing person_id values: condition_occurrence",
+            value_as_string=None,
+            value_as_concept_id=None,
+            value_as_number=0
+        )
+        mock_artifact_instance.save_artifact.assert_called_once()
 
 
 class TestParticipantFilterGenerateFilterSQL:

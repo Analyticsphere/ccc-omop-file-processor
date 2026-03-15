@@ -360,11 +360,16 @@ class TestFilterConnectParticipantsEndpoint:
         mock_filter.return_value = mock_instance
 
         response = client.post('/filter_connect_participants', json={
-            'file_path': 'bucket/2025-01-01/condition_occurrence.parquet'
+            'file_path': 'bucket/2025-01-01/condition_occurrence.parquet',
+            'omop_version': '5.4'
         })
 
         assert response.status_code == 200
         assert b"Applied Connect participant filtering" in response.data
+        mock_filter.assert_called_once_with(
+            file_path='bucket/2025-01-01/condition_occurrence.parquet',
+            omop_version='5.4'
+        )
         mock_instance.apply_exclusions.assert_called_once()
 
     @patch('core.endpoints.participant_filter.ParticipantFilter')
@@ -375,17 +380,22 @@ class TestFilterConnectParticipantsEndpoint:
         mock_filter.return_value = mock_instance
 
         response = client.post('/filter_connect_participants', json={
-            'file_path': 'bucket/2025-01-01/vocabulary.parquet'
+            'file_path': 'bucket/2025-01-01/vocabulary.parquet',
+            'omop_version': '5.4'
         })
 
         assert response.status_code == 200
         assert b"Skipped Connect participant filtering for table without person_id" in response.data
+        mock_filter.assert_called_once_with(
+            file_path='bucket/2025-01-01/vocabulary.parquet',
+            omop_version='5.4'
+        )
 
     def test_filter_connect_participants_missing_parameters(self, client):
-        """Test missing file_path returns 400."""
+        """Test missing file_path and omop_version return 400."""
         response = client.post('/filter_connect_participants', json={})
 
-        assert_missing_fields(response, 'file_path')
+        assert_missing_fields(response, 'file_path', 'omop_version')
 
     @patch('core.endpoints.participant_filter.ParticipantFilter')
     def test_filter_connect_participants_exception(self, mock_filter, client):
@@ -393,7 +403,8 @@ class TestFilterConnectParticipantsEndpoint:
         mock_filter.side_effect = Exception("Connect filtering failed")
 
         response = client.post('/filter_connect_participants', json={
-            'file_path': 'bucket/2025-01-01/person.parquet'
+            'file_path': 'bucket/2025-01-01/person.parquet',
+            'omop_version': '5.4'
         })
 
         assert response.status_code == 500
