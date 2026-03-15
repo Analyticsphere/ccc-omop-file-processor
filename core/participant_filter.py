@@ -117,7 +117,7 @@ class ParticipantFilter:
     def create_connect_eligibility_report_artifacts(connect_data_path: str, delivery_bucket: str) -> None:
         """
         Create Connect study report artifacts used to review participant inclusion status. They summarize:
-        - status breakdowns for delivery-matched participants
+        - status breakdowns for delivery-matched participants, with IDs only for exclusion-driving statuses
         - delivery-matched participants who meet review/exclusion conditions
         - Connect IDs present only in Connect data
         - person_ids present only in the delivery
@@ -187,6 +187,13 @@ class ParticipantFilter:
             )
             artifact.save_artifact()
 
+        def should_save_status_ids(status_column: str, status_concept_id: Optional[int]) -> bool:
+            """Return True when a status bucket represents an exclusion-driving condition."""
+            if status_column == "verified_status":
+                return status_concept_id is not None and status_concept_id != 197316935
+
+            return status_concept_id == 353358909
+
         report_configs = [
             (
                 "Connect participant breakdown: Study status",
@@ -216,7 +223,8 @@ class ParticipantFilter:
             SELECT
                 {status_column} AS status_value,
                 {concept_id_column} AS status_concept_id,
-                COUNT(DISTINCT person_id) AS patient_count
+                COUNT(DISTINCT person_id) AS patient_count,
+                COALESCE(STRING_AGG(CAST(connect_id AS VARCHAR), '|' ORDER BY connect_id), '') AS patient_ids
             FROM matched_patients
             GROUP BY 1, 2
             ORDER BY 1, 2
@@ -228,10 +236,10 @@ class ParticipantFilter:
                 return_results=True
             )
 
-            for status_value, status_concept_id, patient_count in status_counts:
+            for _status_value, status_concept_id, patient_count, patient_ids in status_counts:
                 save_artifact(
                     name=artifact_name,
-                    value_as_string=status_value,
+                    value_as_string=patient_ids if should_save_status_ids(status_column, status_concept_id) else "",
                     value_as_concept_id=status_concept_id,
                     value_as_number=float(patient_count)
                 )

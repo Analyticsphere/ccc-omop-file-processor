@@ -165,10 +165,10 @@ class TestCreateConnectEligibilityReportArtifacts:
         mock_artifact.return_value = mock_artifact_instance
 
         mock_execute_sql.side_effect = [
-            [("Verified", 197316935, 10)],
-            [("No", 104430631, 9), ("Yes", 353358909, 1)],
-            [("No", 104430631, 8), ("Yes", 353358909, 2)],
-            [("No", 104430631, 10)],
+            [("Verified", 197316935, 2, "1001|1002"), ("Pending", 555555555, 1, "1003")],
+            [("No", 104430631, 1, "1001"), ("Yes", 353358909, 1, "1002")],
+            [("No", 104430631, 1, "1001"), ("Yes", 353358909, 2, "1002|1003")],
+            [("No", 104430631, 2, "1001|1002"), ("Yes", 353358909, 1, "1003")],
             [(1, "9001")],
             [(2, "8001|8002")],
         ]
@@ -183,6 +183,7 @@ class TestCreateConnectEligibilityReportArtifacts:
 
         assert "FROM matched_patients" in executed_sql[0]
         assert "verified_status AS status_value" in executed_sql[0]
+        assert "STRING_AGG(CAST(connect_id AS VARCHAR), '|'" in executed_sql[0]
         assert "hipaa_revoked AS status_value" in executed_sql[1]
         assert "consent_withdrawn AS status_value" in executed_sql[2]
         assert "data_destruction_requested AS status_value" in executed_sql[3]
@@ -195,25 +196,34 @@ class TestCreateConnectEligibilityReportArtifacts:
                 artifact_bucket="test-bucket",
                 concept_id=0,
                 name="Connect participant breakdown: Study status",
-                value_as_string="Verified",
+                value_as_string="",
                 value_as_concept_id=197316935,
-                value_as_number=10.0
+                value_as_number=2.0
+            ),
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=0,
+                name="Connect participant breakdown: Study status",
+                value_as_string="1003",
+                value_as_concept_id=555555555,
+                value_as_number=1.0
             ),
             call(
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
                 name="Connect participant breakdown: HIPAA revoked status",
-                value_as_string="No",
+                value_as_string="",
                 value_as_concept_id=104430631,
-                value_as_number=9.0
+                value_as_number=1.0
             ),
             call(
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
                 name="Connect participant breakdown: HIPAA revoked status",
-                value_as_string="Yes",
+                value_as_string="1002",
                 value_as_concept_id=353358909,
                 value_as_number=1.0
             ),
@@ -222,16 +232,16 @@ class TestCreateConnectEligibilityReportArtifacts:
                 artifact_bucket="test-bucket",
                 concept_id=0,
                 name="Connect participant breakdown: Consent withdrawn status",
-                value_as_string="No",
+                value_as_string="",
                 value_as_concept_id=104430631,
-                value_as_number=8.0
+                value_as_number=1.0
             ),
             call(
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
                 name="Connect participant breakdown: Consent withdrawn status",
-                value_as_string="Yes",
+                value_as_string="1002|1003",
                 value_as_concept_id=353358909,
                 value_as_number=2.0
             ),
@@ -240,9 +250,18 @@ class TestCreateConnectEligibilityReportArtifacts:
                 artifact_bucket="test-bucket",
                 concept_id=0,
                 name="Connect participant breakdown: Data destruction status",
-                value_as_string="No",
+                value_as_string="",
                 value_as_concept_id=104430631,
-                value_as_number=10.0
+                value_as_number=2.0
+            ),
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=0,
+                name="Connect participant breakdown: Data destruction status",
+                value_as_string="1003",
+                value_as_concept_id=353358909,
+                value_as_number=1.0
             ),
             call(
                 delivery_date="2025-01-15",
@@ -274,4 +293,4 @@ class TestCreateConnectEligibilityReportArtifacts:
         ]
 
         assert mock_artifact.call_args_list == expected_artifact_calls
-        assert mock_artifact_instance.save_artifact.call_count == 9
+        assert mock_artifact_instance.save_artifact.call_count == 11
