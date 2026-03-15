@@ -77,7 +77,7 @@ class TestParticipantFilterApplyExclusions:
         mock_get_cdm_schema.return_value = {
             'condition_occurrence': {'concept_id': 789012}
         }
-        mock_execute_sql.side_effect = [[[2]], None]
+        mock_execute_sql.side_effect = [[(2, 3, 4)], None]
         mock_artifact_instance = MagicMock()
         mock_artifact.return_value = mock_artifact_instance
 
@@ -93,8 +93,9 @@ class TestParticipantFilterApplyExclusions:
         assert mock_execute_sql.call_count == 2
 
         count_sql = mock_execute_sql.call_args_list[0][0][0]
-        assert "WHERE TRY_CAST(person_id AS BIGINT) IS NULL" in count_sql
-        assert "OR TRY_CAST(person_id AS BIGINT) = -1" in count_sql
+        assert "WHEN src.normalized_person_id IS NULL OR src.normalized_person_id = -1" in count_sql
+        assert "WHEN known.connect_id IS NULL" in count_sql
+        assert "WHEN excluded.connect_id IS NOT NULL" in count_sql
 
         filter_sql = mock_execute_sql.call_args_list[1][0][0]
         assert "FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/connect_data/participant_status.parquet')" in filter_sql
@@ -106,16 +107,37 @@ class TestParticipantFilterApplyExclusions:
         assert "TRY_CAST(verified_status_concept_id AS BIGINT) != 197316935" in filter_sql
         assert "consent_withdrawn_concept_id AS BIGINT) = 353358909" in filter_sql
 
-        mock_artifact.assert_called_once_with(
-            delivery_date="2025-01-15",
-            artifact_bucket="test-bucket",
-            concept_id=789012,
-            name="Number of rows removed due to missing person_id values: condition_occurrence",
-            value_as_string=None,
-            value_as_concept_id=None,
-            value_as_number=2
-        )
-        mock_artifact_instance.save_artifact.assert_called_once()
+        expected_artifact_calls = [
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=789012,
+                name="Number of rows removed due to missing person_id values: condition_occurrence",
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=2
+            ),
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=789012,
+                name="Number of rows removed due to identifier not in Connect database: condition_occurrence",
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=3
+            ),
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=789012,
+                name="Number of rows removed due to Connect exclusion rules: condition_occurrence",
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=4
+            ),
+        ]
+        assert mock_artifact.call_args_list == expected_artifact_calls
+        assert mock_artifact_instance.save_artifact.call_count == 3
 
     @patch('core.participant_filter.utils.execute_duckdb_sql')
     @patch('core.participant_filter.utils.get_columns_from_file')
@@ -179,7 +201,7 @@ class TestParticipantFilterApplyExclusions:
         mock_get_cdm_schema.return_value = {
             'person': {'concept_id': 123456}
         }
-        mock_execute_sql.side_effect = [[[5]], None]
+        mock_execute_sql.side_effect = [[(5, 1, 2)], None]
         mock_artifact_instance = MagicMock()
         mock_artifact.return_value = mock_artifact_instance
 
@@ -191,16 +213,37 @@ class TestParticipantFilterApplyExclusions:
         result = connect_filter.apply_exclusions()
 
         assert result is True
-        mock_artifact.assert_called_once_with(
-            delivery_date="2025-01-15",
-            artifact_bucket="test-bucket",
-            concept_id=123456,
-            name="Number of persons with missing person_id",
-            value_as_string=None,
-            value_as_concept_id=None,
-            value_as_number=5
-        )
-        mock_artifact_instance.save_artifact.assert_called_once()
+        expected_artifact_calls = [
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=123456,
+                name="Number of persons with missing person_id",
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=5
+            ),
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=123456,
+                name="Number of rows removed due to identifier not in Connect database: person",
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=1
+            ),
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=123456,
+                name="Number of rows removed due to Connect exclusion rules: person",
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=2
+            ),
+        ]
+        assert mock_artifact.call_args_list == expected_artifact_calls
+        assert mock_artifact_instance.save_artifact.call_count == 3
 
     @patch('core.participant_filter.report_artifact.ReportArtifact')
     @patch('core.participant_filter.utils.get_cdm_schema')
@@ -224,7 +267,7 @@ class TestParticipantFilterApplyExclusions:
         mock_get_cdm_schema.return_value = {
             'condition_occurrence': {'concept_id': 789012}
         }
-        mock_execute_sql.side_effect = [[[0]], None]
+        mock_execute_sql.side_effect = [[(0, 0, 0)], None]
         mock_artifact_instance = MagicMock()
         mock_artifact.return_value = mock_artifact_instance
 
@@ -237,16 +280,37 @@ class TestParticipantFilterApplyExclusions:
 
         assert result is True
         assert mock_execute_sql.call_count == 2
-        mock_artifact.assert_called_once_with(
-            delivery_date="2025-01-15",
-            artifact_bucket="test-bucket",
-            concept_id=789012,
-            name="Number of rows removed due to missing person_id values: condition_occurrence",
-            value_as_string=None,
-            value_as_concept_id=None,
-            value_as_number=0
-        )
-        mock_artifact_instance.save_artifact.assert_called_once()
+        expected_artifact_calls = [
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=789012,
+                name="Number of rows removed due to missing person_id values: condition_occurrence",
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=0
+            ),
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=789012,
+                name="Number of rows removed due to identifier not in Connect database: condition_occurrence",
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=0
+            ),
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=789012,
+                name="Number of rows removed due to Connect exclusion rules: condition_occurrence",
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=0
+            ),
+        ]
+        assert mock_artifact.call_args_list == expected_artifact_calls
+        assert mock_artifact_instance.save_artifact.call_count == 3
 
 
 class TestParticipantFilterGenerateFilterSQL:
@@ -260,6 +324,16 @@ class TestParticipantFilterGenerateFilterSQL:
         )
 
         expected = load_reference_sql("generate_filter_sql_standard.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
+
+    def test_generate_row_removal_count_sql_matches_golden_file(self):
+        """Test that row-removal count SQL matches the reference SQL file."""
+        sql = ParticipantFilter.generate_row_removal_count_sql(
+            table_uri="gs://test-bucket/2025-01-15/artifacts/converted_files/person.parquet",
+            connect_data_uri="gs://test-bucket/2025-01-15/artifacts/connect_data/participant_status.parquet"
+        )
+
+        expected = load_reference_sql("generate_row_removal_count_sql_standard.sql")
         assert normalize_sql(sql) == normalize_sql(expected)
 
 

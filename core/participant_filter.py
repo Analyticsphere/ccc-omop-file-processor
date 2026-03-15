@@ -21,6 +21,9 @@ class ParticipantFilter:
 
     VERIFIED_STATUS_CONCEPT_ID = 197316935
     YES_STATUS_CONCEPT_ID = 353358909
+    UNKNOWN_IDENTIFIER_BUCKET = "unknown_identifier"
+    IDENTIFIER_NOT_IN_CONNECT_BUCKET = "identifier_not_in_connect"
+    CONNECT_EXCLUSION_BUCKET = "connect_exclusion_rules"
 
     def __init__(self, file_path: str, omop_version: str):
         """
@@ -58,8 +61,11 @@ class ParticipantFilter:
             return False
 
         table_uri = storage.get_uri(self.parquet_file_path)
-        missing_person_id_count = self._count_missing_person_ids(table_uri)
-        self._create_missing_person_id_artifact(missing_person_id_count)
+        row_removal_counts = self._get_row_removal_counts(
+            table_uri=table_uri,
+            connect_data_uri=storage.get_uri(self.connect_data_path)
+        )
+        self._create_row_removal_artifacts(row_removal_counts)
 
         filter_sql = ParticipantFilter.generate_filter_sql(
             table_uri=table_uri,
@@ -74,41 +80,59 @@ class ParticipantFilter:
         utils.logger.info(f"Applied Connect participant exclusions to {self.parquet_file_path}")
         return True
 
-    def _count_missing_person_ids(self, table_uri: str) -> int:
-        """Count rows whose person_id is NULL, non-numeric, or the default -1 value."""
-        count_sql = f"""
-        SELECT COUNT(*)
-        FROM read_parquet('{table_uri}')
-        WHERE TRY_CAST(person_id AS BIGINT) IS NULL
-           OR TRY_CAST(person_id AS BIGINT) = -1
-        """
-
+    def _get_row_removal_counts(self, table_uri: str, connect_data_uri: str) -> dict[str, int]:
+        """Return mutually exclusive row-removal counts for the current OMOP table."""
+        count_sql = ParticipantFilter.generate_row_removal_count_sql(
+            table_uri=table_uri,
+            connect_data_uri=connect_data_uri
+        )
         result = utils.execute_duckdb_sql(
             count_sql,
-            f"Unable to count missing person_id rows in {self.parquet_file_path}",
+            f"Unable to count rows removed by participant filter in {self.parquet_file_path}",
             return_results=True
         )
-        return int(result[0][0]) if result else 0
+        unknown_count, missing_from_connect_count, excluded_count = result[0] if result else (0, 0, 0)
 
-    def _create_missing_person_id_artifact(self, missing_count: int) -> None:
-        """Save the existing missing-person_id artifact for the current OMOP table."""
+        return {
+            ParticipantFilter.UNKNOWN_IDENTIFIER_BUCKET: int(unknown_count),
+            ParticipantFilter.IDENTIFIER_NOT_IN_CONNECT_BUCKET: int(missing_from_connect_count),
+            ParticipantFilter.CONNECT_EXCLUSION_BUCKET: int(excluded_count)
+        }
+
+    def _create_row_removal_artifacts(self, row_removal_counts: dict[str, int]) -> None:
+        """Save per-table row-removal artifacts for the participant filter's three buckets."""
         schema = utils.get_cdm_schema(self.omop_version)
         table_concept_id = int(schema[self.table_name]['concept_id'])
+        artifact_names = {
+            ParticipantFilter.UNKNOWN_IDENTIFIER_BUCKET: self._get_unknown_identifier_artifact_name(),
+            ParticipantFilter.IDENTIFIER_NOT_IN_CONNECT_BUCKET:
+                f"Number of rows removed due to identifier not in Connect database: {self.table_name}",
+            ParticipantFilter.CONNECT_EXCLUSION_BUCKET:
+                f"Number of rows removed due to Connect exclusion rules: {self.table_name}"
+        }
 
-        artifact_name = "Number of persons with missing person_id"
-        if self.table_name != "person":
-            artifact_name = f"Number of rows removed due to missing person_id values: {self.table_name}"
+        for bucket_name in [
+            ParticipantFilter.UNKNOWN_IDENTIFIER_BUCKET,
+            ParticipantFilter.IDENTIFIER_NOT_IN_CONNECT_BUCKET,
+            ParticipantFilter.CONNECT_EXCLUSION_BUCKET
+        ]:
+            artifact = report_artifact.ReportArtifact(
+                delivery_date=self.delivery_date,
+                artifact_bucket=self.bucket,
+                concept_id=table_concept_id,
+                name=artifact_names[bucket_name],
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=row_removal_counts[bucket_name]
+            )
+            artifact.save_artifact()
 
-        artifact = report_artifact.ReportArtifact(
-            delivery_date=self.delivery_date,
-            artifact_bucket=self.bucket,
-            concept_id=table_concept_id,
-            name=artifact_name,
-            value_as_string=None,
-            value_as_concept_id=None,
-            value_as_number=missing_count
-        )
-        artifact.save_artifact()
+    def _get_unknown_identifier_artifact_name(self) -> str:
+        """Return the existing bucket-1 artifact name for the current table."""
+        if self.table_name == "person":
+            return "Number of persons with missing person_id"
+
+        return f"Number of rows removed due to missing person_id values: {self.table_name}"
 
     @staticmethod
     def _has_person_id_column(actual_columns: Sequence[str]) -> bool:
@@ -158,6 +182,67 @@ class ParticipantFilter:
                 ON TRY_CAST(src.person_id AS BIGINT) = excluded.connect_id
             WHERE excluded.connect_id IS NULL
         ) TO '{table_uri}' {constants.DUCKDB_FORMAT_STRING}
+        """.strip()
+
+    @staticmethod
+    def generate_row_removal_count_sql(table_uri: str, connect_data_uri: str) -> str:
+        """
+        Generate SQL to count rows removed by the participant filter's mutually exclusive buckets.
+
+        Bucket precedence:
+        1. unknown_identifier
+        2. identifier_not_in_connect
+        3. connect_exclusion_rules
+        """
+        return f"""
+        WITH source_rows AS (
+            SELECT
+                TRY_CAST(person_id AS BIGINT) AS normalized_person_id
+            FROM read_parquet('{table_uri}')
+        ),
+        known_connect_ids AS (
+            SELECT DISTINCT
+                TRY_CAST(Connect_ID AS BIGINT) AS connect_id
+            FROM read_parquet('{connect_data_uri}')
+            WHERE TRY_CAST(Connect_ID AS BIGINT) IS NOT NULL
+        ),
+        excluded_connect_ids AS (
+            SELECT DISTINCT
+                TRY_CAST(Connect_ID AS BIGINT) AS connect_id
+            FROM read_parquet('{connect_data_uri}')
+            WHERE TRY_CAST(Connect_ID AS BIGINT) IS NOT NULL
+              AND (
+                  TRY_CAST(verified_status_concept_id AS BIGINT) != {ParticipantFilter.VERIFIED_STATUS_CONCEPT_ID}
+                  OR TRY_CAST(consent_withdrawn_concept_id AS BIGINT) = {ParticipantFilter.YES_STATUS_CONCEPT_ID}
+                  OR TRY_CAST(hipaa_revoked_concept_id AS BIGINT) = {ParticipantFilter.YES_STATUS_CONCEPT_ID}
+                  OR TRY_CAST(data_destruction_requested_concept_id AS BIGINT) = {ParticipantFilter.YES_STATUS_CONCEPT_ID}
+              )
+        ),
+        classified_rows AS (
+            SELECT
+                CASE
+                    WHEN src.normalized_person_id IS NULL OR src.normalized_person_id = -1
+                        THEN '{ParticipantFilter.UNKNOWN_IDENTIFIER_BUCKET}'
+                    WHEN known.connect_id IS NULL
+                        THEN '{ParticipantFilter.IDENTIFIER_NOT_IN_CONNECT_BUCKET}'
+                    WHEN excluded.connect_id IS NOT NULL
+                        THEN '{ParticipantFilter.CONNECT_EXCLUSION_BUCKET}'
+                    ELSE 'retained'
+                END AS removal_bucket
+            FROM source_rows src
+            LEFT JOIN known_connect_ids known
+                ON src.normalized_person_id = known.connect_id
+            LEFT JOIN excluded_connect_ids excluded
+                ON src.normalized_person_id = excluded.connect_id
+        )
+        SELECT
+            COALESCE(SUM(CASE WHEN removal_bucket = '{ParticipantFilter.UNKNOWN_IDENTIFIER_BUCKET}' THEN 1 ELSE 0 END), 0)
+                AS unknown_identifier_count,
+            COALESCE(SUM(CASE WHEN removal_bucket = '{ParticipantFilter.IDENTIFIER_NOT_IN_CONNECT_BUCKET}' THEN 1 ELSE 0 END), 0)
+                AS identifier_not_in_connect_count,
+            COALESCE(SUM(CASE WHEN removal_bucket = '{ParticipantFilter.CONNECT_EXCLUSION_BUCKET}' THEN 1 ELSE 0 END), 0)
+                AS connect_exclusion_rules_count
+        FROM classified_rows
         """.strip()
 
     @staticmethod
