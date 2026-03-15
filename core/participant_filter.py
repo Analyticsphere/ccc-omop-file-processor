@@ -103,36 +103,50 @@ class ParticipantFilter:
         """Save per-table row-removal artifacts for the participant filter's three buckets."""
         schema = utils.get_cdm_schema(self.omop_version)
         table_concept_id = int(schema[self.table_name]['concept_id'])
-        artifact_names = {
-            ParticipantFilter.UNKNOWN_IDENTIFIER_BUCKET: self._get_unknown_identifier_artifact_name(),
-            ParticipantFilter.IDENTIFIER_NOT_IN_CONNECT_BUCKET:
-                f"Number of rows removed due to identifier not in Connect database: {self.table_name}",
-            ParticipantFilter.CONNECT_EXCLUSION_BUCKET:
-                f"Number of rows removed due to Connect exclusion rules: {self.table_name}"
-        }
 
-        for bucket_name in [
-            ParticipantFilter.UNKNOWN_IDENTIFIER_BUCKET,
-            ParticipantFilter.IDENTIFIER_NOT_IN_CONNECT_BUCKET,
-            ParticipantFilter.CONNECT_EXCLUSION_BUCKET
-        ]:
+        unknown_identifier_artifact_names = self._get_unknown_identifier_artifact_names()
+        for artifact_name in unknown_identifier_artifact_names:
             artifact = report_artifact.ReportArtifact(
                 delivery_date=self.delivery_date,
                 artifact_bucket=self.bucket,
                 concept_id=table_concept_id,
-                name=artifact_names[bucket_name],
+                name=artifact_name,
                 value_as_string=None,
                 value_as_concept_id=None,
-                value_as_number=row_removal_counts[bucket_name]
+                value_as_number=row_removal_counts[ParticipantFilter.UNKNOWN_IDENTIFIER_BUCKET]
             )
             artifact.save_artifact()
 
-    def _get_unknown_identifier_artifact_name(self) -> str:
-        """Return the existing bucket-1 artifact name for the current table."""
-        if self.table_name == "person":
-            return "Number of persons with missing person_id"
+        artifact_names = [
+            f"Number of rows removed due to identifier not in Connect database: {self.table_name}",
+            f"Number of rows removed due to Connect exclusion rules: {self.table_name}"
+        ]
+        artifact_counts = [
+            row_removal_counts[ParticipantFilter.IDENTIFIER_NOT_IN_CONNECT_BUCKET],
+            row_removal_counts[ParticipantFilter.CONNECT_EXCLUSION_BUCKET]
+        ]
 
-        return f"Number of rows removed due to missing person_id values: {self.table_name}"
+        for artifact_name, artifact_count in zip(artifact_names, artifact_counts):
+            artifact = report_artifact.ReportArtifact(
+                delivery_date=self.delivery_date,
+                artifact_bucket=self.bucket,
+                concept_id=table_concept_id,
+                name=artifact_name,
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=artifact_count
+            )
+            artifact.save_artifact()
+
+    def _get_unknown_identifier_artifact_names(self) -> list[str]:
+        """Return the bucket-1 artifact names for the current table."""
+        if self.table_name == "person":
+            return [
+                "Number of persons with missing person_id",
+                "Number of rows removed due to missing person_id values: person"
+            ]
+
+        return [f"Number of rows removed due to missing person_id values: {self.table_name}"]
 
     @staticmethod
     def _has_person_id_column(actual_columns: Sequence[str]) -> bool:
@@ -368,9 +382,9 @@ class ParticipantFilter:
                 return_results=True
             )
 
-            for _status_value, status_concept_id, patient_count, patient_ids in status_counts:
+            for status_value, status_concept_id, patient_count, patient_ids in status_counts:
                 save_artifact(
-                    name=artifact_name,
+                    name=f"{artifact_name} ({status_value})",
                     value_as_string=patient_ids if should_save_status_ids(status_column, status_concept_id) else "",
                     value_as_concept_id=status_concept_id,
                     value_as_number=float(patient_count)

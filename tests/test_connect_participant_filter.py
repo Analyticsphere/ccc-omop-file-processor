@@ -227,6 +227,15 @@ class TestParticipantFilterApplyExclusions:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=123456,
+                name="Number of rows removed due to missing person_id values: person",
+                value_as_string=None,
+                value_as_concept_id=None,
+                value_as_number=5
+            ),
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=123456,
                 name="Number of rows removed due to identifier not in Connect database: person",
                 value_as_string=None,
                 value_as_concept_id=None,
@@ -243,7 +252,7 @@ class TestParticipantFilterApplyExclusions:
             ),
         ]
         assert mock_artifact.call_args_list == expected_artifact_calls
-        assert mock_artifact_instance.save_artifact.call_count == 3
+        assert mock_artifact_instance.save_artifact.call_count == 4
 
     @patch('core.participant_filter.report_artifact.ReportArtifact')
     @patch('core.participant_filter.utils.get_cdm_schema')
@@ -395,7 +404,7 @@ class TestCreateConnectEligibilityReportArtifacts:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Connect participant breakdown: Study status",
+                name="Connect participant breakdown: Study status (Verified)",
                 value_as_string="",
                 value_as_concept_id=197316935,
                 value_as_number=2.0
@@ -404,7 +413,7 @@ class TestCreateConnectEligibilityReportArtifacts:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Connect participant breakdown: Study status",
+                name="Connect participant breakdown: Study status (Pending)",
                 value_as_string="1003",
                 value_as_concept_id=555555555,
                 value_as_number=1.0
@@ -413,7 +422,7 @@ class TestCreateConnectEligibilityReportArtifacts:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Connect participant breakdown: HIPAA revoked status",
+                name="Connect participant breakdown: HIPAA revoked status (No)",
                 value_as_string="",
                 value_as_concept_id=104430631,
                 value_as_number=1.0
@@ -422,7 +431,7 @@ class TestCreateConnectEligibilityReportArtifacts:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Connect participant breakdown: HIPAA revoked status",
+                name="Connect participant breakdown: HIPAA revoked status (Yes)",
                 value_as_string="1002",
                 value_as_concept_id=353358909,
                 value_as_number=1.0
@@ -431,7 +440,7 @@ class TestCreateConnectEligibilityReportArtifacts:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Connect participant breakdown: Consent withdrawn status",
+                name="Connect participant breakdown: Consent withdrawn status (No)",
                 value_as_string="",
                 value_as_concept_id=104430631,
                 value_as_number=1.0
@@ -440,7 +449,7 @@ class TestCreateConnectEligibilityReportArtifacts:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Connect participant breakdown: Consent withdrawn status",
+                name="Connect participant breakdown: Consent withdrawn status (Yes)",
                 value_as_string="1002|1003",
                 value_as_concept_id=353358909,
                 value_as_number=2.0
@@ -449,7 +458,7 @@ class TestCreateConnectEligibilityReportArtifacts:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Connect participant breakdown: Data destruction status",
+                name="Connect participant breakdown: Data destruction status (No)",
                 value_as_string="",
                 value_as_concept_id=104430631,
                 value_as_number=2.0
@@ -458,7 +467,7 @@ class TestCreateConnectEligibilityReportArtifacts:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Connect participant breakdown: Data destruction status",
+                name="Connect participant breakdown: Data destruction status (Yes)",
                 value_as_string="1003",
                 value_as_concept_id=353358909,
                 value_as_number=1.0
