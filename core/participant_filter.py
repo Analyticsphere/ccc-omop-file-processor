@@ -265,7 +265,7 @@ class ParticipantFilter:
         Create Connect study report artifacts used to review participant inclusion status. They summarize:
         - status breakdowns for delivery-matched participants, with IDs only for exclusion-driving statuses
         - delivery-matched participants who meet review/exclusion conditions
-        - Connect IDs present only in Connect data
+        - eligible Connect IDs present only in Connect data
         - person_ids present only in the delivery
         """
         bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(delivery_bucket)
@@ -392,14 +392,23 @@ class ParticipantFilter:
 
         connect_not_in_delivery_sql = f"""
         {base_cte}
+        -- Only count Connect participants who would survive the participant filter;
+        -- excluded Connect records are not actionable "missing from delivery" patients.
         SELECT
             COUNT(*) AS patient_count,
             COALESCE(STRING_AGG(CAST(connect_id AS VARCHAR), '|' ORDER BY connect_id), '') AS patient_ids
         FROM (
-            SELECT DISTINCT cd.connect_id
-            FROM connect_data cd
+            SELECT DISTINCT eligible_connect.connect_id
+            FROM (
+                SELECT DISTINCT cd.connect_id
+                FROM connect_data cd
+                WHERE COALESCE(cd.verified_status_concept_id, 0) = {ParticipantFilter.VERIFIED_STATUS_CONCEPT_ID}
+                  AND COALESCE(cd.consent_withdrawn_concept_id, 0) != {ParticipantFilter.YES_STATUS_CONCEPT_ID}
+                  AND COALESCE(cd.hipaa_revoked_concept_id, 0) != {ParticipantFilter.YES_STATUS_CONCEPT_ID}
+                  AND COALESCE(cd.data_destruction_requested_concept_id, 0) != {ParticipantFilter.YES_STATUS_CONCEPT_ID}
+            ) eligible_connect
             LEFT JOIN person_delivery p
-                ON p.person_id = cd.connect_id
+                ON p.person_id = eligible_connect.connect_id
             WHERE p.person_id IS NULL
         ) unmatched_connect
         """
@@ -411,7 +420,7 @@ class ParticipantFilter:
 
         connect_only_count, connect_only_ids = connect_not_in_delivery[0] if connect_not_in_delivery else (0, "")
         save_artifact(
-            name="Number of Connect patients not in delivery",
+            name="Number of eligible Connect patients not in delivery",
             value_as_string=connect_only_ids or "",
             value_as_number=float(connect_only_count)
         )

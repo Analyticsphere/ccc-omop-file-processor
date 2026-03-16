@@ -471,7 +471,7 @@ class TestCreateConnectEligibilityReportArtifacts:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Number of Connect patients not in delivery",
+                name="Number of eligible Connect patients not in delivery",
                 value_as_string="9001",
                 value_as_concept_id=None,
                 value_as_number=1.0

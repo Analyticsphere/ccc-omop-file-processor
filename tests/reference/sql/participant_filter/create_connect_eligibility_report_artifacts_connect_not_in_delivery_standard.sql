@@ -34,13 +34,22 @@ matched_patients AS (
     INNER JOIN connect_data cd
         ON p.person_id = cd.connect_id
 )
+-- Only count Connect participants who would survive the participant filter;
+-- excluded Connect records are not actionable "missing from delivery" patients.
 SELECT
     COUNT(*) AS patient_count,
     COALESCE(STRING_AGG(CAST(connect_id AS VARCHAR), '|' ORDER BY connect_id), '') AS patient_ids
 FROM (
-    SELECT DISTINCT cd.connect_id
-    FROM connect_data cd
+    SELECT DISTINCT eligible_connect.connect_id
+    FROM (
+        SELECT DISTINCT cd.connect_id
+        FROM connect_data cd
+        WHERE COALESCE(cd.verified_status_concept_id, 0) = 197316935
+          AND COALESCE(cd.consent_withdrawn_concept_id, 0) != 353358909
+          AND COALESCE(cd.hipaa_revoked_concept_id, 0) != 353358909
+          AND COALESCE(cd.data_destruction_requested_concept_id, 0) != 353358909
+    ) eligible_connect
     LEFT JOIN person_delivery p
-        ON p.person_id = cd.connect_id
+        ON p.person_id = eligible_connect.connect_id
     WHERE p.person_id IS NULL
 ) unmatched_connect
