@@ -93,19 +93,12 @@ class TestParticipantFilterApplyExclusions:
         assert mock_execute_sql.call_count == 2
 
         count_sql = mock_execute_sql.call_args_list[0][0][0]
-        assert "WHEN src.normalized_person_id IS NULL OR src.normalized_person_id = -1" in count_sql
-        assert "WHEN known.connect_id IS NULL" in count_sql
-        assert "WHEN excluded.connect_id IS NOT NULL" in count_sql
+        expected_count_sql = load_reference_sql("generate_row_removal_count_sql_condition_occurrence.sql")
+        assert normalize_sql(count_sql) == normalize_sql(expected_count_sql)
 
         filter_sql = mock_execute_sql.call_args_list[1][0][0]
-        assert "FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/connect_data/participant_status.parquet')" in filter_sql
-        assert "FROM filtered_source src" in filter_sql
-        assert "WHERE TRY_CAST(person_id AS BIGINT) IS NOT NULL" in filter_sql
-        assert "AND TRY_CAST(person_id AS BIGINT) != -1" in filter_sql
-        assert "INNER JOIN known_connect_ids known" in filter_sql
-        assert "LEFT JOIN excluded_connect_ids excluded" in filter_sql
-        assert "TRY_CAST(verified_status_concept_id AS BIGINT) != 197316935" in filter_sql
-        assert "consent_withdrawn_concept_id AS BIGINT) = 353358909" in filter_sql
+        expected_filter_sql = load_reference_sql("generate_filter_sql_condition_occurrence.sql")
+        assert normalize_sql(filter_sql) == normalize_sql(expected_filter_sql)
 
         expected_artifact_calls = [
             call(
@@ -389,15 +382,17 @@ class TestCreateConnectEligibilityReportArtifacts:
 
         assert mock_execute_sql.call_count == 6
         executed_sql = [call_args.args[0] for call_args in mock_execute_sql.call_args_list]
-
-        assert "FROM matched_patients" in executed_sql[0]
-        assert "verified_status AS status_value" in executed_sql[0]
-        assert "STRING_AGG(CAST(connect_id AS VARCHAR), '|'" in executed_sql[0]
-        assert "hipaa_revoked AS status_value" in executed_sql[1]
-        assert "consent_withdrawn AS status_value" in executed_sql[2]
-        assert "data_destruction_requested AS status_value" in executed_sql[3]
-        assert "unmatched_connect" in executed_sql[4]
-        assert "unmatched_delivery" in executed_sql[5]
+        expected_sql_files = [
+            "create_connect_eligibility_report_artifacts_study_status_standard.sql",
+            "create_connect_eligibility_report_artifacts_hipaa_revoked_status_standard.sql",
+            "create_connect_eligibility_report_artifacts_consent_withdrawn_status_standard.sql",
+            "create_connect_eligibility_report_artifacts_data_destruction_status_standard.sql",
+            "create_connect_eligibility_report_artifacts_connect_not_in_delivery_standard.sql",
+            "create_connect_eligibility_report_artifacts_delivery_not_in_connect_standard.sql",
+        ]
+        for executed, expected_file in zip(executed_sql, expected_sql_files):
+            expected_sql = load_reference_sql(expected_file)
+            assert normalize_sql(executed) == normalize_sql(expected_sql)
 
         expected_artifact_calls = [
             call(
