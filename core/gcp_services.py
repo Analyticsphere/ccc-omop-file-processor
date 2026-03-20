@@ -1,10 +1,14 @@
+import os
 from typing import Optional
 
+import fsspec  # type: ignore
+import pyarrow.parquet as pq  # type: ignore
 from google.cloud import bigquery  # type: ignore
 from google.cloud import storage as gcs_storage  # type: ignore
 from google.cloud.exceptions import NotFound  # type: ignore
 
 import core.constants as constants
+import core.participant_filter as participant_filter
 import core.utils as utils
 from core.storage_backend import storage
 
@@ -124,6 +128,57 @@ def execute_bq_sql(sql_script: str, job_config: Optional[bigquery.QueryJobConfig
 
     except Exception as e:
         raise Exception(f"Error executing BigQuery SQL: {e}")
+
+def write_query_results_to_parquet(
+    sql_script: str,
+    output_path: str,
+    project_id: Optional[str] = None,
+    job_config: Optional[bigquery.QueryJobConfig] = None
+) -> str:
+    """Execute a BigQuery SQL query and write the result set to a Parquet file."""
+    client = bigquery.Client(project=project_id)
+    query_job = client.query(sql_script, job_config=job_config)
+    results = query_job.result()
+    result_table = results.to_arrow(create_bqstorage_client=False)
+
+    output_uri = storage.get_uri(output_path)
+
+    if constants.STORAGE_BACKEND == constants.LOCAL_BACKEND:
+        os.makedirs(os.path.dirname(storage.strip_scheme(output_uri)), exist_ok=True)
+
+    with fsspec.open(output_uri, 'wb') as parquet_file:
+        pq.write_table(
+            result_table,
+            parquet_file,
+            compression='zstd',
+            compression_level=1
+        )
+
+    utils.logger.info(f"Saved query results to {output_uri}")
+    return output_uri
+
+def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bucket: str, site_connect_id: str) -> str:
+    """Build the Connect participant-status query and export the results to Parquet."""
+    sql_path = os.path.join(constants.SQL_PATH, "connect_data", "participant_status.sql")
+    with open(sql_path, 'r') as sql_file:
+        sql_script = sql_file.read()
+
+    sql_script = sql_script.replace("@PROJECT_ID", project_id)
+    sql_script = sql_script.replace("@DATASET_ID", dataset_id)
+    # connect_id's are integers but are stored as strings in table
+    sql_script = sql_script.replace("@SITE_CONNECT_ID", str(site_connect_id)) 
+
+    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(delivery_bucket)
+    output_path = utils.get_connect_data_path(bucket, delivery_date)
+
+    output_uri = write_query_results_to_parquet(
+        sql_script=sql_script,
+        output_path=output_path,
+        project_id=project_id
+    )
+
+    participant_filter.ParticipantFilter.create_connect_eligibility_report_artifacts(output_uri, delivery_bucket)
+    return output_uri
 
 def list_gcs_subdirectories(gcs_path: str) -> list:
     """

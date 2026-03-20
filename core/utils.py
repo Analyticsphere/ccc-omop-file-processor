@@ -285,6 +285,11 @@ def get_parquet_artifact_location(file_path: str) -> str:
 
     return parquet_path
 
+def get_connect_data_path(bucket: str, delivery_date: str) -> str:
+    """Get path to the Connect participant-status parquet artifact."""
+    bucket = bucket.rstrip('/')
+    return f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONNECT_DATA.value}participant_status{constants.PARQUET}"
+
 def get_parquet_harmonized_path(file_path: str) -> str:
     """Get path to directory for vocabulary-harmonized Parquet artifacts."""
     file_name = get_table_name_from_path(file_path)

@@ -78,6 +78,25 @@ def test_get_parquet_artifact_location(gcs_path, expected_artifact_path):
 
 
 @pytest.mark.parametrize(
+    "bucket,delivery_date,expected_connect_data_path",
+    [
+        (
+            "synthea53",
+            "2024-12-31",
+            "synthea53/2024-12-31/artifacts/connect_data/participant_status.parquet"
+        ),
+        (
+            "test-bucket/",
+            "2025-01-01",
+            "test-bucket/2025-01-01/artifacts/connect_data/participant_status.parquet"
+        ),
+    ]
+)
+def test_get_connect_data_path(bucket, delivery_date, expected_connect_data_path):
+    assert utils.get_connect_data_path(bucket, delivery_date) == expected_connect_data_path
+
+
+@pytest.mark.parametrize(
     "gcs_path,expected_harmonized_path",
     [
         (
