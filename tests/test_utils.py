@@ -1,5 +1,5 @@
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -714,3 +714,28 @@ def test_placeholder_to_harmonized_file_path_comprehensive(mock_datetime):
     )
 
     assert result == expected
+
+
+@pytest.mark.parametrize("detected_encoding", ["UTF-8-SIG", "utf_8_sig", "utf8", "UTF-8", "UTF_8", "utf__8--sig"])
+@patch('core.utils.fsspec.open')
+def test_get_csv_file_encoding_normalizes_utf8_family(mock_open, detected_encoding):
+    mock_file = MagicMock()
+    mock_file.read.return_value = b'\xef\xbb\xbfheader1,header2\nvalue1,value2\n'
+    mock_open.return_value.__enter__.return_value = mock_file
+
+    with patch('core.utils.chardet.detect', return_value={'encoding': detected_encoding, 'confidence': 1.0}):
+        result = utils.get_csv_file_encoding('file:///tmp/test.csv')
+
+    assert result == 'utf-8'
+
+
+@patch('core.utils.fsspec.open')
+def test_get_csv_file_encoding_preserves_utf16(mock_open):
+    mock_file = MagicMock()
+    mock_file.read.return_value = b'\xff\xfeh\x00e\x00a\x00d\x00e\x00r\x00'
+    mock_open.return_value.__enter__.return_value = mock_file
+
+    with patch('core.utils.chardet.detect', return_value={'encoding': 'UTF-16', 'confidence': 1.0}):
+        result = utils.get_csv_file_encoding('file:///tmp/test.csv')
+
+    assert result == 'utf-16'
