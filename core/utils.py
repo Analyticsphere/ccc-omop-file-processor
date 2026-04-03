@@ -559,6 +559,15 @@ def get_csv_file_encoding(file_path: str) -> str:
 
         if encoding:
             encoding = encoding.lower()
+            
+            # Normalize UTF-8-family names to plain utf-8 after removing
+            # separators so variants like utf-8, utf_8, and utf_8_sig map
+            # cleanly to the encoding name DuckDB expects.
+            normalized_encoding = encoding.replace('-', '').replace('_', '')
+
+            if 'utf' in normalized_encoding and '8' in normalized_encoding:
+                encoding = 'utf-8'
+
             logger.info(f"Detected encoding '{encoding}' (confidence: {result.get('confidence', 0):.2f}) for {file_path}")
             return encoding
 
