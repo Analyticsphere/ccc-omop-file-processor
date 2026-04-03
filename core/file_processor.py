@@ -213,6 +213,7 @@ class FileProcessor:
         select_list = []
 
         for column_name in parquet_columns:
+            # Quote column names to handle reserved keywords (i.e. offset); special characters should have been removed already
             quoted_column_name = '"' + column_name.replace('"', '""') + '"'
             select_list.append(
                 f"NULLIF(NULLIF({quoted_column_name}, 'NULL'), 'null') AS {quoted_column_name}"
