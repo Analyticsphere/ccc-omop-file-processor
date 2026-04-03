@@ -102,10 +102,11 @@ class TestFileProcessorProcess:
 class TestFileProcessorProcessParquet:
     """Tests for _process_parquet method."""
 
+    @patch.object(FileProcessor, 'convert_parquet_string_nulls_to_null')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
     @patch('core.file_processor.utils.valid_parquet_file')
-    def test_process_parquet_success(self, mock_valid, mock_get_columns, mock_execute):
+    def test_process_parquet_success(self, mock_valid, mock_get_columns, mock_execute, mock_cleanup):
         """Test successful Parquet file processing."""
         mock_valid.return_value = True
         mock_get_columns.return_value = ['person_id', 'gender_concept_id']
@@ -120,6 +121,7 @@ class TestFileProcessorProcessParquet:
         mock_valid.assert_called_once_with("bucket/2025-01-01/person.parquet")
         mock_get_columns.assert_called_once_with("bucket/2025-01-01/person.parquet")
         mock_execute.assert_called_once()
+        mock_cleanup.assert_called_once_with(processor.output_path)
         assert result == processor.output_path
 
     @patch('core.file_processor.utils.valid_parquet_file')
@@ -141,10 +143,11 @@ class TestFileProcessorProcessParquet:
 class TestFileProcessorProcessCSV:
     """Tests for _process_csv method."""
 
+    @patch.object(FileProcessor, 'convert_parquet_string_nulls_to_null')
     @patch('core.file_processor.utils.get_csv_file_encoding', return_value='utf-8')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
-    def test_process_csv_success_first_attempt(self, mock_get_columns, mock_execute, mock_encoding):
+    def test_process_csv_success_first_attempt(self, mock_get_columns, mock_execute, mock_encoding, mock_cleanup):
         """Test successful CSV conversion on first attempt."""
         mock_get_columns.return_value = ['person_id', 'gender_concept_id']
 
@@ -157,12 +160,14 @@ class TestFileProcessorProcessCSV:
 
         mock_get_columns.assert_called_once_with("bucket/2025-01-01/person.csv", encoding='utf-8')
         mock_execute.assert_called_once()
+        mock_cleanup.assert_called_once_with(processor.output_path)
         assert result == processor.output_path
 
+    @patch.object(FileProcessor, 'convert_parquet_string_nulls_to_null')
     @patch('core.file_processor.utils.get_csv_file_encoding', return_value='utf-8')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
-    def test_process_csv_retries_on_failure(self, mock_get_columns, mock_execute, mock_encoding):
+    def test_process_csv_retries_on_failure(self, mock_get_columns, mock_execute, mock_encoding, mock_cleanup):
         """Test that CSV conversion retries with permissive settings on failure."""
         mock_get_columns.return_value = ['person_id', 'gender_concept_id']
 
@@ -182,11 +187,13 @@ class TestFileProcessorProcessCSV:
         # Second call should have error handling options
         second_call_sql = mock_execute.call_args_list[1][0][0]
         assert "store_rejects=True" in second_call_sql or "ignore_errors=True" in second_call_sql
+        mock_cleanup.assert_called_once_with(processor.output_path)
 
+    @patch.object(FileProcessor, 'convert_parquet_string_nulls_to_null')
     @patch('core.file_processor.utils.get_csv_file_encoding', return_value='utf-8')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
-    def test_process_csv_raises_after_retry_fails(self, mock_get_columns, mock_execute, mock_encoding):
+    def test_process_csv_raises_after_retry_fails(self, mock_get_columns, mock_execute, mock_encoding, mock_cleanup):
         """Test that exception is raised if retry also fails."""
         mock_get_columns.return_value = ['person_id', 'gender_concept_id']
 
@@ -202,11 +209,13 @@ class TestFileProcessorProcessCSV:
             processor._process_csv()
 
         assert "Still failing" in str(exc_info.value)
+        mock_cleanup.assert_not_called()
 
+    @patch.object(FileProcessor, 'convert_parquet_string_nulls_to_null')
     @patch('core.file_processor.utils.get_csv_file_encoding', return_value='utf-8')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
-    def test_process_csv_with_conversion_options(self, mock_get_columns, mock_execute, mock_encoding):
+    def test_process_csv_with_conversion_options(self, mock_get_columns, mock_execute, mock_encoding, mock_cleanup):
         """Test CSV processing with explicit conversion options."""
         mock_get_columns.return_value = ['person_id', 'gender_concept_id']
 
@@ -220,6 +229,48 @@ class TestFileProcessorProcessCSV:
         # Check that SQL includes the option
         sql = mock_execute.call_args[0][0]
         assert "parallel=False" in sql
+        mock_cleanup.assert_called_once_with(processor.output_path)
+
+
+class TestFileProcessorNullStringCleanup:
+    """Tests for rewriting literal string null markers in Parquet files."""
+
+    @patch('core.file_processor.utils.get_columns_from_file')
+    @patch('core.file_processor.utils.execute_duckdb_sql')
+    def test_convert_parquet_string_nulls_to_null_success(
+        self, mock_execute, mock_get_columns
+    ):
+        """Test successful Parquet null-string cleanup."""
+        mock_get_columns.return_value = ['person_id', 'row_count']
+
+        result = FileProcessor.convert_parquet_string_nulls_to_null(
+            "bucket/2025-01-01/artifacts/converted_files/person.parquet"
+        )
+
+        mock_get_columns.assert_called_once_with(
+            "bucket/2025-01-01/artifacts/converted_files/person.parquet"
+        )
+        sql = mock_execute.call_args[0][0]
+        assert 'NULLIF(NULLIF("person_id", \'NULL\'), \'null\') AS "person_id"' in sql
+        assert 'NULLIF(NULLIF("row_count", \'NULL\'), \'null\') AS "row_count"' in sql
+        assert "TO 'gs://bucket/2025-01-01/artifacts/converted_files/person.parquet'" in sql
+        assert result == "bucket/2025-01-01/artifacts/converted_files/person.parquet"
+
+    @patch('core.file_processor.utils.get_columns_from_file')
+    @patch('core.file_processor.utils.execute_duckdb_sql')
+    def test_convert_parquet_string_nulls_to_null_quotes_offset_column(
+        self, mock_execute, mock_get_columns
+    ):
+        """Test reserved keyword columns like offset are quoted in cleanup SQL."""
+        mock_get_columns.return_value = ['note_nlp_id', 'offset', 'lexical_variant']
+
+        FileProcessor.convert_parquet_string_nulls_to_null(
+            "bucket/2025-01-01/artifacts/converted_files/note_nlp.parquet"
+        )
+
+        sql = mock_execute.call_args[0][0]
+        assert 'NULLIF(NULLIF("offset", \'NULL\'), \'null\') AS "offset"' in sql
+        assert 'NULLIF(NULLIF(offset, \'NULL\'), \'null\') AS offset' not in sql
 
 
 class TestFileProcessorStaticMethods:
@@ -293,10 +344,11 @@ class TestFileProcessorStaticMethods:
 class TestFileProcessorIntegration:
     """Integration tests for FileProcessor."""
 
+    @patch.object(FileProcessor, 'convert_parquet_string_nulls_to_null')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
     @patch('core.file_processor.utils.valid_parquet_file')
-    def test_full_parquet_processing_flow(self, mock_valid, mock_get_columns, mock_execute):
+    def test_full_parquet_processing_flow(self, mock_valid, mock_get_columns, mock_execute, mock_cleanup):
         """Test complete Parquet processing flow from initialization to completion."""
         mock_valid.return_value = True
         mock_get_columns.return_value = ['person_id', 'gender_concept_id', 'year_of_birth']
@@ -312,12 +364,14 @@ class TestFileProcessorIntegration:
         assert mock_valid.called
         assert mock_get_columns.called
         assert mock_execute.called
+        mock_cleanup.assert_called_once_with(processor.output_path)
         assert result == processor.output_path
 
+    @patch.object(FileProcessor, 'convert_parquet_string_nulls_to_null')
     @patch('core.file_processor.utils.get_csv_file_encoding', return_value='utf-8')
     @patch('core.file_processor.utils.execute_duckdb_sql')
     @patch('core.file_processor.utils.get_columns_from_file')
-    def test_full_csv_processing_flow_with_retry(self, mock_get_columns, mock_execute, mock_encoding):
+    def test_full_csv_processing_flow_with_retry(self, mock_get_columns, mock_execute, mock_encoding, mock_cleanup):
         """Test complete CSV processing flow with retry on failure."""
         mock_get_columns.return_value = ['person_id', 'gender_concept_id']
 
@@ -333,4 +387,5 @@ class TestFileProcessorIntegration:
 
         # Verify retry happened
         assert mock_execute.call_count == 2
+        mock_cleanup.assert_called_once_with(processor.output_path)
         assert result == processor.output_path

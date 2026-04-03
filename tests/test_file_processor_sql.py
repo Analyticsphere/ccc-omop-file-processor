@@ -7,6 +7,7 @@ in tests/reference/sql/file_processor/
 """
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -101,4 +102,22 @@ class TestGenerateCsvToParquetSql:
         )
 
         expected = load_reference_sql("generate_csv_to_parquet_sql_with_offset.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestConvertParquetStringNullsToNullSql:
+    """Tests for SQL emitted by convert_parquet_string_nulls_to_null()."""
+
+    @patch('core.file_processor.utils.get_columns_from_file')
+    @patch('core.file_processor.utils.execute_duckdb_sql')
+    def test_with_offset_column(self, mock_execute, mock_get_columns):
+        """Test cleanup SQL generation with offset reserved keyword."""
+        mock_get_columns.return_value = ["note_nlp_id", "offset", "lexical_variant"]
+
+        FileProcessor.convert_parquet_string_nulls_to_null(
+            file_path="synthea53/2025-01-01/artifacts/converted_files/note_nlp.parquet"
+        )
+
+        result = mock_execute.call_args[0][0]
+        expected = load_reference_sql("convert_parquet_string_nulls_to_null_with_offset.sql")
         assert normalize_sql(result) == normalize_sql(expected)
