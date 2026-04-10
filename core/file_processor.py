@@ -47,6 +47,7 @@ class FileProcessor:
         - Lowercase file name
         - Lowercase column names
         - VARCHAR column types
+        - Literal "NULL"/"null" string values converted to actual NULLs
         """
         if not utils.valid_parquet_file(self.file_path):
             raise Exception(f"Invalid Parquet file at {self.file_path}")
@@ -60,6 +61,7 @@ class FileProcessor:
             copy_sql,
             f"Unable to process incoming Parquet file {self.file_path}:"
         )
+        self.convert_parquet_string_nulls_to_null(self.output_path)
 
         return self.output_path
 
@@ -69,6 +71,7 @@ class FileProcessor:
 
         On first attempt, uses strict parsing settings.
         On failure, retries with permissive settings for malformed rows.
+        After conversion, rewrites literal "NULL"/"null" string values to actual NULLs.
 
         Args:
             retry: Whether this is a retry attempt
@@ -104,6 +107,7 @@ class FileProcessor:
             else:
                 raise
 
+        self.convert_parquet_string_nulls_to_null(self.output_path)
         return self.output_path
 
     @staticmethod
@@ -193,6 +197,43 @@ class FileProcessor:
         """
         
         return select_statement
+
+    @staticmethod
+    def convert_parquet_string_nulls_to_null(file_path: str) -> str:
+        """
+        Rewrite an all-string Parquet file so literal "NULL"/"null" values become actual NULLs.
+
+        Args:
+            file_path: Path to the all-string Parquet file to rewrite
+
+        Returns:
+            The original file path after in-place replacement
+        """
+        parquet_columns = utils.get_columns_from_file(file_path)
+        select_list = []
+
+        for column_name in parquet_columns:
+            # Quote column names to handle reserved keywords (i.e. offset); special characters should have been removed already
+            quoted_column_name = '"' + column_name.replace('"', '""') + '"'
+            select_list.append(
+                f"NULLIF(NULLIF({quoted_column_name}, 'NULL'), 'null') AS {quoted_column_name}"
+            )
+
+        select_clause = ", ".join(select_list)
+        cleanup_sql = f"""
+        COPY (
+            SELECT {select_clause}
+            FROM read_parquet('{storage.get_uri(file_path)}')
+        )
+        TO '{storage.get_uri(file_path)}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+        utils.execute_duckdb_sql(
+            cleanup_sql,
+            f"Unable to convert string NULL values to NULL in Parquet file {file_path}"
+        )
+
+        return file_path
 
     @staticmethod
     def format_list(items: list) -> str:
