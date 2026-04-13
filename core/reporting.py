@@ -42,6 +42,18 @@ class ReportGenerator:
         self.tmp_artifacts_path = self._get_tmp_artifacts_path()
         self.output_path = self._get_output_path()
 
+        # Map artifact type names to their generator methods
+        self._artifact_generators = {
+            constants.REPORT_ARTIFACT_METADATA: self._create_metadata_artifacts,
+            constants.REPORT_ARTIFACT_TYPE_CONCEPT_BREAKDOWN: self._create_type_concept_breakdown_artifacts,
+            constants.REPORT_ARTIFACT_VOCABULARY_BREAKDOWN: self._create_vocabulary_breakdown_artifacts,
+            constants.REPORT_ARTIFACT_DATE_DATETIME_DEFAULTS: self._create_date_datetime_default_value_artifacts,
+            constants.REPORT_ARTIFACT_INVALID_CONCEPT_IDS: self._create_invalid_concept_id_artifacts,
+            constants.REPORT_ARTIFACT_PERSON_ID_INTEGRITY: self._create_person_id_referential_integrity_artifacts,
+            constants.REPORT_ARTIFACT_FINAL_ROW_COUNTS: self._create_final_row_count_artifacts,
+            constants.REPORT_ARTIFACT_TIME_SERIES: self._create_time_series_row_count_artifacts,
+        }
+
     def generate(self) -> None:
         """
         Generate complete delivery report CSV file.
@@ -60,6 +72,30 @@ class ReportGenerator:
         self._create_time_series_row_count_artifacts()
 
         # Generate the final, single report CSV file
+        self._consolidate_report_files()
+
+    def generate_artifact(self, artifact_type: str) -> None:
+        """
+        Generate a single type of report artifact.
+
+        Args:
+            artifact_type: One of the REPORT_ARTIFACT_* constants from constants.py.
+
+        Raises:
+            ValueError: If artifact_type is not recognized.
+        """
+        generator_fn = self._artifact_generators.get(artifact_type)
+        if generator_fn is None:
+            raise ValueError(
+                f"Unknown artifact type: '{artifact_type}'. "
+                f"Valid types: {list(self._artifact_generators.keys())}"
+            )
+        utils.logger.info(f"Generating report artifact: {artifact_type}")
+        generator_fn()
+
+    def consolidate(self) -> None:
+        """Consolidate all temporary report artifact files into the final CSV."""
+        utils.logger.info("Consolidating report artifact files into final CSV")
         self._consolidate_report_files()
 
     def _create_metadata_artifacts(self) -> None:

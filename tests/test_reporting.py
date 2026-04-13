@@ -146,6 +146,85 @@ class TestReportGeneratorGenerate:
         assert call_order == ['metadata', 'type_concept', 'vocabulary', 'date_defaults', 'invalid_concept_ids', 'person_id_integrity', 'final_row_count', 'time_series', 'consolidate']
 
 
+class TestReportGeneratorGenerateArtifact:
+    """Tests for generate_artifact single-artifact dispatch method."""
+
+    REPORT_DATA = {
+        "site": "test_site",
+        "bucket": "test-bucket",
+        "delivery_date": "2025-01-15",
+        "site_display_name": "Test Site",
+        "file_delivery_format": "parquet",
+        "delivered_cdm_version": "5.3",
+        "target_vocabulary_version": "v5.0 20-MAR-24",
+        "target_cdm_version": "5.4"
+    }
+
+    @pytest.mark.parametrize("artifact_type,method_name", [
+        (constants.REPORT_ARTIFACT_METADATA, "_create_metadata_artifacts"),
+        (constants.REPORT_ARTIFACT_TYPE_CONCEPT_BREAKDOWN, "_create_type_concept_breakdown_artifacts"),
+        (constants.REPORT_ARTIFACT_VOCABULARY_BREAKDOWN, "_create_vocabulary_breakdown_artifacts"),
+        (constants.REPORT_ARTIFACT_DATE_DATETIME_DEFAULTS, "_create_date_datetime_default_value_artifacts"),
+        (constants.REPORT_ARTIFACT_INVALID_CONCEPT_IDS, "_create_invalid_concept_id_artifacts"),
+        (constants.REPORT_ARTIFACT_PERSON_ID_INTEGRITY, "_create_person_id_referential_integrity_artifacts"),
+        (constants.REPORT_ARTIFACT_FINAL_ROW_COUNTS, "_create_final_row_count_artifacts"),
+        (constants.REPORT_ARTIFACT_TIME_SERIES, "_create_time_series_row_count_artifacts"),
+    ])
+    def test_dispatches_to_correct_method(self, artifact_type, method_name):
+        """Test that generate_artifact calls the correct underlying method."""
+        with patch.object(ReportGenerator, method_name) as mock_method:
+            generator = ReportGenerator(self.REPORT_DATA)
+            generator.generate_artifact(artifact_type)
+            mock_method.assert_called_once()
+
+    def test_raises_for_unknown_artifact_type(self):
+        """Test that generate_artifact raises ValueError for unknown types."""
+        generator = ReportGenerator(self.REPORT_DATA)
+        with pytest.raises(ValueError, match="Unknown artifact type"):
+            generator.generate_artifact("nonexistent_type")
+
+    @patch.object(ReportGenerator, '_consolidate_report_files')
+    @patch.object(ReportGenerator, '_create_metadata_artifacts')
+    def test_does_not_call_consolidate(self, mock_metadata, mock_consolidate):
+        """Test that generate_artifact for a data type does not trigger consolidation."""
+        generator = ReportGenerator(self.REPORT_DATA)
+        generator.generate_artifact(constants.REPORT_ARTIFACT_METADATA)
+        mock_metadata.assert_called_once()
+        mock_consolidate.assert_not_called()
+
+
+class TestReportGeneratorConsolidate:
+    """Tests for consolidate public method."""
+
+    REPORT_DATA = {
+        "site": "test_site",
+        "bucket": "test-bucket",
+        "delivery_date": "2025-01-15",
+        "site_display_name": "Test Site",
+        "file_delivery_format": "parquet",
+        "delivered_cdm_version": "5.3",
+        "target_vocabulary_version": "v5.0 20-MAR-24",
+        "target_cdm_version": "5.4"
+    }
+
+    @patch.object(ReportGenerator, '_consolidate_report_files')
+    def test_calls_consolidate_report_files(self, mock_consolidate):
+        """Test that consolidate() delegates to _consolidate_report_files."""
+        generator = ReportGenerator(self.REPORT_DATA)
+        generator.consolidate()
+        mock_consolidate.assert_called_once()
+
+    @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
+    @patch.object(ReportGenerator, '_create_metadata_artifacts')
+    @patch.object(ReportGenerator, '_consolidate_report_files')
+    def test_does_not_call_artifact_generators(self, mock_consolidate, mock_meta, mock_tc):
+        """Test that consolidate() does not generate any artifacts."""
+        generator = ReportGenerator(self.REPORT_DATA)
+        generator.consolidate()
+        mock_meta.assert_not_called()
+        mock_tc.assert_not_called()
+
+
 class TestReportGeneratorMetadataArtifacts:
     """Tests for _create_metadata_artifacts method."""
 
