@@ -104,29 +104,20 @@ class ParticipantFilter:
         schema = utils.get_cdm_schema(self.omop_version)
         table_concept_id = int(schema[self.table_name]['concept_id'])
 
-        unknown_identifier_artifact_names = self._get_unknown_identifier_artifact_names()
-        for artifact_name in unknown_identifier_artifact_names:
-            artifact = report_artifact.ReportArtifact(
-                delivery_date=self.delivery_date,
-                artifact_bucket=self.bucket,
-                concept_id=table_concept_id,
-                name=artifact_name,
-                value_as_string=None,
-                value_as_concept_id=None,
-                value_as_number=row_removal_counts[ParticipantFilter.UNKNOWN_IDENTIFIER_BUCKET]
-            )
-            artifact.save_artifact()
+        unknown_count = row_removal_counts[ParticipantFilter.UNKNOWN_IDENTIFIER_BUCKET]
 
-        artifact_names = [
-            f"Number of rows removed due to identifier not in Connect database: {self.table_name}",
-            f"Number of rows removed due to Connect exclusion rules: {self.table_name}"
-        ]
-        artifact_counts = [
-            row_removal_counts[ParticipantFilter.IDENTIFIER_NOT_IN_CONNECT_BUCKET],
-            row_removal_counts[ParticipantFilter.CONNECT_EXCLUSION_BUCKET]
+        artifact_names_and_counts = [
+            (f"Number of rows removed due to missing person_id values: {self.table_name}", unknown_count),
+            (f"Number of rows removed due to identifier not in Connect database: {self.table_name}",
+             row_removal_counts[ParticipantFilter.IDENTIFIER_NOT_IN_CONNECT_BUCKET]),
+            (f"Number of rows removed due to Connect exclusion rules: {self.table_name}",
+             row_removal_counts[ParticipantFilter.CONNECT_EXCLUSION_BUCKET]),
         ]
 
-        for artifact_name, artifact_count in zip(artifact_names, artifact_counts):
+        if self.table_name == "person":
+            artifact_names_and_counts.insert(0, ("Number of persons with missing person_id", unknown_count))
+
+        for artifact_name, artifact_count in artifact_names_and_counts:
             artifact = report_artifact.ReportArtifact(
                 delivery_date=self.delivery_date,
                 artifact_bucket=self.bucket,
@@ -137,16 +128,6 @@ class ParticipantFilter:
                 value_as_number=artifact_count
             )
             artifact.save_artifact()
-
-    def _get_unknown_identifier_artifact_names(self) -> list[str]:
-        """Return the bucket-1 artifact names for the current table."""
-        if self.table_name == "person":
-            return [
-                "Number of persons with missing person_id",
-                "Number of rows removed due to missing person_id values: person"
-            ]
-
-        return [f"Number of rows removed due to missing person_id values: {self.table_name}"]
 
     @staticmethod
     def _has_person_id_column(actual_columns: Sequence[str]) -> bool:
@@ -260,13 +241,76 @@ class ParticipantFilter:
         """.strip()
 
     @staticmethod
+    def generate_delivery_not_in_connect_sql(
+        table_uri: str,
+        connect_data_uri: str,
+        invalid_rows_uri: str = "",
+        has_connect_id_column: bool = False
+    ) -> str:
+        """
+        Generate SQL to find person_ids from a table that are not in the Connect database.
+
+        Combines two sources of unmatched IDs:
+        1. Numeric person_ids in the converted parquet that do not match any Connect_ID
+        2. Non-numeric connect_id values in the invalid_rows parquet (when present)
+
+        Excludes -1 person_id values, which represent missing identifiers handled by a
+        separate reporting bucket.
+        """
+        non_numeric_cte = ""
+        non_numeric_union = ""
+
+        if invalid_rows_uri and has_connect_id_column:
+            non_numeric_cte = f""",
+            non_numeric_connect_ids AS (
+                SELECT DISTINCT CAST(connect_id AS VARCHAR) AS unmatched_id
+                FROM read_parquet('{invalid_rows_uri}')
+                WHERE connect_id IS NOT NULL
+                  AND TRIM(CAST(connect_id AS VARCHAR)) != ''
+                  AND TRY_CAST(connect_id AS BIGINT) IS NULL
+            )"""
+            non_numeric_union = """
+                UNION
+                SELECT unmatched_id FROM non_numeric_connect_ids"""
+
+        return f"""
+        WITH table_ids AS (
+            SELECT DISTINCT
+                TRY_CAST(person_id AS BIGINT) AS person_id
+            FROM read_parquet('{table_uri}')
+            WHERE TRY_CAST(person_id AS BIGINT) IS NOT NULL
+              AND TRY_CAST(person_id AS BIGINT) != -1
+        ),
+        connect_ids AS (
+            SELECT DISTINCT
+                TRY_CAST(Connect_ID AS BIGINT) AS connect_id
+            FROM read_parquet('{connect_data_uri}')
+            WHERE TRY_CAST(Connect_ID AS BIGINT) IS NOT NULL
+        ),
+        numeric_not_in_connect AS (
+            SELECT CAST(t.person_id AS VARCHAR) AS unmatched_id
+            FROM table_ids t
+            LEFT JOIN connect_ids cd
+                ON t.person_id = cd.connect_id
+            WHERE cd.connect_id IS NULL
+        ){non_numeric_cte},
+        all_unmatched AS (
+            SELECT unmatched_id FROM numeric_not_in_connect{non_numeric_union}
+        )
+        SELECT
+            COUNT(*) AS patient_count,
+            COALESCE(STRING_AGG(unmatched_id, '|' ORDER BY unmatched_id), '') AS patient_ids
+        FROM all_unmatched
+        """.strip()
+
+    @staticmethod
     def create_connect_eligibility_report_artifacts(connect_data_path: str, delivery_bucket: str) -> None:
         """
         Create Connect study report artifacts used to review participant inclusion status. They summarize:
         - status breakdowns for delivery-matched participants, with IDs only for exclusion-driving statuses
         - delivery-matched participants who meet review/exclusion conditions
         - eligible Connect IDs present only in Connect data
-        - person_ids present only in the delivery
+        - person_ids present only in the delivery (per table)
         """
         bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(delivery_bucket)
         person_parquet_path = utils.get_parquet_artifact_location(f"{delivery_bucket}/person.parquet")
@@ -425,32 +469,51 @@ class ParticipantFilter:
             value_as_number=float(connect_only_count)
         )
 
-        delivery_not_in_connect_sql = f"""
-        {base_cte}
-        SELECT
-            COUNT(*) AS patient_count,
-            COALESCE(STRING_AGG(CAST(person_id AS VARCHAR), '|' ORDER BY person_id), '') AS patient_ids
-        FROM (
-            SELECT DISTINCT p.person_id
-            FROM person_delivery p
-            LEFT JOIN connect_data cd
-                ON p.person_id = cd.connect_id
-            WHERE cd.connect_id IS NULL
-        ) unmatched_delivery
-        """
-        delivery_not_in_connect = utils.execute_duckdb_sql(
-            delivery_not_in_connect_sql,
-            "Unable to create Connect-vs-delivery reconciliation artifacts for delivery-only patients",
-            return_results=True
-        )
+        # Per-table "delivery not in Connect" artifacts
+        converted_files_dir = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}"
+        table_files = utils.list_files(bucket, f"{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}", constants.PARQUET)
 
-        delivery_only_count, delivery_only_ids = delivery_not_in_connect[0] if delivery_not_in_connect else (0, "")
-        save_artifact(
-            name="Number of delivery patients not in Connect data",
-            value_as_string=delivery_only_ids or "",
-            value_as_number=float(delivery_only_count)
-        )
-        save_artifact(
-            name="Delivery patient IDs not in Connect data",
-            value_as_string=delivery_only_ids or ""
-        )
+        for table_file in sorted(table_files):
+            table_name = utils.get_table_name_from_path(table_file)
+            table_uri = storage.get_uri(table_file)
+
+            actual_columns = utils.get_columns_from_file(table_file)
+            if not ParticipantFilter._has_person_id_column(actual_columns):
+                continue
+
+            # Check for non-numeric connect_ids in invalid rows
+            invalid_rows_path = utils.get_invalid_rows_path_from_path(f"{bucket}/{delivery_date}/{table_name}.parquet")
+            invalid_rows_uri = ""
+            has_connect_id_column = False
+            if utils.parquet_file_exists(invalid_rows_path):
+                invalid_rows_columns = utils.get_columns_from_file(invalid_rows_path)
+                has_connect_id_column = any(
+                    'connectid' in col.lower() or 'connect_id' in col.lower()
+                    for col in invalid_rows_columns
+                )
+                if has_connect_id_column:
+                    invalid_rows_uri = storage.get_uri(invalid_rows_path)
+
+            delivery_not_in_connect_sql = ParticipantFilter.generate_delivery_not_in_connect_sql(
+                table_uri=table_uri,
+                connect_data_uri=connect_data_uri,
+                invalid_rows_uri=invalid_rows_uri,
+                has_connect_id_column=has_connect_id_column
+            )
+
+            delivery_not_in_connect = utils.execute_duckdb_sql(
+                delivery_not_in_connect_sql,
+                f"Unable to create delivery-not-in-Connect artifacts for {table_name}",
+                return_results=True
+            )
+
+            delivery_only_count, delivery_only_ids = delivery_not_in_connect[0] if delivery_not_in_connect else (0, "")
+            save_artifact(
+                name=f"Number of delivery patient IDs not in Connect data: {table_name}",
+                value_as_string=delivery_only_ids or "",
+                value_as_number=float(delivery_only_count)
+            )
+            save_artifact(
+                name=f"Delivery patient IDs not in Connect data: {table_name}",
+                value_as_string=delivery_only_ids or ""
+            )

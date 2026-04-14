@@ -338,41 +338,99 @@ class TestParticipantFilterGenerateFilterSQL:
         expected = load_reference_sql("generate_row_removal_count_sql_standard.sql")
         assert normalize_sql(sql) == normalize_sql(expected)
 
+    def test_generate_delivery_not_in_connect_sql_with_invalid_rows(self):
+        """Test that delivery-not-in-Connect SQL includes non-numeric connect_ids from invalid rows."""
+        sql = ParticipantFilter.generate_delivery_not_in_connect_sql(
+            table_uri="gs://test-bucket/2025-01-15/artifacts/converted_files/person.parquet",
+            connect_data_uri="gs://test-bucket/2025-01-15/artifacts/connect_data/participant_status.parquet",
+            invalid_rows_uri="gs://test-bucket/2025-01-15/artifacts/invalid_rows/person.parquet",
+            has_connect_id_column=True
+        )
+
+        expected = load_reference_sql("generate_delivery_not_in_connect_sql_with_invalid_rows.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
+
+    def test_generate_delivery_not_in_connect_sql_without_invalid_rows(self):
+        """Test that delivery-not-in-Connect SQL works without invalid rows."""
+        sql = ParticipantFilter.generate_delivery_not_in_connect_sql(
+            table_uri="gs://test-bucket/2025-01-15/artifacts/converted_files/condition_occurrence.parquet",
+            connect_data_uri="gs://test-bucket/2025-01-15/artifacts/connect_data/participant_status.parquet"
+        )
+
+        expected = load_reference_sql("generate_delivery_not_in_connect_sql_without_invalid_rows.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
+
 
 class TestCreateConnectEligibilityReportArtifacts:
     """Tests for Connect eligibility report artifacts."""
 
     @patch('core.participant_filter.report_artifact.ReportArtifact')
     @patch('core.participant_filter.utils.execute_duckdb_sql')
+    @patch('core.participant_filter.utils.get_columns_from_file')
+    @patch('core.participant_filter.utils.get_invalid_rows_path_from_path')
+    @patch('core.participant_filter.utils.list_files')
     @patch('core.participant_filter.storage.get_uri')
     @patch('core.participant_filter.utils.parquet_file_exists')
     @patch('core.participant_filter.utils.get_parquet_artifact_location')
     @patch('core.participant_filter.utils.get_bucket_and_delivery_date_from_path')
-    def test_creates_status_and_reconciliation_artifacts(
+    def test_creates_status_and_per_table_reconciliation_artifacts(
         self,
         mock_get_bucket_and_date,
         mock_get_parquet_path,
         mock_parquet_exists,
         mock_get_uri,
+        mock_list_files,
+        mock_get_invalid_rows_path,
+        mock_get_columns,
         mock_execute_sql,
         mock_artifact
     ):
-        """Test that current Connect eligibility artifacts are created."""
+        """Test that Connect eligibility artifacts include per-table delivery-not-in-Connect reports."""
         mock_get_bucket_and_date.return_value = ("test-bucket", "2025-01-15")
         mock_get_parquet_path.return_value = "test-bucket/2025-01-15/artifacts/converted_files/person.parquet"
-        mock_parquet_exists.return_value = True
         mock_get_uri.side_effect = lambda path: path if path.startswith("gs://") else f"gs://{path}"
+
+        # Two tables in converted_files: condition_occurrence and person
+        mock_list_files.return_value = [
+            "test-bucket/2025-01-15/artifacts/converted_files/condition_occurrence.parquet",
+            "test-bucket/2025-01-15/artifacts/converted_files/person.parquet",
+        ]
+
+        # parquet_file_exists: person parquet (initial check), then invalid_rows for each table
+        mock_parquet_exists.side_effect = [
+            True,   # person parquet exists (initial check)
+            False,  # condition_occurrence invalid_rows does not exist
+            True,   # person invalid_rows exists
+        ]
+
+        # get_columns_from_file: for condition_occurrence converted, then person converted,
+        # then person invalid_rows
+        mock_get_columns.side_effect = [
+            ['person_id', 'condition_concept_id'],  # condition_occurrence converted
+            ['person_id', 'gender_concept_id'],      # person converted
+            ['person_id', 'connect_id', 'gender_concept_id'],  # person invalid_rows
+        ]
+
+        mock_get_invalid_rows_path.side_effect = [
+            "test-bucket/2025-01-15/artifacts/invalid_rows/condition_occurrence.parquet",
+            "test-bucket/2025-01-15/artifacts/invalid_rows/person.parquet",
+        ]
 
         mock_artifact_instance = MagicMock()
         mock_artifact.return_value = mock_artifact_instance
 
         mock_execute_sql.side_effect = [
+            # 4 status breakdown queries
             [("Verified", 197316935, 2, "1001|1002"), ("Pending", 555555555, 1, "1003")],
             [("No", 104430631, 1, "1001"), ("Yes", 353358909, 1, "1002")],
             [("No", 104430631, 1, "1001"), ("Yes", 353358909, 2, "1002|1003")],
             [("No", 104430631, 2, "1001|1002"), ("Yes", 353358909, 1, "1003")],
+            # Connect not in delivery
             [(1, "9001")],
-            [(2, "8001|8002")],
+            # Per-table delivery not in Connect: condition_occurrence (no invalid rows)
+            [(1, "7001")],
+            # Per-table delivery not in Connect: person (with invalid rows connect_id)
+            [(3, "8001|8002|uuid-value")],
         ]
 
         ParticipantFilter.create_connect_eligibility_report_artifacts(
@@ -380,21 +438,31 @@ class TestCreateConnectEligibilityReportArtifacts:
             delivery_bucket="test-bucket/2025-01-15"
         )
 
-        assert mock_execute_sql.call_count == 6
+        assert mock_execute_sql.call_count == 7
         executed_sql = [call_args.args[0] for call_args in mock_execute_sql.call_args_list]
+
+        # Verify the first 5 SQL queries match existing golden files
         expected_sql_files = [
             "create_connect_eligibility_report_artifacts_study_status_standard.sql",
             "create_connect_eligibility_report_artifacts_hipaa_revoked_status_standard.sql",
             "create_connect_eligibility_report_artifacts_consent_withdrawn_status_standard.sql",
             "create_connect_eligibility_report_artifacts_data_destruction_status_standard.sql",
             "create_connect_eligibility_report_artifacts_connect_not_in_delivery_standard.sql",
-            "create_connect_eligibility_report_artifacts_delivery_not_in_connect_standard.sql",
         ]
-        for executed, expected_file in zip(executed_sql, expected_sql_files):
+        for executed, expected_file in zip(executed_sql[:5], expected_sql_files):
             expected_sql = load_reference_sql(expected_file)
             assert normalize_sql(executed) == normalize_sql(expected_sql)
 
+        # Verify per-table SQL: condition_occurrence (no invalid rows)
+        expected_condition_sql = load_reference_sql("generate_delivery_not_in_connect_sql_without_invalid_rows.sql")
+        assert normalize_sql(executed_sql[5]) == normalize_sql(expected_condition_sql)
+
+        # Verify per-table SQL: person (with invalid rows)
+        expected_person_sql = load_reference_sql("generate_delivery_not_in_connect_sql_with_invalid_rows.sql")
+        assert normalize_sql(executed_sql[6]) == normalize_sql(expected_person_sql)
+
         expected_artifact_calls = [
+            # Status breakdown artifacts (unchanged)
             call(
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
@@ -476,25 +544,45 @@ class TestCreateConnectEligibilityReportArtifacts:
                 value_as_concept_id=None,
                 value_as_number=1.0
             ),
+            # Per-table: condition_occurrence
             call(
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Number of delivery patients not in Connect data",
-                value_as_string="8001|8002",
+                name="Number of delivery patient IDs not in Connect data: condition_occurrence",
+                value_as_string="7001",
                 value_as_concept_id=None,
-                value_as_number=2.0
+                value_as_number=1.0
             ),
             call(
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Delivery patient IDs not in Connect data",
-                value_as_string="8001|8002",
+                name="Delivery patient IDs not in Connect data: condition_occurrence",
+                value_as_string="7001",
+                value_as_concept_id=None,
+                value_as_number=None
+            ),
+            # Per-table: person (with non-numeric connect_ids from invalid rows)
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=0,
+                name="Number of delivery patient IDs not in Connect data: person",
+                value_as_string="8001|8002|uuid-value",
+                value_as_concept_id=None,
+                value_as_number=3.0
+            ),
+            call(
+                delivery_date="2025-01-15",
+                artifact_bucket="test-bucket",
+                concept_id=0,
+                name="Delivery patient IDs not in Connect data: person",
+                value_as_string="8001|8002|uuid-value",
                 value_as_concept_id=None,
                 value_as_number=None
             ),
         ]
 
         assert mock_artifact.call_args_list == expected_artifact_calls
-        assert mock_artifact_instance.save_artifact.call_count == 11
+        assert mock_artifact_instance.save_artifact.call_count == 13
