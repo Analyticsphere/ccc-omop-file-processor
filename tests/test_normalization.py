@@ -5,12 +5,33 @@ Tests file normalization including data type conversions, default value populati
 valid/invalid row separation, and row count artifact creation.
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
 import core.constants as constants
 from core.normalization import Normalizer
+
+# Path to reference SQL files
+REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "normalization"
+
+
+def normalize_sql(sql: str) -> str:
+    """
+    Normalize SQL for comparison by removing extra whitespace.
+    Makes SQL comparison whitespace-insensitive.
+    """
+    lines = [line.strip() for line in sql.strip().split('\n')]
+    lines = [line for line in lines if line]
+    return '\n'.join(lines)
+
+
+def load_reference_sql(filename: str) -> str:
+    """Load reference SQL from file."""
+    filepath = REFERENCE_DIR / filename
+    with open(filepath, 'r') as f:
+        return f.read()
 
 
 class TestNormalizerInit:
@@ -192,9 +213,8 @@ class TestNormalizerGenerateNormalizationSQL:
             actual_columns=actual_columns
         )
 
-        assert "CREATE OR REPLACE TABLE row_check" in sql
-        assert "COPY (" in sql
-        assert "row_hash" in sql
+        expected = load_reference_sql("generate_normalization_sql_simple.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
 
 class TestNormalizerGenerateColumnExpressions:
@@ -484,10 +504,8 @@ class TestNormalizerStaticMethods:
             "%Y-%m-%d %H:%M:%S", column_exists_in_file=True
         )
 
-        assert "COALESCE" in sql
-        assert "TRY_STRPTIME" in sql
-        assert "birth_datetime" in sql
-        assert "year_of_birth" in sql
+        expected = load_reference_sql("generate_birth_datetime_sql_expression_with_column.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
     def test_generate_birth_datetime_expression_without_column(self):
         """Test birth_datetime SQL generation when column doesn't exist."""
@@ -495,14 +513,12 @@ class TestNormalizerStaticMethods:
             "%Y-%m-%d %H:%M:%S", column_exists_in_file=False
         )
 
-        assert "TRY_STRPTIME" not in sql
-        assert "year_of_birth" in sql
-        assert "month_of_birth" in sql
-        assert "day_of_birth" in sql
+        expected = load_reference_sql("generate_birth_datetime_sql_expression_without_column.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
     def test_generate_row_count_sql(self):
         """Test row count SQL generation."""
         sql = Normalizer.generate_row_count_sql("gs://bucket/file.parquet")
 
-        assert "SELECT COUNT(*)" in sql
-        assert "read_parquet('gs://bucket/file.parquet')" in sql
+        expected = load_reference_sql("generate_row_count_sql_simple.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)

@@ -5,12 +5,33 @@ Tests OMOP-to-OMOP ETL transformations including column mapping, type conversion
 composite key generation for surrogate key tables, and placeholder replacement.
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
 import core.constants as constants
 from core.transformer import Transformer
+
+# Path to reference SQL files
+REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "transformer"
+
+
+def normalize_sql(sql: str) -> str:
+    """
+    Normalize SQL for comparison by removing extra whitespace.
+    Makes SQL comparison whitespace-insensitive.
+    """
+    lines = [line.strip() for line in sql.strip().split('\n')]
+    lines = [line for line in lines if line]
+    return '\n'.join(lines)
+
+
+def load_reference_sql(filename: str) -> str:
+    """Load reference SQL from file."""
+    filepath = REFERENCE_DIR / filename
+    with open(filepath, 'r') as f:
+        return f.read()
 
 
 class TestTransformerInit:
@@ -184,15 +205,11 @@ class TestTransformerGenerateOMOPToOMOPSql:
 
     @patch('core.transformer.utils.get_primary_key_column')
     @patch('core.transformer.utils.get_table_schema')
-    @patch('builtins.open', new_callable=mock_open)
-    def test_generate_sql_reads_template_file(self, mock_file, mock_get_schema, mock_get_pk):
+    def test_generate_sql_reads_template_file(self, mock_get_schema, mock_get_pk):
         """Test that SQL generation reads the template file."""
-        mock_file.return_value.read.return_value = """
-        SELECT
-            condition_occurrence_id AS observation_id,
-            person_id AS person_id
-        FROM read_parquet('@CONDITION_OCCURRENCE')
-        """
+        # Load golden file BEFORE patching builtins.open
+        expected = load_reference_sql("generate_omop_to_omop_sql_reads_template.sql")
+
         mock_get_schema.return_value = {
             "observation": {
                 "columns": {
@@ -212,22 +229,29 @@ class TestTransformerGenerateOMOPToOMOPSql:
             etl_artifact_path="gs://bucket/2025-01-01/artifacts/omop_etl/"
         )
 
-        result = transformer.generate_omop_to_omop_sql()
+        with patch('builtins.open', new_callable=mock_open) as mock_file:
+            mock_file.return_value.read.return_value = """
+        SELECT
+            condition_occurrence_id AS observation_id,
+            person_id AS person_id
+        FROM read_parquet('@CONDITION_OCCURRENCE')
+        """
+            result = transformer.generate_omop_to_omop_sql()
 
-        # Verify template file was opened
-        mock_file.assert_called_once()
-        assert "condition_occurrence_to_observation.sql" in str(mock_file.call_args)
+            # Verify template file was opened
+            mock_file.assert_called_once()
+            assert "condition_occurrence_to_observation.sql" in str(mock_file.call_args)
+
+        # Verify generated SQL matches golden file
+        assert normalize_sql(result) == normalize_sql(expected)
 
     @patch('core.transformer.utils.get_primary_key_column')
     @patch('core.transformer.utils.get_table_schema')
-    @patch('builtins.open', new_callable=mock_open)
-    def test_generate_sql_wraps_in_copy_statement(self, mock_file, mock_get_schema, mock_get_pk):
+    def test_generate_sql_wraps_in_copy_statement(self, mock_get_schema, mock_get_pk):
         """Test that generated SQL is wrapped in COPY statement."""
-        mock_file.return_value.read.return_value = """
-        SELECT
-            condition_occurrence_id AS observation_id
-        FROM read_parquet('@CONDITION_OCCURRENCE')
-        """
+        # Load golden file BEFORE patching builtins.open
+        expected = load_reference_sql("generate_omop_to_omop_sql_copy_statement.sql")
+
         mock_get_schema.return_value = {
             "observation": {
                 "columns": {
@@ -246,22 +270,23 @@ class TestTransformerGenerateOMOPToOMOPSql:
             etl_artifact_path="gs://bucket/2025-01-01/artifacts/omop_etl/"
         )
 
-        result = transformer.generate_omop_to_omop_sql()
+        with patch('builtins.open', new_callable=mock_open) as mock_file:
+            mock_file.return_value.read.return_value = """
+        SELECT
+            condition_occurrence_id AS observation_id
+        FROM read_parquet('@CONDITION_OCCURRENCE')
+        """
+            result = transformer.generate_omop_to_omop_sql()
 
-        assert "COPY (" in result
-        assert ") TO" in result
-        assert "WHERE target_table = 'observation'" in result
+        assert normalize_sql(result) == normalize_sql(expected)
 
     @patch('core.transformer.utils.get_primary_key_column')
     @patch('core.transformer.utils.get_table_schema')
-    @patch('builtins.open', new_callable=mock_open)
-    def test_generate_sql_adds_cast_for_required_fields(self, mock_file, mock_get_schema, mock_get_pk):
+    def test_generate_sql_adds_cast_for_required_fields(self, mock_get_schema, mock_get_pk):
         """Test that required fields get COALESCE and CAST."""
-        mock_file.return_value.read.return_value = """
-        SELECT
-            person_id AS person_id
-        FROM read_parquet('@CONDITION_OCCURRENCE')
-        """
+        # Load golden file BEFORE patching builtins.open
+        expected = load_reference_sql("generate_omop_to_omop_sql_cast_required.sql")
+
         mock_get_schema.return_value = {
             "observation": {
                 "columns": {
@@ -280,21 +305,23 @@ class TestTransformerGenerateOMOPToOMOPSql:
             etl_artifact_path="gs://bucket/2025-01-01/artifacts/omop_etl/"
         )
 
-        result = transformer.generate_omop_to_omop_sql()
+        with patch('builtins.open', new_callable=mock_open) as mock_file:
+            mock_file.return_value.read.return_value = """
+        SELECT
+            person_id AS person_id
+        FROM read_parquet('@CONDITION_OCCURRENCE')
+        """
+            result = transformer.generate_omop_to_omop_sql()
 
-        assert "CAST(COALESCE(person_id," in result
-        assert "AS BIGINT)" in result
+        assert normalize_sql(result) == normalize_sql(expected)
 
     @patch('core.transformer.utils.get_primary_key_column')
     @patch('core.transformer.utils.get_table_schema')
-    @patch('builtins.open', new_callable=mock_open)
-    def test_generate_sql_adds_try_cast_for_optional_fields(self, mock_file, mock_get_schema, mock_get_pk):
+    def test_generate_sql_adds_try_cast_for_optional_fields(self, mock_get_schema, mock_get_pk):
         """Test that optional fields get TRY_CAST."""
-        mock_file.return_value.read.return_value = """
-        SELECT
-            value_as_number AS value_as_number
-        FROM read_parquet('@OBSERVATION')
-        """
+        # Load golden file BEFORE patching builtins.open
+        expected = load_reference_sql("generate_omop_to_omop_sql_try_cast_optional.sql")
+
         mock_get_schema.return_value = {
             "measurement": {
                 "columns": {
@@ -313,11 +340,15 @@ class TestTransformerGenerateOMOPToOMOPSql:
             etl_artifact_path="gs://bucket/2025-01-01/artifacts/omop_etl/"
         )
 
-        result = transformer.generate_omop_to_omop_sql()
+        with patch('builtins.open', new_callable=mock_open) as mock_file:
+            mock_file.return_value.read.return_value = """
+        SELECT
+            value_as_number AS value_as_number
+        FROM read_parquet('@OBSERVATION')
+        """
+            result = transformer.generate_omop_to_omop_sql()
 
-        assert "TRY_CAST(value_as_number AS DOUBLE)" in result
-        # Should NOT have COALESCE for optional fields
-        assert "COALESCE(value_as_number" not in result
+        assert normalize_sql(result) == normalize_sql(expected)
 
 
 class TestTransformerGenerateOMOPToOMOPSqlGoldenFiles:

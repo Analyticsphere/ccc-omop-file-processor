@@ -5,12 +5,33 @@ Tests file processing including CSV to Parquet conversion, Parquet file
 processing, retry logic, and special handling for reserved keywords.
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
 import core.constants as constants
 from core.file_processor import FileProcessor
+
+# Path to reference SQL files
+REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "file_processor"
+
+
+def normalize_sql(sql: str) -> str:
+    """
+    Normalize SQL for comparison by removing extra whitespace.
+    Makes SQL comparison whitespace-insensitive.
+    """
+    lines = [line.strip() for line in sql.strip().split('\n')]
+    lines = [line for line in lines if line]
+    return '\n'.join(lines)
+
+
+def load_reference_sql(filename: str) -> str:
+    """Load reference SQL from file."""
+    filepath = REFERENCE_DIR / filename
+    with open(filepath, 'r') as f:
+        return f.read()
 
 
 class TestFileProcessorInit:
@@ -184,9 +205,10 @@ class TestFileProcessorProcessCSV:
         # Should be called twice (initial + retry)
         assert mock_execute.call_count == 2
 
-        # Second call should have error handling options
+        # Second call should match the retry golden file
         second_call_sql = mock_execute.call_args_list[1][0][0]
-        assert "store_rejects=True" in second_call_sql or "ignore_errors=True" in second_call_sql
+        expected = load_reference_sql("generate_csv_to_parquet_sql_retry.sql")
+        assert normalize_sql(second_call_sql) == normalize_sql(expected)
         mock_cleanup.assert_called_once_with(processor.output_path)
 
     @patch.object(FileProcessor, 'convert_parquet_string_nulls_to_null')
@@ -226,9 +248,10 @@ class TestFileProcessorProcessCSV:
 
         result = processor._process_csv(conversion_options=['parallel=False'])
 
-        # Check that SQL includes the option
+        # Check that SQL matches golden file
         sql = mock_execute.call_args[0][0]
-        assert "parallel=False" in sql
+        expected = load_reference_sql("generate_csv_to_parquet_sql_with_parallel_false.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
         mock_cleanup.assert_called_once_with(processor.output_path)
 
 
@@ -251,9 +274,8 @@ class TestFileProcessorNullStringCleanup:
             "bucket/2025-01-01/artifacts/converted_files/person.parquet"
         )
         sql = mock_execute.call_args[0][0]
-        assert 'NULLIF(NULLIF("person_id", \'NULL\'), \'null\') AS "person_id"' in sql
-        assert 'NULLIF(NULLIF("row_count", \'NULL\'), \'null\') AS "row_count"' in sql
-        assert "TO 'gs://bucket/2025-01-01/artifacts/converted_files/person.parquet'" in sql
+        expected = load_reference_sql("convert_parquet_string_nulls_to_null_standard.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
         assert result == "bucket/2025-01-01/artifacts/converted_files/person.parquet"
 
     @patch('core.file_processor.utils.get_columns_from_file')
@@ -269,8 +291,8 @@ class TestFileProcessorNullStringCleanup:
         )
 
         sql = mock_execute.call_args[0][0]
-        assert 'NULLIF(NULLIF("offset", \'NULL\'), \'null\') AS "offset"' in sql
-        assert 'NULLIF(NULLIF(offset, \'NULL\'), \'null\') AS offset' not in sql
+        expected = load_reference_sql("convert_parquet_string_nulls_to_null_offset_column.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
 
 class TestFileProcessorStaticMethods:
@@ -283,10 +305,8 @@ class TestFileProcessorStaticMethods:
             parquet_columns=["person_id", "gender_concept_id", "year_of_birth"]
         )
 
-        assert "COPY (" in sql
-        assert "read_parquet" in sql
-        assert "CAST(person_id AS VARCHAR)" in sql
-        assert "CAST(gender_concept_id AS VARCHAR)" in sql
+        expected = load_reference_sql("generate_process_incoming_parquet_sql_standard_columns_v2.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
     def test_generate_process_incoming_parquet_sql_offset_column(self):
         """Test Parquet SQL generation with offset reserved keyword."""
@@ -295,8 +315,8 @@ class TestFileProcessorStaticMethods:
             parquet_columns=["note_nlp_id", "offset", "snippet"]
         )
 
-        assert '"offset"' in sql
-        assert "note_nlp_id" in sql
+        expected = load_reference_sql("generate_process_incoming_parquet_sql_offset_column.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
     def test_generate_csv_to_parquet_sql_no_options(self):
         """Test CSV to Parquet SQL generation without options."""
@@ -306,10 +326,8 @@ class TestFileProcessorStaticMethods:
             conversion_options=[]
         )
 
-        assert "COPY (" in sql
-        assert "read_csv" in sql
-        assert "null_padding=True" in sql
-        assert "ALL_VARCHAR=True" in sql
+        expected = load_reference_sql("generate_csv_to_parquet_sql_no_options.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
     def test_generate_csv_to_parquet_sql_with_options(self):
         """Test CSV to Parquet SQL generation with conversion options."""
@@ -319,8 +337,8 @@ class TestFileProcessorStaticMethods:
             conversion_options=['store_rejects=True', 'ignore_errors=True']
         )
 
-        assert "store_rejects=True" in sql
-        assert "ignore_errors=True" in sql
+        expected = load_reference_sql("generate_csv_to_parquet_sql_with_string_options.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
     def test_format_list_empty(self):
         """Test format_list with empty list."""

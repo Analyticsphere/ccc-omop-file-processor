@@ -5,12 +5,33 @@ Tests OMOP CDM operations including file upgrades, BigQuery table creation,
 cdm_source population, and derived data generation.
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, call, mock_open, patch
 
 import pytest
 
 import core.constants as constants
 from core.omop_client import OMOPClient
+
+# Path to reference SQL files
+REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "omop_client"
+
+
+def normalize_sql(sql: str) -> str:
+    """
+    Normalize SQL for comparison by removing extra whitespace.
+    Makes SQL comparison whitespace-insensitive.
+    """
+    lines = [line.strip() for line in sql.strip().split('\n')]
+    lines = [line for line in lines if line]
+    return '\n'.join(lines)
+
+
+def load_reference_sql(filename: str) -> str:
+    """Load reference SQL from file."""
+    filepath = REFERENCE_DIR / filename
+    with open(filepath, 'r') as f:
+        return f.read()
 
 
 class TestOMOPClientUpgradeFile:
@@ -270,9 +291,8 @@ class TestOMOPClientStaticMethods:
             normalized_file_path="bucket/2025-01-01/artifacts/converted_files/person.parquet"
         )
 
-        assert "COPY (" in sql
-        assert "SELECT * FROM table" in sql
-        assert "read_parquet" in sql
+        expected = load_reference_sql("generate_upgrade_file_sql_simple.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
     def test_generate_populate_cdm_source_sql(self):
         """Test SQL generation for cdm_source population."""
@@ -292,7 +312,5 @@ class TestOMOPClientStaticMethods:
             output_path="gs://test-bucket/cdm_source.parquet"
         )
 
-        assert "COPY (" in sql
-        assert "Test Site" in sql
-        assert "v5.0_24-JAN-25" in sql
-        assert "5.4" in sql
+        expected = load_reference_sql("generate_populate_cdm_source_sql_simple.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
