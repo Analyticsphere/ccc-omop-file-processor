@@ -5,12 +5,33 @@ Tests vocabulary management including CSV to Parquet conversion,
 optimized vocabulary file creation, and BigQuery loading.
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
 import core.constants as constants
 from core.vocab_manager import VocabularyManager
+
+# Path to reference SQL files
+REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "vocab_manager"
+
+
+def normalize_sql(sql: str) -> str:
+    """
+    Normalize SQL for comparison by removing extra whitespace.
+    Makes SQL comparison whitespace-insensitive.
+    """
+    lines = [line.strip() for line in sql.strip().split('\n')]
+    lines = [line for line in lines if line]
+    return '\n'.join(lines)
+
+
+def load_reference_sql(filename: str) -> str:
+    """Load reference SQL from file."""
+    filepath = REFERENCE_DIR / filename
+    with open(filepath, 'r') as f:
+        return f.read()
 
 
 class TestVocabularyManagerInit:
@@ -248,9 +269,8 @@ class TestVocabularyManagerStaticMethods:
             "gs://vocab-bucket/vocab/v5.0/optimized_vocab/vocabulary.parquet"
         )
 
-        assert "SELECT vocabulary_version" in sql
-        assert "FROM read_parquet" in sql
-        assert "WHERE vocabulary_id = 'None'" in sql
+        expected = load_reference_sql("generate_vocab_version_query_sql_standard.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
     def test_generate_convert_vocab_sql_standard_columns(self):
         """Test CSV to Parquet SQL generation with standard columns."""
@@ -260,12 +280,8 @@ class TestVocabularyManagerStaticMethods:
             csv_columns=["concept_id", "concept_name", "domain_id"]
         )
 
-        assert "COPY (" in sql
-        assert "read_csv" in sql
-        assert "delim='\t'" in sql
-        assert "concept_id" in sql
-        assert "concept_name" in sql
-        assert "domain_id" in sql
+        expected = load_reference_sql("generate_convert_vocab_sql_standard_columns.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
     def test_generate_convert_vocab_sql_with_date_columns(self):
         """Test CSV to Parquet SQL generation with date columns."""
@@ -275,11 +291,8 @@ class TestVocabularyManagerStaticMethods:
             csv_columns=["concept_id", "valid_start_date", "valid_end_date"]
         )
 
-        # Date columns should have special CAST handling
-        assert "CAST(STRPTIME" in sql
-        assert "valid_start_date" in sql
-        assert "valid_end_date" in sql
-        assert "%Y%m%d" in sql
+        expected = load_reference_sql("generate_convert_vocab_sql_with_date_columns.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
     def test_generate_optimized_vocab_sql(self):
         """Test SQL generation for optimized vocabulary file creation."""
@@ -289,12 +302,8 @@ class TestVocabularyManagerStaticMethods:
             output_path="gs://vocab-bucket/vocab/v5.0/optimized_vocab/optimized_vocab_file.parquet"
         )
 
-        assert "COPY (" in sql
-        assert "SELECT DISTINCT" in sql
-        assert "c1.concept_id AS concept_id" in sql
-        assert "LEFT JOIN" in sql
-        assert "concept_relationship" in sql
-        assert "target_concept_id" in sql
+        expected = load_reference_sql("generate_optimized_vocab_sql_standard.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
 
 class TestVocabularyManagerIntegration:

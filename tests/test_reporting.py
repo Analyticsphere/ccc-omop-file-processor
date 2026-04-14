@@ -6,6 +6,7 @@ and consolidation of temporary report files.
 """
 
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -13,6 +14,26 @@ import pytest
 import core.constants as constants
 import core.utils as utils
 from core.reporting import ReportGenerator
+
+# Path to reference SQL files
+REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "reporting"
+
+
+def normalize_sql(sql: str) -> str:
+    """
+    Normalize SQL for comparison by removing extra whitespace.
+    Makes SQL comparison whitespace-insensitive.
+    """
+    lines = [line.strip() for line in sql.strip().split('\n')]
+    lines = [line for line in lines if line]
+    return '\n'.join(lines)
+
+
+def load_reference_sql(filename: str) -> str:
+    """Load reference SQL from file."""
+    filepath = REFERENCE_DIR / filename
+    with open(filepath, 'r') as f:
+        return f.read()
 
 
 class TestReportGeneratorInit:
@@ -383,10 +404,8 @@ class TestReportGeneratorConsolidateReportFiles:
         mock_execute_sql.assert_called_once()
         sql = mock_execute_sql.call_args[0][0]
 
-        # SQL should contain UNION ALL with all three files
-        assert "UNION ALL" in sql
-        assert "SELECT * FROM read_parquet('s3://test-bucket/" in sql
-        assert sql.count("SELECT * FROM read_parquet") == 3
+        expected = load_reference_sql("consolidate_report_files_multiple.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
     @patch('core.reporting.utils.execute_duckdb_sql')
     @patch('core.reporting.storage.get_uri')
@@ -445,9 +464,8 @@ class TestReportGeneratorConsolidateReportFiles:
         mock_execute_sql.assert_called_once()
         sql = mock_execute_sql.call_args[0][0]
 
-        # Should not have UNION ALL with single file
-        assert "UNION ALL" not in sql
-        assert "SELECT * FROM read_parquet" in sql
+        expected = load_reference_sql("consolidate_report_files_single.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
 
 class TestReportGeneratorConsolidationSQL:
@@ -464,16 +482,7 @@ class TestReportGeneratorConsolidationSQL:
 
         sql = ReportGenerator.generate_report_consolidation_sql(select_statement, output_path)
 
-        # Load golden file
-        with open('tests/reference/sql/reporting/generate_report_consolidation_sql_standard.sql', 'r') as f:
-            expected_sql = f.read()
-
-        # Normalize SQL for whitespace-insensitive comparison
-        def normalize_sql(sql: str) -> str:
-            lines = [line.strip() for line in sql.strip().split('\n')]
-            lines = [line for line in lines if line]
-            return '\n'.join(lines)
-
+        expected_sql = load_reference_sql("generate_report_consolidation_sql_standard.sql")
         assert normalize_sql(sql) == normalize_sql(expected_sql)
 
     def test_returns_string(self):
@@ -498,16 +507,7 @@ class TestReportGeneratorDateDatetimeDefaultCountSQL:
 
         sql = ReportGenerator.generate_date_datetime_default_count_sql(table_uri, field_name, default_value)
 
-        # Load golden file
-        with open('tests/reference/sql/reporting/generate_date_datetime_default_count_sql_standard.sql', 'r') as f:
-            expected_sql = f.read()
-
-        # Normalize SQL for whitespace-insensitive comparison
-        def normalize_sql(sql: str) -> str:
-            lines = [line.strip() for line in sql.strip().split('\n')]
-            lines = [line for line in lines if line]
-            return '\n'.join(lines)
-
+        expected_sql = load_reference_sql("generate_date_datetime_default_count_sql_standard.sql")
         assert normalize_sql(sql) == normalize_sql(expected_sql)
 
     def test_matches_golden_file_timestamp(self):
@@ -518,16 +518,7 @@ class TestReportGeneratorDateDatetimeDefaultCountSQL:
 
         sql = ReportGenerator.generate_date_datetime_default_count_sql(table_uri, field_name, default_value)
 
-        # Load golden file
-        with open('tests/reference/sql/reporting/generate_date_datetime_default_count_sql_timestamp.sql', 'r') as f:
-            expected_sql = f.read()
-
-        # Normalize SQL for whitespace-insensitive comparison
-        def normalize_sql(sql: str) -> str:
-            lines = [line.strip() for line in sql.strip().split('\n')]
-            lines = [line for line in lines if line]
-            return '\n'.join(lines)
-
+        expected_sql = load_reference_sql("generate_date_datetime_default_count_sql_timestamp.sql")
         assert normalize_sql(sql) == normalize_sql(expected_sql)
 
 
@@ -619,11 +610,8 @@ class TestTypeConceptBreakdownSQL:
 
         sql = ReportGenerator.generate_type_concept_breakdown_sql(table_uri, concept_uri, type_field)
 
-        # Load golden file
-        with open('tests/reference/sql/reporting/generate_type_concept_breakdown_sql_standard.sql', 'r') as f:
-            expected_sql = f.read()
-
-        assert sql.strip() == expected_sql.strip()
+        expected_sql = load_reference_sql("generate_type_concept_breakdown_sql_standard.sql")
+        assert normalize_sql(sql) == normalize_sql(expected_sql)
 
     def test_returns_string(self):
         """Test that the function returns a string."""
@@ -632,6 +620,54 @@ class TestTypeConceptBreakdownSQL:
         type_field = "visit_type_concept_id"
 
         sql = ReportGenerator.generate_type_concept_breakdown_sql(table_uri, concept_uri, type_field)
+
+        assert isinstance(sql, str)
+        assert len(sql) > 0
+
+
+class TestVocabularyBreakdownSQL:
+    """Tests for generate_vocabulary_breakdown_sql static method."""
+
+    def test_matches_golden_file(self):
+        """Test that generated SQL matches the golden file."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet"
+        concept_uri = "gs://vocab-bucket/v5.0/optimized/concept.parquet"
+        concept_field = "condition_concept_id"
+
+        sql = ReportGenerator.generate_vocabulary_breakdown_sql(table_uri, concept_uri, concept_field, is_source=False)
+
+        expected_sql = load_reference_sql("generate_vocabulary_breakdown_sql_standard.sql")
+        assert normalize_sql(sql) == normalize_sql(expected_sql)
+
+    def test_returns_string(self):
+        """Test that the function returns a string."""
+        table_uri = "gs://test-bucket/table.parquet"
+        concept_uri = "gs://vocab-bucket/concept.parquet"
+        concept_field = "condition_concept_id"
+
+        sql = ReportGenerator.generate_vocabulary_breakdown_sql(table_uri, concept_uri, concept_field, is_source=True)
+
+        assert isinstance(sql, str)
+        assert len(sql) > 0
+
+
+class TestRowCountSQL:
+    """Tests for generate_row_count_sql static method."""
+
+    def test_matches_golden_file(self):
+        """Test that generated SQL matches the golden file."""
+        table_uri = "gs://test-bucket/2025-01-01/artifacts/omop_etl/visit_occurrence/visit_occurrence.parquet"
+
+        sql = ReportGenerator.generate_row_count_sql(table_uri)
+
+        expected_sql = load_reference_sql("generate_row_count_sql_standard.sql")
+        assert normalize_sql(sql) == normalize_sql(expected_sql)
+
+    def test_returns_string(self):
+        """Test that the function returns a string."""
+        table_uri = "gs://test-bucket/table.parquet"
+
+        sql = ReportGenerator.generate_row_count_sql(table_uri)
 
         assert isinstance(sql, str)
         assert len(sql) > 0
@@ -880,11 +916,8 @@ class TestInvalidConceptIdSQL:
 
         sql = ReportGenerator.generate_invalid_concept_id_sql(table_uri, concept_uri, concept_field)
 
-        # Load golden file
-        with open('tests/reference/sql/reporting/generate_invalid_concept_id_sql_standard.sql', 'r') as f:
-            expected_sql = f.read()
-
-        assert sql.strip() == expected_sql.strip()
+        expected_sql = load_reference_sql("generate_invalid_concept_id_sql_standard.sql")
+        assert normalize_sql(sql) == normalize_sql(expected_sql)
 
     def test_returns_string(self):
         """Test that the function returns a string."""
@@ -897,22 +930,16 @@ class TestInvalidConceptIdSQL:
         assert isinstance(sql, str)
         assert len(sql) > 0
 
-    def test_sql_contains_required_components(self):
-        """Test that generated SQL contains all required components."""
+    def test_matches_golden_file_measurement(self):
+        """Test that generated SQL matches golden file with measurement_concept_id."""
         table_uri = "gs://test-bucket/table.parquet"
         concept_uri = "gs://vocab-bucket/concept.parquet"
         concept_field = "measurement_concept_id"
 
         sql = ReportGenerator.generate_invalid_concept_id_sql(table_uri, concept_uri, concept_field)
 
-        # Check for key SQL components
-        assert "SELECT COUNT(*) as invalid_count" in sql
-        assert f"FROM read_parquet('{table_uri}') t" in sql
-        assert f"LEFT JOIN read_parquet('{concept_uri}') c" in sql
-        assert f"ON t.{concept_field} = c.concept_id" in sql
-        assert f"WHERE t.{concept_field} IS NOT NULL" in sql
-        assert f"AND t.{concept_field} != 0" in sql
-        assert "AND c.concept_id IS NULL" in sql
+        expected = load_reference_sql("generate_invalid_concept_id_sql_measurement.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
 
 class TestCreateInvalidConceptIdArtifacts:
@@ -1117,11 +1144,8 @@ class TestPersonIdReferentialIntegritySQL:
 
         sql = ReportGenerator.generate_person_id_referential_integrity_sql(table_uri, person_uri)
 
-        # Load golden file
-        with open('tests/reference/sql/reporting/generate_person_id_referential_integrity_sql_standard.sql', 'r') as f:
-            expected_sql = f.read()
-
-        assert sql.strip() == expected_sql.strip()
+        expected_sql = load_reference_sql("generate_person_id_referential_integrity_sql_standard.sql")
+        assert normalize_sql(sql) == normalize_sql(expected_sql)
 
     def test_returns_string(self):
         """Test that the function returns a string."""
@@ -1394,20 +1418,11 @@ class TestTimeSeriesRowCountSQL:
             table_uri, date_field, start_date, end_date
         )
 
-        # Load golden file
-        with open('tests/reference/sql/reporting/generate_time_series_row_count_sql_standard.sql', 'r') as f:
-            expected_sql = f.read()
-
-        # Normalize SQL for whitespace-insensitive comparison
-        def normalize_sql(sql: str) -> str:
-            lines = [line.strip() for line in sql.strip().split('\n')]
-            lines = [line for line in lines if line]
-            return '\n'.join(lines)
-
+        expected_sql = load_reference_sql("generate_time_series_row_count_sql_standard.sql")
         assert normalize_sql(sql) == normalize_sql(expected_sql)
 
-    def test_uses_correct_date_field(self):
-        """Test that SQL uses the specified date field."""
+    def test_matches_golden_file_measurement_date(self):
+        """Test that generated SQL matches golden file with measurement_date."""
         table_uri = "gs://bucket/table.parquet"
         date_field = "measurement_date"
         start_date = "1970-01-01"
@@ -1417,12 +1432,11 @@ class TestTimeSeriesRowCountSQL:
             table_uri, date_field, start_date, end_date
         )
 
-        # Verify the date field appears in the SQL
-        assert "measurement_date" in sql
-        assert "EXTRACT(YEAR FROM measurement_date)" in sql
+        expected = load_reference_sql("generate_time_series_row_count_sql_measurement_date.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
-    def test_includes_date_range_filter(self):
-        """Test that SQL includes proper date range filtering."""
+    def test_matches_golden_file_observation_date(self):
+        """Test that generated SQL matches golden file with observation_date."""
         table_uri = "gs://bucket/table.parquet"
         date_field = "observation_date"
         start_date = "1970-01-01"
@@ -1432,10 +1446,8 @@ class TestTimeSeriesRowCountSQL:
             table_uri, date_field, start_date, end_date
         )
 
-        # Verify date range filters are present
-        assert ">= '1970-01-01'" in sql
-        assert "<= '2025-12-31'" in sql
-        assert "IS NOT NULL" in sql
+        expected = load_reference_sql("generate_time_series_row_count_sql_observation_date.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
 
 
 class TestCreateTimeSeriesRowCountArtifacts:
