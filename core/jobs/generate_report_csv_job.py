@@ -5,6 +5,10 @@ Cloud Run Job entry point for generating delivery report CSV files.
 This job generates a delivery report CSV file containing information about
 the data delivery. The CSV serves as a data source for visual reporting.
 
+When ARTIFACT_TYPE is set, only that specific artifact type is generated
+(or consolidated). When omitted, all artifacts are generated and consolidated
+serially (legacy behavior).
+
 Required Environment Variables:
     SITE: Site identifier
     GCS_BUCKET: GCS bucket path for the site
@@ -15,6 +19,11 @@ Required Environment Variables:
     TARGET_VOCABULARY_VERSION: Target vocabulary version
     TARGET_CDM_VERSION: Target OMOP CDM version
 
+Optional Environment Variables:
+    ARTIFACT_TYPE: Specific artifact type to generate, or "consolidate"
+                   to merge all artifacts into final CSV. When omitted,
+                   runs all artifact types and consolidation serially.
+
 Exit Codes:
     0: Success
     1: Failure
@@ -24,6 +33,7 @@ import os
 import sys
 import traceback
 
+import core.constants as constants
 import core.reporting as reporting
 import core.utils as utils
 
@@ -91,10 +101,23 @@ def main():
             "target_cdm_version": env_values['TARGET_CDM_VERSION']
         }
 
-        # Execute report CSV generation
-        utils.logger.info(f"Generating delivery report CSV for {env_values['SITE']} - {env_values['DELIVERY_DATE']}")
         generator = reporting.ReportGenerator(report_data)
-        generator.generate()
+
+        # Determine execution mode based on ARTIFACT_TYPE
+        artifact_type = os.getenv('ARTIFACT_TYPE')
+
+        if artifact_type is None:
+            # Legacy mode: generate all artifacts and consolidate serially
+            utils.logger.info(f"Generating all report artifacts for {env_values['SITE']} - {env_values['DELIVERY_DATE']}")
+            generator.generate()
+        elif artifact_type == constants.REPORT_ARTIFACT_CONSOLIDATE:
+            # Consolidation-only mode
+            utils.logger.info(f"Consolidating report artifacts for {env_values['SITE']} - {env_values['DELIVERY_DATE']}")
+            generator.consolidate()
+        else:
+            # Single artifact type mode
+            utils.logger.info(f"Generating '{artifact_type}' artifacts for {env_values['SITE']} - {env_values['DELIVERY_DATE']}")
+            generator.generate_artifact(artifact_type)
 
         utils.logger.info("=" * 80)
         utils.logger.info("Cloud Run Job: Generate Report CSV - SUCCESS")
