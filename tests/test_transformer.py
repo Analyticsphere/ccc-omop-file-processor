@@ -110,9 +110,8 @@ class TestTransformerPlaceholderToFilePath:
         sql = "SELECT * FROM read_parquet('@CONDITION_OCCURRENCE')"
         result = transformer.placeholder_to_file_path(sql)
 
-        assert "@CONDITION_OCCURRENCE" not in result
-        assert "bucket/2025-01-01/harmonized/*" in result
-        assert ".parquet" in result
+        expected = load_reference_sql("placeholder_to_file_path_single.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
 
     def test_placeholder_to_file_path_handles_multiple_placeholders(self):
         """Test that multiple placeholders are all replaced."""
@@ -131,9 +130,8 @@ class TestTransformerPlaceholderToFilePath:
         """
         result = transformer.placeholder_to_file_path(sql)
 
-        assert "@CONDITION_OCCURRENCE" not in result
-        assert "@DRUG_EXPOSURE" not in result
-        assert result.count("bucket/2025-01-01/harmonized/*") >= 2
+        expected = load_reference_sql("placeholder_to_file_path_multiple.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
 
     def test_placeholder_to_file_path_no_placeholders(self):
         """Test that SQL without placeholders remains unchanged."""
