@@ -470,14 +470,15 @@ class ParticipantFilter:
         )
 
         # Per-table "delivery not in Connect" artifacts
-        converted_files_dir = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}"
-        table_files = utils.list_files(bucket, f"{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}", constants.PARQUET)
+        converted_files_prefix = f"{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}"
+        table_filenames = utils.list_files(bucket, converted_files_prefix, constants.PARQUET)
 
-        for table_file in sorted(table_files):
-            table_name = utils.get_table_name_from_path(table_file)
-            table_uri = storage.get_uri(table_file)
+        for table_filename in sorted(table_filenames):
+            table_name = utils.get_table_name_from_path(table_filename)
+            table_path = f"{bucket}/{converted_files_prefix}{table_filename}"
+            table_uri = storage.get_uri(table_path)
 
-            actual_columns = utils.get_columns_from_file(table_file)
+            actual_columns = utils.get_columns_from_file(table_path)
             if not ParticipantFilter._has_person_id_column(actual_columns):
                 continue
 
@@ -509,11 +510,7 @@ class ParticipantFilter:
 
             delivery_only_count, delivery_only_ids = delivery_not_in_connect[0] if delivery_not_in_connect else (0, "")
             save_artifact(
-                name=f"Number of delivery patient IDs not in Connect data: {table_name}",
+                name=f"Delivered Connect ID values not found in Connect database: {table_name}",
                 value_as_string=delivery_only_ids or "",
                 value_as_number=float(delivery_only_count)
-            )
-            save_artifact(
-                name=f"Delivery patient IDs not in Connect data: {table_name}",
-                value_as_string=delivery_only_ids or ""
             )

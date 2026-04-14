@@ -390,10 +390,10 @@ class TestCreateConnectEligibilityReportArtifacts:
         mock_get_parquet_path.return_value = "test-bucket/2025-01-15/artifacts/converted_files/person.parquet"
         mock_get_uri.side_effect = lambda path: path if path.startswith("gs://") else f"gs://{path}"
 
-        # Two tables in converted_files: condition_occurrence and person
+        # list_files returns filenames only, not full paths
         mock_list_files.return_value = [
-            "test-bucket/2025-01-15/artifacts/converted_files/condition_occurrence.parquet",
-            "test-bucket/2025-01-15/artifacts/converted_files/person.parquet",
+            "condition_occurrence.parquet",
+            "person.parquet",
         ]
 
         # parquet_file_exists: person parquet (initial check), then invalid_rows for each table
@@ -549,40 +549,22 @@ class TestCreateConnectEligibilityReportArtifacts:
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Number of delivery patient IDs not in Connect data: condition_occurrence",
+                name="Delivered Connect ID values not found in Connect database: condition_occurrence",
                 value_as_string="7001",
                 value_as_concept_id=None,
                 value_as_number=1.0
-            ),
-            call(
-                delivery_date="2025-01-15",
-                artifact_bucket="test-bucket",
-                concept_id=0,
-                name="Delivery patient IDs not in Connect data: condition_occurrence",
-                value_as_string="7001",
-                value_as_concept_id=None,
-                value_as_number=None
             ),
             # Per-table: person (with non-numeric connect_ids from invalid rows)
             call(
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
-                name="Number of delivery patient IDs not in Connect data: person",
+                name="Delivered Connect ID values not found in Connect database: person",
                 value_as_string="8001|8002|uuid-value",
                 value_as_concept_id=None,
                 value_as_number=3.0
             ),
-            call(
-                delivery_date="2025-01-15",
-                artifact_bucket="test-bucket",
-                concept_id=0,
-                name="Delivery patient IDs not in Connect data: person",
-                value_as_string="8001|8002|uuid-value",
-                value_as_concept_id=None,
-                value_as_number=None
-            ),
         ]
 
         assert mock_artifact.call_args_list == expected_artifact_calls
-        assert mock_artifact_instance.save_artifact.call_count == 13
+        assert mock_artifact_instance.save_artifact.call_count == 11
