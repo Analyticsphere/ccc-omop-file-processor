@@ -236,6 +236,43 @@ class StorageBackend:
 
         return files
 
+    def write_text_file(self, file_path: str, content: str) -> None:
+        """
+        Write a text file to the configured storage backend.
+
+        Args:
+            file_path: Path to file (without storage scheme)
+            content: Text content to write
+        """
+        if self.backend == constants.LOCAL_BACKEND:
+            self._write_text_file_local(file_path, content)
+        elif self.backend == constants.GCS_BACKEND:
+            self._write_text_file_gcs(file_path, content)
+        else:
+            raise ValueError(f"Unsupported storage backend: {self.backend}")
+
+    def _write_text_file_local(self, file_path: str, content: str) -> None:
+        """Write text file to local filesystem."""
+        path = self.strip_scheme(file_path)
+        if not path.startswith('/'):
+            data_root = os.getenv('DATA_ROOT', '/data')
+            path = f"{data_root}/{path}"
+
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w') as f:
+            f.write(content)
+
+    def _write_text_file_gcs(self, file_path: str, content: str) -> None:
+        """Write text file to GCS."""
+        path_without_prefix = self.strip_scheme(file_path)
+        bucket_name = path_without_prefix.split('/')[0]
+        blob_path = '/'.join(path_without_prefix.split('/')[1:])
+
+        storage_client = gcs_storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        blob.upload_from_string(content, content_type='text/plain')
+
     def delete_file(self, file_path: str) -> None:
         """
         Delete a file from the configured storage backend.

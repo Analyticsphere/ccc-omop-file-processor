@@ -220,6 +220,15 @@ REPORT_ARTIFACT_FINAL_ROW_COUNTS = "final_row_counts"
 REPORT_ARTIFACT_TIME_SERIES = "time_series"
 REPORT_ARTIFACT_CONSOLIDATE = "consolidate"
 
+CONNECT_STUDY_STATUSES = [
+    "Verified",
+    "Duplicate",
+    "Not Yet Verified",
+    "Cannot be Verified",
+    "No Longer Enrolling",
+    "Outreach Timed Out",
+]
+
 DELIVERY_DATE_REPORT_NAME = "Delivery date"
 SITE_DISPLAY_NAME_REPORT_NAME = "Site"
 FILE_DELIVERY_FORMAT_REPORT_NAME = "File delivery format"
