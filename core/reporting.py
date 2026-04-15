@@ -73,6 +73,7 @@ class ReportGenerator:
 
         # Generate the final, single report CSV file
         self._consolidate_report_files()
+        self._generate_connect_participant_study_summary()
 
     def generate_artifact(self, artifact_type: str) -> None:
         """
@@ -97,6 +98,7 @@ class ReportGenerator:
         """Consolidate all temporary report artifact files into the final CSV."""
         utils.logger.info("Consolidating report artifact files into final CSV")
         self._consolidate_report_files()
+        self._generate_connect_participant_study_summary()
 
     def _create_metadata_artifacts(self) -> None:
         """Create report artifacts documenting delivery and processing metadata."""
@@ -170,6 +172,113 @@ class ReportGenerator:
         # Generate and execute consolidation SQL
         sql = self.generate_report_consolidation_sql(select_statement, self.output_path)
         utils.execute_duckdb_sql(sql, "Unable to merge reporting artifacts")
+
+    def _generate_connect_participant_study_summary(self) -> None:
+        """
+        Generate a plain-text Connect participant study summary from the consolidated report CSV.
+
+        Reads the consolidated delivery report CSV and extracts Connect ID artifacts
+        to produce a human- and machine-readable summary file.
+        """
+        # Read consolidated CSV into a name->row lookup
+        read_sql = f"SELECT name, value_as_string, value_as_number FROM read_csv('{self.output_path}', header=true)"
+        rows = utils.execute_duckdb_sql(read_sql, "Unable to read consolidated report CSV", return_results=True)
+        if not rows:
+            utils.logger.warning("No report data found for Connect participant study summary")
+            return
+
+        artifacts = {}
+        for name, value_as_string, value_as_number in rows:
+            # Convert pipe-delimited IDs to comma-delimited for readability
+            ids = value_as_string.replace("|", ",") if value_as_string else ""
+            artifacts[name] = (ids, value_as_number)
+
+        lines = []
+
+        # Person record count
+        person_count_key = "Valid row count: person"
+        person_count = int(artifacts.get(person_count_key, (None, 0))[1] or 0)
+        lines.append(f"Person record count: {person_count}")
+        lines.append("")
+
+        # Per-table unmatched Connect IDs
+        schema = utils.get_cdm_schema(self.target_cdm_version)
+        tables_with_person_id = sorted(
+            table_name for table_name, table_info in schema.items()
+            if "person_id" in table_info.get("columns", {})
+        )
+
+        total_unmatched = 0
+        table_lines = []
+        for table_name in tables_with_person_id:
+            key = f"Delivered Connect ID values not found in Connect database: {table_name}"
+            ids_str, count = artifacts.get(key, ("", 0))
+            count = int(count or 0)
+            total_unmatched += count
+            ids = ids_str if ids_str else ""
+            table_lines.append(f"  {table_name}: {ids}")
+
+        lines.append(f"Delivered Connect IDs not found in Connect database ({total_unmatched}):")
+        lines.extend(table_lines)
+        lines.append("")
+
+        # Consent withdrawn
+        consent_yes = artifacts.get("Connect participant breakdown: Consent withdrawn status (Yes)", ("", 0))
+        consent_no = artifacts.get("Connect participant breakdown: Consent withdrawn status (No)", ("", 0))
+        consent_withdrawn_count = int(consent_yes[1] or 0)
+        consent_not_withdrawn_count = int(consent_no[1] or 0)
+        consent_ids = consent_yes[0] if consent_yes[0] else ""
+        lines.append(f"Consent withdrawn ({consent_withdrawn_count}): {consent_ids}")
+        lines.append(f"Consent not withdrawn: {consent_not_withdrawn_count}")
+        lines.append("")
+
+        # HIPAA revoked
+        hipaa_yes = artifacts.get("Connect participant breakdown: HIPAA revoked status (Yes)", ("", 0))
+        hipaa_no = artifacts.get("Connect participant breakdown: HIPAA revoked status (No)", ("", 0))
+        hipaa_revoked_count = int(hipaa_yes[1] or 0)
+        hipaa_not_revoked_count = int(hipaa_no[1] or 0)
+        hipaa_ids = hipaa_yes[0] if hipaa_yes[0] else ""
+        lines.append(f"HIPAA revoked ({hipaa_revoked_count}): {hipaa_ids}")
+        lines.append(f"HIPAA not revoked: {hipaa_not_revoked_count}")
+        lines.append("")
+
+        # Data destruction requested
+        destruction_yes = artifacts.get("Connect participant breakdown: Data destruction status (Yes)", ("", 0))
+        destruction_no = artifacts.get("Connect participant breakdown: Data destruction status (No)", ("", 0))
+        destruction_count = int(destruction_yes[1] or 0)
+        destruction_not_count = int(destruction_no[1] or 0)
+        destruction_ids = destruction_yes[0] if destruction_yes[0] else ""
+        lines.append(f"Data destruction requested ({destruction_count}): {destruction_ids}")
+        lines.append(f"Data destruction not requested: {destruction_not_count}")
+        lines.append("")
+
+        # Study status — always list all known statuses
+        for status in constants.CONNECT_STUDY_STATUSES:
+            key = f"Connect participant breakdown: Study status ({status})"
+            ids_str, count = artifacts.get(key, ("", 0))
+            count = int(count or 0)
+            ids = ids_str if ids_str else ""
+            if status == "Verified":
+                lines.append(f"Study status - Verified: {count}")
+            else:
+                lines.append(f"Study status - {status} ({count}): {ids}")
+
+        # Eligible participants not in delivery
+        eligible_key = "Number of eligible Connect patients not in delivery"
+        eligible_ids_str, eligible_count = artifacts.get(eligible_key, ("", 0))
+        eligible_count = int(eligible_count or 0)
+        eligible_ids = eligible_ids_str if eligible_ids_str else ""
+        lines.append("")
+        lines.append(f"Eligible participants not in delivery ({eligible_count}): {eligible_ids}")
+
+        summary_content = "\n".join(lines) + "\n"
+
+        summary_path = (
+            f"{self.bucket}/{self.delivery_date}/{constants.ArtifactPaths.REPORT.value}"
+            f"connect_participant_study_summary_{self.site}_{self.delivery_date}.txt"
+        )
+        storage.write_text_file(summary_path, summary_content)
+        utils.logger.info(f"Generated Connect participant study summary at {summary_path}")
 
     def _get_tmp_artifacts_path(self) -> str:
         """Get path to temporary report artifacts directory."""

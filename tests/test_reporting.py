@@ -93,6 +93,7 @@ class TestReportGeneratorInit:
 class TestReportGeneratorGenerate:
     """Tests for generate orchestration method."""
 
+    @patch.object(ReportGenerator, '_generate_connect_participant_study_summary')
     @patch.object(ReportGenerator, '_consolidate_report_files')
     @patch.object(ReportGenerator, '_create_time_series_row_count_artifacts')
     @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
@@ -102,8 +103,8 @@ class TestReportGeneratorGenerate:
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_invalid_concept_id_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_person_id_integrity, mock_create_final_row_count, mock_create_time_series, mock_consolidate):
-        """Test that generate calls metadata, invalid concept_id, type concept, vocabulary, date/datetime defaults, person_id referential integrity, final row count, time series row count, and consolidation methods."""
+    def test_generate_calls_all_methods(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_person_id_integrity, mock_create_final_row_count, mock_create_time_series, mock_consolidate, mock_summary):
+        """Test that generate calls metadata, invalid concept_id, type concept, vocabulary, date/datetime defaults, person_id referential integrity, final row count, time series row count, consolidation, and summary methods."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -127,7 +128,9 @@ class TestReportGeneratorGenerate:
         mock_create_final_row_count.assert_called_once()
         mock_create_time_series.assert_called_once()
         mock_consolidate.assert_called_once()
+        mock_summary.assert_called_once()
 
+    @patch.object(ReportGenerator, '_generate_connect_participant_study_summary')
     @patch.object(ReportGenerator, '_consolidate_report_files')
     @patch.object(ReportGenerator, '_create_time_series_row_count_artifacts')
     @patch.object(ReportGenerator, '_create_final_row_count_artifacts')
@@ -137,8 +140,8 @@ class TestReportGeneratorGenerate:
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_invalid_concept_id_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
-    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_person_id_integrity, mock_create_final_row_count, mock_create_time_series, mock_consolidate):
-        """Test that methods are called in correct order: metadata, type concept, vocabulary, date/datetime defaults, invalid concept_id, person_id referential integrity, final row count, time series row count, consolidation."""
+    def test_generate_calls_in_correct_order(self, mock_create_metadata, mock_create_invalid_concept_ids, mock_create_type_concept, mock_create_vocabulary, mock_create_date_defaults, mock_create_person_id_integrity, mock_create_final_row_count, mock_create_time_series, mock_consolidate, mock_summary):
+        """Test that methods are called in correct order: metadata, type concept, vocabulary, date/datetime defaults, invalid concept_id, person_id referential integrity, final row count, time series row count, consolidation, summary."""
         report_data = {
             "site": "test_site",
             "bucket": "test-bucket",
@@ -160,11 +163,12 @@ class TestReportGeneratorGenerate:
         mock_create_final_row_count.side_effect = lambda: call_order.append('final_row_count')
         mock_create_time_series.side_effect = lambda: call_order.append('time_series')
         mock_consolidate.side_effect = lambda: call_order.append('consolidate')
+        mock_summary.side_effect = lambda: call_order.append('summary')
 
         generator = ReportGenerator(report_data)
         generator.generate()
 
-        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'date_defaults', 'invalid_concept_ids', 'person_id_integrity', 'final_row_count', 'time_series', 'consolidate']
+        assert call_order == ['metadata', 'type_concept', 'vocabulary', 'date_defaults', 'invalid_concept_ids', 'person_id_integrity', 'final_row_count', 'time_series', 'consolidate', 'summary']
 
 
 class TestReportGeneratorGenerateArtifact:
@@ -228,17 +232,20 @@ class TestReportGeneratorConsolidate:
         "target_cdm_version": "5.4"
     }
 
+    @patch.object(ReportGenerator, '_generate_connect_participant_study_summary')
     @patch.object(ReportGenerator, '_consolidate_report_files')
-    def test_calls_consolidate_report_files(self, mock_consolidate):
-        """Test that consolidate() delegates to _consolidate_report_files."""
+    def test_calls_consolidate_report_files(self, mock_consolidate, mock_summary):
+        """Test that consolidate() delegates to _consolidate_report_files and generates summary."""
         generator = ReportGenerator(self.REPORT_DATA)
         generator.consolidate()
         mock_consolidate.assert_called_once()
+        mock_summary.assert_called_once()
 
+    @patch.object(ReportGenerator, '_generate_connect_participant_study_summary')
     @patch.object(ReportGenerator, '_create_type_concept_breakdown_artifacts')
     @patch.object(ReportGenerator, '_create_metadata_artifacts')
     @patch.object(ReportGenerator, '_consolidate_report_files')
-    def test_does_not_call_artifact_generators(self, mock_consolidate, mock_meta, mock_tc):
+    def test_does_not_call_artifact_generators(self, mock_consolidate, mock_meta, mock_tc, mock_summary):
         """Test that consolidate() does not generate any artifacts."""
         generator = ReportGenerator(self.REPORT_DATA)
         generator.consolidate()
@@ -1639,3 +1646,103 @@ class TestCreateTimeSeriesRowCountArtifacts:
         assert any('visit_start_date' in call for call in sql_calls)
         assert any('drug_exposure_start_date' in call for call in sql_calls)
         assert any('measurement_date' in call for call in sql_calls)
+
+
+class TestGenerateConnectParticipantStudySummary:
+    """Tests for Connect participant study summary text file generation."""
+
+    REPORT_DATA = {
+        "site": "test_site",
+        "bucket": "test-bucket",
+        "delivery_date": "2025-01-15",
+        "site_display_name": "Test Site",
+        "file_delivery_format": "parquet",
+        "delivered_cdm_version": "5.3",
+        "target_vocabulary_version": "v5.0 20-MAR-24",
+        "target_cdm_version": "5.4"
+    }
+
+    @patch('core.reporting.storage.write_text_file')
+    @patch('core.reporting.utils.get_cdm_schema')
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    def test_generates_summary_with_all_sections(self, mock_execute_sql, mock_get_schema, mock_write):
+        """Test that summary includes all expected sections."""
+        mock_get_schema.return_value = {
+            'person': {'columns': {'person_id': {}}},
+            'condition_occurrence': {'columns': {'person_id': {}, 'condition_concept_id': {}}},
+            'care_site': {'columns': {'care_site_id': {}}},
+        }
+
+        mock_execute_sql.return_value = [
+            ("Valid row count: person", None, 108),
+            ("Delivered Connect ID values not found in Connect database: person", "23541|7133488226145219", 2),
+            ("Delivered Connect ID values not found in Connect database: condition_occurrence", "", 0),
+            ("Connect participant breakdown: Consent withdrawn status (Yes)", "1002", 1),
+            ("Connect participant breakdown: Consent withdrawn status (No)", "", 102),
+            ("Connect participant breakdown: HIPAA revoked status (Yes)", "", 0),
+            ("Connect participant breakdown: HIPAA revoked status (No)", "", 103),
+            ("Connect participant breakdown: Data destruction status (Yes)", "", 0),
+            ("Connect participant breakdown: Data destruction status (No)", "", 103),
+            ("Connect participant breakdown: Study status (Verified)", "", 100),
+            ("Connect participant breakdown: Study status (Duplicate)", "8001|8002", 2),
+            ("Number of eligible Connect patients not in delivery", "9001|9002|9003", 3),
+        ]
+
+        generator = ReportGenerator(self.REPORT_DATA)
+        generator._generate_connect_participant_study_summary()
+
+        mock_write.assert_called_once()
+        written_path = mock_write.call_args[0][0]
+        written_content = mock_write.call_args[0][1]
+
+        assert "connect_participant_study_summary_test_site_2025-01-15.txt" in written_path
+
+        assert "Person record count: 108" in written_content
+        assert "  person: 23541,7133488226145219" in written_content
+        assert "  condition_occurrence: " in written_content
+        assert "Consent withdrawn (1): 1002" in written_content
+        assert "Consent not withdrawn: 102" in written_content
+        assert "HIPAA revoked (0): " in written_content
+        assert "HIPAA not revoked: 103" in written_content
+        assert "Data destruction requested (0): " in written_content
+        assert "Data destruction not requested: 103" in written_content
+        assert "Study status - Verified: 100" in written_content
+        assert "Study status - Duplicate (2): 8001,8002" in written_content
+        # Statuses not in data should still appear with count 0
+        assert "Study status - Not Yet Verified (0): " in written_content
+        assert "Study status - Cannot be Verified (0): " in written_content
+        assert "Eligible participants not in delivery (3): 9001,9002,9003" in written_content
+
+    @patch('core.reporting.storage.write_text_file')
+    @patch('core.reporting.utils.get_cdm_schema')
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    def test_skips_summary_when_no_report_data(self, mock_execute_sql, mock_get_schema, mock_write):
+        """Test that summary is skipped when consolidated CSV has no data."""
+        mock_execute_sql.return_value = []
+
+        generator = ReportGenerator(self.REPORT_DATA)
+        generator._generate_connect_participant_study_summary()
+
+        mock_write.assert_not_called()
+
+    @patch('core.reporting.storage.write_text_file')
+    @patch('core.reporting.utils.get_cdm_schema')
+    @patch('core.reporting.utils.execute_duckdb_sql')
+    def test_uses_target_cdm_version_for_table_list(self, mock_execute_sql, mock_get_schema, mock_write):
+        """Test that the table list comes from target_cdm_version."""
+        mock_get_schema.return_value = {
+            'person': {'columns': {'person_id': {}}},
+            'episode': {'columns': {'person_id': {}, 'episode_concept_id': {}}},
+        }
+
+        mock_execute_sql.return_value = [
+            ("Valid row count: person", None, 50),
+        ]
+
+        generator = ReportGenerator(self.REPORT_DATA)
+        generator._generate_connect_participant_study_summary()
+
+        mock_get_schema.assert_called_with("5.4")
+        written_content = mock_write.call_args[0][1]
+        assert "  episode: " in written_content
+        assert "  person: " in written_content
