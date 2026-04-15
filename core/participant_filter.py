@@ -252,7 +252,8 @@ class ParticipantFilter:
 
         Combines two sources of unmatched IDs:
         1. Numeric person_ids in the converted parquet that do not match any Connect_ID
-        2. Non-numeric connect_id values in the invalid_rows parquet (when present)
+        2. Non-numeric connect_id values in the invalid_rows parquet, when present. All Connect IDs are 8 digit numerics.
+        In the case connect_id is not delivered as a separate column, the SQL will look for non-numeric person_id values instead.
 
         Excludes -1 person_id values, which represent missing identifiers handled by a
         separate reporting bucket.
