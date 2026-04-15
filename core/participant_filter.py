@@ -260,18 +260,19 @@ class ParticipantFilter:
         non_numeric_cte = ""
         non_numeric_union = ""
 
-        if invalid_rows_uri and has_connect_id_column:
+        if invalid_rows_uri:
+            id_column = "connect_id" if has_connect_id_column else "person_id"
             non_numeric_cte = f""",
-            non_numeric_connect_ids AS (
-                SELECT DISTINCT CAST(connect_id AS VARCHAR) AS unmatched_id
+            non_numeric_ids AS (
+                SELECT DISTINCT CAST({id_column} AS VARCHAR) AS unmatched_id
                 FROM read_parquet('{invalid_rows_uri}')
-                WHERE connect_id IS NOT NULL
-                  AND TRIM(CAST(connect_id AS VARCHAR)) != ''
-                  AND TRY_CAST(connect_id AS BIGINT) IS NULL
+                WHERE {id_column} IS NOT NULL
+                  AND TRIM(CAST({id_column} AS VARCHAR)) != ''
+                  AND TRY_CAST({id_column} AS BIGINT) IS NULL
             )"""
             non_numeric_union = """
                 UNION
-                SELECT unmatched_id FROM non_numeric_connect_ids"""
+                SELECT unmatched_id FROM non_numeric_ids"""
 
         return f"""
         WITH table_ids AS (
@@ -482,18 +483,17 @@ class ParticipantFilter:
             if not ParticipantFilter._has_person_id_column(actual_columns):
                 continue
 
-            # Check for non-numeric connect_ids in invalid rows
+            # Check for non-numeric identifiers in invalid rows
             invalid_rows_path = utils.get_invalid_rows_path_from_path(f"{bucket}/{delivery_date}/{table_name}.parquet")
             invalid_rows_uri = ""
             has_connect_id_column = False
             if utils.parquet_file_exists(invalid_rows_path):
+                invalid_rows_uri = storage.get_uri(invalid_rows_path)
                 invalid_rows_columns = utils.get_columns_from_file(invalid_rows_path)
                 has_connect_id_column = any(
                     'connectid' in col.lower() or 'connect_id' in col.lower()
                     for col in invalid_rows_columns
                 )
-                if has_connect_id_column:
-                    invalid_rows_uri = storage.get_uri(invalid_rows_path)
 
             delivery_not_in_connect_sql = ParticipantFilter.generate_delivery_not_in_connect_sql(
                 table_uri=table_uri,

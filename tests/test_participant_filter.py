@@ -360,6 +360,18 @@ class TestParticipantFilterGenerateFilterSQL:
         expected = load_reference_sql("generate_delivery_not_in_connect_sql_without_invalid_rows.sql")
         assert normalize_sql(sql) == normalize_sql(expected)
 
+    def test_generate_delivery_not_in_connect_sql_with_invalid_rows_person_id_fallback(self):
+        """Test that non-numeric person_id values are included when no connect_id column exists."""
+        sql = ParticipantFilter.generate_delivery_not_in_connect_sql(
+            table_uri="gs://test-bucket/2025-01-15/artifacts/converted_files/condition_occurrence.parquet",
+            connect_data_uri="gs://test-bucket/2025-01-15/artifacts/connect_data/participant_status.parquet",
+            invalid_rows_uri="gs://test-bucket/2025-01-15/artifacts/invalid_rows/condition_occurrence.parquet",
+            has_connect_id_column=False
+        )
+
+        expected = load_reference_sql("generate_delivery_not_in_connect_sql_with_invalid_rows_person_id.sql")
+        assert normalize_sql(sql) == normalize_sql(expected)
+
 
 class TestCreateConnectEligibilityReportArtifacts:
     """Tests for Connect eligibility report artifacts."""
@@ -399,16 +411,18 @@ class TestCreateConnectEligibilityReportArtifacts:
         # parquet_file_exists: person parquet (initial check), then invalid_rows for each table
         mock_parquet_exists.side_effect = [
             True,   # person parquet exists (initial check)
-            False,  # condition_occurrence invalid_rows does not exist
+            True,   # condition_occurrence invalid_rows exists
             True,   # person invalid_rows exists
         ]
 
-        # get_columns_from_file: for condition_occurrence converted, then person converted,
-        # then person invalid_rows
+        # get_columns_from_file: for condition_occurrence converted,
+        # then condition_occurrence invalid_rows (no connect_id),
+        # then person converted, then person invalid_rows (has connect_id)
         mock_get_columns.side_effect = [
-            ['person_id', 'condition_concept_id'],  # condition_occurrence converted
-            ['person_id', 'gender_concept_id'],      # person converted
-            ['person_id', 'connect_id', 'gender_concept_id'],  # person invalid_rows
+            ['person_id', 'condition_concept_id'],                 # condition_occurrence converted
+            ['person_id', 'condition_concept_id'],                 # condition_occurrence invalid_rows
+            ['person_id', 'gender_concept_id'],                    # person converted
+            ['person_id', 'connect_id', 'gender_concept_id'],     # person invalid_rows
         ]
 
         mock_get_invalid_rows_path.side_effect = [
@@ -427,8 +441,8 @@ class TestCreateConnectEligibilityReportArtifacts:
             [("No", 104430631, 2, "1001|1002"), ("Yes", 353358909, 1, "1003")],
             # Connect not in delivery
             [(1, "9001")],
-            # Per-table delivery not in Connect: condition_occurrence (no invalid rows)
-            [(1, "7001")],
+            # Per-table delivery not in Connect: condition_occurrence (with invalid rows, person_id fallback)
+            [(2, "7001|bad-id")],
             # Per-table delivery not in Connect: person (with invalid rows connect_id)
             [(3, "8001|8002|uuid-value")],
         ]
@@ -453,8 +467,8 @@ class TestCreateConnectEligibilityReportArtifacts:
             expected_sql = load_reference_sql(expected_file)
             assert normalize_sql(executed) == normalize_sql(expected_sql)
 
-        # Verify per-table SQL: condition_occurrence (no invalid rows)
-        expected_condition_sql = load_reference_sql("generate_delivery_not_in_connect_sql_without_invalid_rows.sql")
+        # Verify per-table SQL: condition_occurrence (invalid rows with person_id fallback)
+        expected_condition_sql = load_reference_sql("generate_delivery_not_in_connect_sql_with_invalid_rows_person_id.sql")
         assert normalize_sql(executed_sql[5]) == normalize_sql(expected_condition_sql)
 
         # Verify per-table SQL: person (with invalid rows)
@@ -544,15 +558,15 @@ class TestCreateConnectEligibilityReportArtifacts:
                 value_as_concept_id=None,
                 value_as_number=1.0
             ),
-            # Per-table: condition_occurrence
+            # Per-table: condition_occurrence (with non-numeric person_id from invalid rows)
             call(
                 delivery_date="2025-01-15",
                 artifact_bucket="test-bucket",
                 concept_id=0,
                 name="Delivered Connect ID values not found in Connect database: condition_occurrence",
-                value_as_string="7001",
+                value_as_string="7001|bad-id",
                 value_as_concept_id=None,
-                value_as_number=1.0
+                value_as_number=2.0
             ),
             # Per-table: person (with non-numeric connect_ids from invalid rows)
             call(

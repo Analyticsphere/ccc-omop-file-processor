@@ -1,7 +1,7 @@
 WITH table_ids AS (
     SELECT DISTINCT
         TRY_CAST(person_id AS BIGINT) AS person_id
-    FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/converted_files/person.parquet')
+    FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/converted_files/condition_occurrence.parquet')
     WHERE TRY_CAST(person_id AS BIGINT) IS NOT NULL
       AND TRY_CAST(person_id AS BIGINT) != -1
 ),
@@ -19,11 +19,11 @@ numeric_not_in_connect AS (
     WHERE cd.connect_id IS NULL
 ),
 non_numeric_ids AS (
-    SELECT DISTINCT CAST(connect_id AS VARCHAR) AS unmatched_id
-    FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/invalid_rows/person.parquet')
-    WHERE connect_id IS NOT NULL
-      AND TRIM(CAST(connect_id AS VARCHAR)) != ''
-      AND TRY_CAST(connect_id AS BIGINT) IS NULL
+    SELECT DISTINCT CAST(person_id AS VARCHAR) AS unmatched_id
+    FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/invalid_rows/condition_occurrence.parquet')
+    WHERE person_id IS NOT NULL
+      AND TRIM(CAST(person_id AS VARCHAR)) != ''
+      AND TRY_CAST(person_id AS BIGINT) IS NULL
 ),
 all_unmatched AS (
     SELECT unmatched_id FROM numeric_not_in_connect
