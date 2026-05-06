@@ -23,7 +23,8 @@
                 'existing non-standard target remapped to standard code' AS vocab_harmonization_status,
                 tbl.condition_source_concept_id AS source_concept_id,
                 tbl.condition_concept_id AS previous_target_concept_id,
-                vocab.target_concept_id AS target_concept_id
+                vocab.target_concept_id AS target_concept_id,
+                vocab.relationship_id AS mapping_relationship_id
                     
                 FROM read_parquet('gs://synthea53/2025-01-01/artifacts/converted_files/condition_occurrence.parquet') AS tbl
                 INNER JOIN read_parquet('gs://vocabularies//v5.0_22-JAN-23/optimized/optimized_vocab_file.parquet') AS vocab
@@ -41,7 +42,9 @@
                 FROM read_parquet('gs://synthea53/2025-01-01/artifacts/converted_files/condition_occurrence.parquet') AS tbl
                 INNER JOIN read_parquet('gs://vocabularies//v5.0_22-JAN-23/optimized/optimized_vocab_file.parquet') AS vocab
                     ON tbl.condition_concept_id = vocab.concept_id
-                WHERE vocab.target_concept_id_domain = 'Meas Value'
+                WHERE 
+                    (vocab.target_concept_id_domain = 'Meas Value' OR
+                    vocab.relationship_id = 'Maps to value')
                 GROUP BY tbl.condition_occurrence_id
             
                 )
@@ -67,6 +70,7 @@
                 source_concept_id,
                 previous_target_concept_id,
                 target_concept_id,
+                mapping_relationship_id,
                 mv_cte.vh_value_as_concept_id,
                 
                 CASE
@@ -85,7 +89,10 @@
                 FROM base AS tbl
                 LEFT JOIN meas_value AS mv_cte
                     ON tbl.condition_occurrence_id = mv_cte.condition_occurrence_id
-                WHERE tbl.target_domain != 'Meas Value'
+                WHERE (
+                    tbl.target_domain != 'Meas Value' OR
+                    tbl.mapping_relationship_id != 'Maps to value'
+                )
             
             
             ) TO 'synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_target_remap.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)

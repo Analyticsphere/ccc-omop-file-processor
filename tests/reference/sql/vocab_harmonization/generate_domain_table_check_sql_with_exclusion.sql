@@ -28,8 +28,9 @@
                 tbl.condition_source_concept_id AS source_concept_id,
                 tbl.condition_concept_id AS previous_target_concept_id,
                 tbl.condition_concept_id AS target_concept_id,
+                vocab.relationship_id AS mapping_relationship_id,
                 CAST(NULL AS BIGINT) AS vh_value_as_concept_id,
-
+                
                 CASE
                     WHEN vocab.concept_id_domain = 'Visit' THEN 'visit_occurrence'
                     WHEN vocab.concept_id_domain = 'Condition' THEN 'condition_occurrence'
@@ -42,8 +43,8 @@
                     WHEN vocab.concept_id_domain = 'Specimen' THEN 'specimen'
                     WHEN vocab.concept_id_domain IS NULL THEN 'condition_occurrence'
                 ELSE 'condition_occurrence' END AS target_table
-
-
+        
+                    
                 FROM read_parquet('gs://synthea53/2025-01-01/artifacts/converted_files/condition_occurrence.parquet') AS tbl
                 LEFT JOIN vocab
                     ON tbl.condition_concept_id = vocab.concept_id
