@@ -811,7 +811,7 @@ class VocabHarmonizer:
                 LEFT JOIN meas_value AS mv_cte
                     ON tbl.{primary_key} = mv_cte.{primary_key}
                 WHERE (
-                    tbl.target_domain != 'Meas Value' OR
+                    tbl.target_domain != 'Meas Value' AND
                     tbl.mapping_relationship_id != 'Maps to value'
                 )
             """
@@ -978,7 +978,7 @@ class VocabHarmonizer:
                 LEFT JOIN meas_value AS mv_cte
                     ON tbl.{primary_key_column} = mv_cte.{primary_key_column}
                 WHERE (
-                    tbl.target_domain != 'Meas Value' OR
+                    tbl.target_domain != 'Meas Value' AND
                     tbl.mapping_relationship_id != 'Maps to value'
                 )
             """

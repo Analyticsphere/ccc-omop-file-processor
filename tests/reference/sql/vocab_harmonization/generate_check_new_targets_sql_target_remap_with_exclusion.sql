@@ -94,7 +94,7 @@
                 LEFT JOIN meas_value AS mv_cte
                     ON tbl.condition_occurrence_id = mv_cte.condition_occurrence_id
                 WHERE (
-                    tbl.target_domain != 'Meas Value' OR
+                    tbl.target_domain != 'Meas Value' AND
                     tbl.mapping_relationship_id != 'Maps to value'
                 )
             

@@ -28,7 +28,6 @@
                 tbl.condition_source_concept_id AS source_concept_id,
                 tbl.condition_concept_id AS previous_target_concept_id,
                 tbl.condition_concept_id AS target_concept_id,
-                vocab.relationship_id AS mapping_relationship_id,
                 CAST(NULL AS BIGINT) AS vh_value_as_concept_id,
                 
                 CASE
