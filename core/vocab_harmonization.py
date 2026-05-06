@@ -1065,7 +1065,7 @@ class VocabHarmonizer:
             f"{source_concept_id_column} AS source_concept_id",
             f"{target_concept_id_column} AS previous_target_concept_id",
             f"{target_concept_id_column} AS target_concept_id",
-            "vocab.relationship_id AS mapping_relationship_id"
+            #"vocab.relationship_id AS mapping_relationship_id"
         ]
 
         for metadata_column in metadata_columns:
