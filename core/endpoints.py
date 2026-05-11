@@ -600,6 +600,7 @@ def populate_cdm_source_file() -> tuple[str, int]:
         'source_description',
         'cdm_version',
         'cdm_release_date',
+        'date_format',
     ]
     missing_fields = _get_missing_fields(cdm_source_data, required_fields)
 
@@ -608,13 +609,14 @@ def populate_cdm_source_file() -> tuple[str, int]:
         return _missing_fields_response(missing_fields)
 
     try:
+        date_format: str = cdm_source_data['date_format']
         utils.logger.info(f"Checking cdm_source file for {cdm_source_data['source_release_date']} delivery from {cdm_source_data['cdm_source_abbreviation']}")
-        omop_client.OMOPClient.populate_cdm_source_file(cdm_source_data)
+        omop_client.OMOPClient.populate_cdm_source_file(cdm_source_data, date_format)
 
         return "cdm_source file populated if needed", 200
     except Exception as e:
         utils.logger.error(f"Unable to populate cdm_source file: {str(e)}")
-        return f"Unable to populate cdm_source file: {str(e)}", 500 
+        return f"Unable to populate cdm_source file: {str(e)}", 500
  
 
 @app.route('/harmonized_parquets_to_bq', methods=['POST'])

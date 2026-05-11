@@ -1,5 +1,6 @@
 import core.constants as constants
 import core.gcp_services as gcp_services
+import core.helpers.report_artifact as report_artifact
 import core.normalization as normalization
 import core.utils as utils
 from core.storage_backend import storage
@@ -93,7 +94,7 @@ class OMOPClient:
             raise Exception(f"DDL file error: {e}")
 
     @staticmethod
-    def populate_cdm_source_file(cdm_source_data: dict) -> None:
+    def populate_cdm_source_file(cdm_source_data: dict, date_format: str) -> None:
         """
         Populate cdm_source Parquet file with metadata if empty or non-existent.
 
@@ -101,6 +102,9 @@ class OMOPClient:
         - If file exists and has rows: do nothing (site provided data)
         - If file exists but is empty: populate with metadata
         - If file doesn't exist: create and populate with metadata
+
+        After population (or skip), creates a "Source system extraction date" report artifact
+        from the cdm_source.source_release_date value.
 
         Args:
             cdm_source_data: Dictionary containing CDM source metadata fields:
@@ -114,6 +118,7 @@ class OMOPClient:
             (optional) source_documentation_reference: Documentation URL
             (optional) cdm_etl_reference: ETL documentation URL
             cdm_release_date: Release date of CDM
+            date_format: Site-specific date format string for strptime parsing (e.g., '%Y-%m-%d')
         """
         bucket = cdm_source_data["bucket"]
         delivery_date = cdm_source_data["source_release_date"]
@@ -130,6 +135,7 @@ class OMOPClient:
 
             if row_count > 0:
                 utils.logger.info(f"cdm_source file has {row_count} rows, skipping population")
+                OMOPClient._create_source_extraction_date_artifact(bucket, delivery_date, cdm_source_path, date_format)
                 return
 
         utils.logger.info(f"Populating cdm_source Parquet file for {delivery_date} delivery")
@@ -137,6 +143,8 @@ class OMOPClient:
         vocab_version = utils.get_delivery_vocabulary_version(bucket, delivery_date)
         populate_sql = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, vocab_version, storage.get_uri(cdm_source_path))
         utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
+
+        OMOPClient._create_source_extraction_date_artifact(bucket, delivery_date, cdm_source_path, date_format)
 
     @staticmethod
     def generate_derived_data_from_harmonized(site: str, bucket: str, delivery_date: str, table_name: str, vocab_version: str, vocab_path: str) -> None:
@@ -290,3 +298,41 @@ class OMOPClient:
         """
 
         return cdm_source_statement
+
+    @staticmethod
+    def generate_source_extraction_date_sql(cdm_source_uri: str, date_format: str) -> str:
+        date_cast = normalization.Normalizer.generate_date_datetime_cast(
+            column_name="source_release_date",
+            column_type="DATE",
+            default_value="'1970-01-01'",
+            date_format=date_format,
+            datetime_format=""
+        )
+        return f"""
+            SELECT CAST(
+                {date_cast} AS VARCHAR
+            ) AS extraction_date
+            FROM read_parquet('{cdm_source_uri}')
+            LIMIT 1
+        """
+
+    @staticmethod
+    def _create_source_extraction_date_artifact(bucket: str, delivery_date: str, cdm_source_path: str, date_format: str) -> None:
+        cdm_source_uri = storage.get_uri(cdm_source_path)
+
+        extraction_date_sql = OMOPClient.generate_source_extraction_date_sql(cdm_source_uri, date_format)
+        result = utils.execute_duckdb_sql(extraction_date_sql, "Unable to read source_release_date from cdm_source", return_results=True)
+
+        extraction_date = result[0][0] if result and result[0][0] else "1970-01-01"
+
+        artifact = report_artifact.ReportArtifact(
+            delivery_date=delivery_date,
+            artifact_bucket=bucket,
+            concept_id=None,
+            name="Source system extraction date",
+            value_as_string=extraction_date,
+            value_as_concept_id=None,
+            value_as_number=None
+        )
+        artifact.save_artifact()
+        utils.logger.info(f"Created source system extraction date artifact: {extraction_date}")

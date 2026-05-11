@@ -757,7 +757,8 @@ class TestPopulateCdmSourceFileEndpoint:
             'cdm_holder': 'Test Holder',
             'source_description': 'Test description',
             'cdm_version': '5.4',
-            'cdm_release_date': '2025-01-01'
+            'cdm_release_date': '2025-01-01',
+            'date_format': '%Y-%m-%d'
         })
 
         assert response.status_code == 200
@@ -777,7 +778,8 @@ class TestPopulateCdmSourceFileEndpoint:
             'cdm_holder',
             'source_description',
             'cdm_version',
-            'cdm_release_date'
+            'cdm_release_date',
+            'date_format'
         )
 
     @patch('core.endpoints.omop_client.OMOPClient.populate_cdm_source_file')
@@ -793,7 +795,8 @@ class TestPopulateCdmSourceFileEndpoint:
             'cdm_holder': 'Test Holder',
             'source_description': 'Test description',
             'cdm_version': '5.4',
-            'cdm_release_date': '2025-01-01'
+            'cdm_release_date': '2025-01-01',
+            'date_format': '%Y-%m-%d'
         })
 
         assert response.status_code == 500
