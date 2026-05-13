@@ -748,8 +748,10 @@ class VocabHarmonizer:
             "'source_concept_id mapped to new target' AS vocab_harmonization_status",
             f"tbl.{source_concept_id_column} AS source_concept_id",
             f"tbl.{target_concept_id_column} AS previous_target_concept_id",
-            "vocab.target_concept_id AS target_concept_id"
+            "vocab.target_concept_id AS target_concept_id",
+            "vocab.relationship_id AS mapping_relationship_id"
         ]
+
         for metadata_column in metadata_columns:
             initial_select_exprs.append(metadata_column)
 
@@ -777,7 +779,10 @@ class VocabHarmonizer:
                 FROM read_parquet('@{source_table_name.upper()}') AS tbl
                 INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
                     ON tbl.{source_concept_id_column} = vocab.concept_id
-                WHERE vocab.target_concept_id_domain = 'Meas Value'
+                WHERE (
+                    vocab.target_concept_id_domain = 'Meas Value' OR
+                    vocab.relationship_id = 'Maps to value'
+                )
                 GROUP BY tbl.{primary_key}
             """
 
@@ -805,7 +810,10 @@ class VocabHarmonizer:
                 FROM base AS tbl
                 LEFT JOIN meas_value AS mv_cte
                     ON tbl.{primary_key} = mv_cte.{primary_key}
-                WHERE tbl.target_domain != 'Meas Value'
+                WHERE (
+                    IFNULL(tbl.target_domain, '') != 'Meas Value' AND
+                    IFNULL(tbl.mapping_relationship_id, '') != 'Maps to value'
+                )
             """
 
         cte_with_placeholders = f"""
@@ -905,8 +913,10 @@ class VocabHarmonizer:
             f"'{vocab_status_string}' AS vocab_harmonization_status",
             f"{source_concept_id_column} AS source_concept_id",
             f"tbl.{target_concept_id_column} AS previous_target_concept_id",
-            "vocab.target_concept_id AS target_concept_id"
+            "vocab.target_concept_id AS target_concept_id",
+            "vocab.relationship_id AS mapping_relationship_id"
         ]
+
         for metadata_column in metadata_columns:
             initial_select_exprs.append(metadata_column)
 
@@ -937,7 +947,9 @@ class VocabHarmonizer:
                 FROM read_parquet('@{source_table_name.upper()}') AS tbl
                 INNER JOIN read_parquet('@OPTIMIZED_VOCABULARY') AS vocab
                     ON tbl.{target_concept_id_column} = vocab.concept_id
-                WHERE vocab.target_concept_id_domain = 'Meas Value'
+                WHERE 
+                    (vocab.target_concept_id_domain = 'Meas Value' OR
+                    vocab.relationship_id = 'Maps to value')
                 GROUP BY tbl.{primary_key_column}
             """
 
@@ -965,7 +977,10 @@ class VocabHarmonizer:
                 FROM base AS tbl
                 LEFT JOIN meas_value AS mv_cte
                     ON tbl.{primary_key_column} = mv_cte.{primary_key_column}
-                WHERE tbl.target_domain != 'Meas Value'
+                WHERE (
+                    IFNULL(tbl.target_domain, '') != 'Meas Value' AND
+                    IFNULL(tbl.mapping_relationship_id, '') != 'Maps to value'
+                )
             """
 
         cte_with_placeholders = f"""
@@ -1049,8 +1064,10 @@ class VocabHarmonizer:
             "'domain check' AS vocab_harmonization_status",
             f"{source_concept_id_column} AS source_concept_id",
             f"{target_concept_id_column} AS previous_target_concept_id",
-            f"{target_concept_id_column} AS target_concept_id"
+            f"{target_concept_id_column} AS target_concept_id",
+            #"vocab.relationship_id AS mapping_relationship_id"
         ]
+
         for metadata_column in metadata_columns:
             select_exprs.append(metadata_column)
 
