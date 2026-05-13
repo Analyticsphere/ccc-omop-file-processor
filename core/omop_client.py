@@ -304,7 +304,7 @@ class OMOPClient:
         date_cast = normalization.Normalizer.generate_date_datetime_cast(
             column_name="source_release_date",
             column_type="DATE",
-            default_value="'1970-01-01'",
+            default_value=f"'{constants.DEFAULT_DATE}'",
             date_format=date_format,
             datetime_format=""
         )
@@ -323,7 +323,7 @@ class OMOPClient:
         extraction_date_sql = OMOPClient.generate_source_extraction_date_sql(cdm_source_uri, date_format)
         result = utils.execute_duckdb_sql(extraction_date_sql, "Unable to read source_release_date from cdm_source", return_results=True)
 
-        extraction_date = result[0][0] if result and result[0][0] else "1970-01-01"
+        extraction_date = result[0][0] if result and result[0][0] else constants.DEFAULT_DATE
 
         artifact = report_artifact.ReportArtifact(
             delivery_date=delivery_date,
