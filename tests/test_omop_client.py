@@ -146,10 +146,11 @@ class TestOMOPClientCreateMissingBQTables:
 class TestOMOPClientPopulateCdmSourceFile:
     """Tests for populate_cdm_source_file method."""
 
+    @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
     @patch('core.omop_client.utils.execute_duckdb_sql')
     @patch('core.omop_client.utils.get_delivery_vocabulary_version')
     @patch('core.omop_client.utils.parquet_file_exists')
-    def test_populate_cdm_source_file_does_not_exist(self, mock_file_exists, mock_get_vocab, mock_execute):
+    def test_populate_cdm_source_file_does_not_exist(self, mock_file_exists, mock_get_vocab, mock_execute, mock_artifact):
         """Test populating cdm_source when file doesn't exist."""
         mock_file_exists.return_value = False
         mock_get_vocab.return_value = "v5.0_24-JAN-25"
@@ -165,15 +166,17 @@ class TestOMOPClientPopulateCdmSourceFile:
             "cdm_version": "5.4"
         }
 
-        OMOPClient.populate_cdm_source_file(cdm_source_data)
+        OMOPClient.populate_cdm_source_file(cdm_source_data, "%Y-%m-%d")
 
         # Should execute SQL to populate file
         mock_execute.assert_called_once()
+        mock_artifact.assert_called_once()
 
+    @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
     @patch('core.omop_client.utils.execute_duckdb_sql')
     @patch('core.omop_client.utils.get_delivery_vocabulary_version')
     @patch('core.omop_client.utils.parquet_file_exists')
-    def test_populate_cdm_source_file_exists_but_empty(self, mock_file_exists, mock_get_vocab, mock_execute):
+    def test_populate_cdm_source_file_exists_but_empty(self, mock_file_exists, mock_get_vocab, mock_execute, mock_artifact):
         """Test populating cdm_source when file exists but is empty."""
         mock_file_exists.return_value = True
         mock_get_vocab.return_value = "v5.0_24-JAN-25"
@@ -195,14 +198,16 @@ class TestOMOPClientPopulateCdmSourceFile:
             "cdm_version": "5.4"
         }
 
-        OMOPClient.populate_cdm_source_file(cdm_source_data)
+        OMOPClient.populate_cdm_source_file(cdm_source_data, "%Y-%m-%d")
 
         # Should call execute twice (row count + population)
         assert mock_execute.call_count == 2
+        mock_artifact.assert_called_once()
 
+    @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
     @patch('core.omop_client.utils.execute_duckdb_sql')
     @patch('core.omop_client.utils.parquet_file_exists')
-    def test_populate_cdm_source_file_exists_with_data(self, mock_file_exists, mock_execute):
+    def test_populate_cdm_source_file_exists_with_data(self, mock_file_exists, mock_execute, mock_artifact):
         """Test that cdm_source is not populated when file exists with data."""
         mock_file_exists.return_value = True
         mock_execute.return_value = [[5]]  # File has 5 rows
@@ -218,10 +223,11 @@ class TestOMOPClientPopulateCdmSourceFile:
             "cdm_version": "5.4"
         }
 
-        OMOPClient.populate_cdm_source_file(cdm_source_data)
+        OMOPClient.populate_cdm_source_file(cdm_source_data, "%Y-%m-%d")
 
         # Should only call execute once for row count, not for population
         assert mock_execute.call_count == 1
+        mock_artifact.assert_called_once()
 
 
 class TestOMOPClientGenerateDerivedDataFromHarmonized:

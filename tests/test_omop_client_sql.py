@@ -177,3 +177,17 @@ class TestGeneratePopulateCdmSourceSql:
 
         expected = load_reference_sql("generate_populate_cdm_source_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateSourceExtractionDateSql:
+    """Tests for generate_source_extraction_date_sql()."""
+
+    def test_standard_extraction_date_sql(self):
+        """Test SQL generation for reading source_release_date from cdm_source."""
+        cdm_source_uri = "gs://test-bucket/2025-01-01/artifacts/converted_files/cdm_source.parquet"
+        date_format = "%Y-%m-%d"
+
+        result = OMOPClient.generate_source_extraction_date_sql(cdm_source_uri, date_format)
+
+        expected = load_reference_sql("generate_source_extraction_date_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
