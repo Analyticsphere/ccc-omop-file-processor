@@ -397,6 +397,49 @@ class TestGetConceptIdSourcePairs:
         assert pairs == []
 
 
+class TestGetPrimaryConceptPair:
+    """Tests for VocabHarmonizer._get_primary_concept_pair()."""
+
+    def _make_harmonizer(self, table_name: str) -> VocabHarmonizer:
+        return VocabHarmonizer(
+            file_path=f'gs://bucket/2025-01-01/{table_name}.csv',
+            cdm_version='5.4',
+            site='test_site',
+            vocab_version='v5.0',
+            vocab_path='vocabularies/',
+            project_id='test_project',
+            dataset_id='test_dataset'
+        )
+
+    def test_measurement_returns_primary_not_unit(self):
+        """Primary pair for measurement is measurement_concept_id, not unit_concept_id."""
+        harmonizer = self._make_harmonizer('measurement')
+        concept_id, source_concept_id = harmonizer._get_primary_concept_pair()
+        assert concept_id == 'measurement_concept_id'
+        assert source_concept_id == 'measurement_source_concept_id'
+
+    def test_specimen_returns_primary_with_empty_source(self):
+        """specimen has no source_concept_id column — should return empty string."""
+        harmonizer = self._make_harmonizer('specimen')
+        concept_id, source_concept_id = harmonizer._get_primary_concept_pair()
+        assert concept_id == 'specimen_concept_id'
+        assert source_concept_id == ''
+
+    def test_condition_occurrence(self):
+        """Single-pair table should return its only pair as primary."""
+        harmonizer = self._make_harmonizer('condition_occurrence')
+        concept_id, source_concept_id = harmonizer._get_primary_concept_pair()
+        assert concept_id == 'condition_concept_id'
+        assert source_concept_id == 'condition_source_concept_id'
+
+    def test_device_exposure_returns_primary_not_unit(self):
+        """Primary pair for device_exposure is device_concept_id, not unit_concept_id."""
+        harmonizer = self._make_harmonizer('device_exposure')
+        concept_id, source_concept_id = harmonizer._get_primary_concept_pair()
+        assert concept_id == 'device_concept_id'
+        assert source_concept_id == 'device_source_concept_id'
+
+
 class TestGenerateSourceConceptOverrideSql:
     """Tests for generate_source_concept_override_sql()."""
 

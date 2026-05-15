@@ -171,17 +171,16 @@ CDM_53_TO_54 = {
 
 TABLES_WITHOUT_SOURCE_ID = ["note", "specimen"]
 
-# Tables whose primary target concept_id column can't be derived from
-# a matching _source_concept_id pair in the schema (no source column exists).
-# Tables WITH a source_concept_id column are discovered dynamically via
-# utils.get_concept_id_source_pairs().
-SOURCE_TARGET_COLUMNS = {
-    "note": {
-        "target_concept_id": "note_class_concept_id"
-    },
-    "specimen": {
-        "target_concept_id": "specimen_concept_id"
-    }
+PRIMARY_CONCEPT_ID_COLUMNS = {
+    "visit_occurrence": "visit_concept_id",
+    "condition_occurrence": "condition_concept_id",
+    "drug_exposure": "drug_concept_id",
+    "procedure_occurrence": "procedure_concept_id",
+    "device_exposure": "device_concept_id",
+    "measurement": "measurement_concept_id",
+    "observation": "observation_concept_id",
+    "note": "note_class_concept_id",
+    "specimen": "specimen_concept_id",
 }
 
 REPORT_ARTIFACT_METADATA = "metadata"

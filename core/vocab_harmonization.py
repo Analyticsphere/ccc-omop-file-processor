@@ -73,7 +73,7 @@ class VocabHarmonizer:
         _, _, ordered_omop_columns = self._get_table_schema_and_columns()
 
         # Get concept column names
-        target_concept_id_column, source_concept_id_column = self._get_concept_column_names()
+        target_concept_id_column, source_concept_id_column = self._get_primary_concept_pair()
         primary_key = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
 
         # Some tables don't have _source_concept_id columns so can't be evaluated with this method
@@ -119,7 +119,7 @@ class VocabHarmonizer:
         _, _, ordered_omop_columns = self._get_table_schema_and_columns()
 
         # Get concept column names and format for SQL
-        target_concept_id_column, raw_source_concept_id_column = self._get_concept_column_names()
+        target_concept_id_column, raw_source_concept_id_column = self._get_primary_concept_pair()
         source_concept_id_column = '0' if raw_source_concept_id_column == "" else f"tbl.{raw_source_concept_id_column}"
         primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
 
@@ -159,7 +159,7 @@ class VocabHarmonizer:
         _, _, ordered_omop_columns = self._get_table_schema_and_columns()
 
         # Get concept column names and format for SQL (domain_table_check needs tbl. prefix)
-        raw_target_concept_id_column, raw_source_concept_id_column = self._get_concept_column_names()
+        raw_target_concept_id_column, raw_source_concept_id_column = self._get_primary_concept_pair()
         target_concept_id_column = f"tbl.{raw_target_concept_id_column}"
         source_concept_id_column = '0' if raw_source_concept_id_column == "" else f"tbl.{raw_source_concept_id_column}"
         primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
@@ -575,23 +575,24 @@ class VocabHarmonizer:
         ordered_omop_columns = list(columns.keys())
         return schema, columns, ordered_omop_columns
 
-    def _get_concept_column_names(self) -> tuple[str, str]:
+    def _get_primary_concept_pair(self) -> tuple[str, str]:
         """
         Get the primary concept_id / source_concept_id column pair for the source table.
 
-        Derives pairs from the OMOP schema via get_concept_id_source_pairs().
-        For tables without a source_concept_id column (e.g. note, specimen),
-        falls back to SOURCE_TARGET_COLUMNS for the target column name and
-        returns an empty string for the source column.
+        The primary concept_id is explicitly defined in PRIMARY_CONCEPT_ID_COLUMNS.
+        The corresponding source_concept_id is looked up from the schema; tables
+        without one (e.g. note, specimen) return an empty string.
 
         Returns:
-            Tuple of (target_concept_id_column, source_concept_id_column)
-            where source_concept_id_column is "" when the table has none.
+            Tuple of (primary_concept_id_column, primary_source_concept_id_column)
+            where primary_source_concept_id_column is "" when the table has none.
         """
+        primary_concept_id = constants.PRIMARY_CONCEPT_ID_COLUMNS[self.source_table_name]
         pairs = utils.get_concept_id_source_pairs(self.source_table_name, self.cdm_version)
-        if pairs:
-            return pairs[0]
-        return constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id'], ""
+        for concept_id_col, source_concept_id_col in pairs:
+            if concept_id_col == primary_concept_id:
+                return primary_concept_id, source_concept_id_col
+        return primary_concept_id, ""
 
     def _build_existing_files_exclusion(self, primary_key_column: str, use_and: bool = True) -> str:
         """Build WHERE/AND clause to exclude already-harmonized rows."""
