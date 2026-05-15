@@ -517,3 +517,29 @@ class TestGenerateSourceConceptOverrideSql:
 
         expected = load_reference_sql("generate_source_concept_override_sql_with_exclusion.sql")
         assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateSecondaryConceptOverrideSql:
+    """Tests for generate_secondary_concept_override_sql()."""
+
+    def test_measurement_unit_pair(self):
+        """Test SQL generation for secondary concept override on measurement (unit_concept_id)."""
+        import core.constants as constants
+
+        all_pairs = get_concept_id_source_pairs('measurement', '5.4')
+        primary = constants.PRIMARY_CONCEPT_ID_COLUMNS['measurement']
+        secondary_pairs = [(c, s) for c, s in all_pairs if c != primary]
+
+        result = VocabHarmonizer.generate_secondary_concept_override_sql(
+            secondary_pairs=secondary_pairs,
+            harmonized_parquet_file='file:///data/synthea53/2025-01-01/artifacts/harmonized_files/measurement/*.parquet',
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized_files/measurement/measurement_secondary_concept_override.parquet'
+        )
+
+        expected = load_reference_sql("generate_secondary_concept_override_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)

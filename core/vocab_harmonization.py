@@ -52,6 +52,8 @@ class VocabHarmonizer:
             self.check_new_targets(constants.TARGET_REPLACEMENT)
         elif step == constants.SOURCE_CONCEPT_OVERRIDE:
             self.source_concept_override()
+        elif step == constants.SECONDARY_CONCEPT_OVERRIDE:
+            self.secondary_concept_override()
         elif step == constants.OMOP_ETL:
             self.omop_etl()
         elif step == constants.CONSOLIDATE_ETL:
@@ -190,28 +192,26 @@ class VocabHarmonizer:
 
     def source_concept_override(self) -> None:
         """
-        Override zero-valued _concept_id fields with the corresponding _source_concept_id
-        when the source concept ID is non-zero and exists in the OMOP vocabulary. This step 
-        attemps to set as many _concept_id values as possible - regardless of concept standarization
-         - as _concept_id fields are used in OHDSI tools and analysis.
+        Override the primary zero-valued _concept_id field with its _source_concept_id
+        when the source concept ID is non-zero and exists in the OMOP vocabulary.
 
         This step runs after target_replacement and before domain_check.
+        Only acts on the primary concept pair (e.g. procedure_concept_id / procedure_source_concept_id).
         """
         _, _, ordered_omop_columns = self._get_table_schema_and_columns()
 
-        concept_pairs = utils.get_concept_id_source_pairs(self.source_table_name, self.cdm_version)
-        if not concept_pairs:
+        primary_concept_id, primary_source_concept_id = self._get_primary_concept_pair()
+        if not primary_source_concept_id:
             return
 
         primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
-
         existing_files_where_clause = self._build_existing_files_exclusion(primary_key_column, use_and=True)
 
         output_path = storage.get_uri(f"{self.harmonized_parquet_path}{self.source_table_name}_source_concept_override{constants.PARQUET}")
         final_sql = VocabHarmonizer.generate_source_concept_override_sql(
             source_table_name=self.source_table_name,
             ordered_omop_columns=ordered_omop_columns,
-            concept_pairs=concept_pairs,
+            concept_pairs=[(primary_concept_id, primary_source_concept_id)],
             primary_key_column=primary_key_column,
             existing_files_where_clause=existing_files_where_clause,
             site=self.site,
@@ -223,6 +223,47 @@ class VocabHarmonizer:
         )
 
         utils.execute_duckdb_sql(final_sql, f"Unable to execute source concept override for table {self.source_table_name}")
+
+    def secondary_concept_override(self) -> None:
+        """
+        Override zero-valued non-primary _concept_id fields with their _source_concept_id
+        when the source concept ID is non-zero and exists in the OMOP vocabulary.
+
+        This step runs after domain_check and before omop_etl.
+        Reads ALL harmonized parquet files and rewrites them with the overrides applied.
+        """
+        all_pairs = utils.get_concept_id_source_pairs(self.source_table_name, self.cdm_version)
+        primary_concept_id, _ = self._get_primary_concept_pair()
+        secondary_pairs = [(cid, scid) for cid, scid in all_pairs if cid != primary_concept_id]
+
+        if not secondary_pairs:
+            return
+
+        output_path = storage.get_uri(
+            f"{self.harmonized_parquet_path}{self.source_table_name}_secondary_concept_override{constants.PARQUET}"
+        )
+        final_sql = VocabHarmonizer.generate_secondary_concept_override_sql(
+            secondary_pairs=secondary_pairs,
+            harmonized_parquet_file=self.harmonized_parquet_file,
+            site=self.site,
+            bucket=self.bucket,
+            delivery_date=self.delivery_date,
+            vocab_version=self.vocab_version,
+            vocab_path=self.vocab_path,
+            output_path=output_path
+        )
+
+        # Count qualifying rows per pair before applying overrides (for reporting)
+        self._generate_secondary_override_artifacts(secondary_pairs)
+
+        utils.execute_duckdb_sql(final_sql, f"Unable to execute secondary concept override for table {self.source_table_name}")
+
+        # Delete the original harmonized files now that the override file contains all rows
+        original_files = storage.list_files(self.harmonized_parquet_path, pattern=f"*{constants.PARQUET}")
+        override_filename = f"{self.source_table_name}_secondary_concept_override{constants.PARQUET}"
+        for file_name in original_files:
+            if file_name != override_filename:
+                storage.delete_file(f"{self.harmonized_parquet_path}{file_name}")
 
     def generate_table_transition_artifacts(self) -> None:
         """
@@ -408,6 +449,47 @@ class VocabHarmonizer:
         except Exception as e:
             # Log the error but don't fail the entire process
             utils.logger.error(f"Error generating row disposition report: {str(e)}")
+
+    def _generate_secondary_override_artifacts(self, secondary_pairs: list[tuple[str, str]]) -> None:
+        """Generate report artifacts counting how many rows qualify for secondary concept override."""
+        try:
+            utils.logger.info(f"Generating secondary concept override report for {self.source_table_name}")
+
+            schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
+            source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
+
+            for concept_id_col, source_concept_id_col in secondary_pairs:
+                count_sql = VocabHarmonizer.generate_secondary_override_count_sql(
+                    concept_id_col=concept_id_col,
+                    source_concept_id_col=source_concept_id_col,
+                    harmonized_parquet_file=self.harmonized_parquet_file,
+                    site=self.site,
+                    bucket=self.bucket,
+                    delivery_date=self.delivery_date,
+                    vocab_version=self.vocab_version,
+                    vocab_path=self.vocab_path,
+                )
+                result = utils.execute_duckdb_sql(
+                    count_sql,
+                    f"Unable to count secondary overrides for {concept_id_col}",
+                    return_results=True
+                )
+                override_count = result[0][0] if result else 0
+
+                ra = report_artifact.ReportArtifact(
+                    delivery_date=self.delivery_date,
+                    artifact_bucket=self.bucket,
+                    concept_id=source_table_concept_id,
+                    name=f"Vocab harmonization secondary override: {self.source_table_name} - {concept_id_col}",
+                    value_as_string=None,
+                    value_as_concept_id=None,
+                    value_as_number=override_count
+                )
+                ra.save_artifact()
+                utils.logger.info(f"Secondary override: {self.source_table_name} - {concept_id_col}: {override_count} rows")
+
+        except Exception as e:
+            utils.logger.error(f"Error generating secondary concept override report: {str(e)}")
 
     def omop_etl(self) -> None:
         """
@@ -1352,6 +1434,85 @@ class VocabHarmonizer:
         )
 
         return final_sql
+
+    @staticmethod
+    def generate_secondary_concept_override_sql(
+        secondary_pairs: list[tuple[str, str]],
+        harmonized_parquet_file: str,
+        site: str,
+        bucket: str,
+        delivery_date: str,
+        vocab_version: str,
+        vocab_path: str,
+        output_path: str
+    ) -> str:
+        """
+        Generate SQL to override zero-valued non-primary _concept_id fields with their
+        _source_concept_id across ALL harmonized parquet files.
+
+        Uses SELECT * REPLACE(...) so all existing columns (including metadata) are
+        preserved. Only the secondary concept_id columns are conditionally overridden.
+        """
+        replace_exprs = []
+        for concept_id_col, source_concept_id_col in secondary_pairs:
+            replace_exprs.append(
+                f"""CASE
+                        WHEN {concept_id_col} = 0
+                            AND {source_concept_id_col} != 0
+                            AND {source_concept_id_col} IN (
+                                SELECT DISTINCT concept_id FROM read_parquet('@OPTIMIZED_VOCABULARY')
+                            )
+                        THEN {source_concept_id_col}
+                        ELSE {concept_id_col}
+                    END AS {concept_id_col}"""
+            )
+
+        replace_sql = ",\n                    ".join(replace_exprs)
+
+        sql_statement = f"""
+            COPY (
+                SELECT * REPLACE (
+                    {replace_sql}
+                )
+                FROM read_parquet('{harmonized_parquet_file}')
+            ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+        final_sql = utils.placeholder_to_file_path(
+            site,
+            bucket,
+            delivery_date,
+            sql_statement,
+            vocab_version,
+            vocab_path
+        )
+
+        return final_sql
+
+    @staticmethod
+    def generate_secondary_override_count_sql(
+        concept_id_col: str,
+        source_concept_id_col: str,
+        harmonized_parquet_file: str,
+        site: str,
+        bucket: str,
+        delivery_date: str,
+        vocab_version: str,
+        vocab_path: str,
+    ) -> str:
+        """Generate SQL to count how many rows qualify for a secondary concept override."""
+        sql_statement = f"""
+            SELECT COUNT(*) FROM read_parquet('{harmonized_parquet_file}')
+            WHERE {concept_id_col} = 0
+            AND {source_concept_id_col} != 0
+            AND {source_concept_id_col} IN (
+                SELECT DISTINCT concept_id FROM read_parquet('@OPTIMIZED_VOCABULARY')
+            )
+        """
+
+        return utils.placeholder_to_file_path(
+            site, bucket, delivery_date, sql_statement, vocab_version, vocab_path
+        )
 
     @staticmethod
     def generate_consolidate_single_table_sql(
