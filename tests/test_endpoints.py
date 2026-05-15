@@ -474,6 +474,29 @@ class TestHarmonizeVocabEndpoint:
         assert data['step'] == constants.SOURCE_TARGET
 
     @patch('core.endpoints.vocab_harmonization.VocabHarmonizer')
+    def test_harmonize_vocab_source_concept_override_step(self, mock_harmonizer, client):
+        """Test vocabulary harmonization with source_concept_override step."""
+        mock_instance = MagicMock()
+        mock_instance.perform_harmonization.return_value = None
+        mock_harmonizer.return_value = mock_instance
+
+        response = client.post('/harmonize_vocab', json={
+            'file_path': 'bucket/2025-01-01/condition_occurrence.parquet',
+            'vocab_version': 'v5.0_24-JAN-25',
+            'omop_version': '5.4',
+            'site': 'test_site',
+            'project_id': 'test-project',
+            'dataset_id': 'test_dataset',
+            'step': constants.SOURCE_CONCEPT_OVERRIDE
+        })
+
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert data['status'] == 'success'
+        assert data['step'] == constants.SOURCE_CONCEPT_OVERRIDE
+        mock_instance.perform_harmonization.assert_called_once_with(constants.SOURCE_CONCEPT_OVERRIDE)
+
+    @patch('core.endpoints.vocab_harmonization.VocabHarmonizer')
     def test_harmonize_vocab_discover_step(self, mock_harmonizer, client):
         """Test vocabulary harmonization with discovery step returns table configs."""
         mock_instance = MagicMock()

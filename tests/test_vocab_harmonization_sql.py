@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 import core.utils as utils
+from core.utils import get_concept_id_source_pairs
 from core.vocab_harmonization import VocabHarmonizer
 
 # Path to reference SQL files
@@ -366,4 +367,110 @@ class TestGenerateRowDispositionCountSql:
         )
 
         expected = load_reference_sql("generate_row_disposition_count_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGetConceptIdSourcePairs:
+    """Tests for utils.get_concept_id_source_pairs()."""
+
+    def test_single_pair_table(self):
+        """Test that condition_occurrence returns its single concept pair."""
+        pairs = get_concept_id_source_pairs('condition_occurrence', '5.4')
+        assert ('condition_concept_id', 'condition_source_concept_id') in pairs
+        assert len(pairs) == 1
+
+    def test_multi_pair_table(self):
+        """Test that measurement returns both concept pairs."""
+        pairs = get_concept_id_source_pairs('measurement', '5.4')
+        assert ('measurement_concept_id', 'measurement_source_concept_id') in pairs
+        assert ('unit_concept_id', 'unit_source_concept_id') in pairs
+        assert len(pairs) == 2
+
+    def test_table_without_source_concept_id(self):
+        """Test that tables with no source_concept_id columns return empty list."""
+        pairs = get_concept_id_source_pairs('note', '5.4')
+        assert pairs == []
+
+    def test_nonexistent_table(self):
+        """Test that a nonexistent table returns empty list."""
+        pairs = get_concept_id_source_pairs('nonexistent_table', '5.4')
+        assert pairs == []
+
+
+class TestGenerateSourceConceptOverrideSql:
+    """Tests for generate_source_concept_override_sql()."""
+
+    def test_standard_single_pair(self):
+        """Test SQL generation for source concept override with a single concept pair (condition_occurrence)."""
+        schema = utils.get_table_schema('condition_occurrence', '5.4')
+        ordered_omop_columns = list(schema['condition_occurrence']['columns'].keys())
+        concept_pairs = get_concept_id_source_pairs('condition_occurrence', '5.4')
+
+        result = VocabHarmonizer.generate_source_concept_override_sql(
+            source_table_name='condition_occurrence',
+            ordered_omop_columns=ordered_omop_columns,
+            concept_pairs=concept_pairs,
+            primary_key_column='condition_occurrence_id',
+            existing_files_where_clause='',
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_source_concept_override.parquet'
+        )
+
+        expected = load_reference_sql("generate_source_concept_override_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+    def test_multi_pair(self):
+        """Test SQL generation for source concept override with multiple concept pairs (measurement)."""
+        schema = utils.get_table_schema('measurement', '5.4')
+        ordered_omop_columns = list(schema['measurement']['columns'].keys())
+        concept_pairs = get_concept_id_source_pairs('measurement', '5.4')
+
+        result = VocabHarmonizer.generate_source_concept_override_sql(
+            source_table_name='measurement',
+            ordered_omop_columns=ordered_omop_columns,
+            concept_pairs=concept_pairs,
+            primary_key_column='measurement_id',
+            existing_files_where_clause='',
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/measurement_source_concept_override.parquet'
+        )
+
+        expected = load_reference_sql("generate_source_concept_override_sql_multi_pair.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+    def test_with_exclusion(self):
+        """Test SQL generation includes NOT IN clause when exclusion is provided."""
+        schema = utils.get_table_schema('condition_occurrence', '5.4')
+        ordered_omop_columns = list(schema['condition_occurrence']['columns'].keys())
+        concept_pairs = get_concept_id_source_pairs('condition_occurrence', '5.4')
+
+        exclusion_clause = """
+                AND tbl.condition_occurrence_id NOT IN (
+                    SELECT condition_occurrence_id FROM read_parquet('gs://synthea53/2025-01-01/artifacts/harmonized/*.parquet')
+                )
+            """
+
+        result = VocabHarmonizer.generate_source_concept_override_sql(
+            source_table_name='condition_occurrence',
+            ordered_omop_columns=ordered_omop_columns,
+            concept_pairs=concept_pairs,
+            primary_key_column='condition_occurrence_id',
+            existing_files_where_clause=exclusion_clause,
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_source_concept_override.parquet'
+        )
+
+        expected = load_reference_sql("generate_source_concept_override_sql_with_exclusion.sql")
         assert normalize_sql(result) == normalize_sql(expected)

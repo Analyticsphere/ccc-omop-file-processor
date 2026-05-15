@@ -50,6 +50,8 @@ class VocabHarmonizer:
             self.check_new_targets(constants.TARGET_REMAP)
         elif step == constants.TARGET_REPLACEMENT:
             self.check_new_targets(constants.TARGET_REPLACEMENT)
+        elif step == constants.SOURCE_CONCEPT_OVERRIDE:
+            self.source_concept_override()
         elif step == constants.OMOP_ETL:
             self.omop_etl()
         elif step == constants.CONSOLIDATE_ETL:
@@ -106,11 +108,11 @@ class VocabHarmonizer:
         """
         if mapping_type == constants.TARGET_REMAP:
             vocab_status_string = "existing non-standard target remapped to standard code"
-            mapping_relationships = "'Maps to', 'Maps to value'"
+            mapping_relationships = constants.MAPPING_RELATIONSHIPS
             table_name = "target_remap"
         elif mapping_type == constants.TARGET_REPLACEMENT:
             vocab_status_string = "existing non-standard target replaced with standard code"
-            mapping_relationships = "'Concept replaced by'"
+            mapping_relationships = constants.REPLACEMENT_RELATIONSHIPS
             table_name = "target_replacement"
 
         # Get table schema and columns
@@ -185,6 +187,42 @@ class VocabHarmonizer:
 
         # Execute SQL
         utils.execute_duckdb_sql(final_sql, f"Unable to perform domain check against {self.source_table_name}")
+
+    def source_concept_override(self) -> None:
+        """
+        Override zero-valued _concept_id fields with the corresponding _source_concept_id
+        when the source concept ID is non-zero and exists in the OMOP vocabulary. This step 
+        attemps to set as many _concept_id values as possible - regardless of concept standarization
+         - as _concept_id fields are used in OHDSI tools and analysis.
+
+        This step runs after target_replacement and before domain_check.
+        """
+        _, _, ordered_omop_columns = self._get_table_schema_and_columns()
+
+        concept_pairs = utils.get_concept_id_source_pairs(self.source_table_name, self.cdm_version)
+        if not concept_pairs:
+            return
+
+        primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
+
+        existing_files_where_clause = self._build_existing_files_exclusion(primary_key_column, use_and=True)
+
+        output_path = storage.get_uri(f"{self.harmonized_parquet_path}{self.source_table_name}_source_concept_override{constants.PARQUET}")
+        final_sql = VocabHarmonizer.generate_source_concept_override_sql(
+            source_table_name=self.source_table_name,
+            ordered_omop_columns=ordered_omop_columns,
+            concept_pairs=concept_pairs,
+            primary_key_column=primary_key_column,
+            existing_files_where_clause=existing_files_where_clause,
+            site=self.site,
+            bucket=self.bucket,
+            delivery_date=self.delivery_date,
+            vocab_version=self.vocab_version,
+            vocab_path=self.vocab_path,
+            output_path=output_path
+        )
+
+        utils.execute_duckdb_sql(final_sql, f"Unable to execute source concept override for table {self.source_table_name}")
 
     def generate_table_transition_artifacts(self) -> None:
         """
@@ -539,14 +577,21 @@ class VocabHarmonizer:
 
     def _get_concept_column_names(self) -> tuple[str, str]:
         """
-        Get raw concept column names from constants for the source table.
+        Get the primary concept_id / source_concept_id column pair for the source table.
+
+        Derives pairs from the OMOP schema via get_concept_id_source_pairs().
+        For tables without a source_concept_id column (e.g. note, specimen),
+        falls back to SOURCE_TARGET_COLUMNS for the target column name and
+        returns an empty string for the source column.
 
         Returns:
             Tuple of (target_concept_id_column, source_concept_id_column)
+            where source_concept_id_column is "" when the table has none.
         """
-        target_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id']
-        source_concept_id_column = constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['source_concept_id']
-        return target_concept_id_column, source_concept_id_column
+        pairs = utils.get_concept_id_source_pairs(self.source_table_name, self.cdm_version)
+        if pairs:
+            return pairs[0]
+        return constants.SOURCE_TARGET_COLUMNS[self.source_table_name]['target_concept_id'], ""
 
     def _build_existing_files_exclusion(self, primary_key_column: str, use_and: bool = True) -> str:
         """Build WHERE/AND clause to exclude already-harmonized rows."""
@@ -767,7 +812,7 @@ class VocabHarmonizer:
                     ON tbl.{source_concept_id_column} = vocab.concept_id
                 WHERE tbl.{source_concept_id_column} != 0
                 AND tbl.{target_concept_id_column} != vocab.target_concept_id
-                AND vocab.relationship_id IN ('Maps to', 'Maps to value')
+                AND vocab.relationship_id IN ({constants.MAPPING_RELATIONSHIPS})
                 AND vocab.target_concept_id_standard = 'S'
             """
 
@@ -1130,6 +1175,182 @@ class VocabHarmonizer:
         )
 
         return final_sql_statement
+
+    @staticmethod
+    def generate_source_concept_override_sql(
+        source_table_name: str,
+        ordered_omop_columns: list[str],
+        concept_pairs: list[tuple[str, str]],
+        primary_key_column: str,
+        existing_files_where_clause: str,
+        site: str,
+        bucket: str,
+        delivery_date: str,
+        vocab_version: str,
+        vocab_path: str,
+        output_path: str
+    ) -> str:
+        """
+        Generate SQL to override zero-valued _concept_id fields with the corresponding
+        _source_concept_id when the source concept is non-zero and exists in the vocabulary.
+
+        For each concept_id/source_concept_id pair, the override applies when:
+        1. The _concept_id field is 0
+        2. The _source_concept_id field is not 0
+        3. The _source_concept_id value exists in the optimized vocabulary
+
+        A row is emitted if ANY of its concept pairs qualify. All qualifying pairs
+        in the row are overridden simultaneously.
+
+        Args:
+            source_table_name: Name of the source OMOP table
+            ordered_omop_columns: List of column names in schema order
+            concept_pairs: List of (concept_id_col, source_concept_id_col) tuples
+            primary_key_column: Name of the primary key column
+            existing_files_where_clause: Optional AND clause to exclude already-harmonized rows
+            site: Site identifier for path resolution
+            bucket: Storage bucket name
+            delivery_date: Delivery date string
+            vocab_version: Vocabulary version for path resolution
+            vocab_path: Path to vocabulary files
+            output_path: Full output path with storage scheme
+        """
+        # Build vocab existence CTEs — one per concept pair
+        vocab_ctes = []
+        for concept_id_col, source_concept_id_col in concept_pairs:
+            cte_name = f"vocab_{source_concept_id_col}"
+            vocab_ctes.append(
+                f"""{cte_name} AS (
+                        SELECT DISTINCT concept_id
+                        FROM read_parquet('@OPTIMIZED_VOCABULARY')
+                    )"""
+            )
+
+        # Build CASE expressions for each concept pair and OR-combined qualification filter
+        select_exprs: list[str] = []
+        qualify_conditions: list[str] = []
+
+        for column_name in ordered_omop_columns:
+            override_pair = None
+            for concept_id_col, source_concept_id_col in concept_pairs:
+                if column_name == concept_id_col:
+                    override_pair = (concept_id_col, source_concept_id_col)
+                    break
+
+            if override_pair:
+                cid, scid = override_pair
+                cte_name = f"vocab_{scid}"
+                select_exprs.append(
+                    f"""CASE
+                            WHEN tbl.{cid} = 0
+                                AND tbl.{scid} != 0
+                                AND {cte_name}.concept_id IS NOT NULL
+                            THEN tbl.{scid}
+                            ELSE tbl.{cid}
+                        END AS {cid}"""
+                )
+            else:
+                select_exprs.append(f"tbl.{column_name}")
+
+        # Build qualification conditions — a row qualifies if ANY pair matches
+        for concept_id_col, source_concept_id_col in concept_pairs:
+            cte_name = f"vocab_{source_concept_id_col}"
+            qualify_conditions.append(
+                f"(tbl.{concept_id_col} = 0 AND tbl.{source_concept_id_col} != 0 AND {cte_name}.concept_id IS NOT NULL)"
+            )
+
+        # Metadata columns
+        # Use the primary concept pair for source/previous/target reporting
+        primary_concept_id_col = concept_pairs[0][0]
+        primary_source_concept_id_col = concept_pairs[0][1]
+        metadata_columns = [
+            "COALESCE(domain_vocab.concept_id_domain, 'Unknown') AS target_domain",
+            "'source_concept_id override' AS vocab_harmonization_status",
+            f"tbl.{primary_source_concept_id_col} AS source_concept_id",
+            f"tbl.{primary_concept_id_col} AS previous_target_concept_id",
+            f"tbl.{primary_source_concept_id_col} AS target_concept_id",
+        ]
+        for mc in metadata_columns:
+            select_exprs.append(mc)
+
+        # vh_value_as_concept_id — keep structure consistent
+        select_exprs.append("CAST(NULL AS BIGINT) AS vh_value_as_concept_id")
+
+        # target_table — use domain from the primary concept pair's source_concept_id
+        case_when_target_table = f"""CASE
+                    WHEN domain_vocab.concept_id_domain = 'Visit' THEN 'visit_occurrence'
+                    WHEN domain_vocab.concept_id_domain = 'Condition' THEN 'condition_occurrence'
+                    WHEN domain_vocab.concept_id_domain = 'Drug' THEN 'drug_exposure'
+                    WHEN domain_vocab.concept_id_domain = 'Procedure' THEN 'procedure_occurrence'
+                    WHEN domain_vocab.concept_id_domain = 'Device' THEN 'device_exposure'
+                    WHEN domain_vocab.concept_id_domain = 'Measurement' THEN 'measurement'
+                    WHEN domain_vocab.concept_id_domain = 'Observation' THEN 'observation'
+                    WHEN domain_vocab.concept_id_domain = 'Note' THEN 'note'
+                    WHEN domain_vocab.concept_id_domain = 'Specimen' THEN 'specimen'
+                    WHEN domain_vocab.concept_id_domain IS NULL THEN '{source_table_name}'
+                ELSE '{source_table_name}' END AS target_table"""
+        select_exprs.append(case_when_target_table)
+
+        select_sql = ",\n                ".join(select_exprs)
+
+        # Build JOINs — LEFT JOIN each vocab CTE on the source_concept_id
+        join_clauses = []
+        for concept_id_col, source_concept_id_col in concept_pairs:
+            cte_name = f"vocab_{source_concept_id_col}"
+            join_clauses.append(
+                f"LEFT JOIN {cte_name}\n                        ON tbl.{source_concept_id_col} = {cte_name}.concept_id"
+            )
+
+        # Domain lookup — LEFT JOIN for target_table assignment using the primary source concept
+        join_clauses.append(
+            f"LEFT JOIN domain_vocab\n                        ON tbl.{primary_source_concept_id_col} = domain_vocab.concept_id"
+        )
+
+        joins_sql = "\n                    ".join(join_clauses)
+        qualify_sql = " OR\n                        ".join(qualify_conditions)
+
+        # Since vocab CTEs all select the same data, deduplicate to a single CTE
+        # and alias the others — but for clarity and correctness with JOINs on
+        # different columns, we keep separate CTEs (they'll be optimized by DuckDB)
+        all_ctes = vocab_ctes + [
+            """domain_vocab AS (
+                        SELECT DISTINCT concept_id, concept_id_domain
+                        FROM read_parquet('@OPTIMIZED_VOCABULARY')
+                    )"""
+        ]
+        cte_sql = ",\n                    ".join(all_ctes)
+
+        where_clause = f"""WHERE (
+                        {qualify_sql}
+                    )"""
+        if existing_files_where_clause:
+            where_clause = where_clause + existing_files_where_clause
+
+        inner_sql = f"""
+                    WITH {cte_sql}
+                    SELECT
+                        {select_sql}
+                    FROM read_parquet('@{source_table_name.upper()}') AS tbl
+                    {joins_sql}
+                    {where_clause}
+                """
+
+        sql_statement = f"""
+            COPY (
+                {inner_sql}
+            ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+        final_sql = utils.placeholder_to_file_path(
+            site,
+            bucket,
+            delivery_date,
+            sql_statement,
+            vocab_version,
+            vocab_path
+        )
+
+        return final_sql
 
     @staticmethod
     def generate_consolidate_single_table_sql(

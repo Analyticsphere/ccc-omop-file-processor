@@ -31,7 +31,7 @@
                     ON tbl.condition_source_concept_id = vocab.concept_id
                 WHERE tbl.condition_source_concept_id != 0
                 AND tbl.condition_concept_id != vocab.target_concept_id
-                AND vocab.relationship_id IN ('Maps to', 'Maps to value')
+                AND vocab.relationship_id IN ('Maps to','Maps to value')
                 AND vocab.target_concept_id_standard = 'S'
             
                 ), meas_value AS (
