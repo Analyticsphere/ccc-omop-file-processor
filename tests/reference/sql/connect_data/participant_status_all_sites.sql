@@ -14,7 +14,20 @@ WITH status_map AS (
     d_821247024,
     d_747006172,
     d_773707518,
-    d_831041022
+    d_831041022,
+    d_659990606,
+    d_664453818,
+    d_269050420,
+    D_517311251,
+    D_832139544,
+    D_770257102,
+    d_264644252,
+    d_222161762,
+    d_764863765,
+    d_195145666,
+    d_217640691,
+    d_784810139,
+    d_199471989
   FROM `test-project.test_dataset.participants`
 
 ), cleaned_datapoints AS (
@@ -27,7 +40,20 @@ WITH status_map AS (
     CASE WHEN smap_hr.concept_name IS NULL THEN 'UNKNOWN' ELSE smap_hr.concept_name END AS hipaa_revoked,
     d_773707518 AS hipaa_revoked_concept_id,
     CASE WHEN smap_dd.concept_name IS NULL THEN 'UNKNOWN' ELSE smap_dd.concept_name END AS data_destruction_requested,
-    d_831041022 AS data_destruction_requested_concept_id
+    d_831041022 AS data_destruction_requested_concept_id,
+    d_659990606 AS consent_withdrawn_ts,
+    d_664453818 AS hipaa_revoked_ts,
+    d_269050420 AS data_destruction_ts,
+    D_517311251 AS module1_complete_ts,
+    D_832139544 AS module2_complete_ts,
+    D_770257102 AS module3_complete_ts,
+    d_264644252 AS module4_complete_ts,
+    d_222161762 AS bio_complete_ts,
+    d_764863765 AS clinicalbio_complete_ts,
+    d_195145666 AS mouthwash_complete_ts,
+    d_217640691 AS menstrual_complete_ts,
+    d_784810139 AS covid19_complete_ts,
+    d_199471989 AS experience2024_complete_ts
   FROM statuses s
   LEFT JOIN status_map smap_vs ON s.d_821247024 = smap_vs.concept_id
   LEFT JOIN status_map smap_cw ON s.d_747006172 = smap_cw.concept_id
