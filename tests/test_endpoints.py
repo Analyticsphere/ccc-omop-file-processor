@@ -406,6 +406,17 @@ class TestGetConnectDataEndpoint:
 
         assert_missing_fields(response, 'project_id', 'dataset_id')
 
+    def test_get_connect_data_invalid_parquet_destination(self, client):
+        """Test parquet_destination not ending in .parquet returns 400."""
+        response = client.post('/get_connect_data', json={
+            'project_id': 'test-project',
+            'dataset_id': 'test_dataset',
+            'parquet_destination': 'some-bucket/no_extension'
+        })
+
+        assert response.status_code == 400
+        assert b"parquet_destination must end with '.parquet'" in response.data
+
     def test_get_connect_data_missing_bucket_and_destination(self, client):
         """Test missing both delivery_bucket and parquet_destination returns 400."""
         response = client.post('/get_connect_data', json={

@@ -234,6 +234,9 @@ def get_connect_data() -> tuple[str, int]:
     if missing_fields:
         return _missing_fields_response(missing_fields)
 
+    if parquet_destination and not parquet_destination.endswith('.parquet'):
+        return "parquet_destination must end with '.parquet'", 400
+
     try:
         assert project_id is not None
         assert dataset_id is not None
