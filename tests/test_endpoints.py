@@ -349,6 +349,100 @@ class TestUpgradeCdmEndpoint:
         assert b"Unable to upgrade file" in response.data
 
 
+class TestGetConnectDataEndpoint:
+    """Tests for /get_connect_data endpoint."""
+
+    @patch('core.endpoints.gcp_services.export_connect_data_to_parquet')
+    def test_get_connect_data_success_with_delivery_bucket(self, mock_export, client):
+        """Test successful retrieval with delivery_bucket."""
+        response = client.post('/get_connect_data', json={
+            'project_id': 'test-project',
+            'dataset_id': 'test_dataset',
+            'delivery_bucket': 'test-bucket/2025-01-01',
+            'site_connect_id': '123456'
+        })
+
+        assert response.status_code == 200
+        assert b"Retrieved Connect study data" in response.data
+        mock_export.assert_called_once_with(
+            'test-project', 'test_dataset', 'test-bucket/2025-01-01', None, '123456'
+        )
+
+    @patch('core.endpoints.gcp_services.export_connect_data_to_parquet')
+    def test_get_connect_data_success_with_parquet_destination(self, mock_export, client):
+        """Test successful retrieval with parquet_destination instead of delivery_bucket."""
+        response = client.post('/get_connect_data', json={
+            'project_id': 'test-project',
+            'dataset_id': 'test_dataset',
+            'parquet_destination': 'gs://output-bucket/connect/status.parquet',
+            'site_connect_id': '123456'
+        })
+
+        assert response.status_code == 200
+        assert b"Retrieved Connect study data" in response.data
+        mock_export.assert_called_once_with(
+            'test-project', 'test_dataset', None, 'gs://output-bucket/connect/status.parquet', '123456'
+        )
+
+    @patch('core.endpoints.gcp_services.export_connect_data_to_parquet')
+    def test_get_connect_data_success_without_site_connect_id(self, mock_export, client):
+        """Test successful retrieval without site_connect_id returns all sites."""
+        response = client.post('/get_connect_data', json={
+            'project_id': 'test-project',
+            'dataset_id': 'test_dataset',
+            'delivery_bucket': 'test-bucket/2025-01-01'
+        })
+
+        assert response.status_code == 200
+        mock_export.assert_called_once_with(
+            'test-project', 'test_dataset', 'test-bucket/2025-01-01', None, None
+        )
+
+    def test_get_connect_data_missing_project_and_dataset(self, client):
+        """Test missing project_id and dataset_id returns 400."""
+        response = client.post('/get_connect_data', json={
+            'delivery_bucket': 'test-bucket/2025-01-01'
+        })
+
+        assert_missing_fields(response, 'project_id', 'dataset_id')
+
+    def test_get_connect_data_invalid_parquet_destination(self, client):
+        """Test parquet_destination not ending in .parquet returns 400."""
+        response = client.post('/get_connect_data', json={
+            'project_id': 'test-project',
+            'dataset_id': 'test_dataset',
+            'parquet_destination': 'some-bucket/no_extension'
+        })
+
+        assert response.status_code == 400
+        assert b"parquet_destination must end with '.parquet'" in response.data
+
+    def test_get_connect_data_missing_bucket_and_destination(self, client):
+        """Test missing both delivery_bucket and parquet_destination returns 400."""
+        response = client.post('/get_connect_data', json={
+            'project_id': 'test-project',
+            'dataset_id': 'test_dataset'
+        })
+
+        assert response.status_code == 400
+        assert b"delivery_bucket or parquet_destination" in response.data
+
+    @patch('core.endpoints.gcp_services.export_connect_data_to_parquet')
+    def test_get_connect_data_exception(self, mock_export, client):
+        """Test exception handling returns 500."""
+        mock_export.side_effect = Exception("BigQuery error")
+
+        response = client.post('/get_connect_data', json={
+            'project_id': 'test-project',
+            'dataset_id': 'test_dataset',
+            'delivery_bucket': 'test-bucket/2025-01-01',
+            'site_connect_id': '123456'
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to retrieve Connect study data" in response.data
+
+
 class TestFilterConnectParticipantsEndpoint:
     """Tests for /filter_connect_participants endpoint."""
 
