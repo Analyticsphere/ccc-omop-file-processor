@@ -218,25 +218,30 @@ def validate_file() -> tuple[str, int]:
 
 @app.route('/get_connect_data', methods=['POST'])
 def get_connect_data() -> tuple[str, int]:
-    """Get Connect study data for participants from BigQuery."""
+    """Create Parquet file containing information about Connect participant study status and data sharing elections."""
     data: dict[str, Any] = request.get_json() or {}
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
     delivery_bucket: Optional[str] = data.get('delivery_bucket')
+    parquet_destination: Optional[str] = data.get('parquet_destination')
     site_connect_id: Optional[str] = data.get('site_connect_id')
-    missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id', 'delivery_bucket', 'site_connect_id'])
+
+    missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id'])
+    if not delivery_bucket and not parquet_destination:
+        missing_fields.append('delivery_bucket or parquet_destination')
 
     # Validate required parameters
     if missing_fields:
         return _missing_fields_response(missing_fields)
 
+    if parquet_destination and not parquet_destination.endswith('.parquet'):
+        return "parquet_destination must end with '.parquet'", 400
+
     try:
         assert project_id is not None
         assert dataset_id is not None
-        assert delivery_bucket is not None
-        assert site_connect_id is not None
 
-        gcp_services.export_connect_data_to_parquet(project_id, dataset_id, delivery_bucket, site_connect_id)
+        gcp_services.export_connect_data_to_parquet(project_id, dataset_id, delivery_bucket, parquet_destination, site_connect_id)
         return "Retrieved Connect study data", 200
     except Exception as e:
         utils.logger.error(f"Unable to retrieve Connect study data: {str(e)}")

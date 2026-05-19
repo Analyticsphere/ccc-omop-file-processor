@@ -508,7 +508,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 **DAG usage:** Called once per site delivery after file-level CDM upgrade and before file-level Connect filtering.
 
-**Description:** Exports Connect participant-status data from BigQuery into a Parquet artifact and creates Connect eligibility report artifacts.
+**Description:** Exports Connect participant-status data from BigQuery into a Parquet file. When `delivery_bucket` is provided, also creates Connect eligibility report artifacts.
 
 **Parameters:**
 
@@ -516,15 +516,18 @@ The endpoint details below are listed in the order each endpoint first appears i
 |-----------|------|----------|-------------|
 | `project_id` | string | Yes | BigQuery project ID |
 | `dataset_id` | string | Yes | BigQuery dataset containing the Connect participant table |
-| `delivery_bucket` | string | Yes | Delivery root path, for example `site/2024-01-15` |
-| `site_connect_id` | string or integer | Yes | Site-specific Connect identifier |
+| `delivery_bucket` | string | One of `delivery_bucket` or `parquet_destination` required | Delivery root path, for example `site/2024-01-15`. Used to infer the Parquet output location and to generate eligibility report artifacts. |
+| `parquet_destination` | string | One of `delivery_bucket` or `parquet_destination` required | Explicit output path for the Parquet file (must end in `.parquet`). Takes precedence over `delivery_bucket` for determining where to write. |
+| `site_connect_id` | string or integer | No | Site-specific Connect identifier. If omitted, data for all sites is returned. |
 
 **Notes:**
 
-- The exported Parquet file is written to `artifacts/connect_data/participant_status.parquet`.
-- A processed `person` Parquet artifact must already exist because the report-artifact step compares Connect identifiers to delivered `person_id` values.
+- At least one of `delivery_bucket` or `parquet_destination` must be provided. If both are given, `parquet_destination` determines the output path and `delivery_bucket` is used for report artifact generation.
+- When only `parquet_destination` is provided, eligibility report artifacts are not generated.
+- When only `delivery_bucket` is provided, the Parquet file is written to `artifacts/connect_data/participant_status.parquet` under the delivery path.
+- A processed `person` Parquet artifact must already exist when `delivery_bucket` is provided, because the report-artifact step compares Connect identifiers to delivered `person_id` values.
 
-**Example:**
+**Example (delivery bucket):**
 
 ```json
 {
@@ -532,6 +535,16 @@ The endpoint details below are listed in the order each endpoint first appears i
   "dataset_id": "connect_dataset",
   "delivery_bucket": "site/2024-01-15",
   "site_connect_id": "12345"
+}
+```
+
+**Example (explicit destination, all sites):**
+
+```json
+{
+  "project_id": "my-project",
+  "dataset_id": "connect_dataset",
+  "parquet_destination": "output-bucket/participant_status.parquet"
 }
 ```
 

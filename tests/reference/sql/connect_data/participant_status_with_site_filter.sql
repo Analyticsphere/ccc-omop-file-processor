@@ -28,8 +28,8 @@ WITH status_map AS (
     d_217640691,
     d_784810139,
     d_199471989
-  FROM `@PROJECT_ID.@DATASET_ID.participants`
-  @SITE_FILTER
+  FROM `test-project.test_dataset.participants`
+  WHERE d_827220437 = '452456345'
 ), cleaned_datapoints AS (
   SELECT DISTINCT
     Connect_ID,
