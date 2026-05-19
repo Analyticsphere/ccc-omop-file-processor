@@ -157,19 +157,33 @@ def write_query_results_to_parquet(
     utils.logger.info(f"Saved query results to {output_uri}")
     return output_uri
 
-def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bucket: str, site_connect_id: str) -> str:
-    """Build the Connect participant-status query and export the results to Parquet."""
+def build_connect_participant_status_sql(project_id: str, dataset_id: str, site_connect_id: Optional[str]) -> str:
+    """Build the Connect participant-status SQL query from template."""
     sql_path = os.path.join(constants.SQL_PATH, "connect_data", "participant_status.sql")
     with open(sql_path, 'r') as sql_file:
         sql_script = sql_file.read()
 
     sql_script = sql_script.replace("@PROJECT_ID", project_id)
     sql_script = sql_script.replace("@DATASET_ID", dataset_id)
-    # connect_id's are integers but are stored as strings in table
-    sql_script = sql_script.replace("@SITE_CONNECT_ID", str(site_connect_id)) 
 
-    bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(delivery_bucket)
-    output_path = utils.get_connect_data_path(bucket, delivery_date)
+    if site_connect_id:
+        sql_script = sql_script.replace("@SITE_FILTER", f"WHERE d_827220437 = '{site_connect_id}'")
+    else:
+        sql_script = sql_script.replace("@SITE_FILTER", "")
+
+    return sql_script
+
+
+def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bucket: Optional[str], parquet_destination: Optional[str], site_connect_id: Optional[str]) -> str:
+    """Build the Connect participant-status query and export the results to Parquet."""
+    sql_script = build_connect_participant_status_sql(project_id, dataset_id, site_connect_id)
+
+    if parquet_destination:
+        output_path = parquet_destination
+    else:
+        assert delivery_bucket is not None
+        bucket, delivery_date = utils.get_bucket_and_delivery_date_from_path(delivery_bucket)
+        output_path = utils.get_connect_data_path(bucket, delivery_date)
 
     output_uri = write_query_results_to_parquet(
         sql_script=sql_script,
@@ -177,7 +191,8 @@ def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bu
         project_id=project_id
     )
 
-    participant_filter.ParticipantFilter.create_connect_eligibility_report_artifacts(output_uri, delivery_bucket)
+    if delivery_bucket:
+        participant_filter.ParticipantFilter.create_connect_eligibility_report_artifacts(output_uri, delivery_bucket)
     return output_uri
 
 def list_gcs_subdirectories(gcs_path: str) -> list:

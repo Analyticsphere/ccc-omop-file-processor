@@ -15,8 +15,8 @@ WITH status_map AS (
     d_747006172,
     d_773707518,
     d_831041022
-  FROM `@PROJECT_ID.@DATASET_ID.participants`
-  @SITE_FILTER
+  FROM `test-project.test_dataset.participants`
+
 ), cleaned_datapoints AS (
   SELECT DISTINCT
     Connect_ID,
