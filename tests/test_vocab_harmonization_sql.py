@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 import core.utils as utils
+from core.utils import get_concept_id_source_pairs
 from core.vocab_harmonization import VocabHarmonizer
 
 # Path to reference SQL files
@@ -366,4 +367,179 @@ class TestGenerateRowDispositionCountSql:
         )
 
         expected = load_reference_sql("generate_row_disposition_count_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGetConceptIdSourcePairs:
+    """Tests for utils.get_concept_id_source_pairs()."""
+
+    def test_single_pair_table(self):
+        """Test that condition_occurrence returns its single concept pair."""
+        pairs = get_concept_id_source_pairs('condition_occurrence', '5.4')
+        assert ('condition_concept_id', 'condition_source_concept_id') in pairs
+        assert len(pairs) == 1
+
+    def test_multi_pair_table(self):
+        """Test that measurement returns both concept pairs."""
+        pairs = get_concept_id_source_pairs('measurement', '5.4')
+        assert ('measurement_concept_id', 'measurement_source_concept_id') in pairs
+        assert ('unit_concept_id', 'unit_source_concept_id') in pairs
+        assert len(pairs) == 2
+
+    def test_table_without_source_concept_id(self):
+        """Test that tables with no source_concept_id columns return empty list."""
+        pairs = get_concept_id_source_pairs('note', '5.4')
+        assert pairs == []
+
+    def test_nonexistent_table(self):
+        """Test that a nonexistent table returns empty list."""
+        pairs = get_concept_id_source_pairs('nonexistent_table', '5.4')
+        assert pairs == []
+
+
+class TestGetPrimaryConceptPair:
+    """Tests for VocabHarmonizer._get_primary_concept_pair()."""
+
+    def _make_harmonizer(self, table_name: str) -> VocabHarmonizer:
+        return VocabHarmonizer(
+            file_path=f'gs://bucket/2025-01-01/{table_name}.csv',
+            cdm_version='5.4',
+            site='test_site',
+            vocab_version='v5.0',
+            vocab_path='vocabularies/',
+            project_id='test_project',
+            dataset_id='test_dataset'
+        )
+
+    def test_measurement_returns_primary_not_unit(self):
+        """Primary pair for measurement is measurement_concept_id, not unit_concept_id."""
+        harmonizer = self._make_harmonizer('measurement')
+        concept_id, source_concept_id = harmonizer._get_primary_concept_pair()
+        assert concept_id == 'measurement_concept_id'
+        assert source_concept_id == 'measurement_source_concept_id'
+
+    def test_specimen_returns_primary_with_empty_source(self):
+        """specimen has no source_concept_id column — should return empty string."""
+        harmonizer = self._make_harmonizer('specimen')
+        concept_id, source_concept_id = harmonizer._get_primary_concept_pair()
+        assert concept_id == 'specimen_concept_id'
+        assert source_concept_id == ''
+
+    def test_condition_occurrence(self):
+        """Single-pair table should return its only pair as primary."""
+        harmonizer = self._make_harmonizer('condition_occurrence')
+        concept_id, source_concept_id = harmonizer._get_primary_concept_pair()
+        assert concept_id == 'condition_concept_id'
+        assert source_concept_id == 'condition_source_concept_id'
+
+    def test_device_exposure_returns_primary_not_unit(self):
+        """Primary pair for device_exposure is device_concept_id, not unit_concept_id."""
+        harmonizer = self._make_harmonizer('device_exposure')
+        concept_id, source_concept_id = harmonizer._get_primary_concept_pair()
+        assert concept_id == 'device_concept_id'
+        assert source_concept_id == 'device_source_concept_id'
+
+
+class TestGenerateSourceConceptBackfillSql:
+    """Tests for generate_source_concept_backfill_sql()."""
+
+    def test_standard_single_pair(self):
+        """Test SQL generation for source concept backfill with a single concept pair (condition_occurrence)."""
+        schema = utils.get_table_schema('condition_occurrence', '5.4')
+        ordered_omop_columns = list(schema['condition_occurrence']['columns'].keys())
+        concept_pairs = get_concept_id_source_pairs('condition_occurrence', '5.4')
+
+        result = VocabHarmonizer.generate_source_concept_backfill_sql(
+            source_table_name='condition_occurrence',
+            ordered_omop_columns=ordered_omop_columns,
+            concept_pairs=concept_pairs,
+            primary_key_column='condition_occurrence_id',
+            existing_files_where_clause='',
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_source_concept_backfill.parquet'
+        )
+
+        expected = load_reference_sql("generate_source_concept_backfill_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+    def test_multi_pair(self):
+        """Test SQL generation for source concept backfill with multiple concept pairs (measurement)."""
+        schema = utils.get_table_schema('measurement', '5.4')
+        ordered_omop_columns = list(schema['measurement']['columns'].keys())
+        concept_pairs = get_concept_id_source_pairs('measurement', '5.4')
+
+        result = VocabHarmonizer.generate_source_concept_backfill_sql(
+            source_table_name='measurement',
+            ordered_omop_columns=ordered_omop_columns,
+            concept_pairs=concept_pairs,
+            primary_key_column='measurement_id',
+            existing_files_where_clause='',
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/measurement_source_concept_backfill.parquet'
+        )
+
+        expected = load_reference_sql("generate_source_concept_backfill_sql_multi_pair.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+    def test_with_exclusion(self):
+        """Test SQL generation includes NOT IN clause when exclusion is provided."""
+        schema = utils.get_table_schema('condition_occurrence', '5.4')
+        ordered_omop_columns = list(schema['condition_occurrence']['columns'].keys())
+        concept_pairs = get_concept_id_source_pairs('condition_occurrence', '5.4')
+
+        exclusion_clause = """
+                AND tbl.condition_occurrence_id NOT IN (
+                    SELECT condition_occurrence_id FROM read_parquet('gs://synthea53/2025-01-01/artifacts/harmonized/*.parquet')
+                )
+            """
+
+        result = VocabHarmonizer.generate_source_concept_backfill_sql(
+            source_table_name='condition_occurrence',
+            ordered_omop_columns=ordered_omop_columns,
+            concept_pairs=concept_pairs,
+            primary_key_column='condition_occurrence_id',
+            existing_files_where_clause=exclusion_clause,
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_source_concept_backfill.parquet'
+        )
+
+        expected = load_reference_sql("generate_source_concept_backfill_sql_with_exclusion.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateSecondaryConceptBackfillSql:
+    """Tests for generate_secondary_concept_backfill_sql()."""
+
+    def test_measurement_unit_pair(self):
+        """Test SQL generation for secondary concept backfill on measurement (unit_concept_id)."""
+        import core.constants as constants
+
+        all_pairs = get_concept_id_source_pairs('measurement', '5.4')
+        primary = constants.PRIMARY_CONCEPT_ID_COLUMNS['measurement']
+        secondary_pairs = [(c, s) for c, s in all_pairs if c != primary]
+
+        result = VocabHarmonizer.generate_secondary_concept_backfill_sql(
+            secondary_pairs=secondary_pairs,
+            harmonized_parquet_file='file:///data/synthea53/2025-01-01/artifacts/harmonized_files/measurement/*.parquet',
+            site='synthea53',
+            bucket='synthea53',
+            delivery_date='2025-01-01',
+            vocab_version='v5.0_22-JAN-23',
+            vocab_path='vocabularies/',
+            output_path='synthea53/2025-01-01/artifacts/harmonized_files/measurement/measurement_secondary_concept_backfill.parquet'
+        )
+
+        expected = load_reference_sql("generate_secondary_concept_backfill_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)

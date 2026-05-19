@@ -2,7 +2,7 @@
 """
 Cloud Run Job entry point for vocabulary harmonization.
 
-This job performs one of 8 vocabulary harmonization steps on OMOP CDM files.
+This job performs one of 10 vocabulary harmonization steps on OMOP CDM files.
 
 Required Environment Variables:
     FILE_PATH: Full GCS path to the file to harmonize
@@ -12,7 +12,8 @@ Required Environment Variables:
     PROJECT_ID: GCP project ID
     DATASET_ID: BigQuery dataset ID
     STEP: Harmonization step name (source_target, target_remap, target_replacement,
-          domain_check, omop_etl, consolidate_etl, discover_tables, deduplicate_single_table)
+          source_concept_backfill, domain_check, secondary_concept_backfill,
+          omop_etl, consolidate_etl, discover_tables, deduplicate_single_table)
 
 Optional Environment Variables:
     OMOP_VOCAB_PATH: GCS bucket for vocabulary files (defaults to constants.VOCAB_PATH)
