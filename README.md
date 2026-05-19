@@ -128,9 +128,9 @@ A typical run in the current orchestrator DAG follows this order:
 14. `POST /harmonize_vocab` with `step=source_target`
 15. `POST /harmonize_vocab` with `step=target_remap`
 16. `POST /harmonize_vocab` with `step=target_replacement`
-17. `POST /harmonize_vocab` with `step=source_concept_override`
+17. `POST /harmonize_vocab` with `step=source_concept_backfill`
 18. `POST /harmonize_vocab` with `step=domain_check`
-19. `POST /harmonize_vocab` with `step=secondary_concept_override`
+19. `POST /harmonize_vocab` with `step=secondary_concept_backfill`
 20. `POST /harmonize_vocab` with `step=omop_etl`
 21. `POST /harmonize_vocab` with `step=consolidate_etl`
 22. `POST /harmonize_vocab` with `step=discover_tables_for_dedup`
@@ -663,9 +663,9 @@ The endpoint details below are listed in the order each endpoint first appears i
 | 1 | `source_target` | Per eligible file |
 | 2 | `target_remap` | Per eligible file |
 | 3 | `target_replacement` | Per eligible file |
-| 4 | `source_concept_override` | Per eligible file |
+| 4 | `source_concept_backfill` | Per eligible file |
 | 5 | `domain_check` | Per eligible file |
-| 6 | `secondary_concept_override` | Per eligible file |
+| 6 | `secondary_concept_backfill` | Per eligible file |
 | 7 | `omop_etl` | Per eligible file |
 | 8 | `consolidate_etl` | Once per site |
 | 9 | `discover_tables_for_dedup` | Once per site |
@@ -674,8 +674,8 @@ The endpoint details below are listed in the order each endpoint first appears i
 **Notes:**
 
 - The orchestrator skips tables outside the harmonized-table set before calling the endpoint.
-- `source_concept_override` sets the primary `_concept_id` to `_source_concept_id` when the concept ID is zero, the source concept ID is non-zero, and the source concept exists in the vocabulary.
-- `secondary_concept_override` applies the same override logic to non-primary concept ID columns (e.g., `unit_concept_id`) across all harmonized files produced by prior steps.
+- `source_concept_backfill` sets the primary `_concept_id` to `_source_concept_id` when the concept ID is zero, the source concept ID is non-zero, and the source concept exists in the vocabulary.
+- `secondary_concept_backfill` applies the same backfill logic to non-primary concept ID columns (e.g., `unit_concept_id`) across all harmonized files produced by prior steps.
 - `discover_tables_for_dedup` returns `table_configs` in the response.
 - For `deduplicate_single_table`, the `file_path` field must contain the JSON-encoded configuration returned by the discovery step.
 

@@ -12,4 +12,4 @@
                     END AS unit_concept_id
                 )
                 FROM read_parquet('file:///data/synthea53/2025-01-01/artifacts/harmonized_files/measurement/*.parquet')
-            ) TO 'synthea53/2025-01-01/artifacts/harmonized_files/measurement/measurement_secondary_concept_override.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)
+            ) TO 'synthea53/2025-01-01/artifacts/harmonized_files/measurement/measurement_secondary_concept_backfill.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)

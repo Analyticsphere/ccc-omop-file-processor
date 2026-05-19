@@ -12,7 +12,7 @@ Required Environment Variables:
     PROJECT_ID: GCP project ID
     DATASET_ID: BigQuery dataset ID
     STEP: Harmonization step name (source_target, target_remap, target_replacement,
-          source_concept_override, domain_check, secondary_concept_override,
+          source_concept_backfill, domain_check, secondary_concept_backfill,
           omop_etl, consolidate_etl, discover_tables, deduplicate_single_table)
 
 Optional Environment Variables:

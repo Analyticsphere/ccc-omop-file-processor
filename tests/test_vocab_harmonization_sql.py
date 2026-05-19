@@ -440,16 +440,16 @@ class TestGetPrimaryConceptPair:
         assert source_concept_id == 'device_source_concept_id'
 
 
-class TestGenerateSourceConceptOverrideSql:
-    """Tests for generate_source_concept_override_sql()."""
+class TestGenerateSourceConceptBackfillSql:
+    """Tests for generate_source_concept_backfill_sql()."""
 
     def test_standard_single_pair(self):
-        """Test SQL generation for source concept override with a single concept pair (condition_occurrence)."""
+        """Test SQL generation for source concept backfill with a single concept pair (condition_occurrence)."""
         schema = utils.get_table_schema('condition_occurrence', '5.4')
         ordered_omop_columns = list(schema['condition_occurrence']['columns'].keys())
         concept_pairs = get_concept_id_source_pairs('condition_occurrence', '5.4')
 
-        result = VocabHarmonizer.generate_source_concept_override_sql(
+        result = VocabHarmonizer.generate_source_concept_backfill_sql(
             source_table_name='condition_occurrence',
             ordered_omop_columns=ordered_omop_columns,
             concept_pairs=concept_pairs,
@@ -460,19 +460,19 @@ class TestGenerateSourceConceptOverrideSql:
             delivery_date='2025-01-01',
             vocab_version='v5.0_22-JAN-23',
             vocab_path='vocabularies/',
-            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_source_concept_override.parquet'
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_source_concept_backfill.parquet'
         )
 
-        expected = load_reference_sql("generate_source_concept_override_sql_standard.sql")
+        expected = load_reference_sql("generate_source_concept_backfill_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
 
     def test_multi_pair(self):
-        """Test SQL generation for source concept override with multiple concept pairs (measurement)."""
+        """Test SQL generation for source concept backfill with multiple concept pairs (measurement)."""
         schema = utils.get_table_schema('measurement', '5.4')
         ordered_omop_columns = list(schema['measurement']['columns'].keys())
         concept_pairs = get_concept_id_source_pairs('measurement', '5.4')
 
-        result = VocabHarmonizer.generate_source_concept_override_sql(
+        result = VocabHarmonizer.generate_source_concept_backfill_sql(
             source_table_name='measurement',
             ordered_omop_columns=ordered_omop_columns,
             concept_pairs=concept_pairs,
@@ -483,10 +483,10 @@ class TestGenerateSourceConceptOverrideSql:
             delivery_date='2025-01-01',
             vocab_version='v5.0_22-JAN-23',
             vocab_path='vocabularies/',
-            output_path='synthea53/2025-01-01/artifacts/harmonized/measurement_source_concept_override.parquet'
+            output_path='synthea53/2025-01-01/artifacts/harmonized/measurement_source_concept_backfill.parquet'
         )
 
-        expected = load_reference_sql("generate_source_concept_override_sql_multi_pair.sql")
+        expected = load_reference_sql("generate_source_concept_backfill_sql_multi_pair.sql")
         assert normalize_sql(result) == normalize_sql(expected)
 
     def test_with_exclusion(self):
@@ -501,7 +501,7 @@ class TestGenerateSourceConceptOverrideSql:
                 )
             """
 
-        result = VocabHarmonizer.generate_source_concept_override_sql(
+        result = VocabHarmonizer.generate_source_concept_backfill_sql(
             source_table_name='condition_occurrence',
             ordered_omop_columns=ordered_omop_columns,
             concept_pairs=concept_pairs,
@@ -512,25 +512,25 @@ class TestGenerateSourceConceptOverrideSql:
             delivery_date='2025-01-01',
             vocab_version='v5.0_22-JAN-23',
             vocab_path='vocabularies/',
-            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_source_concept_override.parquet'
+            output_path='synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_source_concept_backfill.parquet'
         )
 
-        expected = load_reference_sql("generate_source_concept_override_sql_with_exclusion.sql")
+        expected = load_reference_sql("generate_source_concept_backfill_sql_with_exclusion.sql")
         assert normalize_sql(result) == normalize_sql(expected)
 
 
-class TestGenerateSecondaryConceptOverrideSql:
-    """Tests for generate_secondary_concept_override_sql()."""
+class TestGenerateSecondaryConceptBackfillSql:
+    """Tests for generate_secondary_concept_backfill_sql()."""
 
     def test_measurement_unit_pair(self):
-        """Test SQL generation for secondary concept override on measurement (unit_concept_id)."""
+        """Test SQL generation for secondary concept backfill on measurement (unit_concept_id)."""
         import core.constants as constants
 
         all_pairs = get_concept_id_source_pairs('measurement', '5.4')
         primary = constants.PRIMARY_CONCEPT_ID_COLUMNS['measurement']
         secondary_pairs = [(c, s) for c, s in all_pairs if c != primary]
 
-        result = VocabHarmonizer.generate_secondary_concept_override_sql(
+        result = VocabHarmonizer.generate_secondary_concept_backfill_sql(
             secondary_pairs=secondary_pairs,
             harmonized_parquet_file='file:///data/synthea53/2025-01-01/artifacts/harmonized_files/measurement/*.parquet',
             site='synthea53',
@@ -538,8 +538,8 @@ class TestGenerateSecondaryConceptOverrideSql:
             delivery_date='2025-01-01',
             vocab_version='v5.0_22-JAN-23',
             vocab_path='vocabularies/',
-            output_path='synthea53/2025-01-01/artifacts/harmonized_files/measurement/measurement_secondary_concept_override.parquet'
+            output_path='synthea53/2025-01-01/artifacts/harmonized_files/measurement/measurement_secondary_concept_backfill.parquet'
         )
 
-        expected = load_reference_sql("generate_secondary_concept_override_sql_standard.sql")
+        expected = load_reference_sql("generate_secondary_concept_backfill_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)

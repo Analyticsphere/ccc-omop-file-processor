@@ -568,8 +568,8 @@ class TestHarmonizeVocabEndpoint:
         assert data['step'] == constants.SOURCE_TARGET
 
     @patch('core.endpoints.vocab_harmonization.VocabHarmonizer')
-    def test_harmonize_vocab_source_concept_override_step(self, mock_harmonizer, client):
-        """Test vocabulary harmonization with source_concept_override step."""
+    def test_harmonize_vocab_source_concept_backfill_step(self, mock_harmonizer, client):
+        """Test vocabulary harmonization with source_concept_backfill step."""
         mock_instance = MagicMock()
         mock_instance.perform_harmonization.return_value = None
         mock_harmonizer.return_value = mock_instance
@@ -581,18 +581,18 @@ class TestHarmonizeVocabEndpoint:
             'site': 'test_site',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset',
-            'step': constants.SOURCE_CONCEPT_OVERRIDE
+            'step': constants.SOURCE_CONCEPT_BACKFILL
         })
 
         data = json.loads(response.data)
         assert response.status_code == 200
         assert data['status'] == 'success'
-        assert data['step'] == constants.SOURCE_CONCEPT_OVERRIDE
-        mock_instance.perform_harmonization.assert_called_once_with(constants.SOURCE_CONCEPT_OVERRIDE)
+        assert data['step'] == constants.SOURCE_CONCEPT_BACKFILL
+        mock_instance.perform_harmonization.assert_called_once_with(constants.SOURCE_CONCEPT_BACKFILL)
 
     @patch('core.endpoints.vocab_harmonization.VocabHarmonizer')
-    def test_harmonize_vocab_secondary_concept_override_step(self, mock_harmonizer, client):
-        """Test vocabulary harmonization with secondary_concept_override step."""
+    def test_harmonize_vocab_secondary_concept_backfill_step(self, mock_harmonizer, client):
+        """Test vocabulary harmonization with secondary_concept_backfill step."""
         mock_instance = MagicMock()
         mock_instance.perform_harmonization.return_value = None
         mock_harmonizer.return_value = mock_instance
@@ -604,14 +604,14 @@ class TestHarmonizeVocabEndpoint:
             'site': 'test_site',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset',
-            'step': constants.SECONDARY_CONCEPT_OVERRIDE
+            'step': constants.SECONDARY_CONCEPT_BACKFILL
         })
 
         data = json.loads(response.data)
         assert response.status_code == 200
         assert data['status'] == 'success'
-        assert data['step'] == constants.SECONDARY_CONCEPT_OVERRIDE
-        mock_instance.perform_harmonization.assert_called_once_with(constants.SECONDARY_CONCEPT_OVERRIDE)
+        assert data['step'] == constants.SECONDARY_CONCEPT_BACKFILL
+        mock_instance.perform_harmonization.assert_called_once_with(constants.SECONDARY_CONCEPT_BACKFILL)
 
     @patch('core.endpoints.vocab_harmonization.VocabHarmonizer')
     def test_harmonize_vocab_discover_step(self, mock_harmonizer, client):

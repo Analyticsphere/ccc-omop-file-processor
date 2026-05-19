@@ -50,10 +50,10 @@ class VocabHarmonizer:
             self.check_new_targets(constants.TARGET_REMAP)
         elif step == constants.TARGET_REPLACEMENT:
             self.check_new_targets(constants.TARGET_REPLACEMENT)
-        elif step == constants.SOURCE_CONCEPT_OVERRIDE:
-            self.source_concept_override()
-        elif step == constants.SECONDARY_CONCEPT_OVERRIDE:
-            self.secondary_concept_override()
+        elif step == constants.SOURCE_CONCEPT_BACKFILL:
+            self.source_concept_backfill()
+        elif step == constants.SECONDARY_CONCEPT_BACKFILL:
+            self.secondary_concept_backfill()
         elif step == constants.OMOP_ETL:
             self.omop_etl()
         elif step == constants.CONSOLIDATE_ETL:
@@ -190,9 +190,9 @@ class VocabHarmonizer:
         # Execute SQL
         utils.execute_duckdb_sql(final_sql, f"Unable to perform domain check against {self.source_table_name}")
 
-    def source_concept_override(self) -> None:
+    def source_concept_backfill(self) -> None:
         """
-        Override the primary zero-valued _concept_id field with its _source_concept_id
+        Backfill the primary zero-valued _concept_id field with its _source_concept_id
         when the source concept ID is non-zero and exists in the OMOP vocabulary.
 
         This step runs after target_replacement and before domain_check.
@@ -207,8 +207,8 @@ class VocabHarmonizer:
         primary_key_column = utils.get_primary_key_column(self.source_table_name, self.cdm_version)
         existing_files_where_clause = self._build_existing_files_exclusion(primary_key_column, use_and=True)
 
-        output_path = storage.get_uri(f"{self.harmonized_parquet_path}{self.source_table_name}_source_concept_override{constants.PARQUET}")
-        final_sql = VocabHarmonizer.generate_source_concept_override_sql(
+        output_path = storage.get_uri(f"{self.harmonized_parquet_path}{self.source_table_name}_source_concept_backfill{constants.PARQUET}")
+        final_sql = VocabHarmonizer.generate_source_concept_backfill_sql(
             source_table_name=self.source_table_name,
             ordered_omop_columns=ordered_omop_columns,
             concept_pairs=[(primary_concept_id, primary_source_concept_id)],
@@ -222,15 +222,15 @@ class VocabHarmonizer:
             output_path=output_path
         )
 
-        utils.execute_duckdb_sql(final_sql, f"Unable to execute source concept override for table {self.source_table_name}")
+        utils.execute_duckdb_sql(final_sql, f"Unable to execute source concept backfill for table {self.source_table_name}")
 
-    def secondary_concept_override(self) -> None:
+    def secondary_concept_backfill(self) -> None:
         """
-        Override zero-valued non-primary _concept_id fields with their _source_concept_id
+        Backfill zero-valued non-primary _concept_id fields with their _source_concept_id
         when the source concept ID is non-zero and exists in the OMOP vocabulary.
 
         This step runs after domain_check and before omop_etl.
-        Reads ALL harmonized parquet files and rewrites them with the overrides applied.
+        Reads ALL harmonized parquet files and rewrites them with the backfills applied.
         """
         all_pairs = utils.get_concept_id_source_pairs(self.source_table_name, self.cdm_version)
         primary_concept_id, _ = self._get_primary_concept_pair()
@@ -240,9 +240,9 @@ class VocabHarmonizer:
             return
 
         output_path = storage.get_uri(
-            f"{self.harmonized_parquet_path}{self.source_table_name}_secondary_concept_override{constants.PARQUET}"
+            f"{self.harmonized_parquet_path}{self.source_table_name}_secondary_concept_backfill{constants.PARQUET}"
         )
-        final_sql = VocabHarmonizer.generate_secondary_concept_override_sql(
+        final_sql = VocabHarmonizer.generate_secondary_concept_backfill_sql(
             secondary_pairs=secondary_pairs,
             harmonized_parquet_file=self.harmonized_parquet_file,
             site=self.site,
@@ -253,16 +253,16 @@ class VocabHarmonizer:
             output_path=output_path
         )
 
-        # Count qualifying rows per pair before applying overrides (for reporting)
-        self._generate_secondary_override_artifacts(secondary_pairs)
+        # Count qualifying rows per pair before applying backfills (for reporting)
+        self._generate_secondary_backfill_artifacts(secondary_pairs)
 
-        utils.execute_duckdb_sql(final_sql, f"Unable to execute secondary concept override for table {self.source_table_name}")
+        utils.execute_duckdb_sql(final_sql, f"Unable to execute secondary concept backfill for table {self.source_table_name}")
 
-        # Delete the original harmonized files now that the override file contains all rows
+        # Delete the original harmonized files now that the backfill file contains all rows
         original_files = storage.list_files(self.harmonized_parquet_path, pattern=f"*{constants.PARQUET}")
-        override_filename = f"{self.source_table_name}_secondary_concept_override{constants.PARQUET}"
+        backfill_filename = f"{self.source_table_name}_secondary_concept_backfill{constants.PARQUET}"
         for file_name in original_files:
-            if file_name != override_filename:
+            if file_name != backfill_filename:
                 storage.delete_file(f"{self.harmonized_parquet_path}{file_name}")
 
     def generate_table_transition_artifacts(self) -> None:
@@ -450,16 +450,16 @@ class VocabHarmonizer:
             # Log the error but don't fail the entire process
             utils.logger.error(f"Error generating row disposition report: {str(e)}")
 
-    def _generate_secondary_override_artifacts(self, secondary_pairs: list[tuple[str, str]]) -> None:
-        """Generate report artifacts counting how many rows qualify for secondary concept override."""
+    def _generate_secondary_backfill_artifacts(self, secondary_pairs: list[tuple[str, str]]) -> None:
+        """Generate report artifacts counting how many rows qualify for secondary concept backfill."""
         try:
-            utils.logger.info(f"Generating secondary concept override report for {self.source_table_name}")
+            utils.logger.info(f"Generating secondary concept backfill report for {self.source_table_name}")
 
             schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
             source_table_concept_id = schema.get(self.source_table_name, {}).get('concept_id')
 
             for concept_id_col, source_concept_id_col in secondary_pairs:
-                count_sql = VocabHarmonizer.generate_secondary_override_count_sql(
+                count_sql = VocabHarmonizer.generate_secondary_backfill_count_sql(
                     concept_id_col=concept_id_col,
                     source_concept_id_col=source_concept_id_col,
                     harmonized_parquet_file=self.harmonized_parquet_file,
@@ -471,25 +471,25 @@ class VocabHarmonizer:
                 )
                 result = utils.execute_duckdb_sql(
                     count_sql,
-                    f"Unable to count secondary overrides for {concept_id_col}",
+                    f"Unable to count secondary backfills for {concept_id_col}",
                     return_results=True
                 )
-                override_count = result[0][0] if result else 0
+                backfill_count = result[0][0] if result else 0
 
                 ra = report_artifact.ReportArtifact(
                     delivery_date=self.delivery_date,
                     artifact_bucket=self.bucket,
                     concept_id=source_table_concept_id,
-                    name=f"Vocab harmonization secondary override: {self.source_table_name} - {concept_id_col}",
+                    name=f"Vocab harmonization secondary backfill: {self.source_table_name} - {concept_id_col}",
                     value_as_string=None,
                     value_as_concept_id=None,
-                    value_as_number=override_count
+                    value_as_number=backfill_count
                 )
                 ra.save_artifact()
-                utils.logger.info(f"Secondary override: {self.source_table_name} - {concept_id_col}: {override_count} rows")
+                utils.logger.info(f"Secondary backfill: {self.source_table_name} - {concept_id_col}: {backfill_count} rows")
 
         except Exception as e:
-            utils.logger.error(f"Error generating secondary concept override report: {str(e)}")
+            utils.logger.error(f"Error generating secondary concept backfill report: {str(e)}")
 
     def omop_etl(self) -> None:
         """
@@ -1260,7 +1260,7 @@ class VocabHarmonizer:
         return final_sql_statement
 
     @staticmethod
-    def generate_source_concept_override_sql(
+    def generate_source_concept_backfill_sql(
         source_table_name: str,
         ordered_omop_columns: list[str],
         concept_pairs: list[tuple[str, str]],
@@ -1274,16 +1274,16 @@ class VocabHarmonizer:
         output_path: str
     ) -> str:
         """
-        Generate SQL to override zero-valued _concept_id fields with the corresponding
+        Generate SQL to backfill zero-valued _concept_id fields with the corresponding
         _source_concept_id when the source concept is non-zero and exists in the vocabulary.
 
-        For each concept_id/source_concept_id pair, the override applies when:
+        For each concept_id/source_concept_id pair, the backfill applies when:
         1. The _concept_id field is 0
         2. The _source_concept_id field is not 0
         3. The _source_concept_id value exists in the optimized vocabulary
 
         A row is emitted if ANY of its concept pairs qualify. All qualifying pairs
-        in the row are overridden simultaneously.
+        in the row are backfilled simultaneously.
 
         Args:
             source_table_name: Name of the source OMOP table
@@ -1314,14 +1314,14 @@ class VocabHarmonizer:
         qualify_conditions: list[str] = []
 
         for column_name in ordered_omop_columns:
-            override_pair = None
+            backfill_pair = None
             for concept_id_col, source_concept_id_col in concept_pairs:
                 if column_name == concept_id_col:
-                    override_pair = (concept_id_col, source_concept_id_col)
+                    backfill_pair = (concept_id_col, source_concept_id_col)
                     break
 
-            if override_pair:
-                cid, scid = override_pair
+            if backfill_pair:
+                cid, scid = backfill_pair
                 cte_name = f"vocab_{scid}"
                 select_exprs.append(
                     f"""CASE
@@ -1348,7 +1348,7 @@ class VocabHarmonizer:
         primary_source_concept_id_col = concept_pairs[0][1]
         metadata_columns = [
             "COALESCE(domain_vocab.concept_id_domain, 'Unknown') AS target_domain",
-            "'source_concept_id override' AS vocab_harmonization_status",
+            "'source_concept_id backfill' AS vocab_harmonization_status",
             f"tbl.{primary_source_concept_id_col} AS source_concept_id",
             f"tbl.{primary_concept_id_col} AS previous_target_concept_id",
             f"tbl.{primary_source_concept_id_col} AS target_concept_id",
@@ -1436,7 +1436,7 @@ class VocabHarmonizer:
         return final_sql
 
     @staticmethod
-    def generate_secondary_concept_override_sql(
+    def generate_secondary_concept_backfill_sql(
         secondary_pairs: list[tuple[str, str]],
         harmonized_parquet_file: str,
         site: str,
@@ -1447,11 +1447,11 @@ class VocabHarmonizer:
         output_path: str
     ) -> str:
         """
-        Generate SQL to override zero-valued non-primary _concept_id fields with their
+        Generate SQL to backfill zero-valued non-primary _concept_id fields with their
         _source_concept_id across ALL harmonized parquet files.
 
         Uses SELECT * REPLACE(...) so all existing columns (including metadata) are
-        preserved. Only the secondary concept_id columns are conditionally overridden.
+        preserved. Only the secondary concept_id columns are conditionally backfilled.
         """
         replace_exprs = []
         for concept_id_col, source_concept_id_col in secondary_pairs:
@@ -1490,7 +1490,7 @@ class VocabHarmonizer:
         return final_sql
 
     @staticmethod
-    def generate_secondary_override_count_sql(
+    def generate_secondary_backfill_count_sql(
         concept_id_col: str,
         source_concept_id_col: str,
         harmonized_parquet_file: str,
@@ -1500,7 +1500,7 @@ class VocabHarmonizer:
         vocab_version: str,
         vocab_path: str,
     ) -> str:
-        """Generate SQL to count how many rows qualify for a secondary concept override."""
+        """Generate SQL to count how many rows qualify for a secondary concept backfill."""
         sql_statement = f"""
             SELECT COUNT(*) FROM read_parquet('{harmonized_parquet_file}')
             WHERE {concept_id_col} = 0

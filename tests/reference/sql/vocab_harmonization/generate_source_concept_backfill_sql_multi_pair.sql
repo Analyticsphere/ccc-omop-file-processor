@@ -50,7 +50,7 @@
                 tbl.measurement_event_id,
                 tbl.meas_event_field_concept_id,
                 COALESCE(domain_vocab.concept_id_domain, 'Unknown') AS target_domain,
-                'source_concept_id override' AS vocab_harmonization_status,
+                'source_concept_id backfill' AS vocab_harmonization_status,
                 tbl.measurement_source_concept_id AS source_concept_id,
                 tbl.measurement_concept_id AS previous_target_concept_id,
                 tbl.measurement_source_concept_id AS target_concept_id,
@@ -79,5 +79,5 @@
                         (tbl.unit_concept_id = 0 AND tbl.unit_source_concept_id != 0 AND vocab_unit_source_concept_id.concept_id IS NOT NULL)
                     )
                 
-            ) TO 'synthea53/2025-01-01/artifacts/harmonized/measurement_source_concept_override.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)
+            ) TO 'synthea53/2025-01-01/artifacts/harmonized/measurement_source_concept_backfill.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)
         

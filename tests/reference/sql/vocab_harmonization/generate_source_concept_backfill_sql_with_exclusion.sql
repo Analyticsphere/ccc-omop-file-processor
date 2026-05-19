@@ -33,7 +33,7 @@
                 tbl.condition_source_concept_id,
                 tbl.condition_status_source_value,
                 COALESCE(domain_vocab.concept_id_domain, 'Unknown') AS target_domain,
-                'source_concept_id override' AS vocab_harmonization_status,
+                'source_concept_id backfill' AS vocab_harmonization_status,
                 tbl.condition_source_concept_id AS source_concept_id,
                 tbl.condition_concept_id AS previous_target_concept_id,
                 tbl.condition_source_concept_id AS target_concept_id,
@@ -63,5 +63,5 @@
                 )
             
                 
-            ) TO 'synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_source_concept_override.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)
+            ) TO 'synthea53/2025-01-01/artifacts/harmonized/condition_occurrence_source_concept_backfill.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)
         
