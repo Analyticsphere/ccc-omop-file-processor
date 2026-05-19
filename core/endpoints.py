@@ -224,7 +224,7 @@ def get_connect_data() -> tuple[str, int]:
     dataset_id: Optional[str] = data.get('dataset_id')
     delivery_bucket: Optional[str] = data.get('delivery_bucket')
     parquet_destination: Optional[str] = data.get('parquet_destination')
-    site_connect_id: Optional[str] = data.get('site_connect_id') # optional; if blank, gets data for all sites
+    site_connect_id: Optional[str] = data.get('site_connect_id')
 
     missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id'])
     if not delivery_bucket and not parquet_destination:

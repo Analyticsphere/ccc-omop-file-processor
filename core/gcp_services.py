@@ -158,7 +158,13 @@ def write_query_results_to_parquet(
     return output_uri
 
 def build_connect_participant_status_sql(project_id: str, dataset_id: str, site_connect_id: Optional[str]) -> str:
-    """Build the Connect participant-status SQL query from template."""
+    """Build the Connect participant-status SQL query from template.
+
+    Args:
+        project_id: GCP project ID containing the BigQuery dataset.
+        dataset_id: BigQuery dataset containing the Connect participants table.
+        site_connect_id: Connect site identifier to filter by. If None, returns data for all sites.
+    """
     sql_path = os.path.join(constants.SQL_PATH, "connect_data", "participant_status.sql")
     with open(sql_path, 'r') as sql_file:
         sql_script = sql_file.read()
@@ -175,7 +181,17 @@ def build_connect_participant_status_sql(project_id: str, dataset_id: str, site_
 
 
 def export_connect_data_to_parquet(project_id: str, dataset_id: str, delivery_bucket: Optional[str], parquet_destination: Optional[str], site_connect_id: Optional[str]) -> str:
-    """Build the Connect participant-status query and export the results to Parquet."""
+    """Build the Connect participant-status query and export the results to Parquet.
+
+    Args:
+        project_id: GCP project ID containing the BigQuery dataset.
+        dataset_id: BigQuery dataset containing the Connect participants table.
+        delivery_bucket: GCS path to the site delivery (e.g. 'bucket/2025-01-01'). Used to infer the
+            Parquet output location and to generate eligibility report artifacts.
+        parquet_destination: Explicit output path for the Parquet file. Takes precedence over
+            delivery_bucket for determining where to write.
+        site_connect_id: Connect site identifier to filter by. If None, returns data for all sites.
+    """
     sql_script = build_connect_participant_status_sql(project_id, dataset_id, site_connect_id)
 
     if parquet_destination:
