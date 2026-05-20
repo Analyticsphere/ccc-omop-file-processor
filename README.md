@@ -128,22 +128,24 @@ A typical run in the current orchestrator DAG follows this order:
 14. `POST /harmonize_vocab` with `step=source_target`
 15. `POST /harmonize_vocab` with `step=target_remap`
 16. `POST /harmonize_vocab` with `step=target_replacement`
-17. `POST /harmonize_vocab` with `step=domain_check`
-18. `POST /harmonize_vocab` with `step=omop_etl`
-19. `POST /harmonize_vocab` with `step=consolidate_etl`
-20. `POST /harmonize_vocab` with `step=discover_tables_for_dedup`
-21. `POST /harmonize_vocab` with `step=deduplicate_single_table`
-22. `POST /generate_derived_tables_from_harmonized` through `core.jobs.generate_derived_tables_job`
-23. `POST /clear_bq_dataset`
-24. `POST /harmonized_parquets_to_bq`
-25. `POST /load_target_vocab` when the site configuration requests standard target vocabulary tables
-26. `POST /parquet_to_bq` for remaining non-harmonized delivered tables
-27. `POST /load_derived_tables_to_bq`
-28. `POST /pipeline_log` with `status=running`
-29. `POST /create_missing_tables`
-30. `POST /parquet_to_bq` for `cdm_source`
-31. `POST /generate_delivery_report_csv`
-32. `POST /pipeline_log` with `status=completed`
+17. `POST /harmonize_vocab` with `step=source_concept_backfill`
+18. `POST /harmonize_vocab` with `step=domain_check`
+19. `POST /harmonize_vocab` with `step=secondary_concept_backfill`
+20. `POST /harmonize_vocab` with `step=omop_etl`
+21. `POST /harmonize_vocab` with `step=consolidate_etl`
+22. `POST /harmonize_vocab` with `step=discover_tables_for_dedup`
+23. `POST /harmonize_vocab` with `step=deduplicate_single_table`
+24. `POST /generate_derived_tables_from_harmonized` through `core.jobs.generate_derived_tables_job`
+25. `POST /clear_bq_dataset`
+26. `POST /harmonized_parquets_to_bq`
+27. `POST /load_target_vocab` when the site configuration requests standard target vocabulary tables
+28. `POST /parquet_to_bq` for remaining non-harmonized delivered tables
+29. `POST /load_derived_tables_to_bq`
+30. `POST /pipeline_log` with `status=running`
+31. `POST /create_missing_tables`
+32. `POST /parquet_to_bq` for `cdm_source`
+33. `POST /generate_delivery_report_csv`
+34. `POST /pipeline_log` with `status=completed`
 
 If any stage fails, the DAG also uses `POST /pipeline_log` with `status=error`.
 
@@ -638,7 +640,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 **Endpoint:** `POST /harmonize_vocab`
 
-**DAG usage:** Called in eight ordered steps. Steps 1 to 5 run per eligible file. Steps 6 and 7 run once per site. Step 8 runs once per discovered target table.
+**DAG usage:** Called in ten ordered steps. Steps 1 to 7 run per eligible file. Steps 8 and 9 run once per site. Step 10 runs once per discovered target table.
 
 **Description:** Executes one step of the vocabulary harmonization process.
 
@@ -661,15 +663,19 @@ The endpoint details below are listed in the order each endpoint first appears i
 | 1 | `source_target` | Per eligible file |
 | 2 | `target_remap` | Per eligible file |
 | 3 | `target_replacement` | Per eligible file |
-| 4 | `domain_check` | Per eligible file |
-| 5 | `omop_etl` | Per eligible file |
-| 6 | `consolidate_etl` | Once per site |
-| 7 | `discover_tables_for_dedup` | Once per site |
-| 8 | `deduplicate_single_table` | Once per discovered table |
+| 4 | `source_concept_backfill` | Per eligible file |
+| 5 | `domain_check` | Per eligible file |
+| 6 | `secondary_concept_backfill` | Per eligible file |
+| 7 | `omop_etl` | Per eligible file |
+| 8 | `consolidate_etl` | Once per site |
+| 9 | `discover_tables_for_dedup` | Once per site |
+| 10 | `deduplicate_single_table` | Once per discovered table |
 
 **Notes:**
 
 - The orchestrator skips tables outside the harmonized-table set before calling the endpoint.
+- `source_concept_backfill` sets the primary `_concept_id` to `_source_concept_id` when the concept ID is zero, the source concept ID is non-zero, and the source concept exists in the vocabulary.
+- `secondary_concept_backfill` applies the same backfill logic to non-primary concept ID columns (e.g., `unit_concept_id`) across all harmonized files produced by prior steps.
 - `discover_tables_for_dedup` returns `table_configs` in the response.
 - For `deduplicate_single_table`, the `file_path` field must contain the JSON-encoded configuration returned by the discovery step.
 
@@ -687,7 +693,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 }
 ```
 
-**Response for steps 1 to 6 and 8:**
+**Response for steps 1 to 8 and 10:**
 
 ```json
 {
@@ -698,7 +704,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 }
 ```
 
-**Example: step 7**
+**Example: step 9**
 
 ```json
 {
@@ -712,7 +718,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 }
 ```
 
-**Response for step 7:**
+**Response for step 9:**
 
 ```json
 {
@@ -735,7 +741,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 }
 ```
 
-**Example: step 8**
+**Example: step 10**
 
 ```json
 {

@@ -435,6 +435,26 @@ def list_files(bucket_name: str, folder_prefix: str, file_format: str) -> list[s
     except Exception as e:
         raise Exception(f"Error listing files: {str(e)}")
 
+def get_concept_id_source_pairs(table_name: str, cdm_version: str) -> list[tuple[str, str]]:
+    """
+    Find all (_concept_id, _source_concept_id) column pairs in a table by convention:
+    a column named X_concept_id is paired with X_source_concept_id if both exist.
+    """
+    schema = get_table_schema(table_name, cdm_version)
+    if not schema or table_name not in schema:
+        return []
+
+    columns = list(schema[table_name]["columns"].keys())
+    pairs = []
+    for col in columns:
+        if col.endswith("_concept_id") and not col.endswith("_source_concept_id"):
+            prefix = col.removesuffix("_concept_id")
+            source_col = f"{prefix}_source_concept_id"
+            if source_col in columns:
+                pairs.append((col, source_col))
+    return pairs
+
+
 def get_primary_key_column(table_name: str, cdm_version: str) -> str:
     """Get primary key column name for OMOP table, or empty string if no primary key exists."""
     schema = get_table_schema(table_name, cdm_version)

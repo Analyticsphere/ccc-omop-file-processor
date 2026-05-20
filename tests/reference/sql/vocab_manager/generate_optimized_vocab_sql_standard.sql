@@ -11,7 +11,7 @@
                 FROM read_parquet('gs://vocab-bucket/vocab/v5.0/optimized_vocab/concept.parquet') c1
                 LEFT JOIN (
                     SELECT * FROM read_parquet('gs://vocab-bucket/vocab/v5.0/optimized_vocab/concept_relationship.parquet')
-                    WHERE relationship_id IN ('Maps to','Maps to value','Maps to unit','Concept replaced by','Concept was_a to','Concept poss_eq to','Concept same_as to','Concept alt_to to')
+                    WHERE relationship_id IN ('Maps to','Maps to value','Concept replaced by')
                 ) cr on c1.concept_id = cr.concept_id_1
                 LEFT JOIN read_parquet('gs://vocab-bucket/vocab/v5.0/optimized_vocab/concept.parquet') c2 on cr.concept_id_2 = c2.concept_id
             ) TO 'gs://vocab-bucket/vocab/v5.0/optimized_vocab/optimized_vocab_file.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)
