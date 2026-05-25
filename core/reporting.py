@@ -367,7 +367,7 @@ class ReportGenerator:
                         name=f"Type concept breakdown: {table_name}",
                         value_as_string=concept_name,
                         value_as_concept_id=type_concept_id,
-                        value_as_number=float(record_count)
+                        value_as_number=float(record_count) # float() in Python == DOUBLE in DuckDB
                     )
                     artifact.save_artifact()
 
