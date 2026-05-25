@@ -33,8 +33,8 @@ class TestGenerateSaveArtifactSQL:
 
     These guard the artifact-write SQL via golden files. Critically, the
     golden file pins value_as_number to TRY_CAST(... AS DOUBLE) — 32-bit
-    FLOAT would silently round counts >~16.7M (the bug that corrupted
-    the Sanford measurement count from 98,159,833 to 98,159,830).
+    FLOAT silently rounds counts >~16.7M to multiples of 8, which would
+    corrupt the row counts written to the delivery report CSV.
     """
 
     def test_matches_golden_file_with_values(self):
@@ -92,7 +92,10 @@ class TestSaveArtifactPrecision:
         mock_uri.return_value = str(parquet_path)
         mock_execute.side_effect = lambda sql, *_a, **_k: duckdb.sql(sql)
 
-        true_count = 98_159_833  # the Sanford measurement count
+        # A count above ~16.7M that lands on a 32-bit FLOAT precision
+        # boundary — exposes the regression that wide-FLOAT rounding would
+        # produce a different value in the CSV than what COUNT(*) returned.
+        true_count = 98_159_833
         artifact = ReportArtifact(
             delivery_date="2025-01-15",
             artifact_bucket="test-bucket",
