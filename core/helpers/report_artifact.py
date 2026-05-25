@@ -28,24 +28,52 @@ class ReportArtifact:
 
         file_path = storage.get_uri(f"{self.report_artifact_path}delivery_report_part_{random_string}{constants.PARQUET}")
 
-        value_as_string_sql = 'NULL' if self.value_as_string is None else f"'{self.value_as_string}'"
-        value_as_number_sql = 'NULL' if self.value_as_number is None else f"'{self.value_as_number}'"
+        record_statement = self.generate_save_artifact_sql(
+            file_path=file_path,
+            metadata_id=random_id,
+            concept_id=self.concept_id,
+            name=self.name,
+            value_as_string=self.value_as_string,
+            value_as_concept_id=self.value_as_concept_id,
+            value_as_number=self.value_as_number,
+            metadata_date=date.today().strftime("%Y-%m-%d"),
+            metadata_datetime=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        )
+        utils.execute_duckdb_sql(record_statement, "Unable to save report artifact")
 
-        record_statement = f"""
+    @staticmethod
+    def generate_save_artifact_sql(
+        file_path: str,
+        metadata_id: int,
+        concept_id: int,
+        name: str,
+        value_as_string: Optional[str],
+        value_as_concept_id: int,
+        value_as_number: Optional[float],
+        metadata_date: str,
+        metadata_datetime: str,
+    ) -> str:
+        """
+        Generate the COPY statement that writes a single report artifact row
+        to its temporary Parquet file.
+        """
+        value_as_string_sql = 'NULL' if value_as_string is None else f"'{value_as_string}'"
+        value_as_number_sql = 'NULL' if value_as_number is None else f"'{value_as_number}'"
+
+        return f"""
         COPY (
             SELECT
-                CAST('{random_id}' AS INT) AS metadata_id,
-                TRY_CAST('{self.concept_id}' AS INT) AS metadata_concept_id,
+                CAST('{metadata_id}' AS INT) AS metadata_id,
+                TRY_CAST('{concept_id}' AS INT) AS metadata_concept_id,
                 32880 AS metadata_type_concept_id,
-                '{self.name}' AS name,
+                '{name}' AS name,
                 {value_as_string_sql} AS value_as_string,
-                TRY_CAST('{self.value_as_concept_id}' AS INT) AS value_as_concept_id,
-                TRY_CAST({value_as_number_sql} AS FLOAT) AS value_as_number,
-                TRY_CAST('{date.today().strftime("%Y-%m-%d")}' AS DATE) AS metadata_date,
-                TRY_CAST('{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' AS DATETIME) AS metadata_datetime
+                TRY_CAST('{value_as_concept_id}' AS INT) AS value_as_concept_id,
+                TRY_CAST({value_as_number_sql} AS DOUBLE) AS value_as_number,
+                TRY_CAST('{metadata_date}' AS DATE) AS metadata_date,
+                TRY_CAST('{metadata_datetime}' AS DATETIME) AS metadata_datetime
         ) TO '{file_path}' {constants.DUCKDB_FORMAT_STRING}
         """
-        utils.execute_duckdb_sql(record_statement, "Unable to save report artifact")
 
     def to_json(self) -> str:
         """
