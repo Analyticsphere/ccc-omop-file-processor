@@ -109,6 +109,88 @@ class TestGenerateRewriteSql:
         assert normalize_sql(result) == normalize_sql(expected)
 
 
+class TestHashOutputStability:
+    """
+    Stability tests for the hash expression's output.
+
+    DuckDB's hash() function is not guaranteed to be stable across major
+    versions. Because we use it to assign globally-unique IDs that should
+    join across deliveries, any drift in the hash output may silently break
+    cross-site referential integrity.
+
+    These tests pin the expected output to DuckDB 1.4.4. 
+    If a future DuckDB upgrade changes the hash function, 
+    OR if the hash expression itself is modified, these tests will fail
+    """
+
+    # Pinned to duckdb==1.4.4 (see requirements.txt). If this changes,
+    # the hash output for the same input may change too.
+    EXPECTED_HASHES = [
+        # (input_value, site, expected_hash)
+        (69575077305629080, "synthea53", 2555308237151760442),
+        (1, "siteA", 1375360430257248328),
+        (9999999999999, "a-different-site", 8438791239449742916),
+        (-1, "synthea53", 4467886651043547291),
+    ]
+
+    def test_hash_output_matches_pinned_values(self):
+        """
+        Run the exact hash SQL the endpoint uses against live DuckDB and
+        confirm output matches values pinned to DuckDB 1.4.4. If this test
+        fails, DuckDB hash output has drifted — investigate before shipping.
+        """
+        import duckdb
+
+        for value, site, expected in self.EXPECTED_HASHES:
+            sql = (
+                f"SELECT CAST((CAST(hash(CONCAT(CAST({value} AS VARCHAR), '{site}')) "
+                f"AS UBIGINT) % 9223372036854775807) AS BIGINT)"
+            )
+            actual = duckdb.sql(sql).fetchone()[0]
+            assert actual == expected, (
+                f"DuckDB hash output drift detected for value={value}, site={site!r}: "
+                f"expected {expected}, got {actual}. "
+                f"DuckDB version: {duckdb.__version__}. "
+                f"See NATURAL_KEY_FOLLOWUPS.md."
+            )
+
+    def test_hash_expression_generates_matching_sql(self):
+        """
+        Confirm generate_hash_expression() produces SQL whose DuckDB output
+        matches the pinned values. This guards against changes to the
+        Python-side expression as well as DuckDB drift.
+        """
+        import duckdb
+
+        for value, site, expected in self.EXPECTED_HASHES:
+            # Embed the hash expression in a SELECT against a single-row CTE
+            hash_expr = NaturalKeyProcessor.generate_hash_expression(
+                column_name="v", site=site
+            )
+            sql = f"WITH t AS (SELECT CAST({value} AS BIGINT) AS v) SELECT {hash_expr} FROM t"
+            actual = duckdb.sql(sql).fetchone()[0]
+            assert actual == expected, (
+                f"Generated hash expression output drift for value={value}, site={site!r}: "
+                f"expected {expected}, got {actual}. "
+                f"Either the expression in generate_hash_expression() changed, "
+                f"or DuckDB hash output drifted (version: {duckdb.__version__}). "
+                f"See NATURAL_KEY_FOLLOWUPS.md."
+            )
+
+    def test_null_input_returns_null(self):
+        """NULL inputs must pass through unchanged — never hashed."""
+        import duckdb
+
+        hash_expr = NaturalKeyProcessor.generate_hash_expression(
+            column_name="v", site="synthea53"
+        )
+        sql = f"WITH t AS (SELECT CAST(NULL AS BIGINT) AS v) SELECT {hash_expr} FROM t"
+        actual = duckdb.sql(sql).fetchone()[0]
+        assert actual is None, (
+            f"NULL input must produce NULL output (project rule), got {actual}"
+        )
+
+
 class TestFindColumnsToRewrite:
     """Tests for find_columns_to_rewrite()."""
 

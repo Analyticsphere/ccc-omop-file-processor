@@ -67,7 +67,28 @@ rehash interacts with `note_nlp`. Fix likely belongs in either the transformer
 flow (route `note_nlp` through a parallel rewrite) or a small dedicated pass
 that mirrors `note`'s PK transformation into `note_nlp.note_id`.
 
-## 4. DAG wiring (Airflow, not this repo)
+## 4. DuckDB hash output stability (mitigated, not eliminated)
+
+DuckDB's `hash()` function is not contractually stable across DuckDB versions.
+We confirmed this empirically: DuckDB 1.2.1 and 1.4.4 produce different hash
+outputs for the same `(value, site)` input. Because our globally-unique IDs
+ride on top of this function, any change in DuckDB hash output would silently
+break cross-delivery referential integrity — different sites' deliveries
+processed under different DuckDB versions would not join.
+
+**Mitigation in place:** the `TestHashOutputStability` class in
+`tests/test_natural_keys_sql.py` pins expected hash outputs to DuckDB 1.4.4
+(the version locked in `requirements.txt`). Any DuckDB upgrade or hash-output
+change fails these tests loudly.
+
+**Still TODO:**
+- Decide what to do when an intentional DuckDB upgrade is required. A version
+  bump in `requirements.txt` will require regenerating the pinned expected
+  values AND a plan for re-hashing any data already produced under the prior
+  version (or accepting that historical deliveries are quarantined).
+- Consider exposing a re-hash utility for that recovery scenario.
+
+## 5. DAG wiring (Airflow, not this repo)
 
 This repo exposes the endpoint + Cloud Run job. The Airflow DAG that
 orchestrates the pipeline lives elsewhere and must be updated to:

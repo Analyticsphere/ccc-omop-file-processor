@@ -108,10 +108,9 @@ class NaturalKeyProcessor:
         """
         Generate SQL that rewrites the parquet file in place.
 
-        All non-listed columns pass through via SELECT * EXCLUDE; each listed
-        column is replaced with a site-salted hash expression.
+        Uses SELECT * REPLACE so each rewritten column stays in its original
+        position in the schema — column order is preserved exactly.
         """
-        exclude_list = ", ".join(columns_to_rewrite)
         replacement_exprs = ",\n                ".join(
             NaturalKeyProcessor.generate_hash_expression(col, site)
             for col in columns_to_rewrite
@@ -119,9 +118,9 @@ class NaturalKeyProcessor:
 
         rewrite_sql = f"""
         COPY (
-            SELECT
-                * EXCLUDE ({exclude_list}),
+            SELECT * REPLACE (
                 {replacement_exprs}
+            )
             FROM read_parquet('{table_uri}')
         ) TO '{table_uri}' {constants.DUCKDB_FORMAT_STRING}
         """.strip()
