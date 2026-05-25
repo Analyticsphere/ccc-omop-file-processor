@@ -56,10 +56,6 @@ class ReportArtifact:
         """
         Generate the COPY statement that writes a single report artifact row
         to its temporary Parquet file.
-
-        value_as_number is cast to DOUBLE (64-bit IEEE 754) so large row counts
-        round-trip exactly. Casting to FLOAT (32-bit) silently rounds values
-        above ~16.7M to multiples of 8 and corrupts the report.
         """
         value_as_string_sql = 'NULL' if value_as_string is None else f"'{value_as_string}'"
         value_as_number_sql = 'NULL' if value_as_number is None else f"'{value_as_number}'"
