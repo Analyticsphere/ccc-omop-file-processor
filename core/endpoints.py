@@ -9,6 +9,7 @@ import core.file_processor as file_processor
 import core.file_validation as file_validation
 import core.gcp_services as gcp_services
 import core.helpers.pipeline_log as pipeline_log
+import core.natural_keys as natural_keys
 import core.normalization as normalization
 import core.omop_client as omop_client
 import core.participant_filter as participant_filter
@@ -335,6 +336,45 @@ def filter_connect_participants() -> tuple[str, int]:
     except Exception as e:
         utils.logger.error(f"Unable to apply Connect participant filtering: {str(e)}")
         return f"Unable to apply Connect participant filtering: {str(e)}", 500
+
+
+@app.route('/unique_natural_keys', methods=['POST'])
+def unique_natural_keys() -> tuple[str, int]:
+    """
+    Rewrite natural-key columns (PK and FK) so values are globally unique across sites.
+
+    Applied to every in-scope column present in the file
+    (constants.GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS). Vocabulary tables and the
+    person table are skipped per project rules.
+    """
+    data: dict[str, Any] = request.get_json() or {}
+    file_path: Optional[str] = data.get('file_path')
+    omop_version: Optional[str] = data.get('omop_version')
+    site: Optional[str] = data.get('site')
+    missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'site'])
+
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert file_path is not None
+        assert omop_version is not None
+        assert site is not None
+
+        processor = natural_keys.NaturalKeyProcessor(
+            file_path=file_path,
+            omop_version=omop_version,
+            site=site,
+        )
+        was_applied = processor.apply()
+
+        if not was_applied:
+            return "Skipped natural-key rewrite for table not in scope", 200
+
+        return "Applied natural-key rewrite", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to apply natural-key rewrite: {str(e)}")
+        return f"Unable to apply natural-key rewrite: {str(e)}", 500
 
 
 @app.route('/clear_bq_dataset', methods=['POST'])
