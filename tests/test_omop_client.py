@@ -193,44 +193,28 @@ class TestOMOPClientPopulateCdmSourceFile:
     @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
     @patch('core.omop_client.utils.execute_duckdb_sql')
     @patch('core.omop_client.utils.parquet_file_exists')
-    def test_populate_cdm_source_file_one_row_valid_date(self, mock_file_exists, mock_execute, mock_artifact):
-        """File has 1 row with a valid source_release_date -> leave file untouched."""
+    def test_populate_cdm_source_file_one_row_always_rewrites_release_dates(self, mock_file_exists, mock_execute, mock_artifact):
+        """File has 1 row -> always rewrite source_release_date (COALESCE/fallback) and cdm_release_date (=delivery_date), preserving every other site value."""
         mock_file_exists.return_value = True
         mock_execute.side_effect = [
-            [[1]],      # row count
-            [[True]],   # validity check passes
+            [[1]],    # row count
+            None,     # rewrite SQL succeeds
         ]
 
         OMOPClient.populate_cdm_source_file(dict(self.BASE_CDM_SOURCE_DATA), "%Y-%m-%d")
 
-        # Row count + validity check only; no populate, no rewrite
+        # Row count + rewrite (no validity check, no full populate)
         assert mock_execute.call_count == 2
-        mock_artifact.assert_called_once()
 
-    @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
-    @patch('core.omop_client.utils.execute_duckdb_sql')
-    @patch('core.omop_client.utils.parquet_file_exists')
-    def test_populate_cdm_source_file_one_row_invalid_date(self, mock_file_exists, mock_execute, mock_artifact):
-        """File has 1 row with an invalid source_release_date -> rewrite only that column, preserving every other site value."""
-        mock_file_exists.return_value = True
-        mock_execute.side_effect = [
-            [[1]],       # row count
-            [[False]],   # validity check fails
-            None,        # rewrite SQL succeeds
-        ]
-
-        OMOPClient.populate_cdm_source_file(dict(self.BASE_CDM_SOURCE_DATA), "%Y-%m-%d")
-
-        # Row count + validity check + rewrite (no full populate)
-        assert mock_execute.call_count == 3
-
-        # Confirm the third SQL invocation is the SELECT * REPLACE rewrite, not the full populate
-        rewrite_sql = mock_execute.call_args_list[2][0][0]
+        rewrite_sql = mock_execute.call_args_list[1][0][0]
+        # The rewrite uses SELECT * REPLACE so untouched columns pass through
         assert "SELECT * REPLACE" in rewrite_sql
+        # Both release-date columns are rewritten
         assert "source_release_date" in rewrite_sql
-        # delivery_date appears in the COALESCE fallback inside the rewrite
+        assert "cdm_release_date" in rewrite_sql
+        # delivery_date appears as the fallback / hard value
         assert self.BASE_CDM_SOURCE_DATA["delivery_date"] in rewrite_sql
-        # Not a full populate
+        # Not a full populate (no other column literals)
         assert "cdm_source_name" not in rewrite_sql
 
         mock_artifact.assert_called_once()

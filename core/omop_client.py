@@ -99,10 +99,10 @@ class OMOPClient:
         Populate cdm_source Parquet file with metadata if empty, non-existent, or contains multiple rows.
 
         Checks if site delivered cdm_source file and populates it with metadata if needed:
-        - If file exists with exactly one row: verify the source_release_date value.
-          If it parses as a DATE (via date_format or direct cast), leave the row alone.
-          If it does not parse, overwrite only the source_release_date column with
-          delivery_date and preserve every other site-delivered column.
+        - If file exists with exactly one row: keep the site-delivered row but always
+          rewrite two columns: source_release_date (keeps site value if parseable, else
+          falls back to delivery_date) and cdm_release_date (unconditionally set to
+          delivery_date). Every other site-delivered column passes through unchanged.
         - If file exists with multiple rows: treat as if no rows were delivered and populate
         - If file exists but is empty: populate with metadata
         - If file doesn't exist: create and populate with metadata
@@ -131,39 +131,29 @@ class OMOPClient:
         delivery_date = cdm_source_data["delivery_date"]
 
         cdm_source_path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}cdm_source{constants.PARQUET}"
+        cdm_source_uri = storage.get_uri(cdm_source_path)
 
         file_exists = utils.parquet_file_exists(cdm_source_path)
-
         if file_exists:
-            # Check if file has rows
-            row_count_sql = normalization.Normalizer.generate_row_count_sql(storage.get_uri(cdm_source_path))
+            row_count_sql = normalization.Normalizer.generate_row_count_sql(cdm_source_uri)
             result = utils.execute_duckdb_sql(row_count_sql, "Unable to count rows in cdm_source", return_results=True)
             row_count = result[0][0] if result else 0
+        else:
+            row_count = 0
 
-            if row_count == 1:
-                utils.logger.info("cdm_source file has 1 row, verifying source_release_date")
-                cdm_source_uri = storage.get_uri(cdm_source_path)
-
-                validity_sql = OMOPClient.generate_source_release_date_validity_sql(cdm_source_uri, date_format)
-                validity_result = utils.execute_duckdb_sql(validity_sql, "Unable to verify source_release_date in cdm_source", return_results=True)
-                source_release_date_is_valid = bool(validity_result[0][0]) if validity_result else False
-
-                if source_release_date_is_valid:
-                    utils.logger.info("cdm_source source_release_date is valid; leaving file as-is")
-                else:
-                    utils.logger.warning("cdm_source source_release_date is not a valid date; rewriting that column with delivery_date")
-                    fix_sql = OMOPClient.generate_fix_source_release_date_sql(cdm_source_uri, date_format, delivery_date)
-                    utils.execute_duckdb_sql(fix_sql, "Unable to rewrite source_release_date in cdm_source")
-
-                OMOPClient._create_source_extraction_date_artifact(bucket, delivery_date, cdm_source_path, date_format)
-                return
-            elif row_count > 1:
-                utils.logger.warning(f"cdm_source file has {row_count} rows, treating as if no rows were delivered and re-populating")
-
-        utils.logger.info(f"Populating cdm_source Parquet file for {delivery_date} delivery")
-
-        populate_sql = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, storage.get_uri(cdm_source_path))
-        utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
+        if not file_exists or row_count == 0:
+            reason = "does not exist" if not file_exists else "is empty"
+            utils.logger.info(f"cdm_source file {reason}; populating for {delivery_date} delivery")
+            populate_sql = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, cdm_source_uri)
+            utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
+        elif row_count == 1:
+            utils.logger.info("cdm_source file has 1 row, rewriting source_release_date (fallback to delivery_date if unparseable) and cdm_release_date (always delivery_date)")
+            rewrite_sql = OMOPClient.generate_rewrite_release_dates_sql(cdm_source_uri, date_format, delivery_date)
+            utils.execute_duckdb_sql(rewrite_sql, "Unable to rewrite release dates in cdm_source")
+        else:  # row_count > 1
+            utils.logger.warning(f"cdm_source file has {row_count} rows, treating as if no rows were delivered and re-populating")
+            populate_sql = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, cdm_source_uri)
+            utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
 
         OMOPClient._create_source_extraction_date_artifact(bucket, delivery_date, cdm_source_path, date_format)
 
@@ -294,11 +284,11 @@ class OMOPClient:
         Creates a single-row Parquet file containing CDM source metadata including
         version information, release dates, and vocabulary version.
 
-        Date columns (source_release_date, cdm_release_date) are wrapped in a
-        COALESCE chain that tries the site-specific date_format first, then a
-        direct cast, then falls back to delivery_date. The fallback ensures we
-        always produce a valid DATE even if the site-provided release dates are
-        malformed.
+        source_release_date is wrapped in a COALESCE chain that tries the site-specific
+        date_format first, then a direct cast, then falls back to delivery_date.
+
+        cdm_release_date is unconditionally set to delivery_date (the pipeline always
+        stamps this with the delivery date regardless of what the site provided).
 
         Args:
             cdm_source_data: Dictionary containing CDM source metadata fields
@@ -316,13 +306,6 @@ class OMOPClient:
             date_format=date_format,
             datetime_format="",
         )
-        cdm_release_date_cast = normalization.Normalizer.generate_date_datetime_cast(
-            column_name=f"'{cdm_source_data['cdm_release_date']}'",
-            column_type="DATE",
-            default_value=f"'{delivery_date}'",
-            date_format=date_format,
-            datetime_format="",
-        )
 
         cdm_source_statement = f"""
             COPY (
@@ -334,7 +317,7 @@ class OMOPClient:
                     '{cdm_source_data.get("source_documentation_reference", "")}' AS source_documentation_reference,
                     '{cdm_source_data.get("cdm_etl_reference", "")}' AS cdm_etl_reference,
                     {source_release_date_cast} AS source_release_date,
-                    {cdm_release_date_cast} AS cdm_release_date,
+                    CAST('{delivery_date}' AS DATE) AS cdm_release_date,
                     '{target_omop_version}' AS cdm_version,
                     {cdm_version_concept_id} AS cdm_version_concept_id,
                     '{cdm_source_data["target_vocab_version"]}' AS vocabulary_version
@@ -344,32 +327,19 @@ class OMOPClient:
         return cdm_source_statement
 
     @staticmethod
-    def generate_source_release_date_validity_sql(cdm_source_uri: str, date_format: str) -> str:
+    def generate_rewrite_release_dates_sql(cdm_source_uri: str, date_format: str, delivery_date: str) -> str:
         """
-        Generate SQL that returns True if the single-row parquet's source_release_date
-        can be parsed with the site-specific date_format or directly cast to DATE.
+        Generate SQL that overwrites the cdm_source parquet, replacing two columns:
 
-        Used to decide whether to leave a site-delivered cdm_source row alone or
-        rewrite its source_release_date column with delivery_date.
-        """
-        return f"""
-            SELECT
-                (TRY_CAST(TRY_STRPTIME(CAST(source_release_date AS VARCHAR), '{date_format}') AS DATE) IS NOT NULL)
-                OR (TRY_CAST(source_release_date AS DATE) IS NOT NULL) AS is_valid
-            FROM read_parquet('{cdm_source_uri}')
-            LIMIT 1
-        """
-
-    @staticmethod
-    def generate_fix_source_release_date_sql(cdm_source_uri: str, date_format: str, delivery_date: str) -> str:
-        """
-        Generate SQL that overwrites the cdm_source parquet, replacing only the
-        source_release_date column with a COALESCE that falls back to delivery_date.
+        - source_release_date: COALESCE that keeps the site-delivered value if it
+          parses via date_format or direct cast, otherwise falls back to delivery_date.
+        - cdm_release_date: unconditionally set to delivery_date (the pipeline always
+          stamps this with the delivery date regardless of what the site provided).
 
         Uses DuckDB's SELECT * REPLACE so every other site-delivered column passes
         through unchanged.
         """
-        date_cast = normalization.Normalizer.generate_date_datetime_cast(
+        source_release_date_cast = normalization.Normalizer.generate_date_datetime_cast(
             column_name="source_release_date",
             column_type="DATE",
             default_value=f"'{delivery_date}'",
@@ -379,7 +349,8 @@ class OMOPClient:
         return f"""
             COPY (
                 SELECT * REPLACE (
-                    {date_cast} AS source_release_date
+                    {source_release_date_cast} AS source_release_date,
+                    CAST('{delivery_date}' AS DATE) AS cdm_release_date
                 )
                 FROM read_parquet('{cdm_source_uri}')
             ) TO '{cdm_source_uri}' {constants.DUCKDB_FORMAT_STRING}

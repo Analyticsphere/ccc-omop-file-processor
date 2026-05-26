@@ -223,30 +223,16 @@ class TestGenerateSourceExtractionDateSql:
         assert normalize_sql(result) == normalize_sql(expected)
 
 
-class TestGenerateSourceReleaseDateValiditySql:
-    """Tests for generate_source_release_date_validity_sql()."""
+class TestGenerateRewriteReleaseDatesSql:
+    """Tests for generate_rewrite_release_dates_sql()."""
 
-    def test_standard_validity_sql(self):
-        """SQL returns True when source_release_date parses via strptime OR direct cast."""
-        cdm_source_uri = "gs://test-bucket/2025-01-15/artifacts/converted_files/cdm_source.parquet"
-        date_format = "%Y-%m-%d"
-
-        result = OMOPClient.generate_source_release_date_validity_sql(cdm_source_uri, date_format)
-
-        expected = load_reference_sql("generate_source_release_date_validity_sql_standard.sql")
-        assert normalize_sql(result) == normalize_sql(expected)
-
-
-class TestGenerateFixSourceReleaseDateSql:
-    """Tests for generate_fix_source_release_date_sql()."""
-
-    def test_standard_fix_sql(self):
-        """SQL uses SELECT * REPLACE to overwrite only source_release_date with delivery_date, preserving all other columns."""
+    def test_standard_rewrite_sql(self):
+        """SQL uses SELECT * REPLACE to rewrite source_release_date (COALESCE/fallback) and cdm_release_date (=delivery_date), preserving every other column."""
         cdm_source_uri = "gs://test-bucket/2025-01-15/artifacts/converted_files/cdm_source.parquet"
         date_format = "%Y-%m-%d"
         delivery_date = "2025-01-15"
 
-        result = OMOPClient.generate_fix_source_release_date_sql(cdm_source_uri, date_format, delivery_date)
+        result = OMOPClient.generate_rewrite_release_dates_sql(cdm_source_uri, date_format, delivery_date)
 
-        expected = load_reference_sql("generate_fix_source_release_date_sql_standard.sql")
+        expected = load_reference_sql("generate_rewrite_release_dates_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)

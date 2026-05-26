@@ -12,11 +12,7 @@ TRY_CAST(TRY_STRPTIME(CAST('December 31, 2024' AS VARCHAR), '%Y-%m-%d') AS DATE)
 TRY_CAST('December 31, 2024' AS DATE),
 CAST('2025-01-15' AS DATE)
 ) AS source_release_date,
-COALESCE(
-TRY_CAST(TRY_STRPTIME(CAST('December 15, 2024' AS VARCHAR), '%Y-%m-%d') AS DATE),
-TRY_CAST('December 15, 2024' AS DATE),
-CAST('2025-01-15' AS DATE)
-) AS cdm_release_date,
+CAST('2025-01-15' AS DATE) AS cdm_release_date,
 '5.4' AS cdm_version,
 756265 AS cdm_version_concept_id,
 'v5.0_24-JAN-25' AS vocabulary_version

@@ -619,9 +619,11 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 **Notes:**
 
-- If `cdm_source.parquet` exists with exactly one row, the endpoint keeps the site-delivered row and skips population — except that it first verifies the row's `source_release_date`. If that value cannot be parsed via `date_format` or directly cast to `DATE`, the endpoint rewrites only the `source_release_date` column with `delivery_date` (every other site-delivered column is preserved).
-- If the file exists with more than one row, all rows are overwritten (the endpoint treats it as if no rows were delivered).
-- `source_release_date` and `cdm_release_date` written to the parquet on the populate path are wrapped in a date-cast fallback chain — if a value cannot be parsed with `date_format` or directly cast to `DATE`, the column falls back to `delivery_date`.
+- If `cdm_source.parquet` exists with exactly one row, the endpoint keeps every site-delivered column **except** `source_release_date` and `cdm_release_date`, which are always rewritten:
+    - `source_release_date` keeps the site's value if it parses via `date_format` or directly casts to `DATE`; otherwise it falls back to `delivery_date`.
+    - `cdm_release_date` is unconditionally set to `delivery_date`.
+- If the file does not exist, exists with zero rows, or exists with more than one row, it is populated from the request payload (all rows overwritten).
+- On the populate path: `source_release_date` is wrapped in a date-cast fallback chain (falls back to `delivery_date` if unparseable). `cdm_release_date` is unconditionally set to `delivery_date`. Although the request's `cdm_release_date` field is still required, its value is ignored.
 - The "Source system extraction date" report artifact is always written; if the cdm_source `source_release_date` value cannot be parsed, the artifact falls back to `delivery_date`.
 
 **Example:**
