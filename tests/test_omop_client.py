@@ -193,15 +193,46 @@ class TestOMOPClientPopulateCdmSourceFile:
     @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
     @patch('core.omop_client.utils.execute_duckdb_sql')
     @patch('core.omop_client.utils.parquet_file_exists')
-    def test_populate_cdm_source_file_exists_with_one_row(self, mock_file_exists, mock_execute, mock_artifact):
-        """File exists with exactly 1 row -> keep site-delivered data, skip population."""
+    def test_populate_cdm_source_file_one_row_valid_date(self, mock_file_exists, mock_execute, mock_artifact):
+        """File has 1 row with a valid source_release_date -> leave file untouched."""
         mock_file_exists.return_value = True
-        mock_execute.return_value = [[1]]
+        mock_execute.side_effect = [
+            [[1]],      # row count
+            [[True]],   # validity check passes
+        ]
 
         OMOPClient.populate_cdm_source_file(dict(self.BASE_CDM_SOURCE_DATA), "%Y-%m-%d")
 
-        # Only the row count was executed; populate was skipped
-        assert mock_execute.call_count == 1
+        # Row count + validity check only; no populate, no rewrite
+        assert mock_execute.call_count == 2
+        mock_artifact.assert_called_once()
+
+    @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
+    @patch('core.omop_client.utils.execute_duckdb_sql')
+    @patch('core.omop_client.utils.parquet_file_exists')
+    def test_populate_cdm_source_file_one_row_invalid_date(self, mock_file_exists, mock_execute, mock_artifact):
+        """File has 1 row with an invalid source_release_date -> rewrite only that column, preserving every other site value."""
+        mock_file_exists.return_value = True
+        mock_execute.side_effect = [
+            [[1]],       # row count
+            [[False]],   # validity check fails
+            None,        # rewrite SQL succeeds
+        ]
+
+        OMOPClient.populate_cdm_source_file(dict(self.BASE_CDM_SOURCE_DATA), "%Y-%m-%d")
+
+        # Row count + validity check + rewrite (no full populate)
+        assert mock_execute.call_count == 3
+
+        # Confirm the third SQL invocation is the SELECT * REPLACE rewrite, not the full populate
+        rewrite_sql = mock_execute.call_args_list[2][0][0]
+        assert "SELECT * REPLACE" in rewrite_sql
+        assert "source_release_date" in rewrite_sql
+        # delivery_date appears in the COALESCE fallback inside the rewrite
+        assert self.BASE_CDM_SOURCE_DATA["delivery_date"] in rewrite_sql
+        # Not a full populate
+        assert "cdm_source_name" not in rewrite_sql
+
         mock_artifact.assert_called_once()
 
     @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')

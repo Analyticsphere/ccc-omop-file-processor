@@ -99,7 +99,10 @@ class OMOPClient:
         Populate cdm_source Parquet file with metadata if empty, non-existent, or contains multiple rows.
 
         Checks if site delivered cdm_source file and populates it with metadata if needed:
-        - If file exists with exactly one row: do nothing (site provided data)
+        - If file exists with exactly one row: verify the source_release_date value.
+          If it parses as a DATE (via date_format or direct cast), leave the row alone.
+          If it does not parse, overwrite only the source_release_date column with
+          delivery_date and preserve every other site-delivered column.
         - If file exists with multiple rows: treat as if no rows were delivered and populate
         - If file exists but is empty: populate with metadata
         - If file doesn't exist: create and populate with metadata
@@ -138,7 +141,20 @@ class OMOPClient:
             row_count = result[0][0] if result else 0
 
             if row_count == 1:
-                utils.logger.info("cdm_source file has 1 row, skipping population")
+                utils.logger.info("cdm_source file has 1 row, verifying source_release_date")
+                cdm_source_uri = storage.get_uri(cdm_source_path)
+
+                validity_sql = OMOPClient.generate_source_release_date_validity_sql(cdm_source_uri, date_format)
+                validity_result = utils.execute_duckdb_sql(validity_sql, "Unable to verify source_release_date in cdm_source", return_results=True)
+                source_release_date_is_valid = bool(validity_result[0][0]) if validity_result else False
+
+                if source_release_date_is_valid:
+                    utils.logger.info("cdm_source source_release_date is valid; leaving file as-is")
+                else:
+                    utils.logger.warning("cdm_source source_release_date is not a valid date; rewriting that column with delivery_date")
+                    fix_sql = OMOPClient.generate_fix_source_release_date_sql(cdm_source_uri, date_format, delivery_date)
+                    utils.execute_duckdb_sql(fix_sql, "Unable to rewrite source_release_date in cdm_source")
+
                 OMOPClient._create_source_extraction_date_artifact(bucket, delivery_date, cdm_source_path, date_format)
                 return
             elif row_count > 1:
@@ -326,6 +342,48 @@ class OMOPClient:
         """
 
         return cdm_source_statement
+
+    @staticmethod
+    def generate_source_release_date_validity_sql(cdm_source_uri: str, date_format: str) -> str:
+        """
+        Generate SQL that returns True if the single-row parquet's source_release_date
+        can be parsed with the site-specific date_format or directly cast to DATE.
+
+        Used to decide whether to leave a site-delivered cdm_source row alone or
+        rewrite its source_release_date column with delivery_date.
+        """
+        return f"""
+            SELECT
+                (TRY_CAST(TRY_STRPTIME(CAST(source_release_date AS VARCHAR), '{date_format}') AS DATE) IS NOT NULL)
+                OR (TRY_CAST(source_release_date AS DATE) IS NOT NULL) AS is_valid
+            FROM read_parquet('{cdm_source_uri}')
+            LIMIT 1
+        """
+
+    @staticmethod
+    def generate_fix_source_release_date_sql(cdm_source_uri: str, date_format: str, delivery_date: str) -> str:
+        """
+        Generate SQL that overwrites the cdm_source parquet, replacing only the
+        source_release_date column with a COALESCE that falls back to delivery_date.
+
+        Uses DuckDB's SELECT * REPLACE so every other site-delivered column passes
+        through unchanged.
+        """
+        date_cast = normalization.Normalizer.generate_date_datetime_cast(
+            column_name="source_release_date",
+            column_type="DATE",
+            default_value=f"'{delivery_date}'",
+            date_format=date_format,
+            datetime_format=""
+        )
+        return f"""
+            COPY (
+                SELECT * REPLACE (
+                    {date_cast} AS source_release_date
+                )
+                FROM read_parquet('{cdm_source_uri}')
+            ) TO '{cdm_source_uri}' {constants.DUCKDB_FORMAT_STRING}
+        """
 
     @staticmethod
     def generate_source_extraction_date_sql(cdm_source_uri: str, date_format: str, delivery_date: str) -> str:
