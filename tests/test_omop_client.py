@@ -190,6 +190,11 @@ class TestOMOPClientPopulateCdmSourceFile:
         assert mock_execute.call_count == 2
         mock_artifact.assert_called_once()
 
+        # Second call is the populate SQL — pin it against the golden
+        populate_sql = mock_execute.call_args_list[1][0][0]
+        expected = load_reference_sql("generate_populate_cdm_source_sql_via_dispatch.sql")
+        assert normalize_sql(populate_sql) == normalize_sql(expected)
+
     @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
     @patch('core.omop_client.utils.execute_duckdb_sql')
     @patch('core.omop_client.utils.parquet_file_exists')
@@ -235,6 +240,11 @@ class TestOMOPClientPopulateCdmSourceFile:
         # Row count + population (populate is re-run despite file having rows)
         assert mock_execute.call_count == 2
         mock_artifact.assert_called_once()
+
+        # Second call is the populate SQL — same shared golden as the empty-file branch
+        populate_sql = mock_execute.call_args_list[1][0][0]
+        expected = load_reference_sql("generate_populate_cdm_source_sql_via_dispatch.sql")
+        assert normalize_sql(populate_sql) == normalize_sql(expected)
 
     @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
     @patch('core.omop_client.utils.execute_duckdb_sql')
