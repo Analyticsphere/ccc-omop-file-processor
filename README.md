@@ -597,40 +597,48 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 **DAG usage:** Called once per site delivery after file-level Connect filtering and before vocabulary harmonization.
 
-**Description:** Creates or populates `cdm_source.parquet` if the file does not exist or exists but is empty.
+**Description:** Creates or populates `cdm_source.parquet` if the file does not exist, exists but is empty, or contains more than one row.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `bucket` | string | Yes | Site bucket or root directory |
-| `source_release_date` | string | Yes | Delivery date in `YYYY-MM-DD` format |
+| `delivery_date` | string | Yes | Delivery date directory component in `YYYY-MM-DD` format |
+| `source_release_date` | string | Yes | Source release date written to the `source_release_date` column |
 | `cdm_source_name` | string | Yes | Source name written to `cdm_source` |
 | `cdm_source_abbreviation` | string | Yes | Source abbreviation |
 | `cdm_holder` | string | Yes | Organization holding the data |
 | `source_description` | string | Yes | Source description |
-| `cdm_version` | string | Yes | Target OMOP CDM version |
+| `target_omop_version` | string | Yes | Target OMOP CDM version (written to `cdm_version`; drives `cdm_version_concept_id`) |
+| `target_vocab_version` | string | Yes | Target vocabulary version (written to `vocabulary_version`) |
 | `cdm_release_date` | string | Yes | CDM release date |
+| `date_format` | string | Yes | strptime format used to parse `source_release_date` / `cdm_release_date` |
 | `source_documentation_reference` | string | No | Source documentation reference |
 | `cdm_etl_reference` | string | No | ETL documentation reference |
 
 **Notes:**
 
-- If `cdm_source.parquet` already exists and contains rows, the endpoint does nothing.
-- The service derives `vocabulary_version` from the delivered `vocabulary.parquet` file rather than taking it as a request field.
+- If `cdm_source.parquet` exists with exactly one row, the endpoint keeps the site-delivered file and skips population.
+- If the file exists with more than one row, all rows are overwritten (the endpoint treats it as if no rows were delivered).
+- `source_release_date` and `cdm_release_date` written to the parquet are wrapped in a date-cast fallback chain — if a value cannot be parsed with `date_format` or directly cast to `DATE`, the column falls back to `delivery_date`.
+- The "Source system extraction date" report artifact is always written; if the cdm_source `source_release_date` value cannot be parsed, the artifact falls back to `delivery_date`.
 
 **Example:**
 
 ```json
 {
   "bucket": "site",
+  "delivery_date": "2024-01-15",
   "source_release_date": "2024-01-15",
   "cdm_source_name": "Hospital A EHR",
   "cdm_source_abbreviation": "HOSP_A",
   "cdm_holder": "Hospital A",
   "source_description": "OMOP delivery for Hospital A",
-  "cdm_version": "5.4",
-  "cdm_release_date": "2024-01-20"
+  "target_omop_version": "5.4",
+  "target_vocab_version": "v5.0_24-JAN-25",
+  "cdm_release_date": "2024-01-20",
+  "date_format": "%Y-%m-%d"
 }
 ```
 

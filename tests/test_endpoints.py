@@ -962,20 +962,24 @@ class TestCreateMissingTablesEndpoint:
 class TestPopulateCdmSourceFileEndpoint:
     """Tests for /populate_cdm_source_file endpoint."""
 
+    VALID_PAYLOAD = {
+        'bucket': 'test-bucket',
+        'delivery_date': '2025-01-15',
+        'source_release_date': '2024-12-31',
+        'cdm_source_name': 'Test Source',
+        'cdm_source_abbreviation': 'TEST_SITE',
+        'cdm_holder': 'Test Holder',
+        'source_description': 'Test description',
+        'target_omop_version': '5.4',
+        'target_vocab_version': 'v5.0_24-JAN-25',
+        'cdm_release_date': '2024-12-15',
+        'date_format': '%Y-%m-%d',
+    }
+
     @patch('core.endpoints.omop_client.OMOPClient.populate_cdm_source_file')
     def test_populate_cdm_source_file_success(self, mock_populate, client):
         """Test successful cdm_source file population."""
-        response = client.post('/populate_cdm_source_file', json={
-            'bucket': 'test-bucket',
-            'source_release_date': '2025-01-01',
-            'cdm_source_name': 'Test Source',
-            'cdm_source_abbreviation': 'TEST_SITE',
-            'cdm_holder': 'Test Holder',
-            'source_description': 'Test description',
-            'cdm_version': '5.4',
-            'cdm_release_date': '2025-01-01',
-            'date_format': '%Y-%m-%d'
-        })
+        response = client.post('/populate_cdm_source_file', json=self.VALID_PAYLOAD)
 
         assert response.status_code == 200
         assert b"cdm_source file populated if needed" in response.data
@@ -989,11 +993,13 @@ class TestPopulateCdmSourceFileEndpoint:
         assert_missing_fields(
             response,
             'bucket',
+            'delivery_date',
             'cdm_source_name',
             'cdm_source_abbreviation',
             'cdm_holder',
             'source_description',
-            'cdm_version',
+            'target_omop_version',
+            'target_vocab_version',
             'cdm_release_date',
             'date_format'
         )
@@ -1003,17 +1009,7 @@ class TestPopulateCdmSourceFileEndpoint:
         """Test exception handling returns 500."""
         mock_populate.side_effect = Exception("Population failed")
 
-        response = client.post('/populate_cdm_source_file', json={
-            'bucket': 'test-bucket',
-            'source_release_date': '2025-01-01',
-            'cdm_source_name': 'Test Source',
-            'cdm_source_abbreviation': 'TEST_SITE',
-            'cdm_holder': 'Test Holder',
-            'source_description': 'Test description',
-            'cdm_version': '5.4',
-            'cdm_release_date': '2025-01-01',
-            'date_format': '%Y-%m-%d'
-        })
+        response = client.post('/populate_cdm_source_file', json=self.VALID_PAYLOAD)
 
         assert response.status_code == 500
         assert b"Unable to populate cdm_source file" in response.data

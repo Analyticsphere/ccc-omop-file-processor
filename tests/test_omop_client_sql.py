@@ -166,16 +166,41 @@ class TestGeneratePopulateCdmSourceSql:
             "source_description": "Electronic Health Record (EHR) data from test_site",
             "source_documentation_reference": "https://example.com/docs",
             "cdm_etl_reference": "https://github.com/example/etl",
-            "source_release_date": "2025-01-01",
-            "cdm_release_date": "2025-01-15",
-            "cdm_version": "5.4"
+            "source_release_date": "2024-12-31",
+            "cdm_release_date": "2024-12-15",
+            "target_omop_version": "5.4",
+            "target_vocab_version": "v5.0_24-JAN-25",
+            "delivery_date": "2025-01-15",
+            "date_format": "%Y-%m-%d",
         }
-        vocab_version = "v5.0_24-JAN-25"
-        output_path = "gs://test-bucket/2025-01-01/artifacts/converted_files/cdm_source.parquet"
+        output_path = "gs://test-bucket/2025-01-15/artifacts/converted_files/cdm_source.parquet"
 
-        result = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, vocab_version, output_path)
+        result = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, output_path)
 
         expected = load_reference_sql("generate_populate_cdm_source_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+
+    def test_cdm_source_population_with_unparseable_dates(self):
+        """Malformed source/cdm release dates still produce valid SQL; the COALESCE falls back to delivery_date."""
+        cdm_source_data = {
+            "cdm_source_name": "Test Site Medical Center",
+            "cdm_source_abbreviation": "test_site",
+            "cdm_holder": "NIH/NCI Connect for Cancer Prevention Study",
+            "source_description": "Electronic Health Record (EHR) data from test_site",
+            "source_documentation_reference": "https://example.com/docs",
+            "cdm_etl_reference": "https://github.com/example/etl",
+            "source_release_date": "December 31, 2024",
+            "cdm_release_date": "December 15, 2024",
+            "target_omop_version": "5.4",
+            "target_vocab_version": "v5.0_24-JAN-25",
+            "delivery_date": "2025-01-15",
+            "date_format": "%Y-%m-%d",
+        }
+        output_path = "gs://test-bucket/2025-01-15/artifacts/converted_files/cdm_source.parquet"
+
+        result = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, output_path)
+
+        expected = load_reference_sql("generate_populate_cdm_source_sql_unparseable_dates.sql")
         assert normalize_sql(result) == normalize_sql(expected)
 
 
@@ -183,11 +208,16 @@ class TestGenerateSourceExtractionDateSql:
     """Tests for generate_source_extraction_date_sql()."""
 
     def test_standard_extraction_date_sql(self):
-        """Test SQL generation for reading source_release_date from cdm_source."""
-        cdm_source_uri = "gs://test-bucket/2025-01-01/artifacts/converted_files/cdm_source.parquet"
-        date_format = "%Y-%m-%d"
+        """Test SQL generation for reading source_release_date from cdm_source.
 
-        result = OMOPClient.generate_source_extraction_date_sql(cdm_source_uri, date_format)
+        Uses a delivery_date distinct from any date in the URI so the fallback
+        position is unambiguously identifiable.
+        """
+        cdm_source_uri = "gs://test-bucket/2025-01-15/artifacts/converted_files/cdm_source.parquet"
+        date_format = "%Y-%m-%d"
+        delivery_date = "2025-01-15"
+
+        result = OMOPClient.generate_source_extraction_date_sql(cdm_source_uri, date_format, delivery_date)
 
         expected = load_reference_sql("generate_source_extraction_date_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
