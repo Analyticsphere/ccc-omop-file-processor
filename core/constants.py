@@ -545,3 +545,31 @@ NO_PRIMARY_KEY_TABLES = [
     "cohort_definition",
     "attribute_definition"
 ]
+
+VOCABULARY_TABLES = [
+    "concept",
+    "vocabulary",
+    "domain",
+    "concept_class",
+    "relationship",
+    "concept_relationship",
+    "concept_synonym",
+    "concept_ancestor",
+    "drug_strength",
+]
+
+# Natural-key columns rewritten to be globally unique
+GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS = [
+    "visit_occurrence_id",
+    "preceding_visit_occurrence_id",
+    "visit_detail_id",
+    "preceding_visit_detail_id",
+    "parent_visit_detail_id",
+    "provider_id",
+    "care_site_id",
+    "location_id",
+    "episode_id",
+]
+
+# Tables that are not rewritten by the natural-key globalization step.
+NATURAL_KEY_REWRITE_SKIP_TABLES = VOCABULARY_TABLES + ["person"]

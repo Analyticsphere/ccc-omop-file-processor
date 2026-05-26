@@ -88,6 +88,25 @@ steps:
     '--args=python,-m,core.jobs.upgrade_cdm_job'
   ]
 
+# Deploy Cloud Run Job: Unique Natural Keys
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: [
+    'run', 'jobs', 'deploy', 'ccc-omop-file-processor-unique-natural-keys-job',
+    '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
+    '--region=us-central1',
+    '--service-account=$SERVICE_ACCOUNT_EMAIL',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
+    '--cpu=4',
+    '--memory=16Gi',
+    '--task-timeout=3600s',
+    '--max-retries=0',
+    '--parallelism=1',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
+    '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
+    '--args=python,-m,core.jobs.unique_natural_keys_job'
+  ]
+
 # Deploy Cloud Run Job: Harmonize Vocabulary
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   entrypoint: gcloud

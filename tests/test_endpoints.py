@@ -505,6 +505,82 @@ class TestFilterConnectParticipantsEndpoint:
         assert b"Unable to apply Connect participant filtering" in response.data
 
 
+class TestUniqueNaturalKeysEndpoint:
+    """Tests for /unique_natural_keys endpoint."""
+
+    @patch('core.endpoints.natural_keys.NaturalKeyProcessor')
+    def test_unique_natural_keys_success(self, mock_processor, client):
+        """Test successful natural-key rewrite."""
+        mock_instance = MagicMock()
+        mock_instance.apply.return_value = True
+        mock_processor.return_value = mock_instance
+
+        response = client.post('/unique_natural_keys', json={
+            'file_path': 'bucket/2025-01-01/visit_occurrence.parquet',
+            'omop_version': '5.4',
+            'site': 'site_alpha'
+        })
+
+        assert response.status_code == 200
+        assert b"Applied natural-key rewrite" in response.data
+        mock_processor.assert_called_once_with(
+            file_path='bucket/2025-01-01/visit_occurrence.parquet',
+            omop_version='5.4',
+            site='site_alpha'
+        )
+        mock_instance.apply.assert_called_once()
+
+    @patch('core.endpoints.natural_keys.NaturalKeyProcessor')
+    def test_unique_natural_keys_skips_excluded_tables(self, mock_processor, client):
+        """Test skip response for excluded tables (vocab tables, person)."""
+        mock_instance = MagicMock()
+        mock_instance.apply.return_value = False
+        mock_processor.return_value = mock_instance
+
+        response = client.post('/unique_natural_keys', json={
+            'file_path': 'bucket/2025-01-01/person.parquet',
+            'omop_version': '5.4',
+            'site': 'site_alpha'
+        })
+
+        assert response.status_code == 200
+        assert b"Skipped natural-key rewrite for table not in scope" in response.data
+        mock_processor.assert_called_once_with(
+            file_path='bucket/2025-01-01/person.parquet',
+            omop_version='5.4',
+            site='site_alpha'
+        )
+
+    def test_unique_natural_keys_missing_parameters(self, client):
+        """Test missing parameters return 400."""
+        response = client.post('/unique_natural_keys', json={})
+
+        assert_missing_fields(response, 'file_path', 'omop_version', 'site')
+
+    def test_unique_natural_keys_missing_site_only(self, client):
+        """Test missing site parameter returns 400."""
+        response = client.post('/unique_natural_keys', json={
+            'file_path': 'bucket/2025-01-01/visit_occurrence.parquet',
+            'omop_version': '5.4'
+        })
+
+        assert_missing_fields(response, 'site')
+
+    @patch('core.endpoints.natural_keys.NaturalKeyProcessor')
+    def test_unique_natural_keys_exception(self, mock_processor, client):
+        """Test exception handling returns 500."""
+        mock_processor.side_effect = Exception("Rewrite failed")
+
+        response = client.post('/unique_natural_keys', json={
+            'file_path': 'bucket/2025-01-01/visit_occurrence.parquet',
+            'omop_version': '5.4',
+            'site': 'site_alpha'
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to apply natural-key rewrite" in response.data
+
+
 class TestClearBqDatasetEndpoint:
     """Tests for /clear_bq_dataset endpoint."""
 
