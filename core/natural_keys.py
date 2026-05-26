@@ -108,8 +108,7 @@ class NaturalKeyProcessor:
         """
         Generate SQL that rewrites the parquet file in place.
 
-        Uses SELECT * REPLACE so each rewritten column stays in its original
-        position in the schema — column order is preserved exactly.
+        Uses SELECT * REPLACE so each rewritten column stays in its original position
         """
         replacement_exprs = ",\n                ".join(
             NaturalKeyProcessor.generate_hash_expression(col, site)
