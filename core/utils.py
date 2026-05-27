@@ -491,6 +491,49 @@ def placeholder_to_file_path(site: str, bucket: str, delivery_date: str, sql_scr
 
     return replacement_result
 
+def placeholder_to_post_processing_path(site: str, bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_path: str) -> str:
+    """
+    Replaces placeholder strings in post-processing SQL with paths to the appropriate parquet files.
+
+    Like placeholder_to_harmonized_file_path, but also covers additional converted_files
+    tables (care_site, location, provider, visit_detail, episode, cost,
+    payer_plan_period, metadata, cdm_source, fact_relationship, note_nlp) that are
+    not exposed to derived-table generation.
+
+    Routing rules:
+      - Tables in VOCAB_HARMONIZED_TABLES: omop_etl/{table}/{table}.parquet
+      - All other clinical tables: converted_files/{table}.parquet
+      - Derived tables (condition_era, drug_era, observation_period): not exposed by
+        design, because derived tables are regenerated immediately after
+        post-processing finishes.
+    """
+    replacement_result = sql_script
+
+    # Standard clinical-data placeholders (harmonized vs converted)
+    for placeholder, table_name in constants.CLINICAL_DATA_PATH_PLACEHOLDERS.items():
+        if table_name in constants.VOCAB_HARMONIZED_TABLES:
+            table_path = get_omop_etl_table_path(bucket, delivery_date, table_name)
+        else:
+            table_path = storage.get_uri(f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{table_name}{constants.PARQUET}")
+
+        replacement_result = replacement_result.replace(placeholder, table_path)
+
+    # Additional converted-files placeholders exposed only to post-processing
+    for placeholder, table_name in constants.POST_PROCESSING_EXTRA_PATH_PLACEHOLDERS.items():
+        table_path = storage.get_uri(f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}{table_name}{constants.PARQUET}")
+        replacement_result = replacement_result.replace(placeholder, table_path)
+
+    # Vocab placeholders
+    for placeholder, replacement in constants.VOCAB_PATH_PLACEHOLDERS.items():
+        vocab_table_path = storage.get_uri(f"{vocab_path}/{vocab_version}/{constants.OPTIMIZED_VOCAB_FOLDER}/{replacement}{constants.PARQUET}")
+        replacement_result = replacement_result.replace(placeholder, vocab_table_path)
+
+    replacement_result = replacement_result.replace(constants.SITE_PLACEHOLDER_STRING, site)
+    replacement_result = replacement_result.replace(constants.CURRENT_DATE_PLACEHOLDER_STRING, datetime.now().strftime('%Y-%m-%d'))
+
+    return replacement_result
+
+
 def placeholder_to_harmonized_file_path(site: str, bucket: str, delivery_date: str, sql_script: str, vocab_version: str, vocab_path: str) -> str:
     """
     Replaces clinical data table placeholder strings in SQL scripts with paths to the appropriate parquet files.

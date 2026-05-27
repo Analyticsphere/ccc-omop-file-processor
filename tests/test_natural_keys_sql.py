@@ -151,7 +151,6 @@ class TestHashOutputStability:
                 f"DuckDB hash output drift detected for value={value}, site={site!r}: "
                 f"expected {expected}, got {actual}. "
                 f"DuckDB version: {duckdb.__version__}. "
-                f"See NATURAL_KEY_FOLLOWUPS.md."
             )
 
     def test_hash_expression_generates_matching_sql(self):
@@ -174,7 +173,6 @@ class TestHashOutputStability:
                 f"expected {expected}, got {actual}. "
                 f"Either the expression in generate_hash_expression() changed, "
                 f"or DuckDB hash output drifted (version: {duckdb.__version__}). "
-                f"See NATURAL_KEY_FOLLOWUPS.md."
             )
 
     def test_null_input_returns_null(self):
