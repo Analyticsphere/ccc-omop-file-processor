@@ -96,53 +96,64 @@ class OMOPClient:
     @staticmethod
     def populate_cdm_source_file(cdm_source_data: dict, date_format: str) -> None:
         """
-        Populate cdm_source Parquet file with metadata if empty or non-existent.
+        Populate cdm_source Parquet file with metadata if empty, non-existent, or contains multiple rows.
 
         Checks if site delivered cdm_source file and populates it with metadata if needed:
-        - If file exists and has rows: do nothing (site provided data)
+        - If file exists with exactly one row: keep the site-delivered row but always
+          rewrite two columns: source_release_date (keeps site value if parseable, else
+          falls back to delivery_date) and cdm_release_date (unconditionally set to
+          delivery_date). Every other site-delivered column passes through unchanged.
+        - If file exists with multiple rows: treat as if no rows were delivered and populate
         - If file exists but is empty: populate with metadata
         - If file doesn't exist: create and populate with metadata
 
         After population (or skip), creates a "Source system extraction date" report artifact
-        from the cdm_source.source_release_date value.
+        from the cdm_source.source_release_date value, falling back to delivery_date when
+        the site-provided source_release_date cannot be parsed.
 
         Args:
             cdm_source_data: Dictionary containing CDM source metadata fields:
             bucket: Bucket path
-            source_release_date: Release date of source data
+            delivery_date: Delivery date directory component (YYYY-MM-DD)
+            source_release_date: Release date of source data (written to parquet column)
             cdm_source_name: Name of the CDM source
             cdm_source_abbreviation: Abbreviation
             cdm_holder: Organization holding the data
             source_description: Description of data source
-            cdm_version: OMOP CDM version
+            target_omop_version: Target OMOP CDM version (e.g., '5.4'); written to cdm_version column
+            target_vocab_version: Target vocabulary version; written to vocabulary_version column
             (optional) source_documentation_reference: Documentation URL
             (optional) cdm_etl_reference: ETL documentation URL
             cdm_release_date: Release date of CDM
             date_format: Site-specific date format string for strptime parsing (e.g., '%Y-%m-%d')
         """
         bucket = cdm_source_data["bucket"]
-        delivery_date = cdm_source_data["source_release_date"]
+        delivery_date = cdm_source_data["delivery_date"]
 
         cdm_source_path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}cdm_source{constants.PARQUET}"
+        cdm_source_uri = storage.get_uri(cdm_source_path)
 
         file_exists = utils.parquet_file_exists(cdm_source_path)
-
         if file_exists:
-            # Check if file has rows
-            row_count_sql = normalization.Normalizer.generate_row_count_sql(storage.get_uri(cdm_source_path))
+            row_count_sql = normalization.Normalizer.generate_row_count_sql(cdm_source_uri)
             result = utils.execute_duckdb_sql(row_count_sql, "Unable to count rows in cdm_source", return_results=True)
             row_count = result[0][0] if result else 0
+        else:
+            row_count = 0
 
-            if row_count > 0:
-                utils.logger.info(f"cdm_source file has {row_count} rows, skipping population")
-                OMOPClient._create_source_extraction_date_artifact(bucket, delivery_date, cdm_source_path, date_format)
-                return
-
-        utils.logger.info(f"Populating cdm_source Parquet file for {delivery_date} delivery")
-
-        vocab_version = utils.get_delivery_vocabulary_version(bucket, delivery_date)
-        populate_sql = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, vocab_version, storage.get_uri(cdm_source_path))
-        utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
+        if not file_exists or row_count == 0:
+            reason = "does not exist" if not file_exists else "is empty"
+            utils.logger.info(f"cdm_source file {reason}; populating for {delivery_date} delivery")
+            populate_sql = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, cdm_source_uri)
+            utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
+        elif row_count == 1:
+            utils.logger.info("cdm_source file has 1 row, rewriting source_release_date (fallback to delivery_date if unparseable) and cdm_release_date (always delivery_date)")
+            rewrite_sql = OMOPClient.generate_rewrite_release_dates_sql(cdm_source_uri, date_format, delivery_date)
+            utils.execute_duckdb_sql(rewrite_sql, "Unable to rewrite release dates in cdm_source")
+        else:  # row_count > 1
+            utils.logger.warning(f"cdm_source file has {row_count} rows, treating as if no rows were delivered and re-populating")
+            populate_sql = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, cdm_source_uri)
+            utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
 
         OMOPClient._create_source_extraction_date_artifact(bucket, delivery_date, cdm_source_path, date_format)
 
@@ -266,19 +277,35 @@ class OMOPClient:
         return upgrade_statement
 
     @staticmethod
-    def generate_populate_cdm_source_sql(cdm_source_data: dict, vocab_version: str, output_path: str) -> str:
+    def generate_populate_cdm_source_sql(cdm_source_data: dict, output_path: str) -> str:
         """
         Generate SQL to create cdm_source Parquet file with metadata.
 
         Creates a single-row Parquet file containing CDM source metadata including
         version information, release dates, and vocabulary version.
 
+        source_release_date is wrapped in a COALESCE chain that tries the site-specific
+        date_format first, then a direct cast, then falls back to delivery_date.
+
+        cdm_release_date is unconditionally set to delivery_date (the pipeline always
+        stamps this with the delivery date regardless of what the site provided).
+
         Args:
             cdm_source_data: Dictionary containing CDM source metadata fields
-            vocab_version: Vocabulary version string
             output_path: Path where cdm_source Parquet file should be written
         """
-        cdm_version_concept_id = utils.get_cdm_version_concept_id(cdm_source_data["cdm_version"])
+        target_omop_version = cdm_source_data["target_omop_version"]
+        cdm_version_concept_id = utils.get_cdm_version_concept_id(target_omop_version)
+        delivery_date = cdm_source_data["delivery_date"]
+        date_format = cdm_source_data["date_format"]
+
+        source_release_date_cast = normalization.Normalizer.generate_date_datetime_cast(
+            column_name=f"'{cdm_source_data['source_release_date']}'",
+            column_type="DATE",
+            default_value=f"'{delivery_date}'",
+            date_format=date_format,
+            datetime_format="",
+        )
 
         cdm_source_statement = f"""
             COPY (
@@ -289,22 +316,52 @@ class OMOPClient:
                     '{cdm_source_data["source_description"]}' AS source_description,
                     '{cdm_source_data.get("source_documentation_reference", "")}' AS source_documentation_reference,
                     '{cdm_source_data.get("cdm_etl_reference", "")}' AS cdm_etl_reference,
-                    CAST('{cdm_source_data["source_release_date"]}' AS DATE) AS source_release_date,
-                    CAST('{cdm_source_data["cdm_release_date"]}' AS DATE) AS cdm_release_date,
-                    '{cdm_source_data["cdm_version"]}' AS cdm_version,
+                    {source_release_date_cast} AS source_release_date,
+                    CAST('{delivery_date}' AS DATE) AS cdm_release_date,
+                    '{target_omop_version}' AS cdm_version,
                     {cdm_version_concept_id} AS cdm_version_concept_id,
-                    '{vocab_version}' AS vocabulary_version
+                    '{cdm_source_data["target_vocab_version"]}' AS vocabulary_version
             ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}
         """
 
         return cdm_source_statement
 
     @staticmethod
-    def generate_source_extraction_date_sql(cdm_source_uri: str, date_format: str) -> str:
+    def generate_rewrite_release_dates_sql(cdm_source_uri: str, date_format: str, delivery_date: str) -> str:
+        """
+        Generate SQL that overwrites the cdm_source parquet, replacing two columns:
+
+        - source_release_date: COALESCE that keeps the site-delivered value if it
+          parses via date_format or direct cast, otherwise falls back to delivery_date.
+        - cdm_release_date: unconditionally set to delivery_date (the pipeline always
+          stamps this with the delivery date regardless of what the site provided).
+
+        Uses DuckDB's SELECT * REPLACE so every other site-delivered column passes
+        through unchanged.
+        """
+        source_release_date_cast = normalization.Normalizer.generate_date_datetime_cast(
+            column_name="source_release_date",
+            column_type="DATE",
+            default_value=f"'{delivery_date}'",
+            date_format=date_format,
+            datetime_format=""
+        )
+        return f"""
+            COPY (
+                SELECT * REPLACE (
+                    {source_release_date_cast} AS source_release_date,
+                    CAST('{delivery_date}' AS DATE) AS cdm_release_date
+                )
+                FROM read_parquet('{cdm_source_uri}')
+            ) TO '{cdm_source_uri}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+    @staticmethod
+    def generate_source_extraction_date_sql(cdm_source_uri: str, date_format: str, delivery_date: str) -> str:
         date_cast = normalization.Normalizer.generate_date_datetime_cast(
             column_name="source_release_date",
             column_type="DATE",
-            default_value=f"'{constants.DEFAULT_DATE}'",
+            default_value=f"'{delivery_date}'",
             date_format=date_format,
             datetime_format=""
         )
@@ -320,10 +377,10 @@ class OMOPClient:
     def _create_source_extraction_date_artifact(bucket: str, delivery_date: str, cdm_source_path: str, date_format: str) -> None:
         cdm_source_uri = storage.get_uri(cdm_source_path)
 
-        extraction_date_sql = OMOPClient.generate_source_extraction_date_sql(cdm_source_uri, date_format)
+        extraction_date_sql = OMOPClient.generate_source_extraction_date_sql(cdm_source_uri, date_format, delivery_date)
         result = utils.execute_duckdb_sql(extraction_date_sql, "Unable to read source_release_date from cdm_source", return_results=True)
 
-        extraction_date = result[0][0] if result and result[0][0] else constants.DEFAULT_DATE
+        extraction_date = result[0][0] if result and result[0][0] else delivery_date
 
         artifact = report_artifact.ReportArtifact(
             delivery_date=delivery_date,

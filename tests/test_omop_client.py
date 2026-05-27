@@ -146,88 +146,127 @@ class TestOMOPClientCreateMissingBQTables:
 class TestOMOPClientPopulateCdmSourceFile:
     """Tests for populate_cdm_source_file method."""
 
+    BASE_CDM_SOURCE_DATA = {
+        "bucket": "test-bucket",
+        "delivery_date": "2025-01-15",
+        "source_release_date": "2024-12-31",
+        "cdm_source_name": "Test Site",
+        "cdm_source_abbreviation": "test",
+        "cdm_holder": "NIH/NCI",
+        "source_description": "Test data",
+        "cdm_release_date": "2024-12-15",
+        "target_omop_version": "5.4",
+        "target_vocab_version": "v5.0_24-JAN-25",
+        "date_format": "%Y-%m-%d",
+    }
+
     @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
     @patch('core.omop_client.utils.execute_duckdb_sql')
-    @patch('core.omop_client.utils.get_delivery_vocabulary_version')
     @patch('core.omop_client.utils.parquet_file_exists')
-    def test_populate_cdm_source_file_does_not_exist(self, mock_file_exists, mock_get_vocab, mock_execute, mock_artifact):
-        """Test populating cdm_source when file doesn't exist."""
+    def test_populate_cdm_source_file_does_not_exist(self, mock_file_exists, mock_execute, mock_artifact):
+        """File doesn't exist -> populate, then write artifact."""
         mock_file_exists.return_value = False
-        mock_get_vocab.return_value = "v5.0_24-JAN-25"
 
-        cdm_source_data = {
-            "bucket": "gs://test-bucket",
-            "source_release_date": "2025-01-01",
-            "cdm_source_name": "Test Site",
-            "cdm_source_abbreviation": "test",
-            "cdm_holder": "NIH/NCI",
-            "source_description": "Test data",
-            "cdm_release_date": "2025-01-15",
-            "cdm_version": "5.4"
-        }
+        OMOPClient.populate_cdm_source_file(dict(self.BASE_CDM_SOURCE_DATA), "%Y-%m-%d")
 
-        OMOPClient.populate_cdm_source_file(cdm_source_data, "%Y-%m-%d")
-
-        # Should execute SQL to populate file
+        # Single execute call for population (no row-count check when file is missing)
         mock_execute.assert_called_once()
         mock_artifact.assert_called_once()
 
     @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
     @patch('core.omop_client.utils.execute_duckdb_sql')
-    @patch('core.omop_client.utils.get_delivery_vocabulary_version')
     @patch('core.omop_client.utils.parquet_file_exists')
-    def test_populate_cdm_source_file_exists_but_empty(self, mock_file_exists, mock_get_vocab, mock_execute, mock_artifact):
-        """Test populating cdm_source when file exists but is empty."""
+    def test_populate_cdm_source_file_exists_but_empty(self, mock_file_exists, mock_execute, mock_artifact):
+        """File exists with 0 rows -> populate, then write artifact."""
         mock_file_exists.return_value = True
-        mock_get_vocab.return_value = "v5.0_24-JAN-25"
-
-        # First call for row count, second call for population
         mock_execute.side_effect = [
             [[0]],  # Row count is 0
-            None    # Population succeeds
+            None,   # Population succeeds
         ]
 
-        cdm_source_data = {
-            "bucket": "gs://test-bucket",
-            "source_release_date": "2025-01-01",
-            "cdm_source_name": "Test Site",
-            "cdm_source_abbreviation": "test",
-            "cdm_holder": "NIH/NCI",
-            "source_description": "Test data",
-            "cdm_release_date": "2025-01-15",
-            "cdm_version": "5.4"
-        }
+        OMOPClient.populate_cdm_source_file(dict(self.BASE_CDM_SOURCE_DATA), "%Y-%m-%d")
 
-        OMOPClient.populate_cdm_source_file(cdm_source_data, "%Y-%m-%d")
-
-        # Should call execute twice (row count + population)
+        # Row count + population
         assert mock_execute.call_count == 2
+        mock_artifact.assert_called_once()
+
+        # Second call is the populate SQL — pin it against the golden
+        populate_sql = mock_execute.call_args_list[1][0][0]
+        expected = load_reference_sql("generate_populate_cdm_source_sql_via_dispatch.sql")
+        assert normalize_sql(populate_sql) == normalize_sql(expected)
+
+    @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
+    @patch('core.omop_client.utils.execute_duckdb_sql')
+    @patch('core.omop_client.utils.parquet_file_exists')
+    def test_populate_cdm_source_file_one_row_always_rewrites_release_dates(self, mock_file_exists, mock_execute, mock_artifact):
+        """File has 1 row -> always rewrite source_release_date (COALESCE/fallback) and cdm_release_date (=delivery_date), preserving every other site value."""
+        mock_file_exists.return_value = True
+        mock_execute.side_effect = [
+            [[1]],    # row count
+            None,     # rewrite SQL succeeds
+        ]
+
+        OMOPClient.populate_cdm_source_file(dict(self.BASE_CDM_SOURCE_DATA), "%Y-%m-%d")
+
+        # Row count + rewrite (no validity check, no full populate)
+        assert mock_execute.call_count == 2
+
+        rewrite_sql = mock_execute.call_args_list[1][0][0]
+        # The rewrite uses SELECT * REPLACE so untouched columns pass through
+        assert "SELECT * REPLACE" in rewrite_sql
+        # Both release-date columns are rewritten
+        assert "source_release_date" in rewrite_sql
+        assert "cdm_release_date" in rewrite_sql
+        # delivery_date appears as the fallback / hard value
+        assert self.BASE_CDM_SOURCE_DATA["delivery_date"] in rewrite_sql
+        # Not a full populate (no other column literals)
+        assert "cdm_source_name" not in rewrite_sql
+
         mock_artifact.assert_called_once()
 
     @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
     @patch('core.omop_client.utils.execute_duckdb_sql')
     @patch('core.omop_client.utils.parquet_file_exists')
-    def test_populate_cdm_source_file_exists_with_data(self, mock_file_exists, mock_execute, mock_artifact):
-        """Test that cdm_source is not populated when file exists with data."""
+    def test_populate_cdm_source_file_exists_with_multiple_rows(self, mock_file_exists, mock_execute, mock_artifact):
+        """File exists with >1 rows -> treat as if no rows delivered and re-populate."""
         mock_file_exists.return_value = True
-        mock_execute.return_value = [[5]]  # File has 5 rows
+        mock_execute.side_effect = [
+            [[5]],  # Row count is 5
+            None,   # Population succeeds (overwrites file)
+        ]
 
-        cdm_source_data = {
-            "bucket": "gs://test-bucket",
-            "source_release_date": "2025-01-01",
-            "cdm_source_name": "Test Site",
-            "cdm_source_abbreviation": "test",
-            "cdm_holder": "NIH/NCI",
-            "source_description": "Test data",
-            "cdm_release_date": "2025-01-15",
-            "cdm_version": "5.4"
-        }
+        OMOPClient.populate_cdm_source_file(dict(self.BASE_CDM_SOURCE_DATA), "%Y-%m-%d")
 
-        OMOPClient.populate_cdm_source_file(cdm_source_data, "%Y-%m-%d")
-
-        # Should only call execute once for row count, not for population
-        assert mock_execute.call_count == 1
+        # Row count + population (populate is re-run despite file having rows)
+        assert mock_execute.call_count == 2
         mock_artifact.assert_called_once()
+
+        # Second call is the populate SQL — same shared golden as the empty-file branch
+        populate_sql = mock_execute.call_args_list[1][0][0]
+        expected = load_reference_sql("generate_populate_cdm_source_sql_via_dispatch.sql")
+        assert normalize_sql(populate_sql) == normalize_sql(expected)
+
+    @patch('core.omop_client.OMOPClient._create_source_extraction_date_artifact')
+    @patch('core.omop_client.utils.execute_duckdb_sql')
+    @patch('core.omop_client.utils.parquet_file_exists')
+    def test_populate_cdm_source_file_uses_delivery_date_in_path(self, mock_file_exists, mock_execute, mock_artifact):
+        """The directory used for the cdm_source path is delivery_date, not source_release_date."""
+        mock_file_exists.return_value = False
+
+        data = dict(self.BASE_CDM_SOURCE_DATA)
+        data["delivery_date"] = "2025-03-15"
+        data["source_release_date"] = "not-a-date"
+
+        OMOPClient.populate_cdm_source_file(data, "%Y-%m-%d")
+
+        # parquet_file_exists is checked at the delivery_date path
+        checked_path = mock_file_exists.call_args[0][0]
+        assert "2025-03-15" in checked_path
+        assert "not-a-date" not in checked_path
+
+        # Artifact helper receives delivery_date (not source_release_date)
+        artifact_args = mock_artifact.call_args[0]
+        assert artifact_args[1] == "2025-03-15"
 
 
 class TestOMOPClientGenerateDerivedDataFromHarmonized:
@@ -301,20 +340,22 @@ class TestOMOPClientStaticMethods:
         assert normalize_sql(sql) == normalize_sql(expected)
 
     def test_generate_populate_cdm_source_sql(self):
-        """Test SQL generation for cdm_source population."""
+        """Test SQL generation for cdm_source population (no optional fields)."""
         cdm_source_data = {
             "cdm_source_name": "Test Site",
             "cdm_source_abbreviation": "test",
             "cdm_holder": "NIH/NCI",
             "source_description": "Test data",
-            "source_release_date": "2025-01-01",
-            "cdm_release_date": "2025-01-15",
-            "cdm_version": "5.4"
+            "source_release_date": "2024-12-31",
+            "cdm_release_date": "2024-12-15",
+            "target_omop_version": "5.4",
+            "target_vocab_version": "v5.0_24-JAN-25",
+            "delivery_date": "2025-01-15",
+            "date_format": "%Y-%m-%d",
         }
 
         sql = OMOPClient.generate_populate_cdm_source_sql(
             cdm_source_data=cdm_source_data,
-            vocab_version="v5.0_24-JAN-25",
             output_path="gs://test-bucket/cdm_source.parquet"
         )
 

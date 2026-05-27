@@ -16,5 +16,5 @@
                     '5.4' AS cdm_version,
                     756265 AS cdm_version_concept_id,
                     'v5.0_24-JAN-25' AS vocabulary_version
-            ) TO 'gs://test-bucket/cdm_source.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)
+            ) TO 'gs://test-bucket/2025-01-15/artifacts/converted_files/cdm_source.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)
 

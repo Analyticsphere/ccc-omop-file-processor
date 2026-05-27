@@ -634,16 +634,18 @@ def create_missing_omop_tables() -> tuple[str, int]:
 
 @app.route('/populate_cdm_source_file', methods=['POST'])
 def populate_cdm_source_file() -> tuple[str, int]:
-    """Populate cdm_source Parquet file with metadata if empty or non-existent."""
+    """Populate cdm_source Parquet file with metadata if empty, non-existent, or contains multiple rows."""
     cdm_source_data: dict[str, Any] = request.get_json() or {}
     required_fields = [
         'bucket',
+        'delivery_date',
         'source_release_date',
         'cdm_source_name',
         'cdm_source_abbreviation',
         'cdm_holder',
         'source_description',
-        'cdm_version',
+        'target_omop_version',
+        'target_vocab_version',
         'cdm_release_date',
         'date_format',
     ]
@@ -655,7 +657,7 @@ def populate_cdm_source_file() -> tuple[str, int]:
 
     try:
         date_format: str = cdm_source_data['date_format']
-        utils.logger.info(f"Checking cdm_source file for {cdm_source_data['source_release_date']} delivery from {cdm_source_data['cdm_source_abbreviation']}")
+        utils.logger.info(f"Checking cdm_source file for {cdm_source_data['delivery_date']} delivery from {cdm_source_data['cdm_source_abbreviation']}")
         omop_client.OMOPClient.populate_cdm_source_file(cdm_source_data, date_format)
 
         return "cdm_source file populated if needed", 200
