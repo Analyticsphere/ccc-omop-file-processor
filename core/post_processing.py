@@ -11,7 +11,7 @@ from core.storage_backend import storage
 
 class PostProcessor:
     """
-    Apply one user-curated post-processing SQL task to the on-disk OMOP artifacts
+    Apply one user-curated post-processing SQL task to the OMOP artifacts files
     and produce per-task report artifacts describing what changed.
 
     Flow:
@@ -58,6 +58,7 @@ class PostProcessor:
         Raises:
             FileNotFoundError if the task SQL script does not exist.
         """
+        # TODO: is this is the correct way to check for the file?
         if not os.path.isfile(self.sql_script_path):
             raise FileNotFoundError(
                 f"Post-processing task SQL script not found at {self.sql_script_path}"
@@ -109,7 +110,7 @@ class PostProcessor:
     def _discover_in_scope_tables(self) -> dict[str, str]:
         """
         Return {table_name: table_uri} for every OMOP table that has a parquet
-        artifact on disk at its canonical location, excluding vocabulary tables.
+        artifact at its canonical location, excluding vocabulary tables.
         """
         in_scope: dict[str, str] = {}
         schema = utils.get_cdm_schema(self.omop_version)
@@ -125,7 +126,7 @@ class PostProcessor:
         return in_scope
 
     def _resolve_table_artifact_path(self, table_name: str) -> str:
-        """Resolve where on disk an OMOP table lives at post-processing time."""
+        """Resolve where an OMOP table file lives at post-processing time."""
         if table_name in constants.VOCAB_HARMONIZED_TABLES:
             return (
                 f"{self.bucket}/{self.delivery_date}/"
