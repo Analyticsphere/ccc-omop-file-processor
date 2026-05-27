@@ -8,6 +8,8 @@ in tests/reference/sql/post_processing/
 
 from pathlib import Path
 
+import pytest
+
 import core.constants as constants
 import core.utils as utils
 from core.post_processing import PostProcessor
@@ -113,6 +115,120 @@ class TestGenerateSnapshotRowCountSql:
         result = PostProcessor.generate_snapshot_row_count_sql(SNAPSHOT_URI)
         assert "SELECT COUNT(*) FROM read_parquet" in result
         assert SNAPSHOT_URI in result
+
+
+class TestValidateNoVocabWrites:
+    """Tests for the vocabulary-write guard."""
+
+    def test_legitimate_measurement_write_passes(self):
+        sql = (
+            "COPY (SELECT * FROM read_parquet('gs://x/measurement.parquet')) "
+            "TO 'gs://x/measurement.parquet' (FORMAT parquet)"
+        )
+        # Should not raise
+        PostProcessor.validate_no_vocab_writes(sql, "task_a")
+
+    def test_blocks_concept_write_via_placeholder_resolved_path(self):
+        sql = (
+            "COPY (SELECT * FROM read_parquet('gs://vocab/v5/optimized/concept.parquet')) "
+            "TO 'gs://vocab/v5/optimized/concept.parquet' (FORMAT parquet)"
+        )
+        with pytest.raises(ValueError, match="vocabulary file 'concept.parquet'"):
+            PostProcessor.validate_no_vocab_writes(sql, "task_a")
+
+    def test_blocks_concept_ancestor_write(self):
+        sql = "COPY (...) TO 'gs://vocab/v5/optimized/concept_ancestor.parquet' (FORMAT parquet)"
+        with pytest.raises(ValueError, match="concept_ancestor.parquet"):
+            PostProcessor.validate_no_vocab_writes(sql, "task_a")
+
+    def test_blocks_optimized_vocab_file_write(self):
+        sql = "COPY (...) TO 'gs://vocab/v5/optimized/optimized_vocab_file.parquet' (FORMAT parquet)"
+        with pytest.raises(ValueError, match="optimized_vocab_file.parquet"):
+            PostProcessor.validate_no_vocab_writes(sql, "task_a")
+
+    def test_blocks_hardcoded_vocab_path(self):
+        """Even without using a placeholder, writing to a vocab filename is blocked."""
+        sql = "COPY (...) TO 'gs://my-bucket/some/folder/relationship.parquet' (FORMAT parquet)"
+        with pytest.raises(ValueError, match="relationship.parquet"):
+            PostProcessor.validate_no_vocab_writes(sql, "task_a")
+
+    def test_blocks_each_vocab_table(self):
+        """Every table in VOCABULARY_TABLES must be guarded."""
+        for table in constants.VOCABULARY_TABLES:
+            sql = f"COPY (...) TO 'gs://x/{table}.parquet' (FORMAT parquet)"
+            with pytest.raises(ValueError, match=f"{table}.parquet"):
+                PostProcessor.validate_no_vocab_writes(sql, "task_a")
+
+    def test_does_not_confuse_concept_with_concept_relationship(self):
+        """`concept` and `concept_relationship` must be distinguished by word boundaries."""
+        sql_concept = "COPY (...) TO 'gs://x/concept.parquet' (FORMAT parquet)"
+        sql_concept_rel = "COPY (...) TO 'gs://x/concept_relationship.parquet' (FORMAT parquet)"
+
+        with pytest.raises(ValueError, match="'concept.parquet'"):
+            PostProcessor.validate_no_vocab_writes(sql_concept, "task_a")
+        with pytest.raises(ValueError, match="'concept_relationship.parquet'"):
+            PostProcessor.validate_no_vocab_writes(sql_concept_rel, "task_a")
+
+    def test_select_from_vocab_is_allowed(self):
+        """Reading vocabulary via FROM read_parquet(...) is NOT blocked; only writes are."""
+        sql = """
+        COPY (
+            SELECT m.* FROM read_parquet('gs://m/measurement.parquet') m
+            JOIN read_parquet('gs://v/concept.parquet') c
+              ON m.measurement_concept_id = c.concept_id
+        ) TO 'gs://m/measurement.parquet' (FORMAT parquet)
+        """
+        # Should not raise — vocab is only read, not written
+        PostProcessor.validate_no_vocab_writes(sql, "task_a")
+
+    def test_case_insensitive_match(self):
+        sql = "COPY (...) TO 'GS://X/CONCEPT.PARQUET' (FORMAT parquet)"
+        with pytest.raises(ValueError):
+            PostProcessor.validate_no_vocab_writes(sql, "task_a")
+
+    def test_double_quoted_to_clause_is_blocked(self):
+        """COPY supports double-quoted targets; the guard must handle both quote styles."""
+        sql = 'COPY (...) TO "gs://x/concept.parquet" (FORMAT parquet)'
+        with pytest.raises(ValueError, match="concept.parquet"):
+            PostProcessor.validate_no_vocab_writes(sql, "task_a")
+
+    def test_blocks_vocab_update_via_replace(self):
+        """
+        Update-style write: read vocab, transform columns via REPLACE, COPY back.
+        The modification type is irrelevant — the guard only inspects the TO clause.
+        """
+        sql = """
+        COPY (
+            SELECT * REPLACE (UPPER(concept_name) AS concept_name)
+            FROM read_parquet('gs://v/optimized/concept.parquet')
+        ) TO 'gs://v/optimized/concept.parquet' (FORMAT parquet)
+        """
+        with pytest.raises(ValueError, match="concept.parquet"):
+            PostProcessor.validate_no_vocab_writes(sql, "task_a")
+
+    def test_blocks_vocab_deletion_via_where(self):
+        """Deletion-style write: read vocab, drop rows via WHERE, COPY back."""
+        sql = """
+        COPY (
+            SELECT *
+            FROM read_parquet('gs://v/optimized/concept.parquet')
+            WHERE concept_id != 12345
+        ) TO 'gs://v/optimized/concept.parquet' (FORMAT parquet)
+        """
+        with pytest.raises(ValueError, match="concept.parquet"):
+            PostProcessor.validate_no_vocab_writes(sql, "task_a")
+
+    def test_blocks_vocab_insertion_via_union(self):
+        """Insertion-style write: read vocab + new rows via UNION ALL, COPY back."""
+        sql = """
+        COPY (
+            SELECT * FROM read_parquet('gs://v/optimized/concept.parquet')
+            UNION ALL
+            SELECT 999, 'fake_concept', 'Custom', 'Custom', 'S', '', 0, '', ''
+        ) TO 'gs://v/optimized/concept.parquet' (FORMAT parquet)
+        """
+        with pytest.raises(ValueError, match="concept.parquet"):
+            PostProcessor.validate_no_vocab_writes(sql, "task_a")
 
 
 class TestPlaceholderToPostProcessingPath:

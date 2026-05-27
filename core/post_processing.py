@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Optional
 
 import core.constants as constants
@@ -73,6 +74,9 @@ class PostProcessor:
             vocab_version=self.vocab_version,
             vocab_path=self.vocab_path,
         )
+
+        # Hard guard: vocabulary files must never be modified.
+        PostProcessor.validate_no_vocab_writes(rendered_sql, self.task_name)
 
         in_scope_tables = self._discover_in_scope_tables()
         utils.logger.info(
@@ -373,3 +377,35 @@ class PostProcessor:
     def generate_snapshot_row_count_sql(snapshot_uri: str) -> str:
         """Return total row count of a snapshot parquet file."""
         return f"SELECT COUNT(*) FROM read_parquet('{snapshot_uri}')"
+
+    @staticmethod
+    def validate_no_vocab_writes(rendered_sql: str, task_name: str) -> None:
+        """
+        Refuse to run a task whose rendered SQL writes to any vocabulary parquet file.
+
+        Inspects the rendered SQL for `COPY ... TO '...<vocab_stem>.parquet'`
+        patterns covering all OMOP vocabulary tables and the optimized vocab lookup,
+        catching both placeholder-resolved paths and hard-coded paths.
+
+        Reading vocabulary files (in `read_parquet(...)` / `FROM '...'`) is unaffected;
+        only writes are blocked.
+
+        Raises:
+            ValueError: if the SQL would write to a vocabulary file.
+        """
+        protected_stems = list(constants.VOCABULARY_TABLES) + [constants.OPTIMIZED_VOCAB_FILE]
+
+        for stem in protected_stems:
+            # Match COPY ... TO '...<stem>.parquet' (or "...<stem>.parquet"),
+            # using word boundaries so 'concept' doesn't match 'concept_relationship'.
+            pattern = (
+                rf"\bTO\s*['\"][^'\"]*\b"
+                rf"{re.escape(stem)}{re.escape(constants.PARQUET)}['\"]"
+            )
+            if re.search(pattern, rendered_sql, re.IGNORECASE):
+                raise ValueError(
+                    f"Post-processing task '{task_name}' attempts to write to "
+                    f"vocabulary file '{stem}{constants.PARQUET}'. Vocabulary "
+                    f"files must never be modified by post-processing tasks. "
+                    f"Refusing to run."
+                )

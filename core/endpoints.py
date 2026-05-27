@@ -438,6 +438,9 @@ def post_processing_endpoint() -> tuple[str, int]:
     except FileNotFoundError as e:
         utils.logger.error(f"Post-processing task script missing: {str(e)}")
         return f"Post-processing task script missing: {str(e)}", 400
+    except ValueError as e:
+        utils.logger.error(f"Post-processing task rejected: {str(e)}")
+        return f"Post-processing task rejected: {str(e)}", 400
     except Exception as e:
         utils.logger.error(f"Unable to apply post-processing task '{task_name}': {str(e)}")
         return f"Unable to apply post-processing task '{task_name}': {str(e)}", 500

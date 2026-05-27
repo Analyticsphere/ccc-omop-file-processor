@@ -664,6 +664,23 @@ class TestPostProcessingEndpoint:
         assert response.status_code == 500
         assert b"Unable to apply post-processing task" in response.data
 
+    @patch('core.endpoints.post_processing.PostProcessor')
+    def test_post_processing_vocab_write_returns_400(self, mock_class, client):
+        """Test that a task attempting to write to a vocabulary file returns 400."""
+        mock_instance = MagicMock()
+        mock_instance.apply.side_effect = ValueError(
+            "Post-processing task 'evil_task' attempts to write to vocabulary file "
+            "'concept.parquet'. Vocabulary files must never be modified by "
+            "post-processing tasks. Refusing to run."
+        )
+        mock_class.return_value = mock_instance
+
+        response = client.post('/post_processing', json=self._required_body)
+
+        assert response.status_code == 400
+        assert b"Post-processing task rejected" in response.data
+        assert b"vocabulary file" in response.data
+
 
 class TestClearBqDatasetEndpoint:
     """Tests for /clear_bq_dataset endpoint."""

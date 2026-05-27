@@ -854,6 +854,8 @@ Post-processing task 'remove_unmapped_measurements' applied: 1 table(s) affected
 
 5. Foreign-key referential integrity across tables is your responsibility. The pipeline does not cascade deletes or repair orphaned references.
 
+6. **Vocabulary files are read-only.** A task that tries to write to any OMOP vocabulary parquet (`concept`, `vocabulary`, `domain`, `concept_class`, `relationship`, `concept_relationship`, `concept_synonym`, `concept_ancestor`, `drug_strength`) or the optimized vocab lookup is rejected with a 400 before any DuckDB execution happens. The guard inspects the rendered SQL for `COPY ... TO '...<vocab>.parquet'` patterns and catches placeholder-resolved paths AND hard-coded paths. Reading vocabulary via `read_parquet('@CONCEPT')` etc. inside a SELECT is unaffected — only writes are blocked. Because all modifications to parquet artifacts in this pipeline go through a `COPY (SELECT …) TO '<file>'` overwrite, the single check covers updates, deletions, and insertions equally.
+
 ---
 
 ### Generate Derived Tables From Harmonized

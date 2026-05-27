@@ -80,6 +80,21 @@ class TestPostProcessorApply:
         with pytest.raises(FileNotFoundError, match="Post-processing task SQL script not found"):
             processor.apply()
 
+    @patch("core.post_processing.utils.placeholder_to_post_processing_path")
+    @patch("core.post_processing.os.path.isfile")
+    def test_blocks_vocab_writes_before_executing(self, mock_isfile, mock_render):
+        """apply() must reject vocab-writing SQL before any DuckDB execution happens."""
+        mock_isfile.return_value = True
+        mock_render.return_value = (
+            "COPY (SELECT * FROM read_parquet('gs://v/concept.parquet')) "
+            "TO 'gs://v/concept.parquet' (FORMAT parquet)"
+        )
+
+        with patch("builtins.open", mock_open(read_data="EVIL VOCAB WRITE")):
+            processor = PostProcessor(**DEFAULT_KWARGS)
+            with pytest.raises(ValueError, match="vocabulary file 'concept.parquet'"):
+                processor.apply()
+
     @patch("core.post_processing.report_artifact.ReportArtifact")
     @patch("core.post_processing.vocab_harmonization.VocabHarmonizer.deduplicate_primary_keys_in_file")
     @patch("core.post_processing.storage.delete_file")
