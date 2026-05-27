@@ -329,10 +329,9 @@ def _execute_side_effect(diff_result):
     """
     def _side_effect(sql, *args, **kwargs):
         if kwargs.get("return_results"):
-            # Diff queries return (added, removed); orphan queries return (count,)
+            # Diff queries return (added, removed); row-count returns (count,)
             if " AS removed" in sql:
                 return [diff_result]
-            # row-count or orphan single-column result
             return [(0,)]
         return None
     return _side_effect

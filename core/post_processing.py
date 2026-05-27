@@ -7,20 +7,6 @@ import core.utils as utils
 import core.vocab_harmonization as vocab_harmonization
 from core.storage_backend import storage
 
-# Natural-key parent tables whose deletions warrant orphan-reference reporting.
-# Vocabulary tables are excluded by project rule. person is included because
-# removing test patients is exactly the kind of thing a post-processing task
-# would do, and the resulting orphans are useful to surface.
-_ORPHAN_PARENT_TABLES = [
-    "person",
-    "location",
-    "care_site",
-    "provider",
-    "episode",
-    "visit_occurrence",
-    "visit_detail",
-]
-
 
 class PostProcessor:
     """
@@ -32,7 +18,7 @@ class PostProcessor:
       2. Snapshot the row-identity set of every OMOP table on disk
       3. Execute the task SQL via DuckDB
       4. Diff snapshots to per-table added/removed row counts
-      5. Emit ReportArtifact rows for affected tables and FK-orphan counts
+      5. Emit ReportArtifact rows for affected tables
       6. Re-run vocab_harmonization dedup on affected surrogate-key tables
       7. Clean up the snapshot tmp directory
     """
@@ -104,7 +90,6 @@ class PostProcessor:
             changes = self._compute_changes(in_scope_tables, snapshots)
 
             self._emit_per_table_artifacts(changes)
-            self._emit_orphan_reference_artifacts(in_scope_tables, snapshots, changes)
             self._dedupe_surrogate_keys(changes, in_scope_tables)
         finally:
             self._cleanup_snapshots(snapshots)
@@ -279,63 +264,6 @@ class PostProcessor:
                 value_as_string=table_name,
             )
 
-    def _emit_orphan_reference_artifacts(
-        self,
-        in_scope_tables: dict[str, str],
-        snapshots: dict[str, dict],
-        changes: dict[str, dict[str, int]],
-    ) -> None:
-        """
-        For each natural-key parent table that had rows removed, count rows in
-        every other in-scope table whose `<parent>_id` FK now points to a
-        deleted parent PK. Emit one artifact per (child, parent) pair with a
-        non-zero orphan count.
-        """
-        schema = utils.get_cdm_schema(self.omop_version)
-
-        for parent_table in _ORPHAN_PARENT_TABLES:
-            if parent_table not in changes or changes[parent_table]["removed"] == 0:
-                continue
-            if parent_table not in in_scope_tables:
-                continue
-
-            parent_snapshot = snapshots[parent_table]
-            parent_pk_column = parent_snapshot["pk_column"]
-            if not parent_pk_column:
-                continue
-
-            fk_column = f"{parent_table}_id"
-
-            for child_table, child_uri in in_scope_tables.items():
-                if child_table == parent_table:
-                    continue
-                child_columns = schema.get(child_table, {}).get("columns", {})
-                if fk_column not in child_columns:
-                    continue
-
-                orphan_sql = PostProcessor.generate_orphan_count_sql(
-                    child_uri=child_uri,
-                    fk_column=fk_column,
-                    parent_uri=in_scope_tables[parent_table],
-                    parent_pk_column=parent_pk_column,
-                    parent_snapshot_uri=parent_snapshot["snapshot_uri"],
-                )
-                result = utils.execute_duckdb_sql(
-                    orphan_sql,
-                    f"Unable to count orphaned references in {child_table} -> {parent_table}",
-                    return_results=True,
-                )
-                orphan_count = int(result[0][0]) if result else 0
-
-                if orphan_count:
-                    self._save_artifact(
-                        name=(
-                            f"Post-processing task '{self.task_name}': "
-                            f"orphaned references in {child_table} -> {parent_table}"
-                        ),
-                        value_as_number=orphan_count,
-                    )
-
     def _save_artifact(
         self,
         name: str,
@@ -445,29 +373,3 @@ class PostProcessor:
     def generate_snapshot_row_count_sql(snapshot_uri: str) -> str:
         """Return total row count of a snapshot parquet file."""
         return f"SELECT COUNT(*) FROM read_parquet('{snapshot_uri}')"
-
-    @staticmethod
-    def generate_orphan_count_sql(
-        child_uri: str,
-        fk_column: str,
-        parent_uri: str,
-        parent_pk_column: str,
-        parent_snapshot_uri: str,
-    ) -> str:
-        """
-        Count rows in child whose fk_column points to a parent PK that was in
-        the pre-task snapshot but is no longer present in the current parent.
-        NULL FKs are excluded (those are missing, not orphaned).
-        """
-        return f"""
-        SELECT COUNT(*)
-        FROM read_parquet('{child_uri}') c
-        WHERE c.{fk_column} IS NOT NULL
-          AND c.{fk_column} IN (
-              SELECT s.{parent_pk_column}
-              FROM read_parquet('{parent_snapshot_uri}') s
-              WHERE s.{parent_pk_column} NOT IN (
-                  SELECT {parent_pk_column} FROM read_parquet('{parent_uri}')
-              )
-          )
-        """.strip()

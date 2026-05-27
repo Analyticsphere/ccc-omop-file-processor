@@ -36,8 +36,6 @@ TABLE_URI = "gs://test-bucket/2025-01-15/artifacts/converted_files/person.parque
 SNAPSHOT_URI = "gs://test-bucket/2025-01-15/artifacts/post_processing/example_task/tmp/person_pre.parquet"
 DEATH_TABLE_URI = "gs://test-bucket/2025-01-15/artifacts/converted_files/death.parquet"
 DEATH_SNAPSHOT_URI = "gs://test-bucket/2025-01-15/artifacts/post_processing/example_task/tmp/death_pre.parquet"
-CONDITION_URI = "gs://test-bucket/2025-01-15/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet"
-PERSON_SNAPSHOT_URI = "gs://test-bucket/2025-01-15/artifacts/post_processing/example_task/tmp/person_pre.parquet"
 
 
 class TestGenerateSnapshotPkSql:
@@ -115,22 +113,6 @@ class TestGenerateSnapshotRowCountSql:
         result = PostProcessor.generate_snapshot_row_count_sql(SNAPSHOT_URI)
         assert "SELECT COUNT(*) FROM read_parquet" in result
         assert SNAPSHOT_URI in result
-
-
-class TestGenerateOrphanCountSql:
-    """Tests for generate_orphan_count_sql()."""
-
-    def test_condition_occurrence_orphans_to_person(self):
-        result = PostProcessor.generate_orphan_count_sql(
-            child_uri=CONDITION_URI,
-            fk_column="person_id",
-            parent_uri=TABLE_URI,
-            parent_pk_column="person_id",
-            parent_snapshot_uri=PERSON_SNAPSHOT_URI,
-        )
-
-        expected = load_reference_sql("generate_orphan_count_sql_co_to_person.sql")
-        assert normalize_sql(result) == normalize_sql(expected)
 
 
 class TestPlaceholderToPostProcessingPath:

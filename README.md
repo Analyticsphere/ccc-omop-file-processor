@@ -775,7 +775,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 **DAG usage:** Implemented in the DAG through `core.jobs.post_processing_job`. Called once per post-processing task configured for the site, after `harmonize_vocab` step `deduplicate_single_table` and before derived-table generation.
 
-**Description:** Applies one user-curated post-processing SQL task to the on-disk OMOP artifacts. Tasks can delete rows from and insert rows into any non-vocabulary OMOP table. Per-task report artifacts capture rows added, rows removed, tables affected, and orphaned references in child tables. After the task runs, surrogate-key tables that were affected are passed through the same primary-key deduplication step used after vocabulary harmonization.
+**Description:** Applies one user-curated post-processing SQL task to the on-disk OMOP artifacts. Tasks can delete rows from and insert rows into any non-vocabulary OMOP table. Per-task report artifacts capture rows added, rows removed, and tables affected. After the task runs, surrogate-key tables that were affected are passed through the same primary-key deduplication step used after vocabulary harmonization.
 
 **Parameters:**
 
@@ -794,7 +794,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 - Snapshots the row-identity set of every non-vocabulary OMOP table on disk (PK column when present, otherwise a row content hash).
 - Executes the task SQL via DuckDB after substituting placeholders (see below).
 - Diffs the post-task table state against each snapshot to count added and removed rows per table.
-- Emits three report artifacts per affected table (rows added, rows removed, table affected) and one artifact per (child, parent) pair with non-zero FK orphans.
+- Emits three report artifacts per affected table: rows added, rows removed, and table affected.
 - Re-runs primary-key deduplication on every affected surrogate-key table.
 - Cleans up snapshot files at `artifacts/post_processing/<task_name>/tmp/`.
 
@@ -852,7 +852,7 @@ Post-processing task 'remove_unmapped_measurements' applied: 1 table(s) affected
 
 4. Treat updates as delete-plus-insert. Because primary keys depend on row content, an "updated" row will have a different primary key from the row it replaces. The post-processing diff correctly reports this as one added and one removed row.
 
-5. Foreign-key referential integrity across tables is your responsibility. The pipeline reports orphaned references after the task runs, but does not cascade or repair them.
+5. Foreign-key referential integrity across tables is your responsibility. The pipeline does not cascade deletes or repair orphaned references.
 
 ---
 
