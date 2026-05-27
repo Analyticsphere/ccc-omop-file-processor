@@ -590,7 +590,7 @@ class TestPostProcessingEndpoint:
         'delivery_date': '2025-01-15',
         'omop_version': '5.4',
         'vocab_version': 'v5.0_24-JAN-25',
-        'task_name': 'remove_test_patients',
+        'task_name': 'example_task',
     }
 
     @patch('core.endpoints.post_processing.PostProcessor')

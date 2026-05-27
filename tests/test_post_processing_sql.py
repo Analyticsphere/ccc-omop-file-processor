@@ -33,11 +33,11 @@ def load_reference_sql(filename: str) -> str:
 
 
 TABLE_URI = "gs://test-bucket/2025-01-15/artifacts/converted_files/person.parquet"
-SNAPSHOT_URI = "gs://test-bucket/2025-01-15/artifacts/post_processing/remove_test_patients/tmp/person_pre.parquet"
+SNAPSHOT_URI = "gs://test-bucket/2025-01-15/artifacts/post_processing/example_task/tmp/person_pre.parquet"
 DEATH_TABLE_URI = "gs://test-bucket/2025-01-15/artifacts/converted_files/death.parquet"
-DEATH_SNAPSHOT_URI = "gs://test-bucket/2025-01-15/artifacts/post_processing/remove_test_patients/tmp/death_pre.parquet"
+DEATH_SNAPSHOT_URI = "gs://test-bucket/2025-01-15/artifacts/post_processing/example_task/tmp/death_pre.parquet"
 CONDITION_URI = "gs://test-bucket/2025-01-15/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet"
-PERSON_SNAPSHOT_URI = "gs://test-bucket/2025-01-15/artifacts/post_processing/remove_test_patients/tmp/person_pre.parquet"
+PERSON_SNAPSHOT_URI = "gs://test-bucket/2025-01-15/artifacts/post_processing/example_task/tmp/person_pre.parquet"
 
 
 class TestGenerateSnapshotPkSql:

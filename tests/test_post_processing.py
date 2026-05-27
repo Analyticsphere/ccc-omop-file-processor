@@ -18,7 +18,7 @@ DEFAULT_KWARGS = dict(
     omop_version="5.4",
     vocab_version="v5.0_24-JAN-25",
     vocab_path="/vocab",
-    task_name="remove_test_patients",
+    task_name="example_task",
 )
 
 
@@ -34,16 +34,16 @@ class TestPostProcessorInit:
         assert processor.omop_version == "5.4"
         assert processor.vocab_version == "v5.0_24-JAN-25"
         assert processor.vocab_path == "/vocab"
-        assert processor.task_name == "remove_test_patients"
+        assert processor.task_name == "example_task"
 
     def test_init_derives_paths(self):
         processor = PostProcessor(**DEFAULT_KWARGS)
 
         assert processor.sql_script_path == (
-            "reference/sql/post_processing/remove_test_patients.sql"
+            "reference/sql/post_processing/example_task.sql"
         )
         assert processor.tmp_dir == (
-            "test-bucket/2025-01-15/artifacts/post_processing/remove_test_patients/tmp/"
+            "test-bucket/2025-01-15/artifacts/post_processing/example_task/tmp/"
         )
 
 
