@@ -1,8 +1,8 @@
 -- Post-processing task: remove_text-to-concept_measurements
 --
--- Removes rows from the measurement table in which text-to-concept-id
--- was performed *EXCEPT FOR* a curated list of mappings which have
--- been reviewed and found to be accurate
+-- Removes rows from the measurement table in which text-to-concept_id
+-- mapping was performed *EXCEPT FOR* a curated list of mappings which 
+-- have been reviewed and found to be accurate
 
 COPY (
     SELECT *
