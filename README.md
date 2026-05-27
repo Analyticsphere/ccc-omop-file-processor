@@ -819,14 +819,14 @@ Derived tables (`condition_era`, `drug_era`, `observation_period`) are not expos
   "delivery_date": "2024-01-15",
   "omop_version": "5.4",
   "vocab_version": "v5.0 29-FEB-24",
-  "task_name": "remove_unmapped_measurements"
+  "task_name": "remove_text-to-concept_measurements"
 }
 ```
 
 **Response (success):**
 
 ```text
-Post-processing task 'remove_unmapped_measurements' applied: 1 table(s) affected (measurement: +0/-128)
+Post-processing task 'remove_text-to-concept_measurements' applied: 1 table(s) affected (measurement: +0/-128)
 ```
 
 ### Authoring a post-processing task

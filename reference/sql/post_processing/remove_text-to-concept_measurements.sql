@@ -1,4 +1,4 @@
--- Post-processing task: remove_unmapped_measurements
+-- Post-processing task: remove_text-to-concept_measurements
 --
 -- Removes rows from the measurement table in which text-to-concept-id
 -- was performed *EXCEPT FOR* a curated list of mappings which have
