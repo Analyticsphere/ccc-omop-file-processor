@@ -257,15 +257,15 @@ class PostProcessor:
         """Emit added / removed / table-affected artifacts per changed table."""
         for table_name, counts in changes.items():
             self._save_artifact(
-                name=f"Post-processing task '{self.task_name}': rows added in {table_name}",
+                name=f"Post-processing task {self.task_name}: rows added in {table_name}",
                 value_as_number=counts["added"],
             )
             self._save_artifact(
-                name=f"Post-processing task '{self.task_name}': rows removed from {table_name}",
+                name=f"Post-processing task {self.task_name}: rows removed from {table_name}",
                 value_as_number=counts["removed"],
             )
             self._save_artifact(
-                name=f"Post-processing task '{self.task_name}': table affected",
+                name=f"Post-processing task {self.task_name}: table affected",
                 value_as_string=table_name,
             )
 
