@@ -103,7 +103,7 @@ class TestPostProcessorApply:
     @patch("core.post_processing.utils.get_cdm_schema")
     @patch("core.post_processing.utils.placeholder_to_post_processing_path")
     @patch("core.post_processing.os.path.isfile")
-    def test_no_changes_returns_empty_dict_and_no_artifacts(
+    def test_no_changes_returns_empty_dict_and_emits_zero_artifacts(
         self,
         mock_isfile,
         mock_render,
@@ -114,7 +114,8 @@ class TestPostProcessorApply:
         mock_dedupe,
         mock_artifact_class,
     ):
-        """A task that produces zero diffs returns {} and writes no artifacts."""
+        """A task that produces zero diffs returns {} but still emits task-level
+        zero-count artifacts so the no-op run is recorded."""
         mock_isfile.return_value = True
         mock_render.return_value = "SELECT 1"
         mock_schema.return_value = {"person": {"columns": {"person_id": {"primary_key": "true", "type": "BIGINT"}}}}
@@ -127,7 +128,14 @@ class TestPostProcessorApply:
             result = processor.apply()
 
         assert result == {}
-        mock_artifact_class.assert_not_called()
+        # Two task-level zero-count artifacts: one for added, one for removed
+        assert mock_artifact_class.call_count == 2
+        for call in mock_artifact_class.call_args_list:
+            assert call.kwargs["value_as_number"] == 0
+            assert call.kwargs["value_as_string"] is None
+        artifact_names = {call.kwargs["name"] for call in mock_artifact_class.call_args_list}
+        assert any(n.endswith("rows added") for n in artifact_names)
+        assert any(n.endswith("rows removed") for n in artifact_names)
         mock_dedupe.assert_not_called()
 
     @patch("core.post_processing.report_artifact.ReportArtifact")
@@ -165,10 +173,27 @@ class TestPostProcessorApply:
         assert result == {"person": {"added": 0, "removed": 5}}
         # 3 artifacts per affected table: added/removed/affected
         assert mock_artifact_class.call_count == 3
-        artifact_names = {call.kwargs["name"] for call in mock_artifact_class.call_args_list}
-        assert any("rows removed from person" in n for n in artifact_names)
-        assert any("rows added in person" in n for n in artifact_names)
-        assert any("table affected" in n for n in artifact_names)
+
+        artifact_calls_by_name = {
+            call.kwargs["name"]: call.kwargs for call in mock_artifact_class.call_args_list
+        }
+
+        added_kwargs = artifact_calls_by_name[
+            "Post-processing task example_task: rows added"
+        ]
+        assert added_kwargs["value_as_string"] == "person"
+        assert added_kwargs["value_as_number"] == 0
+
+        removed_kwargs = artifact_calls_by_name[
+            "Post-processing task example_task: rows removed"
+        ]
+        assert removed_kwargs["value_as_string"] == "person"
+        assert removed_kwargs["value_as_number"] == 5
+
+        affected_kwargs = artifact_calls_by_name[
+            "Post-processing task example_task: table affected"
+        ]
+        assert affected_kwargs["value_as_string"] == "person"
 
     @patch("core.post_processing.report_artifact.ReportArtifact")
     @patch("core.post_processing.vocab_harmonization.VocabHarmonizer.deduplicate_primary_keys_in_file")

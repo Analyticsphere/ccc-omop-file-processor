@@ -254,14 +254,31 @@ class PostProcessor:
     # ---- artifacts ----------------------------------------------------------
 
     def _emit_per_table_artifacts(self, changes: dict[str, dict[str, int]]) -> None:
-        """Emit added / removed / table-affected artifacts per changed table."""
+        """Emit added / removed / table-affected artifacts per changed table.
+
+        When no tables changed, emit task-level zero-count artifacts so the
+        task's no-op execution is still recorded in the report.
+        """
+        if not changes:
+            self._save_artifact(
+                name=f"Post-processing task {self.task_name}: rows added",
+                value_as_number=0,
+            )
+            self._save_artifact(
+                name=f"Post-processing task {self.task_name}: rows removed",
+                value_as_number=0,
+            )
+            return
+
         for table_name, counts in changes.items():
             self._save_artifact(
-                name=f"Post-processing task {self.task_name}: rows added in {table_name}",
+                name=f"Post-processing task {self.task_name}: rows added",
+                value_as_string=table_name,
                 value_as_number=counts["added"],
             )
             self._save_artifact(
-                name=f"Post-processing task {self.task_name}: rows removed from {table_name}",
+                name=f"Post-processing task {self.task_name}: rows removed",
+                value_as_string=table_name,
                 value_as_number=counts["removed"],
             )
             self._save_artifact(
