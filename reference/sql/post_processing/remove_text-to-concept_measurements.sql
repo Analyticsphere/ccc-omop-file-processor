@@ -12,7 +12,7 @@ COPY (
         AND measurement_source_concept_id = 0
         AND LENGTH(IFNULL(measurement_source_value, '')) > 5
         AND measurement_concept_id NOT IN (
-            4020553, 44816618, 3661712, 36674488, 21490527, 3020891, 4140731, 4137519
+            4020553, 44816618, 21490847, 36674488, 3020891, 4140731, 4137519, 4134573, 4139702, 4141359, 1988764, 4177340, 4177340,
         )
     )
 ) TO '@MEASUREMENT' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1);
