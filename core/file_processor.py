@@ -93,7 +93,8 @@ class FileProcessor:
         try:
             utils.execute_duckdb_sql(
                 convert_statement,
-                f"Unable to convert CSV file to Parquet {storage.get_uri(self.file_path)}"
+                f"Unable to convert CSV file to Parquet {storage.get_uri(self.file_path)}",
+                load_encodings=True
             )
         except Exception as e:
             if not retry:

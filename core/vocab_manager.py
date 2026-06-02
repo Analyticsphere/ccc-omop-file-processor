@@ -55,7 +55,11 @@ class VocabularyManager:
                 convert_query = self.generate_convert_vocab_sql(csv_file_path, parquet_file_path, csv_columns)
 
                 # Execute SQL
-                utils.execute_duckdb_sql(convert_query, "Unable to convert vocabulary CSV to Parquet")
+                utils.execute_duckdb_sql(
+                    convert_query,
+                    "Unable to convert vocabulary CSV to Parquet",
+                    load_encodings=True
+                )
 
     def create_optimized_vocab_file(self) -> None:
         """

@@ -28,10 +28,17 @@ logging.basicConfig(
 # Create the logger at module level so its settings are applied throughout code base
 logger = logging.getLogger(__name__)
 
-def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
+def create_duckdb_connection(load_encodings: bool = False) -> tuple[duckdb.DuckDBPyConnection, str]:
     """
     Create DuckDB connection with optimized settings for processing OMOP files.
     Configures memory limits, threading, and filesystem support.
+
+    Args:
+        load_encodings: If True, install and load the DuckDB `encodings` extension
+            (needed to read CSV files in encodings beyond DuckDB's built-in set).
+            Defaults to False because the extension is only needed during
+            CSV-to-Parquet conversion paths; all other connections operate on
+            Parquet files and don't benefit from loading it.
     """
     try:
         random_string = str(uuid.uuid4())
@@ -59,8 +66,9 @@ def create_duckdb_connection() -> tuple[duckdb.DuckDBPyConnection, str]:
         # Set max size to allow on disk
         conn.execute(f"SET max_temp_directory_size='{constants.DUCKDB_MAX_SIZE}'")
 
-        # Install encodings extension to handle 1000+ CSV encodings
-        conn.execute("INSTALL encodings; LOAD encodings")
+        if load_encodings:
+            # Install encodings extension to handle 1000+ CSV encodings
+            conn.execute("INSTALL encodings; LOAD encodings")
 
         # Register filesystem for cloud storage if using GCS backend
         if constants.STORAGE_BACKEND == constants.GCS_BACKEND:
@@ -89,7 +97,7 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: Opti
         # Manually run garabage collection here to reclaim memory
         gc.collect()
 
-def execute_duckdb_sql(sql: str, error_msg: str, return_results: bool = False):
+def execute_duckdb_sql(sql: str, error_msg: str, return_results: bool = False, load_encodings: bool = False):
     """
     Execute SQL statement using DuckDB with automatic connection management.
 
@@ -97,6 +105,9 @@ def execute_duckdb_sql(sql: str, error_msg: str, return_results: bool = False):
         sql: SQL statement to execute
         error_msg: Error message to display if execution fails
         return_results: If True, returns all query results as a list. If False, returns None. Defaults to False.
+        load_encodings: If True, install/load the DuckDB `encodings` extension on the
+            connection. Set this only when the SQL reads a CSV that may use a non-default
+            encoding (i.e. CSV-to-Parquet conversion paths).
 
     Returns:
         If return_results=True: List of result rows from the query
@@ -106,7 +117,7 @@ def execute_duckdb_sql(sql: str, error_msg: str, return_results: bool = False):
     local_db_file = None
 
     try:
-        conn, local_db_file = create_duckdb_connection()
+        conn, local_db_file = create_duckdb_connection(load_encodings=load_encodings)
 
         with conn:
             result = conn.execute(sql)
@@ -202,7 +213,7 @@ def get_columns_from_file(file_path: str, encoding: str = 'utf-8') -> list:
     conn = None
     local_db_file = None
     try:
-        conn, local_db_file = create_duckdb_connection()
+        conn, local_db_file = create_duckdb_connection(load_encodings=is_csv)
         with conn:
             # Drop any existing temp table with the same name
             conn.execute(f"DROP TABLE IF EXISTS {table_name_for_introspection}")
