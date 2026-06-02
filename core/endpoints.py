@@ -13,6 +13,7 @@ import core.natural_keys as natural_keys
 import core.normalization as normalization
 import core.omop_client as omop_client
 import core.participant_filter as participant_filter
+import core.post_processing as post_processing
 import core.reporting as reporting
 import core.utils as utils
 import core.vocab_harmonization as vocab_harmonization
@@ -375,6 +376,74 @@ def unique_natural_keys() -> tuple[str, int]:
     except Exception as e:
         utils.logger.error(f"Unable to apply natural-key rewrite: {str(e)}")
         return f"Unable to apply natural-key rewrite: {str(e)}", 500
+
+
+@app.route('/post_processing', methods=['POST'])
+def post_processing_endpoint() -> tuple[str, int]:
+    """
+    Apply one user-curated post-processing SQL task to the on-disk OMOP artifacts.
+
+    Runs after vocabulary harmonization and before derived-table generation. The task
+    is identified by `task_name`, which corresponds to
+    reference/sql/post_processing/<task_name>.sql. Returns a 400 if the script does
+    not exist.
+    """
+    data: dict[str, Any] = request.get_json() or {}
+    site: Optional[str] = data.get('site')
+    bucket: Optional[str] = data.get('bucket')
+    delivery_date: Optional[str] = data.get('delivery_date')
+    omop_version: Optional[str] = data.get('omop_version')
+    vocab_version: Optional[str] = data.get('vocab_version')
+    vocab_path: str = constants.VOCAB_PATH
+    task_name: Optional[str] = data.get('task_name')
+    missing_fields = _get_missing_fields(
+        data,
+        ['site', 'bucket', 'delivery_date', 'omop_version', 'vocab_version', 'task_name']
+    )
+
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert site is not None
+        assert bucket is not None
+        assert delivery_date is not None
+        assert omop_version is not None
+        assert vocab_version is not None
+        assert task_name is not None
+
+        processor = post_processing.PostProcessor(
+            site=site,
+            bucket=bucket,
+            delivery_date=delivery_date,
+            omop_version=omop_version,
+            vocab_version=vocab_version,
+            vocab_path=vocab_path,
+            task_name=task_name,
+        )
+        changes = processor.apply()
+
+        summary_parts = [
+            f"{table}: +{counts['added']}/-{counts['removed']}"
+            for table, counts in changes.items()
+        ]
+        summary = ", ".join(summary_parts) if summary_parts else "no changes"
+        message = (
+            f"Post-processing task '{task_name}' applied: "
+            f"{len(changes)} table(s) affected ({summary})"
+        )
+        utils.logger.info(message)
+        return message, 200
+
+    except FileNotFoundError as e:
+        utils.logger.error(f"Post-processing task script missing: {str(e)}")
+        return f"Post-processing task script missing: {str(e)}", 400
+    except ValueError as e:
+        utils.logger.error(f"Post-processing task rejected: {str(e)}")
+        return f"Post-processing task rejected: {str(e)}", 400
+    except Exception as e:
+        utils.logger.error(f"Unable to apply post-processing task '{task_name}': {str(e)}")
+        return f"Unable to apply post-processing task '{task_name}': {str(e)}", 500
 
 
 @app.route('/clear_bq_dataset', methods=['POST'])

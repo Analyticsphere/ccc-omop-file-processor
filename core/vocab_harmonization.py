@@ -716,6 +716,13 @@ class VocabHarmonizer:
 
     def _deduplicate_primary_keys(self, file_path: str, table_name: str) -> None:
         """
+        Instance-method shim for the public static deduplicate_primary_keys_in_file.
+        """
+        VocabHarmonizer.deduplicate_primary_keys_in_file(file_path, table_name, self.cdm_version)
+
+    @staticmethod
+    def deduplicate_primary_keys_in_file(file_path: str, table_name: str, cdm_version: str) -> None:
+        """
         Check for and fix duplicate primary keys in a consolidated parquet file.
         Only applies to tables with surrogate keys.
 
@@ -727,20 +734,21 @@ class VocabHarmonizer:
         Args:
             file_path: Path to the consolidated parquet file
             table_name: Name of the OMOP table
+            cdm_version: OMOP CDM version, used for schema lookups
         """
         # Only process tables with surrogate keys
         if table_name not in constants.SURROGATE_KEY_TABLES:
             utils.logger.info(f"Table {table_name} does not use surrogate keys. Skipping deduplication.")
             return
-        
+
         # Get primary key column
-        primary_key_column = utils.get_primary_key_column(table_name, self.cdm_version)
+        primary_key_column = utils.get_primary_key_column(table_name, cdm_version)
         if not primary_key_column:
             utils.logger.info(f"No primary key column defined for table {table_name}. Skipping deduplication.")
             return
-        
+
         # Get primary key data type
-        schema = utils.get_table_schema(table_name, self.cdm_version)
+        schema = utils.get_table_schema(table_name, cdm_version)
         if table_name not in schema:
             utils.logger.warning(f"Schema not found for table {table_name}. Skipping deduplication.")
             return

@@ -581,6 +581,107 @@ class TestUniqueNaturalKeysEndpoint:
         assert b"Unable to apply natural-key rewrite" in response.data
 
 
+class TestPostProcessingEndpoint:
+    """Tests for /post_processing endpoint."""
+
+    _required_body = {
+        'site': 'site_alpha',
+        'bucket': 'test-bucket',
+        'delivery_date': '2025-01-15',
+        'omop_version': '5.4',
+        'vocab_version': 'v5.0_24-JAN-25',
+        'task_name': 'example_task',
+    }
+
+    @patch('core.endpoints.post_processing.PostProcessor')
+    def test_post_processing_success(self, mock_class, client):
+        """Test successful post-processing run with changes."""
+        mock_instance = MagicMock()
+        mock_instance.apply.return_value = {
+            'condition_occurrence': {'added': 0, 'removed': 47},
+            'person': {'added': 0, 'removed': 3},
+        }
+        mock_class.return_value = mock_instance
+
+        response = client.post('/post_processing', json=self._required_body)
+
+        assert response.status_code == 200
+        assert b"2 table(s) affected" in response.data
+        assert b"condition_occurrence: +0/-47" in response.data
+        assert b"person: +0/-3" in response.data
+        mock_instance.apply.assert_called_once()
+
+    @patch('core.endpoints.post_processing.PostProcessor')
+    def test_post_processing_no_changes(self, mock_class, client):
+        """Test no-op task still returns 200."""
+        mock_instance = MagicMock()
+        mock_instance.apply.return_value = {}
+        mock_class.return_value = mock_instance
+
+        response = client.post('/post_processing', json=self._required_body)
+
+        assert response.status_code == 200
+        assert b"0 table(s) affected" in response.data
+        assert b"no changes" in response.data
+
+    def test_post_processing_missing_parameters(self, client):
+        """Test missing parameters return 400."""
+        response = client.post('/post_processing', json={})
+
+        assert_missing_fields(
+            response,
+            'site', 'bucket', 'delivery_date', 'omop_version', 'vocab_version', 'task_name'
+        )
+
+    def test_post_processing_missing_task_name_only(self, client):
+        """Test missing task_name returns 400."""
+        body = {k: v for k, v in self._required_body.items() if k != 'task_name'}
+        response = client.post('/post_processing', json=body)
+
+        assert_missing_fields(response, 'task_name')
+
+    @patch('core.endpoints.post_processing.PostProcessor')
+    def test_post_processing_unknown_task_returns_400(self, mock_class, client):
+        """Test missing task SQL script returns 400."""
+        mock_instance = MagicMock()
+        mock_instance.apply.side_effect = FileNotFoundError(
+            "Post-processing task SQL script not found at reference/sql/post_processing/nope.sql"
+        )
+        mock_class.return_value = mock_instance
+
+        response = client.post('/post_processing', json=self._required_body)
+
+        assert response.status_code == 400
+        assert b"Post-processing task script missing" in response.data
+
+    @patch('core.endpoints.post_processing.PostProcessor')
+    def test_post_processing_exception_returns_500(self, mock_class, client):
+        """Test unhandled exception returns 500."""
+        mock_class.side_effect = Exception("boom")
+
+        response = client.post('/post_processing', json=self._required_body)
+
+        assert response.status_code == 500
+        assert b"Unable to apply post-processing task" in response.data
+
+    @patch('core.endpoints.post_processing.PostProcessor')
+    def test_post_processing_vocab_write_returns_400(self, mock_class, client):
+        """Test that a task attempting to write to a vocabulary file returns 400."""
+        mock_instance = MagicMock()
+        mock_instance.apply.side_effect = ValueError(
+            "Post-processing task 'evil_task' attempts to write to vocabulary file "
+            "'concept.parquet'. Vocabulary files must never be modified by "
+            "post-processing tasks. Refusing to run."
+        )
+        mock_class.return_value = mock_instance
+
+        response = client.post('/post_processing', json=self._required_body)
+
+        assert response.status_code == 400
+        assert b"Post-processing task rejected" in response.data
+        assert b"vocabulary file" in response.data
+
+
 class TestClearBqDatasetEndpoint:
     """Tests for /clear_bq_dataset endpoint."""
 

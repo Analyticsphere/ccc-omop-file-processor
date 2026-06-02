@@ -54,6 +54,7 @@ Artifacts are created under `{bucket}/{delivery_date}/artifacts/`.
 | `artifacts/delivery_report/` | Final consolidated delivery report CSV |
 | `artifacts/invalid_rows/` | Invalid rows removed during normalization |
 | `artifacts/connect_data/` | Exported Connect participant status Parquet file |
+| `artifacts/post_processing/` | Temporary per-task snapshots used by post-processing diff reporting |
 | `artifacts/dqd/` | Reserved artifact directory |
 | `artifacts/achilles/` | Reserved artifact directory |
 | `artifacts/pass/` | Reserved artifact directory |
@@ -135,17 +136,18 @@ A typical run in the current orchestrator DAG follows this order:
 21. `POST /harmonize_vocab` with `step=consolidate_etl`
 22. `POST /harmonize_vocab` with `step=discover_tables_for_dedup`
 23. `POST /harmonize_vocab` with `step=deduplicate_single_table`
-24. `POST /generate_derived_tables_from_harmonized` through `core.jobs.generate_derived_tables_job`
-25. `POST /clear_bq_dataset`
-26. `POST /harmonized_parquets_to_bq`
-27. `POST /load_target_vocab` when the site configuration requests standard target vocabulary tables
-28. `POST /parquet_to_bq` for remaining non-harmonized delivered tables
-29. `POST /load_derived_tables_to_bq`
-30. `POST /pipeline_log` with `status=running`
-31. `POST /create_missing_tables`
-32. `POST /parquet_to_bq` for `cdm_source`
-33. `POST /generate_delivery_report_csv`
-34. `POST /pipeline_log` with `status=completed`
+24. `POST /post_processing` through `core.jobs.post_processing_job` for each task configured by the site
+25. `POST /generate_derived_tables_from_harmonized` through `core.jobs.generate_derived_tables_job`
+26. `POST /clear_bq_dataset`
+27. `POST /harmonized_parquets_to_bq`
+28. `POST /load_target_vocab` when the site configuration requests standard target vocabulary tables
+29. `POST /parquet_to_bq` for remaining non-harmonized delivered tables
+30. `POST /load_derived_tables_to_bq`
+31. `POST /pipeline_log` with `status=running`
+32. `POST /create_missing_tables`
+33. `POST /parquet_to_bq` for `cdm_source`
+34. `POST /generate_delivery_report_csv`
+35. `POST /pipeline_log` with `status=completed`
 
 If any stage fails, the DAG also uses `POST /pipeline_log` with `status=error`.
 
@@ -767,6 +769,95 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 ---
 
+### Post Processing
+
+**Endpoint:** `POST /post_processing`
+
+**DAG usage:** Implemented in the DAG through `core.jobs.post_processing_job`. Called once per post-processing task configured for the site, after `harmonize_vocab` step `deduplicate_single_table` and before derived-table generation.
+
+**Description:** Applies one user-curated post-processing SQL task to the on-disk OMOP artifacts. Tasks can delete rows from and insert rows into any non-vocabulary OMOP table. Per-task report artifacts capture rows added, rows removed, and tables affected. After the task runs, surrogate-key tables that were affected are passed through the same primary-key deduplication step used after vocabulary harmonization.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `site` | string | Yes | Site identifier |
+| `bucket` | string | Yes | Site bucket or root directory |
+| `delivery_date` | string | Yes | Delivery date in `YYYY-MM-DD` format |
+| `omop_version` | string | Yes | OMOP CDM version, for example `5.4` |
+| `vocab_version` | string | Yes | Vocabulary version (used to resolve `@CONCEPT`-style placeholders) |
+| `task_name` | string | Yes | Task name. Must match a SQL file at `reference/sql/post_processing/<task_name>.sql` |
+
+**Behavior:**
+
+- Loads `reference/sql/post_processing/<task_name>.sql`. Returns 400 if the script does not exist.
+- Snapshots the row-identity set of every non-vocabulary OMOP table on disk (PK column when present, otherwise a row content hash).
+- Executes the task SQL via DuckDB after substituting placeholders (see below).
+- Diffs the post-task table state against each snapshot to count added and removed rows per table.
+- Emits three report artifacts per affected table: rows added, rows removed, and table affected.
+- Re-runs primary-key deduplication on every affected surrogate-key table.
+- Cleans up snapshot files at `artifacts/post_processing/<task_name>/tmp/`.
+
+**Available placeholders in task SQL:**
+
+| Placeholder | Routes to |
+|-------------|-----------|
+| `@CONDITION_OCCURRENCE`, `@DRUG_EXPOSURE`, `@VISIT_OCCURRENCE`, `@PROCEDURE_OCCURRENCE`, `@DEVICE_EXPOSURE`, `@MEASUREMENT`, `@OBSERVATION`, `@NOTE`, `@SPECIMEN` | `artifacts/omop_etl/<table>/<table>.parquet` |
+| `@PERSON`, `@DEATH`, `@CARE_SITE`, `@LOCATION`, `@PROVIDER`, `@VISIT_DETAIL`, `@EPISODE`, `@COST`, `@PAYER_PLAN_PERIOD`, `@METADATA`, `@CDM_SOURCE`, `@FACT_RELATIONSHIP`, `@NOTE_NLP` | `artifacts/converted_files/<table>.parquet` |
+| `@CONCEPT`, `@CONCEPT_ANCESTOR`, `@OPTIMIZED_VOCABULARY` | Vocabulary parquet files for the requested `vocab_version` |
+| `@SITE` | Site identifier (used as a hash salt for inserted surrogate keys) |
+| `@CURRENT_DATE` | Today's date in `YYYY-MM-DD` format |
+
+Derived tables (`condition_era`, `drug_era`, `observation_period`) are not exposed as placeholders, because they are regenerated immediately after post-processing.
+
+**Example:**
+
+```json
+{
+  "site": "hospital-a",
+  "bucket": "site",
+  "delivery_date": "2024-01-15",
+  "omop_version": "5.4",
+  "vocab_version": "v5.0 29-FEB-24",
+  "task_name": "remove_text-to-concept_measurements"
+}
+```
+
+**Response (success):**
+
+```text
+Post-processing task 'remove_text-to-concept_measurements' applied: 1 table(s) affected (measurement: +0/-128)
+```
+
+### Authoring a post-processing task
+
+1. Add a SQL file at `reference/sql/post_processing/<task_name>.sql`. Use one or more `COPY (...) TO '...'` statements separated by semicolons; the same read-and-overwrite pattern used by natural-key globalization and the CDM upgrade flow.
+2. Use the placeholders documented above to refer to OMOP table artifacts. Inline the parquet format string (`(FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)`) in your `COPY` targets.
+3. For inserts into surrogate-key tables, mint the primary key with the canonical hash formula so the new row keeps the same identity contract as the rest of the pipeline:
+
+    ```sql
+    -- Example: minting a condition_occurrence_id
+    CAST(
+      hash(CONCAT(
+          CAST(person_id            AS VARCHAR),
+          CAST(condition_concept_id AS VARCHAR),
+          CAST(condition_start_date AS VARCHAR),
+          /* ... every other non-PK column ... */
+          '@SITE'
+      )) % 9223372036854775807 AS BIGINT
+    ) AS condition_occurrence_id
+    ```
+
+    After the task runs, the pipeline automatically re-runs primary-key deduplication on every affected surrogate-key table, so accidental hash collisions are corrected deterministically. Natural-key and derived tables are *not* auto-deduplicated.
+
+4. Treat updates as delete-plus-insert. Because primary keys depend on row content, an "updated" row will have a different primary key from the row it replaces. The post-processing diff correctly reports this as one added and one removed row.
+
+5. Foreign-key referential integrity across tables is your responsibility. The pipeline does not cascade deletes or repair orphaned references.
+
+6. **Vocabulary files are read-only.** A task that tries to write to any OMOP vocabulary parquet (`concept`, `vocabulary`, `domain`, `concept_class`, `relationship`, `concept_relationship`, `concept_synonym`, `concept_ancestor`, `drug_strength`) or the optimized vocab lookup is rejected with a 400 before any DuckDB execution happens. The guard inspects the rendered SQL for `COPY ... TO '...<vocab>.parquet'` patterns and catches placeholder-resolved paths AND hard-coded paths. Reading vocabulary via `read_parquet('@CONCEPT')` etc. inside a SELECT is unaffected — only writes are blocked. Because all modifications to parquet artifacts in this pipeline go through a `COPY (SELECT …) TO '<file>'` overwrite, the single check covers updates, deletions, and insertions equally.
+
+---
+
 ### Generate Derived Tables From Harmonized
 
 **Endpoint:** `POST /generate_derived_tables_from_harmonized`
@@ -1073,6 +1164,7 @@ The repository also exposes direct job entry points under `core/jobs/`.
 | `core.jobs.normalize_parquet_job` | `FILE_PATH`, `OMOP_VERSION`, `DATE_FORMAT`, `DATETIME_FORMAT` | `POST /normalize_parquet` |
 | `core.jobs.upgrade_cdm_job` | `FILE_PATH`, `OMOP_VERSION`, `TARGET_OMOP_VERSION` | `POST /upgrade_cdm` |
 | `core.jobs.harmonize_vocab_job` | `FILE_PATH`, `VOCAB_VERSION`, `OMOP_VERSION`, `SITE`, `PROJECT_ID`, `DATASET_ID`, `STEP` | `POST /harmonize_vocab` |
+| `core.jobs.post_processing_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `OMOP_VERSION`, `VOCAB_VERSION`, `TASK_NAME` | `POST /post_processing` |
 | `core.jobs.generate_derived_tables_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `TABLE_NAME`, `VOCAB_VERSION` | `POST /generate_derived_tables_from_harmonized` |
 | `core.jobs.generate_report_csv_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `SITE_DISPLAY_NAME`, `FILE_DELIVERY_FORMAT`, `DELIVERED_CDM_VERSION`, `TARGET_VOCABULARY_VERSION`, `TARGET_CDM_VERSION` | `POST /generate_delivery_report_csv` |
 
