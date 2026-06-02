@@ -103,7 +103,7 @@ class FileProcessor:
 
                 return self._process_csv(
                     retry=True,
-                    conversion_options=["store_rejects=True, ignore_errors=True, parallel=False"]
+                    conversion_options=["store_rejects=True, ignore_errors=True, parallel=False, strict_mode=False"]
                 )
             else:
                 raise
@@ -193,7 +193,7 @@ class FileProcessor:
         COPY (
             SELECT {select_clause}
             FROM read_csv('{storage.get_uri(file_path)}',
-                null_padding=True, ALL_VARCHAR=True, strict_mode=False {FileProcessor.format_list(conversion_options)})
+                null_padding=True, ALL_VARCHAR=True, strict_mode=True {FileProcessor.format_list(conversion_options)})
         ) TO '{storage.get_uri(parquet_path)}' {constants.DUCKDB_FORMAT_STRING}
         """
         

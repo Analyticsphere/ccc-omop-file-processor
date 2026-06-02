@@ -225,7 +225,7 @@ def get_columns_from_file(file_path: str, encoding: str = 'utf-8') -> list:
                     SELECT * FROM read_csv('{storage.get_uri(file_path)}',
                                           null_padding=True,
                                           ALL_VARCHAR=True,
-                                          strict_mode=False,
+                                          strict_mode=True,
                                           ignore_errors=True,
                                           encoding='{encoding}')
                     LIMIT 0
