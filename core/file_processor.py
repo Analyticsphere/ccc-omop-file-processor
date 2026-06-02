@@ -84,9 +84,10 @@ class FileProcessor:
         # Get column names from CSV using detected encoding
         csv_column_names = utils.get_columns_from_file(self.file_path, encoding=encoding)
 
-        # Generate SQL — always include detected encoding
+        # Generate SQL — always include detected encoding; retries disable strict_mode
         convert_statement = self.generate_csv_to_parquet_sql(
-            self.file_path, csv_column_names, [f"encoding='{encoding}'"] + conversion_options
+            self.file_path, csv_column_names, [f"encoding='{encoding}'"] + conversion_options,
+            strict_mode=not retry,
         )
 
         # Execute SQL with retry logic
@@ -103,7 +104,7 @@ class FileProcessor:
 
                 return self._process_csv(
                     retry=True,
-                    conversion_options=["store_rejects=True, ignore_errors=True, parallel=False, strict_mode=False"]
+                    conversion_options=["store_rejects=True, ignore_errors=True, parallel=False"]
                 )
             else:
                 raise
@@ -151,7 +152,7 @@ class FileProcessor:
         return select_statement
 
     @staticmethod
-    def generate_csv_to_parquet_sql(file_path: str, csv_column_names: list[str], conversion_options: list = []) -> str:
+    def generate_csv_to_parquet_sql(file_path: str, csv_column_names: list[str], conversion_options: list = [], strict_mode: bool = True) -> str:
         """
         Generate SQL to convert CSV file to Parquet format.
 
@@ -193,7 +194,7 @@ class FileProcessor:
         COPY (
             SELECT {select_clause}
             FROM read_csv('{storage.get_uri(file_path)}',
-                null_padding=True, ALL_VARCHAR=True, strict_mode=True {FileProcessor.format_list(conversion_options)})
+                null_padding=True, ALL_VARCHAR=True, strict_mode={strict_mode} {FileProcessor.format_list(conversion_options)})
         ) TO '{storage.get_uri(parquet_path)}' {constants.DUCKDB_FORMAT_STRING}
         """
         
