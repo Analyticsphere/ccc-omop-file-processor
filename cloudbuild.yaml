@@ -20,12 +20,12 @@ steps:
   args: [
     'run', 'deploy', '$_IMAGE_NAME',
     '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
-    '--cpu=4', '--memory=16Gi',
+    '--cpu=$_DEFAULT_CPU', '--memory=$_DEFAULT_MEMORY',
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL', # Directly use the substitution variable
     '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
     '--concurrency=1',
-    '--timeout=3600s',
+    '--timeout=$_SERVICE_TIMEOUT',
     '--execution-environment=gen2',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
     '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data'
@@ -40,9 +40,9 @@ steps:
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
     '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
-    '--cpu=4',
-    '--memory=16Gi',
-    '--task-timeout=3600s',
+    '--cpu=$_DEFAULT_CPU',
+    '--memory=$_DEFAULT_MEMORY',
+    '--task-timeout=$_DEFAULT_TASK_TIMEOUT',
     '--max-retries=0',
     '--parallelism=1',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
@@ -59,9 +59,9 @@ steps:
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
     '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
-    '--cpu=4',
-    '--memory=16Gi',
-    '--task-timeout=3600s',
+    '--cpu=$_DEFAULT_CPU',
+    '--memory=$_DEFAULT_MEMORY',
+    '--task-timeout=$_DEFAULT_TASK_TIMEOUT',
     '--max-retries=0',
     '--parallelism=1',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
@@ -78,9 +78,9 @@ steps:
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
     '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
-    '--cpu=4',
-    '--memory=16Gi',
-    '--task-timeout=3600s',
+    '--cpu=$_DEFAULT_CPU',
+    '--memory=$_DEFAULT_MEMORY',
+    '--task-timeout=$_DEFAULT_TASK_TIMEOUT',
     '--max-retries=0',
     '--parallelism=1',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
@@ -97,9 +97,9 @@ steps:
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
     '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
-    '--cpu=4',
-    '--memory=16Gi',
-    '--task-timeout=3600s',
+    '--cpu=$_DEFAULT_CPU',
+    '--memory=$_DEFAULT_MEMORY',
+    '--task-timeout=$_DEFAULT_TASK_TIMEOUT',
     '--max-retries=0',
     '--parallelism=1',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
@@ -116,9 +116,9 @@ steps:
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
     '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
-    '--cpu=4',
-    '--memory=16Gi',
-    '--task-timeout=7200s',
+    '--cpu=$_DEFAULT_CPU',
+    '--memory=$_DEFAULT_MEMORY',
+    '--task-timeout=$_HARMONIZE_VOCAB_TIMEOUT',
     '--max-retries=0',
     '--parallelism=1',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
@@ -135,9 +135,9 @@ steps:
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
     '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
-    '--cpu=4',
-    '--memory=16Gi',
-    '--task-timeout=3600s',
+    '--cpu=$_DEFAULT_CPU',
+    '--memory=$_DEFAULT_MEMORY',
+    '--task-timeout=$_DEFAULT_TASK_TIMEOUT',
     '--max-retries=0',
     '--parallelism=1',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
@@ -154,9 +154,9 @@ steps:
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
     '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
-    '--cpu=4',
-    '--memory=16Gi',
-    '--task-timeout=3600s',
+    '--cpu=$_DEFAULT_CPU',
+    '--memory=$_DEFAULT_MEMORY',
+    '--task-timeout=$_DEFAULT_TASK_TIMEOUT',
     '--max-retries=0',
     '--parallelism=1',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
@@ -173,9 +173,9 @@ steps:
     '--region=us-central1',
     '--service-account=$SERVICE_ACCOUNT_EMAIL',
     '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
-    '--cpu=4',
-    '--memory=16Gi',
-    '--task-timeout=3600s',
+    '--cpu=$_DEFAULT_CPU',
+    '--memory=$_DEFAULT_MEMORY',
+    '--task-timeout=$_DEFAULT_TASK_TIMEOUT',
     '--max-retries=0',
     '--parallelism=1',
     '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
@@ -185,6 +185,17 @@ steps:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+
+# Default Cloud Run resource allocations applied across the service and all jobs.
+# Override per-trigger or per-deployment by setting the corresponding substitution.
+# Per-job overrides live inline above (e.g. _HARMONIZE_VOCAB_TIMEOUT for the
+# harmonize-vocab job, which needs more headroom than the other jobs).
+substitutions:
+  _DEFAULT_CPU: '4'
+  _DEFAULT_MEMORY: '16Gi'
+  _DEFAULT_TASK_TIMEOUT: '3600s'
+  _SERVICE_TIMEOUT: '3600s'
+  _HARMONIZE_VOCAB_TIMEOUT: '7200s'
 
 images:
   - 'gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA'
