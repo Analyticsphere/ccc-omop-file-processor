@@ -790,7 +790,12 @@ class VocabHarmonizer:
                 bucket_path = file_path.rsplit('/', 1)[0]
                 tmp_non_dup = f"{bucket_path}/tmp/tmp_non_dup_{tmp_id}.parquet"
                 tmp_dup_fixed = f"{bucket_path}/tmp/tmp_dup_fixed_{tmp_id}.parquet"
-                
+
+                # This block bypasses execute_duckdb_sql (it needs the temp table
+                # to survive across statements), so ensure parents exist explicitly.
+                storage.ensure_parent_directory(tmp_non_dup)
+                storage.ensure_parent_directory(tmp_dup_fixed)
+
                 # Pass 1: Write non-duplicate rows
                 utils.logger.info(f"Processing non-duplicate rows in in {table_name}...")
                 write_non_dup_sql = VocabHarmonizer.generate_write_non_duplicates_sql(

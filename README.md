@@ -65,6 +65,98 @@ Important behavior:
 - Directory creation clears existing files in those directories before reuse.
 - Several endpoints accept the original delivery `file_path` and internally resolve the processed artifact path in `artifacts/converted_files/`.
 
+## Local Development
+
+The service can run end-to-end against the local filesystem instead of GCS/BigQuery. This is the recommended setup for developing or debugging file-processing logic without touching cloud resources.
+
+### Layout under `local-data/`
+
+The `local-data/` directory at the repo root is mounted into the container at `/data`. Deliveries and vocabularies go here:
+
+```text
+local-data/
+├── <site>/<YYYY-MM-DD>/...     # delivery files (csv, csv.gz, parquet)
+├── vocabulary/<vocab_version>/ # Athena vocabulary CSVs
+└── temp/                       # DuckDB spill directory (must exist before first run)
+```
+
+### Build and run
+
+```bash
+docker build -t omop-processor:local .
+mkdir -p local-data/temp
+
+docker run -d \
+  --name omop-processor-local \
+  -p 8080:8080 \
+  -v "$(pwd)/local-data:/data" \
+  -e STORAGE_BACKEND=local \
+  -e DATA_ROOT=/data \
+  -e OMOP_VOCAB_PATH=/data/vocabulary \
+  -e BQ_LOGGING_TABLE=local.test.pipeline_log \
+  -e DUCKDB_TEMP_DIR=/data/temp/ \
+  -e PORT=8080 \
+  omop-processor:local
+```
+
+`local-data/restart-local.sh` wraps the stop/remove/run cycle for iteration.
+
+### Examples of calling local endpoints
+Check service heartbeat.
+```bash
+curl http://localhost:8080/heartbeat
+```
+
+Create the directory structure for processing artifacts.
+```bash
+curl -X POST http://localhost:8080/create_artifact_directories \
+  -H "Content-Type: application/json" \
+  -d '{"delivery_bucket": "synthea53/2025-01-01"}'
+```
+
+Convert CSV to Parquet.
+```bash
+curl -X POST http://localhost:8080/process_incoming_file \
+  -H "Content-Type: application/json" \
+  -d '{"file_type": ".csv", "file_path": "synthea53/2025-01-01/person.csv"}'
+```
+
+Source to Target vocabulary harominzation.
+```bash
+curl -X POST http://localhost:8080/harmonize_vocab \
+  -H "Content-Type: application/json" \
+  -d '{
+    "file_path": "synthea53/2025-01-01/procedure_occurrence.csv",
+    "vocab_version": "v5.0 29-FEB-24",
+    "omop_version": "5.4",
+    "site": "synthea53",
+    "project_id": "local-project",
+    "dataset_id": "omop_cdm",
+    "step": "source_target"
+  }'
+```
+
+### File paths in API requests
+
+Paths in request bodies are relative to `DATA_ROOT`. Do not include the `/data/` prefix or any storage scheme.
+
+- Host file: `./local-data/synthea53/2025-01-01/person.csv`
+- API field: `"file_path": "synthea53/2025-01-01/person.csv"`
+
+The storage backend converts these to `file:///data/...` URIs internally.
+
+### Endpoints that still need cloud access
+
+BigQuery-backed endpoints (`/pipeline_log`, `/get_log_row`, `/clear_bq_dataset`, `/parquet_to_bq`, `/harmonized_parquets_to_bq`, `/load_derived_tables_to_bq`, `/load_target_vocab`, `/create_missing_tables`, `/get_connect_data`) still require Google Cloud credentials. The local backend covers file-based stages only.
+
+### Rebuilding after code changes
+
+```bash
+docker stop omop-processor-local && docker rm omop-processor-local
+docker build -t omop-processor:local .
+./local-data/restart-local.sh
+```
+
 ## Deployment Configuration
 
 ### Cloud Run Resource Allocation

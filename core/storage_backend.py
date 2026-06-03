@@ -71,6 +71,26 @@ class StorageBackend:
                 return path[len(scheme):]
         return path
 
+    def ensure_parent_directory(self, file_path: str) -> None:
+        """
+        Make sure the parent directory of a file exists. Necessary when
+        using local backend; unneeded for GCS.
+
+        Args:
+            file_path: File path or URI (any scheme) whose parent should exist.
+        """
+        if self.backend != constants.LOCAL_BACKEND:
+            return
+
+        path = self.strip_scheme(file_path)
+        if not path.startswith('/'):
+            data_root = os.getenv('DATA_ROOT', '/data')
+            path = f"{data_root}/{path}"
+
+        parent = os.path.dirname(path)
+        if parent:
+            pathlib.Path(parent).mkdir(parents=True, exist_ok=True)
+
     def create_directory(self, directory_path: str, delete_existing_files: bool = True) -> None:
         """
         Create a directory in the configured storage backend.
