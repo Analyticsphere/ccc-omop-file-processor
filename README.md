@@ -121,7 +121,7 @@ curl -X POST http://localhost:8080/process_incoming_file \
   -d '{"file_type": ".csv", "file_path": "synthea53/2025-01-01/person.csv"}'
 ```
 
-Source to Target vocabulary harominzation.
+Source to Target vocabulary harmonization.
 ```bash
 curl -X POST http://localhost:8080/harmonize_vocab \
   -H "Content-Type: application/json" \
@@ -215,33 +215,34 @@ A typical run in the current orchestrator DAG follows this order:
 8. `POST /validate_file`
 9. `POST /normalize_parquet` through `core.jobs.normalize_parquet_job`
 10. `POST /upgrade_cdm` through `core.jobs.upgrade_cdm_job` when the delivery CDM version is below the target
-11. `POST /get_connect_data`
-12. `POST /filter_connect_participants`
-13. `POST /populate_cdm_source_file`
-14. `POST /harmonize_vocab` with `step=source_target`
-15. `POST /harmonize_vocab` with `step=target_remap`
-16. `POST /harmonize_vocab` with `step=target_replacement`
+11. `POST /populate_cdm_source_file`
+12. `POST /unique_natural_keys` through `core.jobs.unique_natural_keys_job`
+13. `POST /get_connect_data`
+14. `POST /filter_connect_participants`
+15. `POST /harmonize_vocab` with `step=source_target`
+16. `POST /harmonize_vocab` with `step=target_remap`
 17. `POST /harmonize_vocab` with `step=source_concept_backfill`
 18. `POST /harmonize_vocab` with `step=domain_check`
-19. `POST /harmonize_vocab` with `step=secondary_concept_backfill`
-20. `POST /harmonize_vocab` with `step=omop_etl`
-21. `POST /harmonize_vocab` with `step=consolidate_etl`
-22. `POST /harmonize_vocab` with `step=discover_tables_for_dedup`
-23. `POST /harmonize_vocab` with `step=deduplicate_single_table`
-24. `POST /post_processing` through `core.jobs.post_processing_job` for each task configured by the site
-25. `POST /generate_derived_tables_from_harmonized` through `core.jobs.generate_derived_tables_job`
-26. `POST /clear_bq_dataset`
-27. `POST /harmonized_parquets_to_bq`
-28. `POST /load_target_vocab` when the site configuration requests standard target vocabulary tables
-29. `POST /parquet_to_bq` for remaining non-harmonized delivered tables
-30. `POST /load_derived_tables_to_bq`
-31. `POST /pipeline_log` with `status=running`
-32. `POST /create_missing_tables`
-33. `POST /parquet_to_bq` for `cdm_source`
-34. `POST /generate_delivery_report_csv`
-35. `POST /pipeline_log` with `status=completed`
+19. `POST /harmonize_vocab` with `step=omop_etl`
+20. `POST /harmonize_vocab` with `step=consolidate_etl`
+21. `POST /harmonize_vocab` with `step=discover_tables_for_dedup`
+22. `POST /harmonize_vocab` with `step=deduplicate_single_table`
+23. `POST /post_processing` through `core.jobs.post_processing_job` for each task configured by the site
+24. `POST /generate_derived_tables_from_harmonized` through `core.jobs.generate_derived_tables_job`
+25. `POST /clear_bq_dataset`
+26. `POST /harmonized_parquets_to_bq`
+27. `POST /load_target_vocab` when the site configuration requests standard target vocabulary tables
+28. `POST /parquet_to_bq` for remaining non-harmonized delivered tables
+29. `POST /load_derived_tables_to_bq`
+30. `POST /pipeline_log` with `status=running`
+31. `POST /create_missing_tables`
+32. `POST /parquet_to_bq` for `cdm_source`
+33. `POST /generate_delivery_report_csv` through `core.jobs.generate_report_csv_job` (the DAG invokes the job once per artifact type in parallel, then a final consolidation pass)
+34. `POST /pipeline_log` with `status=completed`
 
 If any stage fails, the DAG also uses `POST /pipeline_log` with `status=error`.
+
+Steps 7 through 12 run as a single per-file group (`process_delivery`), followed by per-site `populate_cdm_source_file` and per-file `unique_natural_keys`. The `filtering` group (steps 13–14) runs as a separate sequential group after `process_delivery` completes, not interleaved with it. Vocabulary harmonization steps `target_replacement` (logical step 3) and `secondary_concept_backfill` (logical step 6) remain available as endpoints but are intentionally excluded from the current DAG chain.
 
 ## HTTP API
 
@@ -598,11 +599,105 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 ---
 
+### Populate CDM Source File
+
+**Endpoint:** `POST /populate_cdm_source_file`
+
+**DAG usage:** Called once per site delivery after the per-file CDM upgrade completes and before `unique_natural_keys` runs.
+
+**Description:** Creates or populates `cdm_source.parquet` if the file does not exist, exists but is empty, or contains more than one row.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `bucket` | string | Yes | Site bucket or root directory |
+| `delivery_date` | string | Yes | Delivery date directory component in `YYYY-MM-DD` format |
+| `source_release_date` | string | Yes | Source release date written to the `source_release_date` column |
+| `cdm_source_name` | string | Yes | Source name written to `cdm_source` |
+| `cdm_source_abbreviation` | string | Yes | Source abbreviation |
+| `cdm_holder` | string | Yes | Organization holding the data |
+| `source_description` | string | Yes | Source description |
+| `target_omop_version` | string | Yes | Target OMOP CDM version (written to `cdm_version`; drives `cdm_version_concept_id`) |
+| `target_vocab_version` | string | Yes | Target vocabulary version (written to `vocabulary_version`) |
+| `cdm_release_date` | string | Yes | CDM release date |
+| `date_format` | string | Yes | strptime format used to parse `source_release_date` / `cdm_release_date` |
+| `source_documentation_reference` | string | No | Source documentation reference |
+| `cdm_etl_reference` | string | No | ETL documentation reference |
+
+**Notes:**
+
+- If `cdm_source.parquet` exists with exactly one row, the endpoint keeps every site-delivered column **except** `source_release_date` and `cdm_release_date`, which are always rewritten:
+    - `source_release_date` keeps the site's value if it parses as a valid date; otherwise it falls back to `delivery_date`.
+    - `cdm_release_date` is unconditionally set to `delivery_date`.
+- If the file does not exist, exists with zero rows, or exists with more than one row, it is populated from the request payload (all rows overwritten).
+- On the populate path: `source_release_date` is wrapped in a date-cast fallback chain (falls back to `delivery_date` if unparseable). `cdm_release_date` is unconditionally set to `delivery_date`. Although the request's `cdm_release_date` field is still required, its value is ignored.
+- The "Source system extraction date" report artifact is always written; if the cdm_source `source_release_date` value cannot be parsed, the artifact falls back to `delivery_date`.
+
+**Example:**
+
+```json
+{
+  "bucket": "site",
+  "delivery_date": "2024-01-15",
+  "source_release_date": "2024-01-15",
+  "cdm_source_name": "Hospital A EHR",
+  "cdm_source_abbreviation": "HOSP_A",
+  "cdm_holder": "Hospital A",
+  "source_description": "OMOP delivery for Hospital A",
+  "target_omop_version": "5.4",
+  "target_vocab_version": "v5.0_24-JAN-25",
+  "cdm_release_date": "2024-01-20",
+  "date_format": "%Y-%m-%d"
+}
+```
+
+---
+
+### Unique Natural Keys
+
+**Endpoint:** `POST /unique_natural_keys`
+
+**DAG usage:** Implemented in the DAG through `core.jobs.unique_natural_keys_job`. Runs per file as part of the `process_delivery` task group, immediately after `populate_cdm_source_file` and before the parallel `filtering` group.
+
+**Description:** Rewrites natural-key columns (PK and FK) in the processed Parquet artifact so values are globally unique across sites. Each in-scope column value is replaced with `hash(CONCAT(value, site)) % 9223372036854775807`, preserving NULLs.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file_path` | string | Yes | Original delivery file path |
+| `omop_version` | string | Yes | OMOP CDM version |
+| `site` | string | Yes | Site identifier used as the hash salt |
+
+**Notes:**
+
+- Vocabulary tables and `person` are excluded by policy (`NATURAL_KEY_REWRITE_SKIP_TABLES`). The endpoint returns a 200 success with a skip message in those cases.
+- Tables with none of the in-scope columns present are also skipped with a 200 success.
+- Columns rewritten when present (`GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS`):
+    - `visit_occurrence_id`, `preceding_visit_occurrence_id`
+    - `visit_detail_id`, `preceding_visit_detail_id`, `parent_visit_detail_id`
+    - `provider_id`, `care_site_id`, `location_id`
+    - `episode_id`
+- The hash shape matches the surrogate-key hash used by `transformer.py`, so cross-table FK joins continue to work after rewrite.
+
+**Example:**
+
+```json
+{
+  "file_path": "site/2024-01-15/visit_occurrence.csv",
+  "omop_version": "5.4",
+  "site": "hospital-a"
+}
+```
+
+---
+
 ### Get Connect Data
 
 **Endpoint:** `POST /get_connect_data`
 
-**DAG usage:** Called once per site delivery after file-level CDM upgrade and before file-level Connect filtering.
+**DAG usage:** Called once per site delivery as part of the `filtering` task group, which runs after the per-file `process_delivery` group completes and before vocabulary harmonization.
 
 **Description:** Exports Connect participant-status data from BigQuery into a Parquet file. When `delivery_bucket` is provided, also creates Connect eligibility report artifacts.
 
@@ -685,61 +780,6 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 ---
 
-### Populate CDM Source File
-
-**Endpoint:** `POST /populate_cdm_source_file`
-
-**DAG usage:** Called once per site delivery after file-level Connect filtering and before vocabulary harmonization.
-
-**Description:** Creates or populates `cdm_source.parquet` if the file does not exist, exists but is empty, or contains more than one row.
-
-**Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `bucket` | string | Yes | Site bucket or root directory |
-| `delivery_date` | string | Yes | Delivery date directory component in `YYYY-MM-DD` format |
-| `source_release_date` | string | Yes | Source release date written to the `source_release_date` column |
-| `cdm_source_name` | string | Yes | Source name written to `cdm_source` |
-| `cdm_source_abbreviation` | string | Yes | Source abbreviation |
-| `cdm_holder` | string | Yes | Organization holding the data |
-| `source_description` | string | Yes | Source description |
-| `target_omop_version` | string | Yes | Target OMOP CDM version (written to `cdm_version`; drives `cdm_version_concept_id`) |
-| `target_vocab_version` | string | Yes | Target vocabulary version (written to `vocabulary_version`) |
-| `cdm_release_date` | string | Yes | CDM release date |
-| `date_format` | string | Yes | strptime format used to parse `source_release_date` / `cdm_release_date` |
-| `source_documentation_reference` | string | No | Source documentation reference |
-| `cdm_etl_reference` | string | No | ETL documentation reference |
-
-**Notes:**
-
-- If `cdm_source.parquet` exists with exactly one row, the endpoint keeps every site-delivered column **except** `source_release_date` and `cdm_release_date`, which are always rewritten:
-    - `source_release_date` keeps the site's value if it parses via `date_format` or directly casts to `DATE`; otherwise it falls back to `delivery_date`.
-    - `cdm_release_date` is unconditionally set to `delivery_date`.
-- If the file does not exist, exists with zero rows, or exists with more than one row, it is populated from the request payload (all rows overwritten).
-- On the populate path: `source_release_date` is wrapped in a date-cast fallback chain (falls back to `delivery_date` if unparseable). `cdm_release_date` is unconditionally set to `delivery_date`. Although the request's `cdm_release_date` field is still required, its value is ignored.
-- The "Source system extraction date" report artifact is always written; if the cdm_source `source_release_date` value cannot be parsed, the artifact falls back to `delivery_date`.
-
-**Example:**
-
-```json
-{
-  "bucket": "site",
-  "delivery_date": "2024-01-15",
-  "source_release_date": "2024-01-15",
-  "cdm_source_name": "Hospital A EHR",
-  "cdm_source_abbreviation": "HOSP_A",
-  "cdm_holder": "Hospital A",
-  "source_description": "OMOP delivery for Hospital A",
-  "target_omop_version": "5.4",
-  "target_vocab_version": "v5.0_24-JAN-25",
-  "cdm_release_date": "2024-01-20",
-  "date_format": "%Y-%m-%d"
-}
-```
-
----
-
 ### Harmonize Vocab
 
 **Endpoint:** `POST /harmonize_vocab`
@@ -752,7 +792,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `file_path` | string | Yes | Original delivery file path, a dummy path for site-level steps, or a JSON-encoded table configuration for step 8 |
+| `file_path` | string | Yes | Original delivery file path, a dummy path for site-level steps, or a JSON-encoded table configuration for step 10 |
 | `vocab_version` | string | Yes | Target vocabulary version |
 | `omop_version` | string | Yes | Target OMOP CDM version |
 | `site` | string | Yes | Site identifier |
@@ -954,7 +994,7 @@ Post-processing task 'remove_text-to-concept_measurements' applied: 1 table(s) a
 
 **Endpoint:** `POST /generate_derived_tables_from_harmonized`
 
-**DAG usage:** Implemented in the DAG through `core.jobs.generate_derived_tables_job` after vocabulary harmonization finishes.
+**DAG usage:** Implemented in the DAG through `core.jobs.generate_derived_tables_job`. Runs after the `post_processing` task group, so derived tables reflect the final post-processed state of the harmonized clinical tables.
 
 **Description:** Generates derived OMOP tables from harmonized data.
 
@@ -1255,10 +1295,11 @@ The repository also exposes direct job entry points under `core/jobs/`.
 | `core.jobs.process_incoming_file_job` | `FILE_TYPE`, `FILE_PATH` | `POST /process_incoming_file` |
 | `core.jobs.normalize_parquet_job` | `FILE_PATH`, `OMOP_VERSION`, `DATE_FORMAT`, `DATETIME_FORMAT` | `POST /normalize_parquet` |
 | `core.jobs.upgrade_cdm_job` | `FILE_PATH`, `OMOP_VERSION`, `TARGET_OMOP_VERSION` | `POST /upgrade_cdm` |
+| `core.jobs.unique_natural_keys_job` | `FILE_PATH`, `OMOP_VERSION`, `SITE` | `POST /unique_natural_keys` |
 | `core.jobs.harmonize_vocab_job` | `FILE_PATH`, `VOCAB_VERSION`, `OMOP_VERSION`, `SITE`, `PROJECT_ID`, `DATASET_ID`, `STEP` | `POST /harmonize_vocab` |
 | `core.jobs.post_processing_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `OMOP_VERSION`, `VOCAB_VERSION`, `TASK_NAME` | `POST /post_processing` |
 | `core.jobs.generate_derived_tables_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `TABLE_NAME`, `VOCAB_VERSION` | `POST /generate_derived_tables_from_harmonized` |
-| `core.jobs.generate_report_csv_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `SITE_DISPLAY_NAME`, `FILE_DELIVERY_FORMAT`, `DELIVERED_CDM_VERSION`, `TARGET_VOCABULARY_VERSION`, `TARGET_CDM_VERSION` | `POST /generate_delivery_report_csv` |
+| `core.jobs.generate_report_csv_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `SITE_DISPLAY_NAME`, `FILE_DELIVERY_FORMAT`, `DELIVERED_CDM_VERSION`, `TARGET_VOCABULARY_VERSION`, `TARGET_CDM_VERSION`; optional `ARTIFACT_TYPE` to generate one artifact type or run the final consolidation | `POST /generate_delivery_report_csv` |
 
 ## Running Tests
 
