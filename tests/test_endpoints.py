@@ -229,7 +229,7 @@ class TestValidateFileEndpoint:
 
         response = client.post('/validate_file', json={
             'file_path': 'bucket/2025-01-01/person.parquet',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'delivery_date': '2025-01-01',
             'storage_path': 'bucket/2025-01-01'
         })
@@ -244,7 +244,7 @@ class TestValidateFileEndpoint:
             'file_path': 'bucket/2025-01-01/person.parquet'
         })
 
-        assert_missing_fields(response, 'omop_version', 'delivery_date', 'storage_path')
+        assert_missing_fields(response, 'cdm_version', 'delivery_date', 'storage_path')
 
     @patch('core.endpoints.file_validation.FileValidator')
     def test_validate_file_exception(self, mock_validator, client):
@@ -253,7 +253,7 @@ class TestValidateFileEndpoint:
 
         response = client.post('/validate_file', json={
             'file_path': 'bucket/2025-01-01/person.parquet',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'delivery_date': '2025-01-01',
             'storage_path': 'bucket/2025-01-01'
         })
@@ -275,7 +275,7 @@ class TestNormalizeParquetEndpoint:
 
         response = client.post('/normalize_parquet', json={
             'file_path': 'bucket/2025-01-01/person.csv',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'date_format': '%Y-%m-%d',
             'datetime_format': '%Y-%m-%d %H:%M:%S'
         })
@@ -290,7 +290,7 @@ class TestNormalizeParquetEndpoint:
             'file_path': 'bucket/2025-01-01/person.parquet'
         })
 
-        assert_missing_fields(response, 'omop_version', 'date_format', 'datetime_format')
+        assert_missing_fields(response, 'cdm_version', 'date_format', 'datetime_format')
 
     @patch('core.endpoints.normalization.Normalizer')
     @patch('core.endpoints.utils.get_parquet_artifact_location')
@@ -301,7 +301,7 @@ class TestNormalizeParquetEndpoint:
 
         response = client.post('/normalize_parquet', json={
             'file_path': 'bucket/2025-01-01/person.csv',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'date_format': '%Y-%m-%d',
             'datetime_format': '%Y-%m-%d %H:%M:%S'
         })
@@ -318,8 +318,8 @@ class TestUpgradeCdmEndpoint:
         """Test successful CDM upgrade."""
         response = client.post('/upgrade_cdm', json={
             'file_path': 'bucket/2025-01-01/person.parquet',
-            'omop_version': '5.3',
-            'target_omop_version': '5.4'
+            'cdm_version': '5.3',
+            'target_cdm_version': '5.4'
         })
 
         assert response.status_code == 200
@@ -332,7 +332,7 @@ class TestUpgradeCdmEndpoint:
             'file_path': 'bucket/2025-01-01/person.parquet'
         })
 
-        assert_missing_fields(response, 'omop_version', 'target_omop_version')
+        assert_missing_fields(response, 'cdm_version', 'target_cdm_version')
 
     @patch('core.endpoints.omop_client.OMOPClient.upgrade_file')
     def test_upgrade_cdm_exception(self, mock_upgrade, client):
@@ -341,8 +341,8 @@ class TestUpgradeCdmEndpoint:
 
         response = client.post('/upgrade_cdm', json={
             'file_path': 'bucket/2025-01-01/person.parquet',
-            'omop_version': '5.3',
-            'target_omop_version': '5.4'
+            'cdm_version': '5.3',
+            'target_cdm_version': '5.4'
         })
 
         assert response.status_code == 500
@@ -455,7 +455,7 @@ class TestFilterConnectParticipantsEndpoint:
 
         response = client.post('/filter_connect_participants', json={
             'file_path': 'bucket/2025-01-01/condition_occurrence.parquet',
-            'omop_version': '5.4'
+            'cdm_version': '5.4'
         })
 
         assert response.status_code == 200
@@ -475,7 +475,7 @@ class TestFilterConnectParticipantsEndpoint:
 
         response = client.post('/filter_connect_participants', json={
             'file_path': 'bucket/2025-01-01/vocabulary.parquet',
-            'omop_version': '5.4'
+            'cdm_version': '5.4'
         })
 
         assert response.status_code == 200
@@ -486,10 +486,10 @@ class TestFilterConnectParticipantsEndpoint:
         )
 
     def test_filter_connect_participants_missing_parameters(self, client):
-        """Test missing file_path and omop_version return 400."""
+        """Test missing file_path and cdm_version return 400."""
         response = client.post('/filter_connect_participants', json={})
 
-        assert_missing_fields(response, 'file_path', 'omop_version')
+        assert_missing_fields(response, 'file_path', 'cdm_version')
 
     @patch('core.endpoints.participant_filter.ParticipantFilter')
     def test_filter_connect_participants_exception(self, mock_filter, client):
@@ -498,7 +498,7 @@ class TestFilterConnectParticipantsEndpoint:
 
         response = client.post('/filter_connect_participants', json={
             'file_path': 'bucket/2025-01-01/person.parquet',
-            'omop_version': '5.4'
+            'cdm_version': '5.4'
         })
 
         assert response.status_code == 500
@@ -517,7 +517,7 @@ class TestUniqueNaturalKeysEndpoint:
 
         response = client.post('/unique_natural_keys', json={
             'file_path': 'bucket/2025-01-01/visit_occurrence.parquet',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'site': 'site_alpha'
         })
 
@@ -539,7 +539,7 @@ class TestUniqueNaturalKeysEndpoint:
 
         response = client.post('/unique_natural_keys', json={
             'file_path': 'bucket/2025-01-01/person.parquet',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'site': 'site_alpha'
         })
 
@@ -555,13 +555,13 @@ class TestUniqueNaturalKeysEndpoint:
         """Test missing parameters return 400."""
         response = client.post('/unique_natural_keys', json={})
 
-        assert_missing_fields(response, 'file_path', 'omop_version', 'site')
+        assert_missing_fields(response, 'file_path', 'cdm_version', 'site')
 
     def test_unique_natural_keys_missing_site_only(self, client):
         """Test missing site parameter returns 400."""
         response = client.post('/unique_natural_keys', json={
             'file_path': 'bucket/2025-01-01/visit_occurrence.parquet',
-            'omop_version': '5.4'
+            'cdm_version': '5.4'
         })
 
         assert_missing_fields(response, 'site')
@@ -573,7 +573,7 @@ class TestUniqueNaturalKeysEndpoint:
 
         response = client.post('/unique_natural_keys', json={
             'file_path': 'bucket/2025-01-01/visit_occurrence.parquet',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'site': 'site_alpha'
         })
 
@@ -588,7 +588,7 @@ class TestPostProcessingEndpoint:
         'site': 'site_alpha',
         'bucket': 'test-bucket',
         'delivery_date': '2025-01-15',
-        'omop_version': '5.4',
+        'cdm_version': '5.4',
         'vocab_version': 'v5.0_24-JAN-25',
         'task_name': 'example_task',
     }
@@ -630,7 +630,7 @@ class TestPostProcessingEndpoint:
 
         assert_missing_fields(
             response,
-            'site', 'bucket', 'delivery_date', 'omop_version', 'vocab_version', 'task_name'
+            'site', 'bucket', 'delivery_date', 'cdm_version', 'vocab_version', 'task_name'
         )
 
     def test_post_processing_missing_task_name_only(self, client):
@@ -732,7 +732,7 @@ class TestHarmonizeVocabEndpoint:
         response = client.post('/harmonize_vocab', json={
             'file_path': 'bucket/2025-01-01/observation.parquet',
             'vocab_version': 'v5.0_24-JAN-25',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'site': 'test_site',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset',
@@ -754,7 +754,7 @@ class TestHarmonizeVocabEndpoint:
         response = client.post('/harmonize_vocab', json={
             'file_path': 'bucket/2025-01-01/condition_occurrence.parquet',
             'vocab_version': 'v5.0_24-JAN-25',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'site': 'test_site',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset',
@@ -777,7 +777,7 @@ class TestHarmonizeVocabEndpoint:
         response = client.post('/harmonize_vocab', json={
             'file_path': 'bucket/2025-01-01/measurement.parquet',
             'vocab_version': 'v5.0_24-JAN-25',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'site': 'test_site',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset',
@@ -802,7 +802,7 @@ class TestHarmonizeVocabEndpoint:
         response = client.post('/harmonize_vocab', json={
             'file_path': 'bucket/2025-01-01/observation.parquet',
             'vocab_version': 'v5.0_24-JAN-25',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'site': 'test_site',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset',
@@ -820,7 +820,7 @@ class TestHarmonizeVocabEndpoint:
             'file_path': 'bucket/2025-01-01/observation.parquet'
         })
 
-        assert_missing_fields(response, 'vocab_version', 'omop_version', 'site', 'project_id', 'dataset_id', 'step')
+        assert_missing_fields(response, 'vocab_version', 'cdm_version', 'site', 'project_id', 'dataset_id', 'step')
 
     @patch('core.endpoints.vocab_harmonization.VocabHarmonizer')
     def test_harmonize_vocab_exception(self, mock_harmonizer, client):
@@ -830,7 +830,7 @@ class TestHarmonizeVocabEndpoint:
         response = client.post('/harmonize_vocab', json={
             'file_path': 'bucket/2025-01-01/observation.parquet',
             'vocab_version': 'v5.0_24-JAN-25',
-            'omop_version': '5.4',
+            'cdm_version': '5.4',
             'site': 'test_site',
             'project_id': 'test-project',
             'dataset_id': 'test_dataset',
@@ -1031,7 +1031,7 @@ class TestCreateMissingTablesEndpoint:
         response = client.post('/create_missing_tables', json={
             'project_id': 'test-project',
             'dataset_id': 'test_dataset',
-            'omop_version': '5.4'
+            'cdm_version': '5.4'
         })
 
         assert response.status_code == 200
@@ -1043,7 +1043,7 @@ class TestCreateMissingTablesEndpoint:
             'project_id': 'test-project'
         })
 
-        assert_missing_fields(response, 'dataset_id', 'omop_version')
+        assert_missing_fields(response, 'dataset_id', 'cdm_version')
 
     @patch('core.endpoints.omop_client.OMOPClient.create_missing_bq_tables')
     def test_create_missing_tables_exception(self, mock_create, client):
@@ -1053,7 +1053,7 @@ class TestCreateMissingTablesEndpoint:
         response = client.post('/create_missing_tables', json={
             'project_id': 'test-project',
             'dataset_id': 'test_dataset',
-            'omop_version': '5.4'
+            'cdm_version': '5.4'
         })
 
         assert response.status_code == 500
@@ -1071,7 +1071,7 @@ class TestPopulateCdmSourceFileEndpoint:
         'cdm_source_abbreviation': 'TEST_SITE',
         'cdm_holder': 'Test Holder',
         'source_description': 'Test description',
-        'target_omop_version': '5.4',
+        'target_cdm_version': '5.4',
         'target_vocab_version': 'v5.0_24-JAN-25',
         'cdm_release_date': '2024-12-15',
         'date_format': '%Y-%m-%d',
@@ -1099,7 +1099,7 @@ class TestPopulateCdmSourceFileEndpoint:
             'cdm_source_abbreviation',
             'cdm_holder',
             'source_description',
-            'target_omop_version',
+            'target_cdm_version',
             'target_vocab_version',
             'cdm_release_date',
             'date_format'
@@ -1239,7 +1239,7 @@ class TestPipelineLogEndpoint:
             'run_id': 'run-123',
             'message': 'Test message',
             'file_type': 'csv',
-            'omop_version': '5.4'
+            'cdm_version': '5.4'
         })
 
         assert response.status_code == 200

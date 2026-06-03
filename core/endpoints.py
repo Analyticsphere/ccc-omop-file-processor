@@ -187,10 +187,10 @@ def validate_file() -> tuple[str, int]:
     """
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
-    cdm_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('cdm_version')
     delivery_date: Optional[str] = data.get('delivery_date')
     storage_path: Optional[str] = data.get('storage_path')
-    missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'delivery_date', 'storage_path'])
+    missing_fields = _get_missing_fields(data, ['file_path', 'cdm_version', 'delivery_date', 'storage_path'])
 
     # Validate required parameters
     if missing_fields:
@@ -254,10 +254,10 @@ def normalize_parquet_file() -> tuple[str, int]:
     """Normalize Parquet file to conform to OMOP CDM schema with type conversions and constraints, and Connect data requirements"""
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
-    cdm_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('cdm_version')
     date_format: Optional[str] = data.get('date_format')
     datetime_format: Optional[str] = data.get('datetime_format')
-    missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'date_format', 'datetime_format'])
+    missing_fields = _get_missing_fields(data, ['file_path', 'cdm_version', 'date_format', 'datetime_format'])
 
     # Validate required parameters
     if missing_fields:
@@ -285,9 +285,9 @@ def cdm_upgrade() -> tuple[str, int]:
     """Upgrade OMOP CDM file from one version to another (e.g., 5.3 to 5.4)."""
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
-    cdm_version: Optional[str] = data.get('omop_version')
-    target_cdm_version: Optional[str] = data.get('target_omop_version')
-    missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'target_omop_version'])
+    cdm_version: Optional[str] = data.get('cdm_version')
+    target_cdm_version: Optional[str] = data.get('target_cdm_version')
+    missing_fields = _get_missing_fields(data, ['file_path', 'cdm_version', 'target_cdm_version'])
 
     # Validate required parameters
     if missing_fields:
@@ -317,8 +317,8 @@ def filter_connect_participants() -> tuple[str, int]:
     """
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
-    cdm_version: Optional[str] = data.get('omop_version')
-    missing_fields = _get_missing_fields(data, ['file_path', 'omop_version'])
+    cdm_version: Optional[str] = data.get('cdm_version')
+    missing_fields = _get_missing_fields(data, ['file_path', 'cdm_version'])
 
     if missing_fields:
         return _missing_fields_response(missing_fields)
@@ -350,9 +350,9 @@ def unique_natural_keys() -> tuple[str, int]:
     """
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
-    cdm_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('cdm_version')
     site: Optional[str] = data.get('site')
-    missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'site'])
+    missing_fields = _get_missing_fields(data, ['file_path', 'cdm_version', 'site'])
 
     if missing_fields:
         return _missing_fields_response(missing_fields)
@@ -392,13 +392,13 @@ def post_processing_endpoint() -> tuple[str, int]:
     site: Optional[str] = data.get('site')
     bucket: Optional[str] = data.get('bucket')
     delivery_date: Optional[str] = data.get('delivery_date')
-    cdm_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('cdm_version')
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_path: str = constants.VOCAB_PATH
     task_name: Optional[str] = data.get('task_name')
     missing_fields = _get_missing_fields(
         data,
-        ['site', 'bucket', 'delivery_date', 'omop_version', 'vocab_version', 'task_name']
+        ['site', 'bucket', 'delivery_date', 'cdm_version', 'vocab_version', 'task_name']
     )
 
     if missing_fields:
@@ -481,14 +481,14 @@ def harmonize_vocab() -> tuple[Any, int]:
     file_path: Optional[str] = data.get('file_path')
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_path: str = constants.VOCAB_PATH
-    cdm_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('cdm_version')
     site: Optional[str] = data.get('site')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
     step: Optional[str] = data.get('step')
     missing_fields = _get_missing_fields(
         data,
-        ['file_path', 'vocab_version', 'omop_version', 'site', 'project_id', 'dataset_id', 'step']
+        ['file_path', 'vocab_version', 'cdm_version', 'site', 'project_id', 'dataset_id', 'step']
     )
 
     # Validate required parameters
@@ -680,8 +680,8 @@ def create_missing_omop_tables() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
-    cdm_version: Optional[str] = data.get('omop_version')
-    missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id', 'omop_version'])
+    cdm_version: Optional[str] = data.get('cdm_version')
+    missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id', 'cdm_version'])
 
     # Validate required parameters
     if missing_fields:
@@ -713,7 +713,7 @@ def populate_cdm_source_file() -> tuple[str, int]:
         'cdm_source_abbreviation',
         'cdm_holder',
         'source_description',
-        'target_omop_version',
+        'target_cdm_version',
         'target_vocab_version',
         'cdm_release_date',
         'date_format',
@@ -848,7 +848,7 @@ def log_pipeline_state() -> tuple:
     status: Optional[str] = data.get('status')
     message: Optional[str] = data.get('message')
     file_type: Optional[str] = data.get('file_type')
-    cdm_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('cdm_version')
     run_id: Optional[str] = data.get('run_id')
     missing_fields = _get_missing_fields(data, ['site_name', 'delivery_date', 'status', 'run_id'])
 

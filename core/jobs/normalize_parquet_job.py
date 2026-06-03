@@ -6,7 +6,7 @@ This job standardizes data types, formats dates/datetimes, and ensures OMOP CDM 
 
 Required Environment Variables:
     FILE_PATH: Full GCS path to the original file (will be converted to parquet artifact path)
-    OMOP_VERSION: OMOP CDM version (e.g., '5.4')
+    CDM_VERSION: OMOP CDM version (e.g., '5.4')
     DATE_FORMAT: Date format string (e.g., '%Y-%m-%d')
     DATETIME_FORMAT: Datetime format string (e.g., '%Y-%m-%d %H:%M:%S')
 
@@ -25,7 +25,7 @@ import core.utils as utils
 
 def validate_env_vars() -> dict[str, str]:
     """Validate and return required environment variables."""
-    required_vars = ['FILE_PATH', 'OMOP_VERSION', 'DATE_FORMAT', 'DATETIME_FORMAT']
+    required_vars = ['FILE_PATH', 'CDM_VERSION', 'DATE_FORMAT', 'DATETIME_FORMAT']
 
     env_values = {}
     missing_vars = []
@@ -56,7 +56,7 @@ def main():
     env_values = validate_env_vars()
 
     utils.logger.info(f"FILE_PATH: {env_values['FILE_PATH']}")
-    utils.logger.info(f"OMOP_VERSION: {env_values['OMOP_VERSION']}")
+    utils.logger.info(f"CDM_VERSION: {env_values['CDM_VERSION']}")
     utils.logger.info(f"DATE_FORMAT: {env_values['DATE_FORMAT']}")
     utils.logger.info(f"DATETIME_FORMAT: {env_values['DATETIME_FORMAT']}")
 
@@ -68,7 +68,7 @@ def main():
         # Execute normalization
         normalizer = normalization.Normalizer(
             file_path=parquet_file_path,
-            cdm_version=env_values['OMOP_VERSION'],
+            cdm_version=env_values['CDM_VERSION'],
             date_format=env_values['DATE_FORMAT'],
             datetime_format=env_values['DATETIME_FORMAT']
         )

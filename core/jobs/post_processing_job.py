@@ -10,7 +10,7 @@ Required Environment Variables:
     SITE: Site identifier
     GCS_BUCKET: GCS bucket path for the site
     DELIVERY_DATE: Delivery date (YYYY-MM-DD format)
-    OMOP_VERSION: OMOP CDM version (e.g., '5.4')
+    CDM_VERSION: OMOP CDM version (e.g., '5.4')
     VOCAB_VERSION: Vocabulary version
     TASK_NAME: Name of the post-processing task (matches the SQL file stem under
                reference/sql/post_processing/<task_name>.sql)
@@ -34,7 +34,7 @@ import core.utils as utils
 
 def validate_env_vars() -> dict[str, str]:
     """Validate and return required environment variables."""
-    required_vars = ['SITE', 'GCS_BUCKET', 'DELIVERY_DATE', 'OMOP_VERSION',
+    required_vars = ['SITE', 'GCS_BUCKET', 'DELIVERY_DATE', 'CDM_VERSION',
                      'VOCAB_VERSION', 'TASK_NAME']
 
     env_values = {}
@@ -69,7 +69,7 @@ def main():
     utils.logger.info(f"SITE: {env_values['SITE']}")
     utils.logger.info(f"GCS_BUCKET: {env_values['GCS_BUCKET']}")
     utils.logger.info(f"DELIVERY_DATE: {env_values['DELIVERY_DATE']}")
-    utils.logger.info(f"OMOP_VERSION: {env_values['OMOP_VERSION']}")
+    utils.logger.info(f"CDM_VERSION: {env_values['CDM_VERSION']}")
     utils.logger.info(f"VOCAB_VERSION: {env_values['VOCAB_VERSION']}")
     utils.logger.info(f"TASK_NAME: {env_values['TASK_NAME']}")
     utils.logger.info(f"OMOP_VOCAB_PATH: {env_values['OMOP_VOCAB_PATH']}")
@@ -79,7 +79,7 @@ def main():
             site=env_values['SITE'],
             bucket=env_values['GCS_BUCKET'],
             delivery_date=env_values['DELIVERY_DATE'],
-            cdm_version=env_values['OMOP_VERSION'],
+            cdm_version=env_values['CDM_VERSION'],
             vocab_version=env_values['VOCAB_VERSION'],
             vocab_path=env_values['OMOP_VOCAB_PATH'],
             task_name=env_values['TASK_NAME'],

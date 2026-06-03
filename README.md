@@ -128,7 +128,7 @@ curl -X POST http://localhost:8080/harmonize_vocab \
   -d '{
     "file_path": "synthea53/2025-01-01/procedure_occurrence.csv",
     "vocab_version": "v5.0 29-FEB-24",
-    "omop_version": "5.4",
+    "cdm_version": "5.4",
     "site": "synthea53",
     "project_id": "local-project",
     "dataset_id": "omop_cdm",
@@ -369,7 +369,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 | `run_id` | string | Yes | Pipeline run identifier |
 | `message` | string | No | Error or status message |
 | `file_type` | string | No | Delivery file format or file identifier, depending on caller |
-| `omop_version` | string | No | OMOP CDM version |
+| `cdm_version` | string | No | OMOP CDM version |
 
 **Notes:**
 
@@ -386,7 +386,7 @@ The endpoint details below are listed in the order each endpoint first appears i
   "status": "started",
   "run_id": "run-123456",
   "file_type": ".csv",
-  "omop_version": "5.3"
+  "cdm_version": "5.3"
 }
 ```
 
@@ -504,7 +504,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `file_path` | string | Yes | Original delivery file path |
-| `omop_version` | string | Yes | OMOP CDM version, for example `5.4` |
+| `cdm_version` | string | Yes | OMOP CDM version, for example `5.4` |
 | `delivery_date` | string | Yes | Delivery date in `YYYY-MM-DD` format |
 | `storage_path` | string | Yes | Storage path prefix supplied by the caller |
 
@@ -519,7 +519,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 ```json
 {
   "file_path": "site/2024-01-15/person.csv",
-  "omop_version": "5.4",
+  "cdm_version": "5.4",
   "delivery_date": "2024-01-15",
   "storage_path": "site"
 }
@@ -540,7 +540,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `file_path` | string | Yes | Original delivery file path |
-| `omop_version` | string | Yes | OMOP CDM version |
+| `cdm_version` | string | Yes | OMOP CDM version |
 | `date_format` | string | Yes | Site-specific date format used for `DATE` parsing |
 | `datetime_format` | string | Yes | Site-specific datetime format used for `TIMESTAMP` and `DATETIME` parsing |
 
@@ -558,7 +558,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 ```json
 {
   "file_path": "site/2024-01-15/person.csv",
-  "omop_version": "5.4",
+  "cdm_version": "5.4",
   "date_format": "%Y-%m-%d",
   "datetime_format": "%Y-%m-%d %H:%M:%S"
 }
@@ -579,8 +579,8 @@ The endpoint details below are listed in the order each endpoint first appears i
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `file_path` | string | Yes | Original delivery file path |
-| `omop_version` | string | Yes | Delivered OMOP CDM version |
-| `target_omop_version` | string | Yes | Target OMOP CDM version |
+| `cdm_version` | string | Yes | Delivered OMOP CDM version |
+| `target_cdm_version` | string | Yes | Target OMOP CDM version |
 
 **Notes:**
 
@@ -592,8 +592,8 @@ The endpoint details below are listed in the order each endpoint first appears i
 ```json
 {
   "file_path": "site/2024-01-15/measurement.csv",
-  "omop_version": "5.3",
-  "target_omop_version": "5.4"
+  "cdm_version": "5.3",
+  "target_cdm_version": "5.4"
 }
 ```
 
@@ -618,7 +618,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 | `cdm_source_abbreviation` | string | Yes | Source abbreviation |
 | `cdm_holder` | string | Yes | Organization holding the data |
 | `source_description` | string | Yes | Source description |
-| `target_omop_version` | string | Yes | Target OMOP CDM version (written to `cdm_version`; drives `cdm_version_concept_id`) |
+| `target_cdm_version` | string | Yes | Target OMOP CDM version (written to `cdm_version`; drives `cdm_version_concept_id`) |
 | `target_vocab_version` | string | Yes | Target vocabulary version (written to `vocabulary_version`) |
 | `cdm_release_date` | string | Yes | CDM release date |
 | `date_format` | string | Yes | strptime format used to parse `source_release_date` / `cdm_release_date` |
@@ -645,7 +645,7 @@ The endpoint details below are listed in the order each endpoint first appears i
   "cdm_source_abbreviation": "HOSP_A",
   "cdm_holder": "Hospital A",
   "source_description": "OMOP delivery for Hospital A",
-  "target_omop_version": "5.4",
+  "target_cdm_version": "5.4",
   "target_vocab_version": "v5.0_24-JAN-25",
   "cdm_release_date": "2024-01-20",
   "date_format": "%Y-%m-%d"
@@ -667,7 +667,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `file_path` | string | Yes | Original delivery file path |
-| `omop_version` | string | Yes | OMOP CDM version |
+| `cdm_version` | string | Yes | OMOP CDM version |
 | `site` | string | Yes | Site identifier used as the hash salt |
 
 **Notes:**
@@ -686,7 +686,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 ```json
 {
   "file_path": "site/2024-01-15/visit_occurrence.csv",
-  "omop_version": "5.4",
+  "cdm_version": "5.4",
   "site": "hospital-a"
 }
 ```
@@ -754,7 +754,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `file_path` | string | Yes | Original delivery file path |
-| `omop_version` | string | Yes | OMOP CDM version used to resolve table metadata |
+| `cdm_version` | string | Yes | OMOP CDM version used to resolve table metadata |
 
 **Rows are removed when:**
 
@@ -774,7 +774,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 ```json
 {
   "file_path": "site/2024-01-15/condition_occurrence.csv",
-  "omop_version": "5.4"
+  "cdm_version": "5.4"
 }
 ```
 
@@ -794,7 +794,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 |-----------|------|----------|-------------|
 | `file_path` | string | Yes | Original delivery file path, a dummy path for site-level steps, or a JSON-encoded table configuration for step 10 |
 | `vocab_version` | string | Yes | Target vocabulary version |
-| `omop_version` | string | Yes | Target OMOP CDM version |
+| `cdm_version` | string | Yes | Target OMOP CDM version |
 | `site` | string | Yes | Site identifier |
 | `project_id` | string | Yes | Google Cloud project ID |
 | `dataset_id` | string | Yes | BigQuery dataset ID |
@@ -829,7 +829,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 {
   "file_path": "site/2024-01-15/condition_occurrence.csv",
   "vocab_version": "v5.0 29-FEB-24",
-  "omop_version": "5.4",
+  "cdm_version": "5.4",
   "site": "hospital-a",
   "project_id": "my-project",
   "dataset_id": "omop_cdm",
@@ -854,7 +854,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 {
   "file_path": "site/2024-01-15/dummy.csv",
   "vocab_version": "v5.0 29-FEB-24",
-  "omop_version": "5.4",
+  "cdm_version": "5.4",
   "site": "hospital-a",
   "project_id": "my-project",
   "dataset_id": "omop_cdm",
@@ -891,7 +891,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 {
   "file_path": "{\"site\":\"hospital-a\",\"delivery_date\":\"2024-01-15\",\"table_name\":\"condition_occurrence\",\"bucket_name\":\"site\",\"etl_folder\":\"2024-01-15/artifacts/omop_etl/\",\"file_path\":\"gs://site/2024-01-15/artifacts/omop_etl/condition_occurrence/condition_occurrence.parquet\",\"cdm_version\":\"5.4\",\"project_id\":\"my-project\",\"dataset_id\":\"omop_cdm\"}",
   "vocab_version": "v5.0 29-FEB-24",
-  "omop_version": "5.4",
+  "cdm_version": "5.4",
   "site": "hospital-a",
   "project_id": "my-project",
   "dataset_id": "omop_cdm",
@@ -916,7 +916,7 @@ The endpoint details below are listed in the order each endpoint first appears i
 | `site` | string | Yes | Site identifier |
 | `bucket` | string | Yes | Site bucket or root directory |
 | `delivery_date` | string | Yes | Delivery date in `YYYY-MM-DD` format |
-| `omop_version` | string | Yes | OMOP CDM version, for example `5.4` |
+| `cdm_version` | string | Yes | OMOP CDM version, for example `5.4` |
 | `vocab_version` | string | Yes | Vocabulary version (used to resolve `@CONCEPT`-style placeholders) |
 | `task_name` | string | Yes | Task name. Must match a SQL file at `reference/sql/post_processing/<task_name>.sql` |
 
@@ -949,7 +949,7 @@ Derived tables (`condition_era`, `drug_era`, `observation_period`) are not expos
   "site": "hospital-a",
   "bucket": "site",
   "delivery_date": "2024-01-15",
-  "omop_version": "5.4",
+  "cdm_version": "5.4",
   "vocab_version": "v5.0 29-FEB-24",
   "task_name": "remove_text-to-concept_measurements"
 }
@@ -1225,7 +1225,7 @@ Successfully loaded 2 derived table(s): drug_era, condition_era
 |-----------|------|----------|-------------|
 | `project_id` | string | Yes | Google Cloud project ID |
 | `dataset_id` | string | Yes | BigQuery dataset ID |
-| `omop_version` | string | Yes | OMOP CDM version |
+| `cdm_version` | string | Yes | OMOP CDM version |
 
 **Notes:**
 
@@ -1239,7 +1239,7 @@ Successfully loaded 2 derived table(s): drug_era, condition_era
 {
   "project_id": "my-project",
   "dataset_id": "omop_cdm",
-  "omop_version": "5.4"
+  "cdm_version": "5.4"
 }
 ```
 
@@ -1293,11 +1293,11 @@ The repository also exposes direct job entry points under `core/jobs/`.
 | Job module | Required environment variables | Equivalent API stage |
 |-----------|--------------------------------|----------------------|
 | `core.jobs.process_incoming_file_job` | `FILE_TYPE`, `FILE_PATH` | `POST /process_incoming_file` |
-| `core.jobs.normalize_parquet_job` | `FILE_PATH`, `OMOP_VERSION`, `DATE_FORMAT`, `DATETIME_FORMAT` | `POST /normalize_parquet` |
-| `core.jobs.upgrade_cdm_job` | `FILE_PATH`, `OMOP_VERSION`, `TARGET_OMOP_VERSION` | `POST /upgrade_cdm` |
-| `core.jobs.unique_natural_keys_job` | `FILE_PATH`, `OMOP_VERSION`, `SITE` | `POST /unique_natural_keys` |
-| `core.jobs.harmonize_vocab_job` | `FILE_PATH`, `VOCAB_VERSION`, `OMOP_VERSION`, `SITE`, `PROJECT_ID`, `DATASET_ID`, `STEP` | `POST /harmonize_vocab` |
-| `core.jobs.post_processing_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `OMOP_VERSION`, `VOCAB_VERSION`, `TASK_NAME` | `POST /post_processing` |
+| `core.jobs.normalize_parquet_job` | `FILE_PATH`, `CDM_VERSION`, `DATE_FORMAT`, `DATETIME_FORMAT` | `POST /normalize_parquet` |
+| `core.jobs.upgrade_cdm_job` | `FILE_PATH`, `CDM_VERSION`, `TARGET_CDM_VERSION` | `POST /upgrade_cdm` |
+| `core.jobs.unique_natural_keys_job` | `FILE_PATH`, `CDM_VERSION`, `SITE` | `POST /unique_natural_keys` |
+| `core.jobs.harmonize_vocab_job` | `FILE_PATH`, `VOCAB_VERSION`, `CDM_VERSION`, `SITE`, `PROJECT_ID`, `DATASET_ID`, `STEP` | `POST /harmonize_vocab` |
+| `core.jobs.post_processing_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `CDM_VERSION`, `VOCAB_VERSION`, `TASK_NAME` | `POST /post_processing` |
 | `core.jobs.generate_derived_tables_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `TABLE_NAME`, `VOCAB_VERSION` | `POST /generate_derived_tables_from_harmonized` |
 | `core.jobs.generate_report_csv_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `SITE_DISPLAY_NAME`, `FILE_DELIVERY_FORMAT`, `DELIVERED_CDM_VERSION`, `TARGET_VOCABULARY_VERSION`, `TARGET_CDM_VERSION`; optional `ARTIFACT_TYPE` to generate one artifact type or run the final consolidation | `POST /generate_delivery_report_csv` |
 

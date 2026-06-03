@@ -475,12 +475,11 @@ DECISIONS (confirmed by Eddy 2026-06-03)
      `cdm_version: '5.3'` for each site, along with
      FileConfig.OMOP_VERSION = "omop_version" → CDM_VERSION = "cdm_version".
 
-#3 — Transitional approach: in Phase 2, endpoints and jobs accept BOTH the new
-     and the old key names during the rollout window. The new key wins when
-     both are present. This decouples the Phase 2 deploy from the Phase 3
-     deploy — the file processor can ship Phase 2 alone without breaking the
-     DAG, and the DAG can ship Phase 3 whenever ready. A Phase 4 cleanup PR
-     (not in this plan) would later drop the fallback shims.
+#3 — Clean swap (revised 2026-06-03): file processor wire surface and the
+     orchestrator both flip to the new key names in one go. Phase 2 (file
+     processor wire) and Phase 3 (orchestrator) are implemented together and
+     deployed in lock-step. No fallback shims. Eddy handles commits and
+     deploy coordination between the two repos.
 
 #4 — Commits handled by Eddy between phases. Plan executes phases
      sequentially with a pause for review/commit after each phase.

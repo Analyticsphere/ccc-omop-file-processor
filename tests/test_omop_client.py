@@ -155,7 +155,7 @@ class TestOMOPClientPopulateCdmSourceFile:
         "cdm_holder": "NIH/NCI",
         "source_description": "Test data",
         "cdm_release_date": "2024-12-15",
-        "target_omop_version": "5.4",
+        "target_cdm_version": "5.4",
         "target_vocab_version": "v5.0_24-JAN-25",
         "date_format": "%Y-%m-%d",
     }
@@ -348,7 +348,7 @@ class TestOMOPClientStaticMethods:
             "source_description": "Test data",
             "source_release_date": "2024-12-31",
             "cdm_release_date": "2024-12-15",
-            "target_omop_version": "5.4",
+            "target_cdm_version": "5.4",
             "target_vocab_version": "v5.0_24-JAN-25",
             "delivery_date": "2025-01-15",
             "date_format": "%Y-%m-%d",

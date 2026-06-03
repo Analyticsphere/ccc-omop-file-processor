@@ -120,7 +120,7 @@ class OMOPClient:
             cdm_source_abbreviation: Abbreviation
             cdm_holder: Organization holding the data
             source_description: Description of data source
-            target_omop_version: Target OMOP CDM version (e.g., '5.4'); written to cdm_version column
+            target_cdm_version: Target OMOP CDM version (e.g., '5.4'); written to cdm_version column
             target_vocab_version: Target vocabulary version; written to vocabulary_version column
             (optional) source_documentation_reference: Documentation URL
             (optional) cdm_etl_reference: ETL documentation URL
@@ -294,8 +294,8 @@ class OMOPClient:
             cdm_source_data: Dictionary containing CDM source metadata fields
             output_path: Path where cdm_source Parquet file should be written
         """
-        target_omop_version = cdm_source_data["target_omop_version"]
-        cdm_version_concept_id = utils.get_cdm_version_concept_id(target_omop_version)
+        target_cdm_version = cdm_source_data["target_cdm_version"]
+        cdm_version_concept_id = utils.get_cdm_version_concept_id(target_cdm_version)
         delivery_date = cdm_source_data["delivery_date"]
         date_format = cdm_source_data["date_format"]
 
@@ -318,7 +318,7 @@ class OMOPClient:
                     '{cdm_source_data.get("cdm_etl_reference", "")}' AS cdm_etl_reference,
                     {source_release_date_cast} AS source_release_date,
                     CAST('{delivery_date}' AS DATE) AS cdm_release_date,
-                    '{target_omop_version}' AS cdm_version,
+                    '{target_cdm_version}' AS cdm_version,
                     {cdm_version_concept_id} AS cdm_version_concept_id,
                     '{cdm_source_data["target_vocab_version"]}' AS vocabulary_version
             ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}

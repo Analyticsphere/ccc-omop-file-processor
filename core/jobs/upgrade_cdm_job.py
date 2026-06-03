@@ -6,8 +6,8 @@ This job upgrades OMOP CDM files from one version to another (e.g., 5.3 to 5.4).
 
 Required Environment Variables:
     FILE_PATH: Full GCS path to the file to upgrade
-    OMOP_VERSION: Current OMOP CDM version
-    TARGET_OMOP_VERSION: Target OMOP CDM version to upgrade to
+    CDM_VERSION: Current OMOP CDM version
+    TARGET_CDM_VERSION: Target OMOP CDM version to upgrade to
 
 Exit Codes:
     0: Success
@@ -24,7 +24,7 @@ import core.utils as utils
 
 def validate_env_vars() -> dict[str, str]:
     """Validate and return required environment variables."""
-    required_vars = ['FILE_PATH', 'OMOP_VERSION', 'TARGET_OMOP_VERSION']
+    required_vars = ['FILE_PATH', 'CDM_VERSION', 'TARGET_CDM_VERSION']
 
     env_values = {}
     missing_vars = []
@@ -55,16 +55,16 @@ def main():
     env_values = validate_env_vars()
 
     utils.logger.info(f"FILE_PATH: {env_values['FILE_PATH']}")
-    utils.logger.info(f"OMOP_VERSION: {env_values['OMOP_VERSION']}")
-    utils.logger.info(f"TARGET_OMOP_VERSION: {env_values['TARGET_OMOP_VERSION']}")
+    utils.logger.info(f"CDM_VERSION: {env_values['CDM_VERSION']}")
+    utils.logger.info(f"TARGET_CDM_VERSION: {env_values['TARGET_CDM_VERSION']}")
 
     try:
         # Execute CDM upgrade
-        utils.logger.info(f"Upgrading file from CDM {env_values['OMOP_VERSION']} to {env_values['TARGET_OMOP_VERSION']}")
+        utils.logger.info(f"Upgrading file from CDM {env_values['CDM_VERSION']} to {env_values['TARGET_CDM_VERSION']}")
         omop_client.OMOPClient.upgrade_file(
             file_path=env_values['FILE_PATH'],
-            cdm_version=env_values['OMOP_VERSION'],
-            target_cdm_version=env_values['TARGET_OMOP_VERSION']
+            cdm_version=env_values['CDM_VERSION'],
+            target_cdm_version=env_values['TARGET_CDM_VERSION']
         )
 
         utils.logger.info("=" * 80)
