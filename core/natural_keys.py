@@ -14,16 +14,16 @@ class NaturalKeyProcessor:
     hash(CONCAT(value, site)) % 9223372036854775807, preserving NULLs.
     """
 
-    def __init__(self, file_path: str, omop_version: str, site: str):
+    def __init__(self, file_path: str, cdm_version: str, site: str):
         """
         Args:
             file_path: Path to delivered OMOP file (any extension; resolved to
                 the normalized parquet artifact).
-            omop_version: OMOP CDM version, used for schema lookups by callers.
+            cdm_version: OMOP CDM version, used for schema lookups by callers.
             site: Site identifier used as the hash salt.
         """
         self.file_path = file_path
-        self.omop_version = omop_version
+        self.cdm_version = cdm_version
         self.site = site
         self.table_name = utils.get_table_name_from_path(file_path).lower()
         self.parquet_file_path = utils.get_parquet_artifact_location(file_path)

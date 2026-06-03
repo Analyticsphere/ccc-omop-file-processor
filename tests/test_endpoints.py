@@ -462,7 +462,7 @@ class TestFilterConnectParticipantsEndpoint:
         assert b"Applied Connect participant filtering" in response.data
         mock_filter.assert_called_once_with(
             file_path='bucket/2025-01-01/condition_occurrence.parquet',
-            omop_version='5.4'
+            cdm_version='5.4'
         )
         mock_instance.apply_exclusions.assert_called_once()
 
@@ -482,7 +482,7 @@ class TestFilterConnectParticipantsEndpoint:
         assert b"Skipped Connect participant filtering for table without person_id" in response.data
         mock_filter.assert_called_once_with(
             file_path='bucket/2025-01-01/vocabulary.parquet',
-            omop_version='5.4'
+            cdm_version='5.4'
         )
 
     def test_filter_connect_participants_missing_parameters(self, client):
@@ -525,7 +525,7 @@ class TestUniqueNaturalKeysEndpoint:
         assert b"Applied natural-key rewrite" in response.data
         mock_processor.assert_called_once_with(
             file_path='bucket/2025-01-01/visit_occurrence.parquet',
-            omop_version='5.4',
+            cdm_version='5.4',
             site='site_alpha'
         )
         mock_instance.apply.assert_called_once()
@@ -547,7 +547,7 @@ class TestUniqueNaturalKeysEndpoint:
         assert b"Skipped natural-key rewrite for table not in scope" in response.data
         mock_processor.assert_called_once_with(
             file_path='bucket/2025-01-01/person.parquet',
-            omop_version='5.4',
+            cdm_version='5.4',
             site='site_alpha'
         )
 

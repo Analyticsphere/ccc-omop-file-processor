@@ -19,13 +19,13 @@ class TestFileValidatorInit:
         """Test that initialization stores all parameters."""
         validator = FileValidator(
             file_path="synthea53/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="synthea53"
         )
 
         assert validator.file_path == "synthea53/2025-01-01/person.parquet"
-        assert validator.omop_version == "5.4"
+        assert validator.cdm_version == "5.4"
         assert validator.delivery_date == "2025-01-01"
         assert validator.storage_path == "synthea53"
 
@@ -33,7 +33,7 @@ class TestFileValidatorInit:
         """Test that initialization computes table_name and bucket_name."""
         validator = FileValidator(
             file_path="test-bucket/2025-01-01/observation.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="test-bucket"
         )
@@ -57,7 +57,7 @@ class TestFileValidatorTableName:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -83,7 +83,7 @@ class TestFileValidatorTableName:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/unknown_table.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -107,7 +107,7 @@ class TestFileValidatorTableName:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -123,7 +123,7 @@ class TestFileValidatorTableName:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -156,7 +156,7 @@ class TestFileValidatorColumns:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -187,7 +187,7 @@ class TestFileValidatorColumns:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -223,7 +223,7 @@ class TestFileValidatorColumns:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -262,7 +262,7 @@ class TestFileValidatorColumns:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/observation.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -295,7 +295,7 @@ class TestFileValidatorValidate:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -313,7 +313,7 @@ class TestFileValidatorValidate:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/invalid_table.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -330,7 +330,7 @@ class TestFileValidatorValidate:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -352,7 +352,7 @@ class TestFileValidatorHelpers:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -372,7 +372,7 @@ class TestFileValidatorHelpers:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )
@@ -392,7 +392,7 @@ class TestFileValidatorHelpers:
 
         validator = FileValidator(
             file_path="bucket/2025-01-01/person.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             delivery_date="2025-01-01",
             storage_path="bucket"
         )

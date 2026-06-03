@@ -25,16 +25,16 @@ class ParticipantFilter:
     IDENTIFIER_NOT_IN_CONNECT_BUCKET = "identifier_not_in_connect"
     CONNECT_EXCLUSION_BUCKET = "connect_exclusion_rules"
 
-    def __init__(self, file_path: str, omop_version: str):
+    def __init__(self, file_path: str, cdm_version: str):
         """
         Initialize the table-level Connect participant filter.
 
         Args:
             file_path: Path to delivered OMOP file.
-            omop_version: OMOP CDM version used to look up table concept IDs.
+            cdm_version: OMOP CDM version used to look up table concept IDs.
         """
         self.file_path = file_path
-        self.omop_version = omop_version
+        self.cdm_version = cdm_version
         self.table_name = utils.get_table_name_from_path(file_path).lower()
         self.bucket, self.delivery_date = utils.get_bucket_and_delivery_date_from_path(file_path)
         self.parquet_file_path = utils.get_parquet_artifact_location(file_path)
@@ -101,7 +101,7 @@ class ParticipantFilter:
 
     def _create_row_removal_artifacts(self, row_removal_counts: dict[str, int]) -> None:
         """Save per-table row-removal artifacts for the participant filter's three buckets."""
-        schema = utils.get_cdm_schema(self.omop_version)
+        schema = utils.get_cdm_schema(self.cdm_version)
         table_concept_id = int(schema[self.table_name]['concept_id'])
 
         unknown_count = row_removal_counts[ParticipantFilter.UNKNOWN_IDENTIFIER_BUCKET]

@@ -63,7 +63,7 @@ def main():
     try:
         processor = natural_keys.NaturalKeyProcessor(
             file_path=env_values['FILE_PATH'],
-            omop_version=env_values['OMOP_VERSION'],
+            cdm_version=env_values['OMOP_VERSION'],
             site=env_values['SITE'],
         )
         was_applied = processor.apply()

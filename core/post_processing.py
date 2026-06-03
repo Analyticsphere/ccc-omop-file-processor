@@ -29,7 +29,7 @@ class PostProcessor:
         site: str,
         bucket: str,
         delivery_date: str,
-        omop_version: str,
+        cdm_version: str,
         vocab_version: str,
         vocab_path: str,
         task_name: str,
@@ -37,7 +37,7 @@ class PostProcessor:
         self.site = site
         self.bucket = bucket
         self.delivery_date = delivery_date
-        self.omop_version = omop_version
+        self.cdm_version = cdm_version
         self.vocab_version = vocab_version
         self.vocab_path = vocab_path
         self.task_name = task_name
@@ -113,7 +113,7 @@ class PostProcessor:
         artifact at its canonical location, excluding vocabulary tables.
         """
         in_scope: dict[str, str] = {}
-        schema = utils.get_cdm_schema(self.omop_version)
+        schema = utils.get_cdm_schema(self.cdm_version)
 
         for table_name in schema.keys():
             if table_name in constants.VOCABULARY_TABLES:
@@ -154,7 +154,7 @@ class PostProcessor:
         """
         snapshots: dict[str, dict] = {}
         for table_name, table_uri in in_scope_tables.items():
-            pk_column = utils.get_primary_key_column(table_name, self.omop_version)
+            pk_column = utils.get_primary_key_column(table_name, self.cdm_version)
             snapshot_uri = storage.get_uri(
                 f"{self.tmp_dir}{table_name}_pre{constants.PARQUET}"
             )
@@ -320,7 +320,7 @@ class PostProcessor:
             vocab_harmonization.VocabHarmonizer.deduplicate_primary_keys_in_file(
                 file_path=in_scope_tables[table_name],
                 table_name=table_name,
-                cdm_version=self.omop_version,
+                cdm_version=self.cdm_version,
             )
 
     # ---- cleanup ------------------------------------------------------------

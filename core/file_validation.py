@@ -11,18 +11,18 @@ class FileValidator:
     Creates report artifacts documenting validation results.
     """
 
-    def __init__(self, file_path: str, omop_version: str, delivery_date: str, storage_path: str):
+    def __init__(self, file_path: str, cdm_version: str, delivery_date: str, storage_path: str):
         """
         Initialize validator for a specific file.
 
         Args:
             file_path: Path to file being validated
-            omop_version: OMOP CDM version (e.g., "5.4")
+            cdm_version: OMOP CDM version (e.g., "5.4")
             delivery_date: Delivery date for reporting
             storage_path: Storage bucket/path for report artifacts
         """
         self.file_path = file_path
-        self.omop_version = omop_version
+        self.cdm_version = cdm_version
         self.delivery_date = delivery_date
         self.storage_path = storage_path
         self.table_name = utils.get_table_name_from_path(file_path)
@@ -37,7 +37,7 @@ class FileValidator:
         Validates table name and columns, creating report artifacts
         for each validation result.
         """
-        utils.logger.info(f"Validating {self.file_path} against OMOP v{self.omop_version}")
+        utils.logger.info(f"Validating {self.file_path} against OMOP v{self.cdm_version}")
 
         try:
             valid_table_name = self.validate_table_name()
@@ -131,7 +131,7 @@ class FileValidator:
     def _get_cdm_schema(self) -> dict[Any, Any]:
         """Get CDM schema for the specified OMOP version"""
         if self._cdm_schema is None:
-            self._cdm_schema = utils.get_cdm_schema(cdm_version=self.omop_version)
+            self._cdm_schema = utils.get_cdm_schema(cdm_version=self.cdm_version)
         return self._cdm_schema
 
     def _get_table_schema(self) -> dict[Any, Any]:
@@ -139,7 +139,7 @@ class FileValidator:
         if self._table_schema is None:
             self._table_schema = utils.get_table_schema(
                 table_name=self.table_name,
-                cdm_version=self.omop_version
+                cdm_version=self.cdm_version
             )
         return self._table_schema
 

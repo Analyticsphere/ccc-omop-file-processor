@@ -64,7 +64,7 @@ def main():
         omop_client.OMOPClient.upgrade_file(
             file_path=env_values['FILE_PATH'],
             cdm_version=env_values['OMOP_VERSION'],
-            target_omop_version=env_values['TARGET_OMOP_VERSION']
+            target_cdm_version=env_values['TARGET_OMOP_VERSION']
         )
 
         utils.logger.info("=" * 80)

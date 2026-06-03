@@ -79,7 +79,7 @@ def main():
             site=env_values['SITE'],
             bucket=env_values['GCS_BUCKET'],
             delivery_date=env_values['DELIVERY_DATE'],
-            omop_version=env_values['OMOP_VERSION'],
+            cdm_version=env_values['OMOP_VERSION'],
             vocab_version=env_values['VOCAB_VERSION'],
             vocab_path=env_values['OMOP_VOCAB_PATH'],
             task_name=env_values['TASK_NAME'],

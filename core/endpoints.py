@@ -187,7 +187,7 @@ def validate_file() -> tuple[str, int]:
     """
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
-    omop_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('omop_version')
     delivery_date: Optional[str] = data.get('delivery_date')
     storage_path: Optional[str] = data.get('storage_path')
     missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'delivery_date', 'storage_path'])
@@ -195,16 +195,16 @@ def validate_file() -> tuple[str, int]:
     # Validate required parameters
     if missing_fields:
         return _missing_fields_response(missing_fields)
-    
+
     try:
         assert file_path is not None
-        assert omop_version is not None
+        assert cdm_version is not None
         assert delivery_date is not None
         assert storage_path is not None
 
         validator = file_validation.FileValidator(
             file_path=file_path,
-            omop_version=omop_version,
+            cdm_version=cdm_version,
             delivery_date=delivery_date,
             storage_path=storage_path
         )
@@ -254,7 +254,7 @@ def normalize_parquet_file() -> tuple[str, int]:
     """Normalize Parquet file to conform to OMOP CDM schema with type conversions and constraints, and Connect data requirements"""
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
-    omop_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('omop_version')
     date_format: Optional[str] = data.get('date_format')
     datetime_format: Optional[str] = data.get('datetime_format')
     missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'date_format', 'datetime_format'])
@@ -265,13 +265,13 @@ def normalize_parquet_file() -> tuple[str, int]:
 
     try:
         assert file_path is not None
-        assert omop_version is not None
+        assert cdm_version is not None
         assert date_format is not None
         assert datetime_format is not None
-        
+
         parquet_file_path: str = utils.get_parquet_artifact_location(file_path)
         utils.logger.info(f"Attempting to normalize Parquet file {parquet_file_path}")
-        normalizer = normalization.Normalizer(parquet_file_path, omop_version, date_format, datetime_format)
+        normalizer = normalization.Normalizer(parquet_file_path, cdm_version, date_format, datetime_format)
         normalizer.normalize()
 
         return "Normalized Parquet file", 200
@@ -285,8 +285,8 @@ def cdm_upgrade() -> tuple[str, int]:
     """Upgrade OMOP CDM file from one version to another (e.g., 5.3 to 5.4)."""
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
-    omop_version: Optional[str] = data.get('omop_version')
-    target_omop_version: Optional[str] = data.get('target_omop_version')
+    cdm_version: Optional[str] = data.get('omop_version')
+    target_cdm_version: Optional[str] = data.get('target_omop_version')
     missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'target_omop_version'])
 
     # Validate required parameters
@@ -295,11 +295,11 @@ def cdm_upgrade() -> tuple[str, int]:
 
     try:
         assert file_path is not None
-        assert omop_version is not None
-        assert target_omop_version is not None
-        
+        assert cdm_version is not None
+        assert target_cdm_version is not None
+
         utils.logger.info(f"Attempting to upgrade file {file_path}")
-        omop_client.OMOPClient.upgrade_file(file_path, omop_version, target_omop_version)
+        omop_client.OMOPClient.upgrade_file(file_path, cdm_version, target_cdm_version)
 
         return "Upgraded file", 200
     except Exception as e:
@@ -317,7 +317,7 @@ def filter_connect_participants() -> tuple[str, int]:
     """
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
-    omop_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('omop_version')
     missing_fields = _get_missing_fields(data, ['file_path', 'omop_version'])
 
     if missing_fields:
@@ -325,9 +325,9 @@ def filter_connect_participants() -> tuple[str, int]:
 
     try:
         assert file_path is not None
-        assert omop_version is not None
+        assert cdm_version is not None
 
-        connect_filter = participant_filter.ParticipantFilter(file_path=file_path, omop_version=omop_version)
+        connect_filter = participant_filter.ParticipantFilter(file_path=file_path, cdm_version=cdm_version)
         was_applied = connect_filter.apply_exclusions()
 
         if not was_applied:
@@ -350,7 +350,7 @@ def unique_natural_keys() -> tuple[str, int]:
     """
     data: dict[str, Any] = request.get_json() or {}
     file_path: Optional[str] = data.get('file_path')
-    omop_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('omop_version')
     site: Optional[str] = data.get('site')
     missing_fields = _get_missing_fields(data, ['file_path', 'omop_version', 'site'])
 
@@ -359,12 +359,12 @@ def unique_natural_keys() -> tuple[str, int]:
 
     try:
         assert file_path is not None
-        assert omop_version is not None
+        assert cdm_version is not None
         assert site is not None
 
         processor = natural_keys.NaturalKeyProcessor(
             file_path=file_path,
-            omop_version=omop_version,
+            cdm_version=cdm_version,
             site=site,
         )
         was_applied = processor.apply()
@@ -392,7 +392,7 @@ def post_processing_endpoint() -> tuple[str, int]:
     site: Optional[str] = data.get('site')
     bucket: Optional[str] = data.get('bucket')
     delivery_date: Optional[str] = data.get('delivery_date')
-    omop_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('omop_version')
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_path: str = constants.VOCAB_PATH
     task_name: Optional[str] = data.get('task_name')
@@ -408,7 +408,7 @@ def post_processing_endpoint() -> tuple[str, int]:
         assert site is not None
         assert bucket is not None
         assert delivery_date is not None
-        assert omop_version is not None
+        assert cdm_version is not None
         assert vocab_version is not None
         assert task_name is not None
 
@@ -416,7 +416,7 @@ def post_processing_endpoint() -> tuple[str, int]:
             site=site,
             bucket=bucket,
             delivery_date=delivery_date,
-            omop_version=omop_version,
+            cdm_version=cdm_version,
             vocab_version=vocab_version,
             vocab_path=vocab_path,
             task_name=task_name,
@@ -481,7 +481,7 @@ def harmonize_vocab() -> tuple[Any, int]:
     file_path: Optional[str] = data.get('file_path')
     vocab_version: Optional[str] = data.get('vocab_version')
     vocab_path: str = constants.VOCAB_PATH
-    omop_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('omop_version')
     site: Optional[str] = data.get('site')
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
@@ -500,7 +500,7 @@ def harmonize_vocab() -> tuple[Any, int]:
 
         assert file_path is not None
         assert vocab_version is not None
-        assert omop_version is not None
+        assert cdm_version is not None
         assert site is not None
         assert project_id is not None
         assert dataset_id is not None
@@ -509,7 +509,7 @@ def harmonize_vocab() -> tuple[Any, int]:
         # Initialize the VocabHarmonizer
         vocab_harmonizer = vocab_harmonization.VocabHarmonizer(
             file_path=file_path,
-            cdm_version=omop_version,
+            cdm_version=cdm_version,
             site=site,
             vocab_version=vocab_version,
             vocab_path=vocab_path,
@@ -680,7 +680,7 @@ def create_missing_omop_tables() -> tuple[str, int]:
     data: dict[str, Any] = request.get_json() or {}
     project_id: Optional[str] = data.get('project_id')
     dataset_id: Optional[str] = data.get('dataset_id')
-    omop_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('omop_version')
     missing_fields = _get_missing_fields(data, ['project_id', 'dataset_id', 'omop_version'])
 
     # Validate required parameters
@@ -690,10 +690,10 @@ def create_missing_omop_tables() -> tuple[str, int]:
     try:
         assert project_id is not None
         assert dataset_id is not None
-        assert omop_version is not None
-        
-        utils.logger.info(f"Creating any missing v{omop_version} tables in {project_id}.{dataset_id}")
-        omop_client.OMOPClient.create_missing_bq_tables(project_id, dataset_id, omop_version)
+        assert cdm_version is not None
+
+        utils.logger.info(f"Creating any missing v{cdm_version} tables in {project_id}.{dataset_id}")
+        omop_client.OMOPClient.create_missing_bq_tables(project_id, dataset_id, cdm_version)
 
         return "Created missing tables", 200
     except Exception as e:
@@ -848,20 +848,20 @@ def log_pipeline_state() -> tuple:
     status: Optional[str] = data.get('status')
     message: Optional[str] = data.get('message')
     file_type: Optional[str] = data.get('file_type')
-    omop_version: Optional[str] = data.get('omop_version')
+    cdm_version: Optional[str] = data.get('omop_version')
     run_id: Optional[str] = data.get('run_id')
     missing_fields = _get_missing_fields(data, ['site_name', 'delivery_date', 'status', 'run_id'])
 
     # Validate required parameters
     if missing_fields:
         return _missing_fields_response(missing_fields)
-    
+
     try:
         assert site_name is not None
         assert delivery_date is not None
         assert status is not None
         assert run_id is not None
-        
+
         pipeline_logger = pipeline_log.PipelineLog(
             logging_table,
             site_name,
@@ -869,7 +869,7 @@ def log_pipeline_state() -> tuple:
             status,
             message,
             file_type,
-            omop_version,
+            cdm_version,
             run_id
         )
         pipeline_logger.add_log_entry()
