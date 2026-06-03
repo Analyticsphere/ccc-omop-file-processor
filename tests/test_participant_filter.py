@@ -35,13 +35,13 @@ class TestParticipantFilterInit:
         """Test that initialization derives parquet and Connect artifact paths."""
         connect_filter = ParticipantFilter(
             file_path="test-bucket/2025-01-15/condition_occurrence.parquet",
-            omop_version="5.4"
+            cdm_version="5.4"
         )
 
         assert connect_filter.table_name == "condition_occurrence"
         assert connect_filter.bucket == "test-bucket"
         assert connect_filter.delivery_date == "2025-01-15"
-        assert connect_filter.omop_version == "5.4"
+        assert connect_filter.cdm_version == "5.4"
         assert (
             connect_filter.parquet_file_path
             == "test-bucket/2025-01-15/artifacts/converted_files/condition_occurrence.parquet"
@@ -83,7 +83,7 @@ class TestParticipantFilterApplyExclusions:
 
         connect_filter = ParticipantFilter(
             file_path="test-bucket/2025-01-15/condition_occurrence.parquet",
-            omop_version="5.4"
+            cdm_version="5.4"
         )
 
         result = connect_filter.apply_exclusions()
@@ -147,7 +147,7 @@ class TestParticipantFilterApplyExclusions:
 
         connect_filter = ParticipantFilter(
             file_path="test-bucket/2025-01-15/visit_occurrence.parquet",
-            omop_version="5.4"
+            cdm_version="5.4"
         )
 
         result = connect_filter.apply_exclusions()
@@ -164,7 +164,7 @@ class TestParticipantFilterApplyExclusions:
 
         connect_filter = ParticipantFilter(
             file_path="test-bucket/2025-01-15/person.parquet",
-            omop_version="5.4"
+            cdm_version="5.4"
         )
 
         with pytest.raises(Exception) as exc_info:
@@ -200,7 +200,7 @@ class TestParticipantFilterApplyExclusions:
 
         connect_filter = ParticipantFilter(
             file_path="test-bucket/2025-01-15/person.parquet",
-            omop_version="5.4"
+            cdm_version="5.4"
         )
 
         result = connect_filter.apply_exclusions()
@@ -275,7 +275,7 @@ class TestParticipantFilterApplyExclusions:
 
         connect_filter = ParticipantFilter(
             file_path="test-bucket/2025-01-15/condition_occurrence.parquet",
-            omop_version="5.4"
+            cdm_version="5.4"
         )
 
         result = connect_filter.apply_exclusions()

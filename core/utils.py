@@ -97,6 +97,14 @@ def close_duckdb_connection(conn: duckdb.DuckDBPyConnection, local_db_file: Opti
         # Manually run garabage collection here to reclaim memory
         gc.collect()
 
+def _ensure_local_copy_parents(sql: str) -> None:
+    """For local backend, mkdir -p the parent of every `COPY ... TO 'file://...'` target."""
+    if constants.STORAGE_BACKEND != constants.LOCAL_BACKEND:
+        return
+    for uri in re.findall(r"\bTO\s+'(file://[^']+)'", sql, flags=re.IGNORECASE):
+        storage.ensure_parent_directory(uri)
+
+
 def execute_duckdb_sql(sql: str, error_msg: str, return_results: bool = False, load_encodings: bool = False):
     """
     Execute SQL statement using DuckDB with automatic connection management.
@@ -117,6 +125,7 @@ def execute_duckdb_sql(sql: str, error_msg: str, return_results: bool = False, l
     local_db_file = None
 
     try:
+        _ensure_local_copy_parents(sql)
         conn, local_db_file = create_duckdb_connection(load_encodings=load_encodings)
 
         with conn:

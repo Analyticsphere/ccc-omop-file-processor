@@ -20,19 +20,19 @@ class TestNaturalKeyProcessorInit:
         """Test that initialization stores all parameters."""
         processor = NaturalKeyProcessor(
             file_path="test-bucket/2025-01-15/visit_occurrence.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             site="site_alpha",
         )
 
         assert processor.file_path == "test-bucket/2025-01-15/visit_occurrence.parquet"
-        assert processor.omop_version == "5.4"
+        assert processor.cdm_version == "5.4"
         assert processor.site == "site_alpha"
 
     def test_init_derives_paths(self):
         """Test that initialization derives table name and parquet artifact path."""
         processor = NaturalKeyProcessor(
             file_path="test-bucket/2025-01-15/condition_occurrence.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             site="site_alpha",
         )
 
@@ -53,7 +53,7 @@ class TestNaturalKeyProcessorApply:
         """Test that apply() returns False for excluded tables without touching files."""
         processor = NaturalKeyProcessor(
             file_path=f"test-bucket/2025-01-15/{table_name}.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             site="site_alpha",
         )
 
@@ -71,7 +71,7 @@ class TestNaturalKeyProcessorApply:
 
         processor = NaturalKeyProcessor(
             file_path="test-bucket/2025-01-15/visit_occurrence.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             site="site_alpha",
         )
 
@@ -93,7 +93,7 @@ class TestNaturalKeyProcessorApply:
 
         processor = NaturalKeyProcessor(
             file_path="test-bucket/2025-01-15/cost.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             site="site_alpha",
         )
 
@@ -121,7 +121,7 @@ class TestNaturalKeyProcessorApply:
 
         processor = NaturalKeyProcessor(
             file_path="test-bucket/2025-01-15/condition_occurrence.parquet",
-            omop_version="5.4",
+            cdm_version="5.4",
             site="site_alpha",
         )
 

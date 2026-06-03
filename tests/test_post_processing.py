@@ -15,7 +15,7 @@ DEFAULT_KWARGS = dict(
     site="site_alpha",
     bucket="test-bucket",
     delivery_date="2025-01-15",
-    omop_version="5.4",
+    cdm_version="5.4",
     vocab_version="v5.0_24-JAN-25",
     vocab_path="/vocab",
     task_name="example_task",
@@ -31,7 +31,7 @@ class TestPostProcessorInit:
         assert processor.site == "site_alpha"
         assert processor.bucket == "test-bucket"
         assert processor.delivery_date == "2025-01-15"
-        assert processor.omop_version == "5.4"
+        assert processor.cdm_version == "5.4"
         assert processor.vocab_version == "v5.0_24-JAN-25"
         assert processor.vocab_path == "/vocab"
         assert processor.task_name == "example_task"

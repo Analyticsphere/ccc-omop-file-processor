@@ -48,7 +48,7 @@ class TestOMOPClientUpgradeFile:
         OMOPClient.upgrade_file(
             file_path="bucket/2025-01-01/person.parquet",
             cdm_version="5.4",
-            target_omop_version="5.4"
+            target_cdm_version="5.4"
         )
 
         # Should not attempt any operations
@@ -65,7 +65,7 @@ class TestOMOPClientUpgradeFile:
         OMOPClient.upgrade_file(
             file_path="bucket/2025-01-01/attribute_definition.parquet",
             cdm_version="5.3",
-            target_omop_version="5.4"
+            target_cdm_version="5.4"
         )
 
         # Should delete the file
@@ -83,7 +83,7 @@ class TestOMOPClientUpgradeFile:
         OMOPClient.upgrade_file(
             file_path="bucket/2025-01-01/measurement.parquet",
             cdm_version="5.3",
-            target_omop_version="5.4"
+            target_cdm_version="5.4"
         )
 
         # Should read upgrade script and execute SQL
@@ -101,7 +101,7 @@ class TestOMOPClientUpgradeFile:
             OMOPClient.upgrade_file(
                 file_path="bucket/2025-01-01/person.parquet",
                 cdm_version="5.2",
-                target_omop_version="5.4"
+                target_cdm_version="5.4"
             )
 
         assert "not supported" in str(exc_info.value)
@@ -119,7 +119,7 @@ class TestOMOPClientCreateMissingBQTables:
             OMOPClient.create_missing_bq_tables(
                 project_id="my-project",
                 dataset_id="my-dataset",
-                omop_version="5.4"
+                cdm_version="5.4"
             )
 
         # Should execute SQL in BigQuery
@@ -137,7 +137,7 @@ class TestOMOPClientCreateMissingBQTables:
             OMOPClient.create_missing_bq_tables(
                 project_id="my-project",
                 dataset_id="my-dataset",
-                omop_version="5.4"
+                cdm_version="5.4"
             )
 
         assert "DDL file error" in str(exc_info.value)
@@ -155,7 +155,7 @@ class TestOMOPClientPopulateCdmSourceFile:
         "cdm_holder": "NIH/NCI",
         "source_description": "Test data",
         "cdm_release_date": "2024-12-15",
-        "target_omop_version": "5.4",
+        "target_cdm_version": "5.4",
         "target_vocab_version": "v5.0_24-JAN-25",
         "date_format": "%Y-%m-%d",
     }
@@ -348,7 +348,7 @@ class TestOMOPClientStaticMethods:
             "source_description": "Test data",
             "source_release_date": "2024-12-31",
             "cdm_release_date": "2024-12-15",
-            "target_omop_version": "5.4",
+            "target_cdm_version": "5.4",
             "target_vocab_version": "v5.0_24-JAN-25",
             "delivery_date": "2025-01-15",
             "date_format": "%Y-%m-%d",

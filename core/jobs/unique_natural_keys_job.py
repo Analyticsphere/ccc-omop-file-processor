@@ -9,7 +9,7 @@ site-salted hash, preserving referential integrity across the delivery.
 
 Required Environment Variables:
     FILE_PATH: Full path to the original file (resolves to parquet artifact path)
-    OMOP_VERSION: OMOP CDM version (e.g., '5.4')
+    CDM_VERSION: OMOP CDM version (e.g., '5.4')
     SITE: Site identifier used as the hash salt
 
 Exit Codes:
@@ -27,7 +27,7 @@ import core.utils as utils
 
 def validate_env_vars() -> dict[str, str]:
     """Validate and return required environment variables."""
-    required_vars = ['FILE_PATH', 'OMOP_VERSION', 'SITE']
+    required_vars = ['FILE_PATH', 'CDM_VERSION', 'SITE']
 
     env_values = {}
     missing_vars = []
@@ -57,13 +57,13 @@ def main():
     env_values = validate_env_vars()
 
     utils.logger.info(f"FILE_PATH: {env_values['FILE_PATH']}")
-    utils.logger.info(f"OMOP_VERSION: {env_values['OMOP_VERSION']}")
+    utils.logger.info(f"CDM_VERSION: {env_values['CDM_VERSION']}")
     utils.logger.info(f"SITE: {env_values['SITE']}")
 
     try:
         processor = natural_keys.NaturalKeyProcessor(
             file_path=env_values['FILE_PATH'],
-            omop_version=env_values['OMOP_VERSION'],
+            cdm_version=env_values['CDM_VERSION'],
             site=env_values['SITE'],
         )
         was_applied = processor.apply()

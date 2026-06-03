@@ -18,7 +18,7 @@ class OMOPClient:
     """
 
     @staticmethod
-    def upgrade_file(file_path: str, cdm_version: str, target_omop_version: str) -> None:
+    def upgrade_file(file_path: str, cdm_version: str, target_cdm_version: str) -> None:
         """
         Upgrade an OMOP CDM table file from one version to another.
 
@@ -32,22 +32,22 @@ class OMOPClient:
         Args:
             file_path: Path to the file to upgrade
             cdm_version: Current CDM version of the file
-            target_omop_version: Target CDM version to upgrade to
+            target_cdm_version: Target CDM version to upgrade to
         """
         normalized_file_path = utils.get_parquet_artifact_location(file_path)
         table_name = utils.get_table_name_from_path(file_path)
 
-        if cdm_version == target_omop_version:
+        if cdm_version == target_cdm_version:
             utils.logger.info(f"CDM upgrade not needed for file {file_path}")
             return
-        elif cdm_version == constants.CDM_v53 and target_omop_version == constants.CDM_v54:
+        elif cdm_version == constants.CDM_v53 and target_cdm_version == constants.CDM_v54:
             if table_name in constants.CDM_53_TO_54:
                 if constants.CDM_53_TO_54[table_name] == constants.REMOVED:
                     # This deletes the pipeline-processed version of the file - NOT the original site delivery file
                     storage.delete_file(normalized_file_path)
                 elif constants.CDM_53_TO_54[table_name] == constants.CHANGED:
                     try:
-                        upgrade_file_path = f"{constants.CDM_UPGRADE_SCRIPT_PATH}{cdm_version}_to_{target_omop_version}/{table_name}.sql"
+                        upgrade_file_path = f"{constants.CDM_UPGRADE_SCRIPT_PATH}{cdm_version}_to_{target_cdm_version}/{table_name}.sql"
                         with open(upgrade_file_path, 'r') as f:
                             upgrade_script = f.read()
 
@@ -60,12 +60,12 @@ class OMOPClient:
                     except Exception as e:
                         raise Exception(f"Unable to open SQL upgrade file {upgrade_file_path}: {e}") from e
             else:
-                utils.logger.info(f"No changes in {file_path} when upgrading from {cdm_version} to {target_omop_version}")
+                utils.logger.info(f"No changes in {file_path} when upgrading from {cdm_version} to {target_cdm_version}")
         else:
-            raise Exception(f"OMOP CDM version transformation from {cdm_version} to {target_omop_version} not supported")
+            raise Exception(f"OMOP CDM version transformation from {cdm_version} to {target_cdm_version} not supported")
 
     @staticmethod
-    def create_missing_bq_tables(project_id: str, dataset_id: str, omop_version: str) -> None:
+    def create_missing_bq_tables(project_id: str, dataset_id: str, cdm_version: str) -> None:
         """
         Create OMOP CDM tables in BigQuery dataset using DDL scripts.
 
@@ -75,9 +75,9 @@ class OMOPClient:
         Args:
             project_id: GCP project ID for BigQuery
             dataset_id: BigQuery dataset ID
-            omop_version: OMOP CDM version (e.g., '5.4')
+            cdm_version: OMOP CDM version (e.g., '5.4')
         """
-        ddl_file = f"{constants.DDL_SQL_PATH}{omop_version}/{constants.DDL_FILE_NAME}"
+        ddl_file = f"{constants.DDL_SQL_PATH}{cdm_version}/{constants.DDL_FILE_NAME}"
 
         # Get DDL with CREATE OR REPLACE TABLE statements
         try:
@@ -120,7 +120,7 @@ class OMOPClient:
             cdm_source_abbreviation: Abbreviation
             cdm_holder: Organization holding the data
             source_description: Description of data source
-            target_omop_version: Target OMOP CDM version (e.g., '5.4'); written to cdm_version column
+            target_cdm_version: Target OMOP CDM version (e.g., '5.4'); written to cdm_version column
             target_vocab_version: Target vocabulary version; written to vocabulary_version column
             (optional) source_documentation_reference: Documentation URL
             (optional) cdm_etl_reference: ETL documentation URL
@@ -294,8 +294,8 @@ class OMOPClient:
             cdm_source_data: Dictionary containing CDM source metadata fields
             output_path: Path where cdm_source Parquet file should be written
         """
-        target_omop_version = cdm_source_data["target_omop_version"]
-        cdm_version_concept_id = utils.get_cdm_version_concept_id(target_omop_version)
+        target_cdm_version = cdm_source_data["target_cdm_version"]
+        cdm_version_concept_id = utils.get_cdm_version_concept_id(target_cdm_version)
         delivery_date = cdm_source_data["delivery_date"]
         date_format = cdm_source_data["date_format"]
 
@@ -318,7 +318,7 @@ class OMOPClient:
                     '{cdm_source_data.get("cdm_etl_reference", "")}' AS cdm_etl_reference,
                     {source_release_date_cast} AS source_release_date,
                     CAST('{delivery_date}' AS DATE) AS cdm_release_date,
-                    '{target_omop_version}' AS cdm_version,
+                    '{target_cdm_version}' AS cdm_version,
                     {cdm_version_concept_id} AS cdm_version_concept_id,
                     '{cdm_source_data["target_vocab_version"]}' AS vocabulary_version
             ) TO '{output_path}' {constants.DUCKDB_FORMAT_STRING}

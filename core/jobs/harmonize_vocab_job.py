@@ -7,7 +7,7 @@ This job performs one of 10 vocabulary harmonization steps on OMOP CDM files.
 Required Environment Variables:
     FILE_PATH: Full GCS path to the file to harmonize
     VOCAB_VERSION: Vocabulary version to harmonize to
-    OMOP_VERSION: OMOP CDM version
+    CDM_VERSION: OMOP CDM version
     SITE: Site identifier
     PROJECT_ID: GCP project ID
     DATASET_ID: BigQuery dataset ID
@@ -39,7 +39,7 @@ from core.storage_backend import storage
 
 def validate_env_vars() -> dict[str, str]:
     """Validate and return required environment variables."""
-    required_vars = ['FILE_PATH', 'VOCAB_VERSION', 'OMOP_VERSION', 'SITE',
+    required_vars = ['FILE_PATH', 'VOCAB_VERSION', 'CDM_VERSION', 'SITE',
                      'PROJECT_ID', 'DATASET_ID', 'STEP']
 
     env_values = {}
@@ -77,7 +77,7 @@ def main():
     utils.logger.info(f"FILE_PATH: {env_values['FILE_PATH']}")
     utils.logger.info(f"VOCAB_VERSION: {env_values['VOCAB_VERSION']}")
     utils.logger.info(f"OMOP_VOCAB_PATH: {env_values['OMOP_VOCAB_PATH']}")
-    utils.logger.info(f"OMOP_VERSION: {env_values['OMOP_VERSION']}")
+    utils.logger.info(f"CDM_VERSION: {env_values['CDM_VERSION']}")
     utils.logger.info(f"SITE: {env_values['SITE']}")
     utils.logger.info(f"PROJECT_ID: {env_values['PROJECT_ID']}")
     utils.logger.info(f"DATASET_ID: {env_values['DATASET_ID']}")
@@ -87,7 +87,7 @@ def main():
         # Initialize the VocabHarmonizer
         vocab_harmonizer = vocab_harmonization.VocabHarmonizer(
             file_path=env_values['FILE_PATH'],
-            cdm_version=env_values['OMOP_VERSION'],
+            cdm_version=env_values['CDM_VERSION'],
             site=env_values['SITE'],
             vocab_version=env_values['VOCAB_VERSION'],
             vocab_path=env_values['OMOP_VOCAB_PATH'],
