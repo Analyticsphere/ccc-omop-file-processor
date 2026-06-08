@@ -46,7 +46,7 @@ class TestNaturalKeyProcessorInit:
 class TestNaturalKeyProcessorApply:
     """Tests for the apply() orchestration method."""
 
-    @pytest.mark.parametrize("table_name", ["person", "concept", "vocabulary", "domain"])
+    @pytest.mark.parametrize("table_name", ["concept", "vocabulary", "domain"])
     @patch('core.natural_keys.utils.execute_duckdb_sql')
     @patch('core.natural_keys.utils.parquet_file_exists')
     def test_skips_excluded_tables(self, mock_exists, mock_execute, table_name):
@@ -140,13 +140,55 @@ class TestNaturalKeyProcessorApply:
         assert "condition_occurrence_id IS NOT NULL" not in executed_sql
 
 
+    @patch('core.natural_keys.storage.get_uri')
+    @patch('core.natural_keys.utils.execute_duckdb_sql')
+    @patch('core.natural_keys.utils.get_columns_from_file')
+    @patch('core.natural_keys.utils.parquet_file_exists')
+    def test_rewrites_person_fk_columns_but_not_person_id(
+        self, mock_exists, mock_get_columns, mock_execute, mock_get_uri
+    ):
+        """person table must be rewritten on its FK columns (location_id,
+        provider_id, care_site_id) while person_id is left untouched."""
+        mock_exists.return_value = True
+        mock_get_columns.return_value = [
+            "person_id",  # never rewritten
+            "gender_concept_id",  # vocab ref, not rewritten
+            "location_id",  # rewritten
+            "provider_id",  # rewritten
+            "care_site_id",  # rewritten
+        ]
+        mock_get_uri.side_effect = lambda path: f"gs://{path}"
+
+        processor = NaturalKeyProcessor(
+            file_path="test-bucket/2025-01-15/person.parquet",
+            cdm_version="5.4",
+            site="site_alpha",
+        )
+
+        result = processor.apply()
+
+        assert result is True
+        mock_execute.assert_called_once()
+
+        executed_sql = mock_execute.call_args[0][0]
+        assert "location_id" in executed_sql
+        assert "provider_id" in executed_sql
+        assert "care_site_id" in executed_sql
+        assert "'site_alpha'" in executed_sql
+        # person_id must NOT appear as a rewritten column
+        assert "person_id IS NOT NULL" not in executed_sql
+
+
 class TestSkipTablesConstant:
     """Sanity tests on the constants — defensive checks against accidental
     rule violations in future refactors."""
 
-    def test_person_is_skipped(self):
-        """person must always be in the skip list (project rule)."""
-        assert "person" in constants.NATURAL_KEY_REWRITE_SKIP_TABLES
+    def test_person_is_not_skipped(self):
+        """person must NOT be in the skip list — its location_id, provider_id,
+        and care_site_id FK columns need to be globalized so they keep
+        referencing the rewritten parent rows. person_id is protected by
+        exclusion from the column allowlist, not by skipping the table."""
+        assert "person" not in constants.NATURAL_KEY_REWRITE_SKIP_TABLES
 
     def test_vocab_tables_skipped(self):
         """All vocabulary tables must be in the skip list (project rule)."""

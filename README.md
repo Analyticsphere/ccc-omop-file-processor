@@ -672,7 +672,8 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 **Notes:**
 
-- Vocabulary tables and `person` are excluded by policy (`NATURAL_KEY_REWRITE_SKIP_TABLES`). The endpoint returns a 200 success with a skip message in those cases.
+- Vocabulary tables are excluded by policy (`NATURAL_KEY_REWRITE_SKIP_TABLES`). The endpoint returns a 200 success with a skip message in those cases.
+- The `person` table IS rewritten — its `location_id`, `provider_id`, and `care_site_id` FK columns are globalized so they continue to reference the rewritten parent rows. `person_id` is protected from rewrite by its exclusion from `GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS`, which holds across every table where `person_id` appears.
 - Tables with none of the in-scope columns present are also skipped with a 200 success.
 - Columns rewritten when present (`GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS`):
     - `visit_occurrence_id`, `preceding_visit_occurrence_id`
@@ -800,26 +801,28 @@ The endpoint details below are listed in the order each endpoint first appears i
 | `dataset_id` | string | Yes | BigQuery dataset ID |
 | `step` | string | Yes | Harmonization step name |
 
-**Step order in the DAG:**
+**Defined harmonization steps:**
 
-| Order | `step` value | Execution model |
-|------|--------------|-----------------|
-| 1 | `source_target` | Per eligible file |
-| 2 | `target_remap` | Per eligible file |
-| 3 | `target_replacement` | Per eligible file |
-| 4 | `source_concept_backfill` | Per eligible file |
-| 5 | `domain_check` | Per eligible file |
-| 6 | `secondary_concept_backfill` | Per eligible file |
-| 7 | `omop_etl` | Per eligible file |
-| 8 | `consolidate_etl` | Once per site |
-| 9 | `discover_tables_for_dedup` | Once per site |
-| 10 | `deduplicate_single_table` | Once per discovered table |
+The table below lists every step the endpoint accepts. Two steps (marked *not in DAG*) remain available as endpoints but are intentionally excluded from the current DAG chain — see the [Typical Pipeline Order](#typical-pipeline-order) for the active execution order.
+
+| `step` value | Execution model | DAG status |
+|--------------|-----------------|------------|
+| `source_target` | Per eligible file | Active |
+| `target_remap` | Per eligible file | Active |
+| `target_replacement` | Per eligible file | **Not in DAG** |
+| `source_concept_backfill` | Per eligible file | Active |
+| `domain_check` | Per eligible file | Active |
+| `secondary_concept_backfill` | Per eligible file | **Not in DAG** |
+| `omop_etl` | Per eligible file | Active |
+| `consolidate_etl` | Once per site | Active |
+| `discover_tables_for_dedup` | Once per site | Active |
+| `deduplicate_single_table` | Once per discovered table | Active |
 
 **Notes:**
 
 - The orchestrator skips tables outside the harmonized-table set before calling the endpoint.
 - `source_concept_backfill` sets the primary `_concept_id` to `_source_concept_id` when the concept ID is zero, the source concept ID is non-zero, and the source concept exists in the vocabulary.
-- `secondary_concept_backfill` applies the same backfill logic to non-primary concept ID columns (e.g., `unit_concept_id`) across all harmonized files produced by prior steps.
+- `secondary_concept_backfill` applies the same backfill logic to non-primary concept ID columns (e.g., `unit_concept_id`) across all harmonized files produced by prior steps. Even though this step is not invoked by the current DAG, the endpoint still accepts it.
 - `discover_tables_for_dedup` returns `table_configs` in the response.
 - For `deduplicate_single_table`, the `file_path` field must contain the JSON-encoded configuration returned by the discovery step.
 
