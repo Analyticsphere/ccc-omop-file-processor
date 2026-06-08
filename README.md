@@ -672,7 +672,8 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 **Notes:**
 
-- Vocabulary tables and `person` are excluded by policy (`NATURAL_KEY_REWRITE_SKIP_TABLES`). The endpoint returns a 200 success with a skip message in those cases.
+- Vocabulary tables are excluded by policy (`NATURAL_KEY_REWRITE_SKIP_TABLES`). The endpoint returns a 200 success with a skip message in those cases.
+- The `person` table IS rewritten — its `location_id`, `provider_id`, and `care_site_id` FK columns are globalized so they continue to reference the rewritten parent rows. `person_id` is protected from rewrite by its exclusion from `GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS`, which holds across every table where `person_id` appears.
 - Tables with none of the in-scope columns present are also skipped with a 200 success.
 - Columns rewritten when present (`GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS`):
     - `visit_occurrence_id`, `preceding_visit_occurrence_id`
