@@ -603,4 +603,8 @@ GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS = [
 ]
 
 # Tables that are not rewritten by the natural-key globalization step.
-NATURAL_KEY_REWRITE_SKIP_TABLES = VOCABULARY_TABLES + ["person"]
+# person is NOT skipped: it has location_id/provider_id/care_site_id FK columns
+# that must be globalized so they continue to reference rewritten parent rows.
+# person_id is protected by exclusion from GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS,
+# not by skipping the table.
+NATURAL_KEY_REWRITE_SKIP_TABLES = VOCABULARY_TABLES
