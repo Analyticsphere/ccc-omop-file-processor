@@ -27,9 +27,9 @@ statuses AS (
     d_536735468,
     d_976570371,
     d_663265240,
-    d_265193023,
-    d_253883960,
-    d_547363263,
+    --d_265193023,
+    --d_253883960,
+    --d_547363263,
     d_459098666,
     d_220186468,
     d_956490759,
@@ -41,9 +41,9 @@ statuses AS (
     d_832139544,
     d_770257102,
     d_264644252,
-    d_222161762,
-    d_764863765,
-    d_195145666,
+    --d_222161762,
+    --d_764863765,
+    --d_195145666,
     d_217640691,
     d_784810139,
     d_199471989
@@ -70,12 +70,12 @@ statuses AS (
     d_976570371 AS module3_status_concept_id,
     COALESCE(smap_m4.concept_name, 'UNKNOWN') AS module4_status,
     d_663265240 AS module4_status_concept_id,
-    COALESCE(smap_bio.concept_name, 'UNKNOWN') AS bio_status,
-    d_265193023 AS bio_status_concept_id,
-    COALESCE(smap_clbio.concept_name, 'UNKNOWN') AS clinicalbio_status,
-    d_253883960 AS clinicalbio_status_concept_id,
-    COALESCE(smap_mw.concept_name, 'UNKNOWN') AS mouthwash_status,
-    d_547363263 AS mouthwash_status_concept_id,
+    --COALESCE(smap_bio.concept_name, 'UNKNOWN') AS bio_status,
+    --d_265193023 AS bio_status_concept_id,
+    --COALESCE(smap_clbio.concept_name, 'UNKNOWN') AS clinicalbio_status,
+    --d_253883960 AS clinicalbio_status_concept_id,
+    --COALESCE(smap_mw.concept_name, 'UNKNOWN') AS mouthwash_status,
+    --d_547363263 AS mouthwash_status_concept_id,
     COALESCE(smap_mens.concept_name, 'UNKNOWN') AS menstrual_status,
     d_459098666 AS menstrual_status_concept_id,
     COALESCE(smap_covid.concept_name, 'UNKNOWN') AS covid19_status,
@@ -90,9 +90,9 @@ statuses AS (
     d_832139544 AS module2_complete_ts,
     d_770257102 AS module3_complete_ts,
     d_264644252 AS module4_complete_ts,
-    d_222161762 AS bio_complete_ts,
-    d_764863765 AS clinicalbio_complete_ts,
-    d_195145666 AS mouthwash_complete_ts,
+    --d_222161762 AS bio_complete_ts,
+    --d_764863765 AS clinicalbio_complete_ts,
+    --d_195145666 AS mouthwash_complete_ts,
     d_217640691 AS menstrual_complete_ts,
     d_784810139 AS covid19_complete_ts,
     d_199471989 AS experience2024_complete_ts
@@ -105,9 +105,9 @@ statuses AS (
   LEFT JOIN completion_status_map smap_m2 ON s.d_536735468 = smap_m2.concept_id
   LEFT JOIN completion_status_map smap_m3 ON s.d_976570371 = smap_m3.concept_id
   LEFT JOIN completion_status_map smap_m4 ON s.d_663265240 = smap_m4.concept_id
-  LEFT JOIN completion_status_map smap_bio ON s.d_265193023 = smap_bio.concept_id
-  LEFT JOIN completion_status_map smap_clbio ON s.d_253883960 = smap_clbio.concept_id
-  LEFT JOIN completion_status_map smap_mw ON s.d_547363263 = smap_mw.concept_id
+  --LEFT JOIN completion_status_map smap_bio ON s.d_265193023 = smap_bio.concept_id
+  --LEFT JOIN completion_status_map smap_clbio ON s.d_253883960 = smap_clbio.concept_id
+  --LEFT JOIN completion_status_map smap_mw ON s.d_547363263 = smap_mw.concept_id
   LEFT JOIN completion_status_map smap_mens ON s.d_459098666 = smap_mens.concept_id
   LEFT JOIN completion_status_map smap_covid ON s.d_220186468 = smap_covid.concept_id
   LEFT JOIN completion_status_map smap_exp2024 ON s.d_956490759 = smap_exp2024.concept_id
