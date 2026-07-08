@@ -236,3 +236,16 @@ class TestGenerateRewriteReleaseDatesSql:
 
         expected = load_reference_sql("generate_rewrite_release_dates_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
+
+
+class TestGenerateGetDeliveryCdmVersionSql:
+    """Tests for generate_get_delivery_cdm_version_sql()."""
+
+    def test_standard(self):
+        """SQL reads cdm_version and vocabulary_version from a cdm_source parquet, limit 1."""
+        result = OMOPClient.generate_get_delivery_cdm_version_sql(
+            "gs://siteA/2025-01-01/artifacts/converted_files/cdm_source.parquet"
+        )
+
+        expected = load_reference_sql("generate_get_delivery_cdm_version_sql_standard.sql")
+        assert normalize_sql(result) == normalize_sql(expected)

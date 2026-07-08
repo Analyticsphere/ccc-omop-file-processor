@@ -9,6 +9,7 @@ import core.file_processor as file_processor
 import core.file_validation as file_validation
 import core.gcp_services as gcp_services
 import core.helpers.pipeline_log as pipeline_log
+import core.merge as merge
 import core.natural_keys as natural_keys
 import core.normalization as normalization
 import core.omop_client as omop_client
@@ -836,6 +837,117 @@ def load_derived_tables_to_bq() -> tuple[str, int]:
     except Exception as e:
         utils.logger.error(f"Error loading derived tables to BigQuery: {str(e)}")
         return f"Error loading derived tables to BigQuery: {str(e)}", 500
+
+
+# ---------------------------------------------------------------------------
+# EHR PR2 merge pipeline
+# ---------------------------------------------------------------------------
+
+@app.route('/get_latest_completed_delivery', methods=['POST'])
+def get_latest_completed_delivery() -> tuple[Any, int]:
+    """Return the delivery_date of a site's most recent 'completed' delivery, or null."""
+    data: dict[str, Any] = request.get_json() or {}
+    site: Optional[str] = data.get('site')
+    missing_fields = _get_missing_fields(data, ['site'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert site is not None
+
+        delivery_date: Optional[str] = pipeline_log.get_latest_completed_delivery(site)
+        return jsonify({
+            'status': 'healthy',
+            'delivery_date': delivery_date,
+            'service': constants.SERVICE_NAME
+        }), 200
+    except Exception as e:
+        utils.logger.error(f"Unable to get latest completed delivery for {site}: {str(e)}")
+        return f"Unable to get latest completed delivery for {site}: {str(e)}", 500
+
+
+@app.route('/get_delivery_cdm_version', methods=['POST'])
+def get_delivery_cdm_version() -> tuple[Any, int]:
+    """Return the CDM and vocabulary versions a processed delivery was standardized to."""
+    data: dict[str, Any] = request.get_json() or {}
+    bucket: Optional[str] = data.get('bucket')
+    delivery_date: Optional[str] = data.get('delivery_date')
+    missing_fields = _get_missing_fields(data, ['bucket', 'delivery_date'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert bucket is not None
+        assert delivery_date is not None
+
+        versions = omop_client.OMOPClient.get_delivery_cdm_version(bucket, delivery_date)
+        return jsonify({
+            'status': 'healthy',
+            'cdm_version': versions['cdm_version'],
+            'vocabulary_version': versions['vocabulary_version'],
+            'service': constants.SERVICE_NAME
+        }), 200
+    except Exception as e:
+        utils.logger.error(f"Unable to read cdm_version for {bucket}/{delivery_date}: {str(e)}")
+        return f"Unable to read cdm_version for {bucket}/{delivery_date}: {str(e)}", 500
+
+
+@app.route('/extract_participant_chunk', methods=['POST'])
+def extract_participant_chunk() -> tuple[str, int]:
+    """
+    Copy one source-delivery table into a provenance-named merge chunk file.
+
+    For v1, participant_scope is always "ALL" (whole table). A participant-id subset
+    (v2) is supported by pointing participant_scope at a parquet of ids.
+    """
+    data: dict[str, Any] = request.get_json() or {}
+    source_uri: Optional[str] = data.get('source_uri')
+    chunk_uri: Optional[str] = data.get('chunk_uri')
+    participant_scope: Optional[str] = data.get('participant_scope')
+    person_id_column: str = data.get('person_id_column') or constants.DEFAULT_PERSON_ID_COLUMN
+    missing_fields = _get_missing_fields(data, ['source_uri', 'chunk_uri', 'participant_scope'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert source_uri is not None
+        assert chunk_uri is not None
+        assert participant_scope is not None
+
+        merge.MergeProcessor.extract_chunk(source_uri, chunk_uri, participant_scope, person_id_column)
+        return "Extracted participant chunk", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to extract participant chunk: {str(e)}")
+        return f"Unable to extract participant chunk: {str(e)}", 500
+
+
+@app.route('/reconcile_chunks', methods=['POST'])
+def reconcile_chunks() -> tuple[str, int]:
+    """Union all chunk files for a table into a single merged parquet in converted_files/."""
+    data: dict[str, Any] = request.get_json() or {}
+    chunk_glob: Optional[str] = data.get('chunk_glob')
+    output_uri: Optional[str] = data.get('output_uri')
+    missing_fields = _get_missing_fields(data, ['chunk_glob', 'output_uri'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert chunk_glob is not None
+        assert output_uri is not None
+
+        merge.MergeProcessor.reconcile_chunks(chunk_glob, output_uri)
+        return "Reconciled merge chunks", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to reconcile merge chunks: {str(e)}")
+        return f"Unable to reconcile merge chunks: {str(e)}", 500
 
 
 @app.route('/pipeline_log', methods=['POST'])

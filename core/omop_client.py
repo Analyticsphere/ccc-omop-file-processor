@@ -254,6 +254,44 @@ class OMOPClient:
             raise Exception(f"Unable to generate {table_name} derived data from harmonized files: {str(e)}") from e
 
     @staticmethod
+    def get_delivery_cdm_version(bucket: str, delivery_date: str) -> dict:
+        """
+        Read the CDM and vocabulary versions a delivery was standardized to.
+
+        Reads the single-row processed cdm_source.parquet in converted_files/. This is the
+        authoritative version for a PROCESSED delivery (the site-delivered version in
+        site_config / the BQ log records the delivered, not standardized, version).
+
+        Args:
+            bucket: Bucket/directory of the source delivery.
+            delivery_date: Delivery date directory component (YYYY-MM-DD).
+
+        Returns:
+            {"cdm_version": <str|None>, "vocabulary_version": <str|None>}. Both None if the
+            cdm_source file has no rows.
+        """
+        cdm_source_path = f"{bucket}/{delivery_date}/{constants.ArtifactPaths.CONVERTED_FILES.value}cdm_source{constants.PARQUET}"
+        cdm_source_uri = storage.get_uri(cdm_source_path)
+
+        sql = OMOPClient.generate_get_delivery_cdm_version_sql(cdm_source_uri)
+        result = utils.execute_duckdb_sql(
+            sql, f"Unable to read cdm_version from {cdm_source_uri}", return_results=True
+        )
+
+        if result and len(result) > 0:
+            return {"cdm_version": result[0][0], "vocabulary_version": result[0][1]}
+        return {"cdm_version": None, "vocabulary_version": None}
+
+    @staticmethod
+    def generate_get_delivery_cdm_version_sql(cdm_source_uri: str) -> str:
+        """Generate SQL to read cdm_version and vocabulary_version from a cdm_source parquet."""
+        return f"""
+            SELECT cdm_version, vocabulary_version
+            FROM read_parquet('{cdm_source_uri}')
+            LIMIT 1
+        """
+
+    @staticmethod
     def generate_upgrade_file_sql(upgrade_script: str, normalized_file_path: str) -> str:
         """
         Generate SQL to upgrade an OMOP CDM table file.

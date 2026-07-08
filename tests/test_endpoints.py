@@ -1268,3 +1268,151 @@ class TestPipelineLogEndpoint:
 
         assert response.status_code == 500
         assert b"Unable to save logging information" in response.data
+
+
+class TestGetLatestCompletedDeliveryEndpoint:
+    """Tests for /get_latest_completed_delivery endpoint."""
+
+    @patch('core.endpoints.pipeline_log.get_latest_completed_delivery')
+    def test_success(self, mock_get, client):
+        mock_get.return_value = '2025-03-01'
+
+        response = client.post('/get_latest_completed_delivery', json={'site': 'siteA'})
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data['delivery_date'] == '2025-03-01'
+        mock_get.assert_called_once_with('siteA')
+
+    @patch('core.endpoints.pipeline_log.get_latest_completed_delivery')
+    def test_no_completed_delivery_returns_null(self, mock_get, client):
+        mock_get.return_value = None
+
+        response = client.post('/get_latest_completed_delivery', json={'site': 'siteA'})
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data['delivery_date'] is None
+
+    def test_missing_parameter(self, client):
+        response = client.post('/get_latest_completed_delivery', json={})
+        assert_missing_fields(response, 'site')
+
+    @patch('core.endpoints.pipeline_log.get_latest_completed_delivery')
+    def test_exception(self, mock_get, client):
+        mock_get.side_effect = Exception("BigQuery error")
+
+        response = client.post('/get_latest_completed_delivery', json={'site': 'siteA'})
+
+        assert response.status_code == 500
+        assert b"Unable to get latest completed delivery" in response.data
+
+
+class TestGetDeliveryCdmVersionEndpoint:
+    """Tests for /get_delivery_cdm_version endpoint."""
+
+    @patch('core.endpoints.omop_client.OMOPClient.get_delivery_cdm_version')
+    def test_success(self, mock_get, client):
+        mock_get.return_value = {'cdm_version': '5.4', 'vocabulary_version': 'v5.0 27-AUG-25'}
+
+        response = client.post('/get_delivery_cdm_version', json={
+            'bucket': 'siteA',
+            'delivery_date': '2025-01-01'
+        })
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data['cdm_version'] == '5.4'
+        assert data['vocabulary_version'] == 'v5.0 27-AUG-25'
+        mock_get.assert_called_once_with('siteA', '2025-01-01')
+
+    def test_missing_parameters(self, client):
+        response = client.post('/get_delivery_cdm_version', json={'bucket': 'siteA'})
+        assert_missing_fields(response, 'delivery_date')
+
+    @patch('core.endpoints.omop_client.OMOPClient.get_delivery_cdm_version')
+    def test_exception(self, mock_get, client):
+        mock_get.side_effect = Exception("read failed")
+
+        response = client.post('/get_delivery_cdm_version', json={
+            'bucket': 'siteA',
+            'delivery_date': '2025-01-01'
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to read cdm_version" in response.data
+
+
+class TestExtractParticipantChunkEndpoint:
+    """Tests for /extract_participant_chunk endpoint."""
+
+    @patch('core.endpoints.merge.MergeProcessor.extract_chunk')
+    def test_success_all_scope(self, mock_extract, client):
+        response = client.post('/extract_participant_chunk', json={
+            'source_uri': 'siteA/2025-01-01/artifacts/converted_files/measurement.parquet',
+            'chunk_uri': 'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet',
+            'participant_scope': 'ALL'
+        })
+
+        assert response.status_code == 200
+        assert b"Extracted participant chunk" in response.data
+        # Optional person_id_column defaults to the constant.
+        mock_extract.assert_called_once_with(
+            'siteA/2025-01-01/artifacts/converted_files/measurement.parquet',
+            'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet',
+            'ALL',
+            constants.DEFAULT_PERSON_ID_COLUMN
+        )
+
+    def test_missing_parameters(self, client):
+        response = client.post('/extract_participant_chunk', json={
+            'source_uri': 'siteA/2025-01-01/artifacts/converted_files/measurement.parquet'
+        })
+        assert_missing_fields(response, 'chunk_uri', 'participant_scope')
+
+    @patch('core.endpoints.merge.MergeProcessor.extract_chunk')
+    def test_exception(self, mock_extract, client):
+        mock_extract.side_effect = Exception("extract failed")
+
+        response = client.post('/extract_participant_chunk', json={
+            'source_uri': 'siteA/2025-01-01/artifacts/converted_files/measurement.parquet',
+            'chunk_uri': 'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet',
+            'participant_scope': 'ALL'
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to extract participant chunk" in response.data
+
+
+class TestReconcileChunksEndpoint:
+    """Tests for /reconcile_chunks endpoint."""
+
+    @patch('core.endpoints.merge.MergeProcessor.reconcile_chunks')
+    def test_success(self, mock_reconcile, client):
+        response = client.post('/reconcile_chunks', json={
+            'chunk_glob': 'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/*.parquet',
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/measurement.parquet'
+        })
+
+        assert response.status_code == 200
+        assert b"Reconciled merge chunks" in response.data
+        mock_reconcile.assert_called_once_with(
+            'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/*.parquet',
+            'ehr_merged/2026-06-24/artifacts/converted_files/measurement.parquet'
+        )
+
+    def test_missing_parameters(self, client):
+        response = client.post('/reconcile_chunks', json={})
+        assert_missing_fields(response, 'chunk_glob', 'output_uri')
+
+    @patch('core.endpoints.merge.MergeProcessor.reconcile_chunks')
+    def test_exception(self, mock_reconcile, client):
+        mock_reconcile.side_effect = Exception("no chunks matched glob")
+
+        response = client.post('/reconcile_chunks', json={
+            'chunk_glob': 'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/*.parquet',
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/measurement.parquet'
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to reconcile merge chunks" in response.data

@@ -8,31 +8,51 @@ WITH status_map AS (
 	SELECT '219863910' AS concept_id, 'Cannot be Verified' AS concept_name UNION ALL
 	SELECT '104430631' AS concept_id, 'No' AS concept_name UNION ALL
 	SELECT '353358909' AS concept_id, 'Yes' AS concept_name
-), statuses AS (
+),
+completion_status_map AS (
+  SELECT '972455046' AS concept_id, 'Not Started' AS concept_name UNION ALL
+  SELECT '615768760' AS concept_id, 'Started' AS concept_name UNION ALL
+  SELECT '231311385' AS concept_id, 'Submitted' AS concept_name
+),
+statuses AS (
   SELECT DISTINCT
     Connect_ID,
+    -- Participant status fields
     d_821247024,
     d_747006172,
     d_773707518,
     d_831041022,
+    -- Module/survey completion status fields
+    d_949302066,
+    d_536735468,
+    d_976570371,
+    d_663265240,
+    --d_265193023,
+    --d_253883960,
+    --d_547363263,
+    d_459098666,
+    d_220186468,
+    d_956490759,
+    -- Timestamp fields
     d_659990606,
     d_664453818,
     d_269050420,
-    D_517311251,
-    D_832139544,
-    D_770257102,
+    d_517311251,
+    d_832139544,
+    d_770257102,
     d_264644252,
-    d_222161762,
-    d_764863765,
-    d_195145666,
+    --d_222161762,
+    --d_764863765,
+    --d_195145666,
     d_217640691,
     d_784810139,
     d_199471989
   FROM `test-project.test_dataset.participants`
-
+  
 ), cleaned_datapoints AS (
   SELECT DISTINCT
     Connect_ID,
+    -- Participant status fields
     CASE WHEN smap_vs.concept_name IS NULL THEN 'UNKNOWN' ELSE smap_vs.concept_name END AS verified_status,
     d_821247024 AS verified_status_concept_id,
     CASE WHEN smap_cw.concept_name IS NULL THEN 'UNKNOWN' ELSE smap_cw.concept_name END AS consent_withdrawn,
@@ -41,16 +61,38 @@ WITH status_map AS (
     d_773707518 AS hipaa_revoked_concept_id,
     CASE WHEN smap_dd.concept_name IS NULL THEN 'UNKNOWN' ELSE smap_dd.concept_name END AS data_destruction_requested,
     d_831041022 AS data_destruction_requested_concept_id,
+    -- Module/survey completion status fields
+    COALESCE(smap_m1.concept_name, 'UNKNOWN') AS module1_status,
+    d_949302066 AS module1_status_concept_id,
+    COALESCE(smap_m2.concept_name, 'UNKNOWN') AS module2_status,
+    d_536735468 AS module2_status_concept_id,
+    COALESCE(smap_m3.concept_name, 'UNKNOWN') AS module3_status,
+    d_976570371 AS module3_status_concept_id,
+    COALESCE(smap_m4.concept_name, 'UNKNOWN') AS module4_status,
+    d_663265240 AS module4_status_concept_id,
+    --COALESCE(smap_bio.concept_name, 'UNKNOWN') AS bio_status,
+    --d_265193023 AS bio_status_concept_id,
+    --COALESCE(smap_clbio.concept_name, 'UNKNOWN') AS clinicalbio_status,
+    --d_253883960 AS clinicalbio_status_concept_id,
+    --COALESCE(smap_mw.concept_name, 'UNKNOWN') AS mouthwash_status,
+    --d_547363263 AS mouthwash_status_concept_id,
+    COALESCE(smap_mens.concept_name, 'UNKNOWN') AS menstrual_status,
+    d_459098666 AS menstrual_status_concept_id,
+    COALESCE(smap_covid.concept_name, 'UNKNOWN') AS covid19_status,
+    d_220186468 AS covid19_status_concept_id,
+    COALESCE(smap_exp2024.concept_name, 'UNKNOWN') AS experience2024_status,
+    d_956490759 AS experience2024_status_concept_id,
+    -- Timestamp fields
     d_659990606 AS consent_withdrawn_ts,
     d_664453818 AS hipaa_revoked_ts,
     d_269050420 AS data_destruction_ts,
-    D_517311251 AS module1_complete_ts,
-    D_832139544 AS module2_complete_ts,
-    D_770257102 AS module3_complete_ts,
+    d_517311251 AS module1_complete_ts,
+    d_832139544 AS module2_complete_ts,
+    d_770257102 AS module3_complete_ts,
     d_264644252 AS module4_complete_ts,
-    d_222161762 AS bio_complete_ts,
-    d_764863765 AS clinicalbio_complete_ts,
-    d_195145666 AS mouthwash_complete_ts,
+    --d_222161762 AS bio_complete_ts,
+    --d_764863765 AS clinicalbio_complete_ts,
+    --d_195145666 AS mouthwash_complete_ts,
     d_217640691 AS menstrual_complete_ts,
     d_784810139 AS covid19_complete_ts,
     d_199471989 AS experience2024_complete_ts
@@ -59,6 +101,16 @@ WITH status_map AS (
   LEFT JOIN status_map smap_cw ON s.d_747006172 = smap_cw.concept_id
   LEFT JOIN status_map smap_hr ON s.d_773707518 = smap_hr.concept_id
   LEFT JOIN status_map smap_dd ON s.d_831041022 = smap_dd.concept_id
+  LEFT JOIN completion_status_map smap_m1 ON s.d_949302066 = smap_m1.concept_id
+  LEFT JOIN completion_status_map smap_m2 ON s.d_536735468 = smap_m2.concept_id
+  LEFT JOIN completion_status_map smap_m3 ON s.d_976570371 = smap_m3.concept_id
+  LEFT JOIN completion_status_map smap_m4 ON s.d_663265240 = smap_m4.concept_id
+  --LEFT JOIN completion_status_map smap_bio ON s.d_265193023 = smap_bio.concept_id
+  --LEFT JOIN completion_status_map smap_clbio ON s.d_253883960 = smap_clbio.concept_id
+  --LEFT JOIN completion_status_map smap_mw ON s.d_547363263 = smap_mw.concept_id
+  LEFT JOIN completion_status_map smap_mens ON s.d_459098666 = smap_mens.concept_id
+  LEFT JOIN completion_status_map smap_covid ON s.d_220186468 = smap_covid.concept_id
+  LEFT JOIN completion_status_map smap_exp2024 ON s.d_956490759 = smap_exp2024.concept_id
   WHERE Connect_ID IS NOT NULL
 )
 SELECT * FROM cleaned_datapoints

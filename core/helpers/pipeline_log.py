@@ -2,10 +2,65 @@ from datetime import datetime
 from typing import Optional
 
 from google.cloud import bigquery  # type: ignore
+from google.cloud.exceptions import NotFound  # type: ignore
 
 import core.constants as constants
 import core.gcp_services as gcp_services
 import core.utils as utils
+
+
+def get_latest_completed_delivery(site: str) -> Optional[str]:
+    """
+    Return the delivery_date of a site's most recent successfully-processed delivery.
+
+    "Latest" is MAX(delivery_date) among rows whose status is 'completed'. This is a
+    server-side query against the pipeline logging table.
+
+    Args:
+        site: The site_name to look up.
+
+    Returns:
+        The delivery_date as an ISO string (YYYY-MM-DD), or None if the site has no
+        completed delivery (or the logging table does not exist yet).
+    """
+    client = bigquery.Client()
+
+    # If the logging table doesn't exist yet (e.g. first run) there is nothing completed.
+    try:
+        client.get_table(constants.BQ_LOGGING_TABLE)
+    except NotFound:
+        return None
+
+    query = f"""
+        SELECT delivery_date
+        FROM `{constants.BQ_LOGGING_TABLE}`
+        WHERE site_name = @site
+          AND status = @status
+        ORDER BY delivery_date DESC
+        LIMIT 1
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("site", "STRING", site),
+            bigquery.ScalarQueryParameter("status", "STRING", constants.PIPELINE_COMPLETE_STRING),
+        ]
+    )
+
+    try:
+        query_job = client.query(query, job_config=job_config)
+        rows = list(query_job.result())
+
+        if not rows:
+            return None
+
+        delivery_date = rows[0]["delivery_date"]
+        # BigQuery DATE columns come back as datetime.date; normalize to YYYY-MM-DD.
+        if hasattr(delivery_date, "isoformat"):
+            return delivery_date.isoformat()
+        return str(delivery_date)
+    except Exception as e:
+        raise Exception(f"Failed to retrieve latest completed delivery for site '{site}': {e}") from e
 
 
 class PipelineLog:

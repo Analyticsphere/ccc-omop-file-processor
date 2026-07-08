@@ -361,3 +361,30 @@ class TestOMOPClientStaticMethods:
 
         expected = load_reference_sql("generate_populate_cdm_source_sql_simple.sql")
         assert normalize_sql(sql) == normalize_sql(expected)
+
+
+class TestGetDeliveryCdmVersion:
+    """Tests for get_delivery_cdm_version() reader (DuckDB mocked)."""
+
+    @patch('core.omop_client.utils.execute_duckdb_sql')
+    def test_returns_versions_from_cdm_source(self, mock_execute):
+        """Reads cdm_version and vocabulary_version from the delivery's cdm_source parquet."""
+        mock_execute.return_value = [("5.4", "v5.0 27-AUG-25")]
+
+        result = OMOPClient.get_delivery_cdm_version("siteA", "2025-01-01")
+
+        assert result == {"cdm_version": "5.4", "vocabulary_version": "v5.0 27-AUG-25"}
+
+        # Reads from the delivery's converted_files/cdm_source.parquet with return_results=True.
+        sql_arg = mock_execute.call_args[0][0]
+        assert "siteA/2025-01-01/artifacts/converted_files/cdm_source.parquet" in sql_arg
+        assert mock_execute.call_args.kwargs.get("return_results") is True
+
+    @patch('core.omop_client.utils.execute_duckdb_sql')
+    def test_returns_none_when_cdm_source_empty(self, mock_execute):
+        """An empty cdm_source (no rows) yields None versions rather than raising."""
+        mock_execute.return_value = []
+
+        result = OMOPClient.get_delivery_cdm_version("siteA", "2025-01-01")
+
+        assert result == {"cdm_version": None, "vocabulary_version": None}

@@ -165,6 +165,9 @@ class ArtifactPaths(str, Enum):
     INVALID_ROWS = f"{ARTIFACTS}invalid_rows/"
     CONNECT_DATA = f"{ARTIFACTS}connect_data/"
     POST_PROCESSING_TMP = f"{ARTIFACTS}post_processing/"
+    # EHR PR2 merge pipeline: shared per-table staging area for provenance-named
+    # chunk files extracted from each source delivery before reconciliation.
+    MERGE_CHUNKS = f"{ARTIFACTS}merge_chunks/"
 
 # Using -1 as place/holder default value for numeric columns 
 #   as these are uncommon values in real data
@@ -608,3 +611,14 @@ GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS = [
 # person_id is protected by exclusion from GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS,
 # not by skipping the table.
 NATURAL_KEY_REWRITE_SKIP_TABLES = VOCABULARY_TABLES
+
+# ---------------------------------------------------------------------------
+# EHR PR2 merge pipeline
+# ---------------------------------------------------------------------------
+# Sentinel PARTICIPANT_SCOPE value meaning "extract the whole source table" (no
+# participant WHERE clause). Any other value is treated as a GCS/URI reference to
+# a parquet file of participant ids to subset by (v2 path; designed-for now).
+PARTICIPANT_SCOPE_ALL = "ALL"
+
+# Default person_id column used when subsetting a chunk by participant scope.
+DEFAULT_PERSON_ID_COLUMN = "person_id"
