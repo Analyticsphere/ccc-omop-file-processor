@@ -34,7 +34,7 @@ class MergeProcessor:
             chunk_uri: Path to the destination chunk parquet in the staging area.
             participant_scope: constants.PARTICIPANT_SCOPE_ALL for the whole table, otherwise a
                 path to a parquet file with an `id` column of participant ids to keep.
-            person_id_column: Column TRY_CAST to BIGINT and matched against the id set. Only used
+            person_id_column: Column matched against the id set. Only used
                 when participant_scope is not PARTICIPANT_SCOPE_ALL.
         """
         source = storage.get_uri(source_uri)

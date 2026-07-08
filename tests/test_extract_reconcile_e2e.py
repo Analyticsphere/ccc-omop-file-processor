@@ -99,9 +99,9 @@ def test_extract_id_scope_subsets_participants(local_backend):
         src,
         "SELECT * FROM (VALUES (1,'101'),(2,'102'),(3,'103')) AS t(measurement_id, person_id)",
     )
-    # Keep only participants 101 and 103.
+    # Keep only participants 101 and 103. The id column matches person_id's type (VARCHAR).
     ids_uri = str(root / "ehr_merged/2026-06-24/artifacts/merge_chunks/_ids/keep.parquet")
-    _write_parquet(con, ids_uri, "SELECT * FROM (VALUES (101),(103)) AS t(id)")
+    _write_parquet(con, ids_uri, "SELECT * FROM (VALUES ('101'),('103')) AS t(id)")
 
     chunk = str(root / "ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet")
 

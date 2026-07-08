@@ -50,8 +50,8 @@ class TestExtractAllScopeSql:
 class TestExtractIdScopeSql:
     """Tests for generate_extract_chunk_sql() with a participant-id subset (v2 path)."""
 
-    def test_id_scope_uses_try_cast_in_subquery(self):
-        """A non-ALL scope subsets by TRY_CAST(person_id AS BIGINT) IN (SELECT id ...)."""
+    def test_id_scope_filters_by_person_id_in_subquery(self):
+        """A non-ALL scope subsets by person_id IN (SELECT id ...)."""
         result = MergeProcessor.generate_extract_chunk_sql(
             source_uri="siteA/2025-01-01/artifacts/converted_files/measurement.parquet",
             chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/measurement__siteA__2025-01-01.parquet",
@@ -63,7 +63,7 @@ class TestExtractIdScopeSql:
         assert normalize_sql(result) == normalize_sql(expected)
 
     def test_id_scope_respects_custom_person_id_column(self):
-        """A custom person_id column name is used in the TRY_CAST."""
+        """A custom person_id column name is used in the WHERE clause."""
         result = MergeProcessor.generate_extract_chunk_sql(
             source_uri="siteA/2025-01-01/artifacts/converted_files/measurement.parquet",
             chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet",
@@ -71,7 +71,7 @@ class TestExtractIdScopeSql:
             person_id_column="subject_id",
         )
 
-        assert "TRY_CAST(subject_id AS BIGINT)" in result
+        assert "WHERE subject_id IN (" in result
 
 
 class TestReconcileGlobUnionByNameSql:
