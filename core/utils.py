@@ -104,7 +104,6 @@ def _ensure_local_copy_parents(sql: str) -> None:
     for uri in re.findall(r"\bTO\s+'(file://[^']+)'", sql, flags=re.IGNORECASE):
         storage.ensure_parent_directory(uri)
 
-
 def execute_duckdb_sql(sql: str, error_msg: str, return_results: bool = False, load_encodings: bool = False):
     """
     Execute SQL statement using DuckDB with automatic connection management.

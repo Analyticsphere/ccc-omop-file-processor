@@ -6,24 +6,18 @@ then reconciled into a single merged table. Asserts union row counts, column uni
 (union_by_name), and provenance file naming. A second test exercises the participant-id
 subset (v2) extract path.
 
-The shared storage backend is switched to 'local' so MergeProcessor reads/writes real
-files via the file:// scheme; DuckDB's temp directory is redirected to a temp path.
+The shared storage backend is switched to 'local' so MergeProcessor (and the fixture
+helpers below) read/write real files via the file:// scheme; DuckDB's temp directory is
+redirected to a temp path. All DuckDB access goes through utils.execute_duckdb_sql — the
+project's connection helper — so no test opens a raw duckdb connection.
 """
 
-import os
-
-import duckdb
 import pytest
 
 import core.constants as constants
 import core.merge as merge
+import core.utils as utils
 from core.storage_backend import storage as shared_storage
-
-
-def _write_parquet(con, path: str, select_sql: str) -> None:
-    """Write a parquet file at a plain local path (creating parent dirs)."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    con.execute(f"COPY ({select_sql}) TO '{path}' (FORMAT parquet)")
 
 
 @pytest.fixture
@@ -40,23 +34,39 @@ def local_backend(tmp_path, monkeypatch):
     return tmp_path
 
 
+def _write_parquet(path: str, select_sql: str) -> None:
+    """
+    Write a parquet fixture via utils.execute_duckdb_sql.
+
+    The COPY target is a file:// uri so execute_duckdb_sql's local-backend hook
+    creates the parent directories automatically.
+    """
+    uri = shared_storage.get_uri(path)
+    utils.execute_duckdb_sql(
+        f"COPY ({select_sql}) TO '{uri}' (FORMAT parquet)",
+        f"Unable to write test fixture to {uri}",
+    )
+
+
+def _query(select_sql: str) -> list:
+    """Run a verification query through the helper and return all rows."""
+    return utils.execute_duckdb_sql(select_sql, "Verification query failed", return_results=True)
+
+
 def test_extract_all_then_reconcile_unions_rows_and_columns(local_backend):
     root = local_backend
-    con = duckdb.connect()
 
     # siteA: 2 rows, 3 columns
     site_a_src = str(root / "siteA/2025-01-01/artifacts/converted_files/measurement.parquet")
     _write_parquet(
-        con,
         site_a_src,
-        "SELECT * FROM (VALUES (1,'101','5.0'),(2,'102','6.0')) AS t(measurement_id, person_id, value)",
+        "SELECT * FROM (VALUES (1,101,'5.0'),(2,102,'6.0')) AS t(measurement_id, person_id, value)",
     )
     # siteB: 3 rows, with an EXTRA column to exercise union_by_name schema alignment
     site_b_src = str(root / "siteB/2025-02-01/artifacts/converted_files/measurement.parquet")
     _write_parquet(
-        con,
         site_b_src,
-        "SELECT * FROM (VALUES (10,'201','7.0','x'),(11,'202','8.0','y'),(12,'203','9.0','z')) "
+        "SELECT * FROM (VALUES (10,201,'7.0','x'),(11,202,'8.0','y'),(12,203,'9.0','z')) "
         "AS t(measurement_id, person_id, value, extra_col)",
     )
 
@@ -69,49 +79,43 @@ def test_extract_all_then_reconcile_unions_rows_and_columns(local_backend):
     merge.MergeProcessor.extract_chunk(site_b_src, chunk_b, constants.PARTICIPANT_SCOPE_ALL)
 
     # Provenance-named chunk files land in the shared per-table staging folder.
-    assert os.path.exists(chunk_a)
-    assert os.path.exists(chunk_b)
+    assert shared_storage.file_exists(chunk_a)
+    assert shared_storage.file_exists(chunk_b)
 
     merge.MergeProcessor.reconcile_chunks(str(chunk_dir / "*.parquet"), output)
-    assert os.path.exists(output)
+    assert shared_storage.file_exists(output)
 
-    verify = duckdb.connect()
-    row_count = verify.execute(f"SELECT count(*) FROM read_parquet('{output}')").fetchone()[0]
-    assert row_count == 5  # 2 (siteA) + 3 (siteB)
+    output_uri = shared_storage.get_uri(output)
+    merged_rows = _query(f"SELECT extra_col FROM read_parquet('{output_uri}')")
+    assert len(merged_rows) == 5  # 2 (siteA) + 3 (siteB)
 
-    columns = {r[0] for r in verify.execute(f"DESCRIBE SELECT * FROM read_parquet('{output}')").fetchall()}
+    columns = {r[0] for r in _query(f"DESCRIBE SELECT * FROM read_parquet('{output_uri}')")}
     assert {"measurement_id", "person_id", "value", "extra_col"} <= columns
 
     # siteA rows (no extra_col) are NULL-filled for the unioned column.
-    null_extra = verify.execute(
-        f"SELECT count(*) FROM read_parquet('{output}') WHERE extra_col IS NULL"
-    ).fetchone()[0]
+    null_extra = sum(1 for (extra_col,) in merged_rows if extra_col is None)
     assert null_extra == 2
 
 
 def test_extract_id_scope_subsets_participants(local_backend):
     root = local_backend
-    con = duckdb.connect()
 
     src = str(root / "siteA/2025-01-01/artifacts/converted_files/measurement.parquet")
     _write_parquet(
-        con,
         src,
-        "SELECT * FROM (VALUES (1,'101'),(2,'102'),(3,'103')) AS t(measurement_id, person_id)",
+        "SELECT * FROM (VALUES (1,101),(2,102),(3,103)) AS t(measurement_id, person_id)",
     )
-    # Keep only participants 101 and 103. The id column matches person_id's type (VARCHAR).
+    # Keep only participants 101 and 103. The id column is numeric, matching person_id.
     ids_uri = str(root / "ehr_merged/2026-06-24/artifacts/merge_chunks/_ids/keep.parquet")
-    _write_parquet(con, ids_uri, "SELECT * FROM (VALUES ('101'),('103')) AS t(id)")
+    _write_parquet(ids_uri, "SELECT * FROM (VALUES (101),(103)) AS t(id)")
 
     chunk = str(root / "ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet")
 
     merge.MergeProcessor.extract_chunk(src, chunk, ids_uri)
 
-    verify = duckdb.connect()
+    chunk_uri = shared_storage.get_uri(chunk)
     kept = [
         r[0]
-        for r in verify.execute(
-            f"SELECT person_id FROM read_parquet('{chunk}') ORDER BY person_id"
-        ).fetchall()
+        for r in _query(f"SELECT person_id FROM read_parquet('{chunk_uri}') ORDER BY person_id")
     ]
-    assert kept == ['101', '103']
+    assert kept == [101, 103]
