@@ -16,6 +16,7 @@ import pytest
 
 import core.constants as constants
 import core.merge as merge
+import core.merge_reporting as merge_reporting
 import core.utils as utils
 from core.storage_backend import storage as shared_storage
 
@@ -119,3 +120,54 @@ def test_extract_id_scope_subsets_participants(local_backend):
         for r in _query(f"SELECT person_id FROM read_parquet('{chunk_uri}') ORDER BY person_id")
     ]
     assert kept == [101, 103]
+
+
+def test_generate_merge_report_writes_provenance_csv(local_backend):
+    root = local_backend
+    merge_bucket = str(root / "ehr_merged")
+    run_date = "2026-06-24"
+    chunks = f"{merge_bucket}/{run_date}/artifacts/merge_chunks"
+
+    # siteA delivery: measurement (2 rows) + person (1 row) = 3 rows into the merge.
+    _write_parquet(
+        f"{chunks}/measurement/measurement__siteA__2025-01-01.parquet",
+        "SELECT * FROM (VALUES (1,101),(2,102)) AS t(measurement_id, person_id)",
+    )
+    _write_parquet(
+        f"{chunks}/person/person__siteA__2025-01-01.parquet",
+        "SELECT * FROM (VALUES (101)) AS t(person_id)",
+    )
+    # siteB delivery: measurement (3 rows) = 3 rows into the merge.
+    _write_parquet(
+        f"{chunks}/measurement/measurement__siteB__2025-02-01.parquet",
+        "SELECT * FROM (VALUES (10,201),(11,202),(12,203)) AS t(measurement_id, person_id)",
+    )
+
+    deliveries = [
+        {"site": "siteA", "delivery_date": "2025-01-01"},
+        {"site": "siteB", "delivery_date": "2025-02-01"},
+    ]
+    merge_reporting.MergeReporter.generate_merge_report(
+        merge_bucket=merge_bucket, run_date=run_date, site="merged_ehr", deliveries=deliveries
+    )
+
+    csv_uri = shared_storage.get_uri(
+        f"{merge_bucket}/{run_date}/artifacts/delivery_report/delivery_report_merged_ehr_{run_date}.csv"
+    )
+    report = _query(f"SELECT name, value_as_string, value_as_number FROM read_csv('{csv_uri}', header=true)")
+
+    # Which sites were included.
+    included_sites = {value_as_string for name, value_as_string, _ in report if name == "Merge source site"}
+    assert included_sites == {"siteA", "siteB"}
+
+    # Which deliveries were included + rows each contributed.
+    delivery_row_counts = {
+        value_as_string: int(value_as_number)
+        for name, value_as_string, value_as_number in report
+        if name == "Merge source delivery row count"
+    }
+    assert delivery_row_counts == {"siteA__2025-01-01": 3, "siteB__2025-02-01": 3}
+
+    # Total rows across the whole merge (sum of the per-delivery counts).
+    total = [int(value_as_number) for name, _, value_as_number in report if name == "Merge total row count"]
+    assert total == [6]

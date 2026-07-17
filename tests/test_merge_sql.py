@@ -9,6 +9,7 @@ in tests/reference/sql/merge/
 from pathlib import Path
 
 from core.merge import MergeProcessor
+from core.merge_reporting import MergeReporter
 
 # Path to reference SQL files
 REFERENCE_DIR = Path(__file__).parent / "reference" / "sql" / "merge"
@@ -85,5 +86,27 @@ class TestReconcileGlobUnionByNameSql:
         )
 
         expected = load_reference_sql("reconcile_chunks_union_by_name.sql")
+        assert normalize_sql(result) == normalize_sql(expected)
+        assert "union_by_name=true" in result
+
+
+class TestMergeReportRowCountSql:
+    """Tests for MergeReporter row-count SQL + chunk-glob builders."""
+
+    def test_delivery_chunk_glob_matches_all_tables_for_one_delivery(self):
+        """The glob spans every per-table subfolder for a single (site, delivery_date)."""
+        glob = MergeReporter.delivery_chunk_glob(
+            merge_bucket="ehr_merged", run_date="2026-06-24", site="siteA", delivery_date="2025-01-01"
+        )
+        assert glob == "ehr_merged/2026-06-24/artifacts/merge_chunks/*/*__siteA__2025-01-01.parquet"
+
+    def test_row_count_globs_delivery_chunks_with_union_by_name(self):
+        """Counts one delivery's rows across all its per-table chunks via union_by_name."""
+        glob = MergeReporter.delivery_chunk_glob(
+            merge_bucket="ehr_merged", run_date="2026-06-24", site="siteA", delivery_date="2025-01-01"
+        )
+        result = MergeReporter.generate_delivery_row_count_sql(glob)
+
+        expected = load_reference_sql("merge_delivery_row_count.sql")
         assert normalize_sql(result) == normalize_sql(expected)
         assert "union_by_name=true" in result

@@ -10,6 +10,7 @@ import core.file_validation as file_validation
 import core.gcp_services as gcp_services
 import core.helpers.pipeline_log as pipeline_log
 import core.merge as merge
+import core.merge_reporting as merge_reporting
 import core.natural_keys as natural_keys
 import core.normalization as normalization
 import core.omop_client as omop_client
@@ -948,6 +949,33 @@ def reconcile_chunks() -> tuple[str, int]:
     except Exception as e:
         utils.logger.error(f"Unable to reconcile merge chunks: {str(e)}")
         return f"Unable to reconcile merge chunks: {str(e)}", 500
+
+
+@app.route('/generate_merge_report', methods=['POST'])
+def generate_merge_report() -> tuple[str, int]:
+    """Generate merge provenance report artifacts + consolidated CSV."""
+    data: dict[str, Any] = request.get_json() or {}
+    merge_bucket: Optional[str] = data.get('merge_bucket')
+    run_date: Optional[str] = data.get('run_date')
+    site: Optional[str] = data.get('site')
+    deliveries: Optional[list] = data.get('deliveries')
+    missing_fields = _get_missing_fields(data, ['merge_bucket', 'run_date', 'site', 'deliveries'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert merge_bucket is not None
+        assert run_date is not None
+        assert site is not None
+        assert deliveries is not None
+
+        merge_reporting.MergeReporter.generate_merge_report(merge_bucket, run_date, site, deliveries)
+        return "Generated merge report", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to generate merge report: {str(e)}")
+        return f"Unable to generate merge report: {str(e)}", 500
 
 
 @app.route('/pipeline_log', methods=['POST'])

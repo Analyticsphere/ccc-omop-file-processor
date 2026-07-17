@@ -1416,3 +1416,45 @@ class TestReconcileChunksEndpoint:
 
         assert response.status_code == 500
         assert b"Unable to reconcile merge chunks" in response.data
+
+
+class TestGenerateMergeReportEndpoint:
+    """Tests for /generate_merge_report endpoint."""
+
+    @patch('core.endpoints.merge_reporting.MergeReporter.generate_merge_report')
+    def test_success(self, mock_report, client):
+        deliveries = [
+            {'site': 'siteA', 'delivery_date': '2025-01-01'},
+            {'site': 'siteB', 'delivery_date': '2025-02-01'},
+        ]
+        response = client.post('/generate_merge_report', json={
+            'merge_bucket': 'ehr_merged',
+            'run_date': '2026-06-24',
+            'site': 'merged_ehr',
+            'deliveries': deliveries,
+        })
+
+        assert response.status_code == 200
+        assert b"Generated merge report" in response.data
+        mock_report.assert_called_once_with('ehr_merged', '2026-06-24', 'merged_ehr', deliveries)
+
+    def test_missing_parameters(self, client):
+        response = client.post('/generate_merge_report', json={
+            'merge_bucket': 'ehr_merged',
+            'run_date': '2026-06-24',
+        })
+        assert_missing_fields(response, 'site', 'deliveries')
+
+    @patch('core.endpoints.merge_reporting.MergeReporter.generate_merge_report')
+    def test_exception(self, mock_report, client):
+        mock_report.side_effect = Exception("count failed")
+
+        response = client.post('/generate_merge_report', json={
+            'merge_bucket': 'ehr_merged',
+            'run_date': '2026-06-24',
+            'site': 'merged_ehr',
+            'deliveries': [{'site': 'siteA', 'delivery_date': '2025-01-01'}],
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to generate merge report" in response.data
