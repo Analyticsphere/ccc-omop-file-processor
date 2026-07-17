@@ -515,9 +515,7 @@ def placeholder_to_post_processing_path(site: str, bucket: str, delivery_date: s
     Replaces placeholder strings in post-processing SQL with paths to the appropriate parquet files.
 
     Like placeholder_to_harmonized_file_path, but also covers additional converted_files
-    tables (care_site, location, provider, visit_detail, episode, cost,
-    payer_plan_period, metadata, cdm_source, fact_relationship, note_nlp) that are
-    not exposed to derived-table generation.
+    tables that are not exposed to derived-table generation.
 
     Routing rules:
       - Tables in VOCAB_HARMONIZED_TABLES: omop_etl/{table}/{table}.parquet
@@ -560,8 +558,6 @@ def placeholder_to_harmonized_file_path(site: str, bucket: str, delivery_date: s
     This intelligently determines the correct path based on whether the table underwent vocabulary harmonization:
     - Harmonized tables (in VOCAB_HARMONIZED_TABLES): {scheme}://{bucket}/{date}/artifacts/omop_etl/{table}/{table}.parquet
     - Non-harmonized tables (not in list): {scheme}://{bucket}/{date}/artifacts/converted_files/{table}.parquet
-
-    This is used for derived table generation after vocabulary harmonization is complete.
     """
     replacement_result = sql_script
 
