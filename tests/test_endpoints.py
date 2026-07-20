@@ -1356,12 +1356,32 @@ class TestExtractParticipantChunkEndpoint:
 
         assert response.status_code == 200
         assert b"Extracted participant chunk" in response.data
-        # Optional person_id_column defaults to the constant.
+        # Optional person_id_column defaults to the constant; site_display_name is None (no stamp).
         mock_extract.assert_called_once_with(
             'siteA/2025-01-01/artifacts/converted_files/measurement.parquet',
             'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet',
             'ALL',
-            constants.DEFAULT_PERSON_ID_COLUMN
+            constants.DEFAULT_PERSON_ID_COLUMN,
+            None
+        )
+
+    @patch('core.endpoints.merge.MergeProcessor.extract_chunk')
+    def test_success_with_site_display_name(self, mock_extract, client):
+        response = client.post('/extract_participant_chunk', json={
+            'source_uri': 'siteA/2025-01-01/artifacts/converted_files/person.parquet',
+            'chunk_uri': 'ehr_merged/2026-06-24/artifacts/merge_chunks/person/chunk.parquet',
+            'participant_scope': 'ALL',
+            'site_display_name': 'Site A',
+        })
+
+        assert response.status_code == 200
+        # site_display_name is forwarded so person's care_site_id gets stamped.
+        mock_extract.assert_called_once_with(
+            'siteA/2025-01-01/artifacts/converted_files/person.parquet',
+            'ehr_merged/2026-06-24/artifacts/merge_chunks/person/chunk.parquet',
+            'ALL',
+            constants.DEFAULT_PERSON_ID_COLUMN,
+            'Site A'
         )
 
     def test_missing_parameters(self, client):
@@ -1416,6 +1436,45 @@ class TestReconcileChunksEndpoint:
 
         assert response.status_code == 500
         assert b"Unable to reconcile merge chunks" in response.data
+
+
+class TestBuildCareSiteEndpoint:
+    """Tests for /build_care_site endpoint."""
+
+    @patch('core.endpoints.merge.MergeProcessor.build_care_site')
+    def test_success(self, mock_build, client):
+        response = client.post('/build_care_site', json={
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/care_site.parquet',
+            'site_display_names': ['Site A', 'Site B'],
+            'cdm_version': '5.4',
+        })
+
+        assert response.status_code == 200
+        assert b"Built care_site table" in response.data
+        mock_build.assert_called_once_with(
+            'ehr_merged/2026-06-24/artifacts/converted_files/care_site.parquet',
+            ['Site A', 'Site B'],
+            '5.4'
+        )
+
+    def test_missing_parameters(self, client):
+        response = client.post('/build_care_site', json={
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/care_site.parquet'
+        })
+        assert_missing_fields(response, 'site_display_names', 'cdm_version')
+
+    @patch('core.endpoints.merge.MergeProcessor.build_care_site')
+    def test_exception(self, mock_build, client):
+        mock_build.side_effect = Exception("build failed")
+
+        response = client.post('/build_care_site', json={
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/care_site.parquet',
+            'site_display_names': ['Site A'],
+            'cdm_version': '5.4',
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to build care_site table" in response.data
 
 
 class TestGenerateMergeReportEndpoint:

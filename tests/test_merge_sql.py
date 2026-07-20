@@ -8,6 +8,8 @@ in tests/reference/sql/merge/
 
 from pathlib import Path
 
+import pytest
+
 from core.merge import MergeProcessor
 from core.merge_reporting import MergeReporter
 
@@ -110,3 +112,81 @@ class TestMergeReportRowCountSql:
         expected = load_reference_sql("merge_delivery_row_count.sql")
         assert normalize_sql(result) == normalize_sql(expected)
         assert "union_by_name=true" in result
+
+
+class TestHashCareSiteId:
+    """Tests for the site-name -> care_site_id hash."""
+
+    def test_deterministic_and_in_positive_signed_64_bit_range(self):
+        first = MergeProcessor.hash_care_site_id("Site A")
+        assert first == MergeProcessor.hash_care_site_id("Site A")
+        assert 1 <= first <= 0x7FFFFFFFFFFFFFFF
+
+    def test_distinct_names_give_distinct_ids(self):
+        assert MergeProcessor.hash_care_site_id("Site A") != MergeProcessor.hash_care_site_id("Site B")
+
+
+class TestExtractStampsCareSiteId:
+    """Tests that a site name stamps care_site_id via SELECT * REPLACE."""
+
+    def test_all_scope_replaces_care_site_id_with_hash(self):
+        care_site_id = MergeProcessor.hash_care_site_id("Site A")
+        result = MergeProcessor.generate_extract_chunk_sql(
+            source_uri="siteA/2025-01-01/artifacts/converted_files/person.parquet",
+            chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/person/person__siteA__2025-01-01.parquet",
+            participant_scope="ALL",
+            site_display_name="Site A",
+        )
+        assert f"* REPLACE (CAST({care_site_id} AS BIGINT) AS care_site_id)" in result
+
+    def test_id_scope_replaces_care_site_id_with_hash(self):
+        care_site_id = MergeProcessor.hash_care_site_id("Site A")
+        result = MergeProcessor.generate_extract_chunk_sql(
+            source_uri="siteA/2025-01-01/artifacts/converted_files/person.parquet",
+            chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/person/chunk.parquet",
+            participant_scope="ehr_merged/ids.parquet",
+            site_display_name="Site A",
+        )
+        assert f"* REPLACE (CAST({care_site_id} AS BIGINT) AS care_site_id)" in result
+        assert "WHERE person_id IN (" in result
+
+    def test_no_site_name_selects_star(self):
+        result = MergeProcessor.generate_extract_chunk_sql(
+            source_uri="siteA/2025-01-01/artifacts/converted_files/person.parquet",
+            chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/person/chunk.parquet",
+            participant_scope="ALL",
+        )
+        assert "REPLACE" not in result
+        assert "SELECT * FROM read_parquet(" in normalize_sql(result)
+
+
+class TestBuildCareSiteSql:
+    """Tests for generate_build_care_site_sql()."""
+
+    OUTPUT = "ehr_merged/2026-06-24/artifacts/converted_files/care_site.parquet"
+
+    def test_one_row_per_site_with_hashed_id_and_null_padding(self):
+        result = MergeProcessor.generate_build_care_site_sql(
+            self.OUTPUT, ["Site A", "Site B"], "5.4"
+        )
+        id_a = MergeProcessor.hash_care_site_id("Site A")
+        id_b = MergeProcessor.hash_care_site_id("Site B")
+        # schema order: care_site_id, care_site_name, then 4 unset columns
+        assert f"({id_a}, 'Site A', NULL, NULL, NULL, NULL)" in result
+        assert f"({id_b}, 'Site B', NULL, NULL, NULL, NULL)" in result
+        # projection/types come from the OMOP care_site schema
+        assert "CAST(care_site_id AS BIGINT) AS care_site_id" in result
+        assert "CAST(care_site_name AS VARCHAR) AS care_site_name" in result
+
+    def test_escapes_single_quotes_in_name(self):
+        result = MergeProcessor.generate_build_care_site_sql(self.OUTPUT, ["O'Neil Clinic"], "5.4")
+        assert "'O''Neil Clinic'" in result
+
+    def test_dedups_repeated_site_names(self):
+        result = MergeProcessor.generate_build_care_site_sql(self.OUTPUT, ["Site A", "Site A"], "5.4")
+        id_a = MergeProcessor.hash_care_site_id("Site A")
+        assert result.count(f"({id_a}, 'Site A'") == 1
+
+    def test_empty_site_list_raises(self):
+        with pytest.raises(ValueError):
+            MergeProcessor.generate_build_care_site_sql(self.OUTPUT, [], "5.4")

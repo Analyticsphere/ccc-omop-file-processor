@@ -122,6 +122,48 @@ def test_extract_id_scope_subsets_participants(local_backend):
     assert kept == [101, 103]
 
 
+def test_extract_stamps_person_care_site_id(local_backend):
+    root = local_backend
+
+    # Source person rows carry an unrelated care_site_id that must be overwritten.
+    src = str(root / "siteA/2025-01-01/artifacts/converted_files/person.parquet")
+    _write_parquet(
+        src,
+        "SELECT * FROM (VALUES (101, 999),(102, 999)) AS t(person_id, care_site_id)",
+    )
+    chunk = str(root / "ehr_merged/2026-06-24/artifacts/merge_chunks/person/person__siteA__2025-01-01.parquet")
+
+    merge.MergeProcessor.extract_chunk(
+        src, chunk, constants.PARTICIPANT_SCOPE_ALL, site_display_name="Site A"
+    )
+
+    expected_id = merge.MergeProcessor.hash_care_site_id("Site A")
+    chunk_uri = shared_storage.get_uri(chunk)
+    ids = _query(f"SELECT DISTINCT care_site_id FROM read_parquet('{chunk_uri}')")
+    assert ids == [(expected_id,)]
+
+
+def test_build_care_site_writes_typed_row_per_site(local_backend):
+    root = local_backend
+    output = str(root / "ehr_merged/2026-06-24/artifacts/converted_files/care_site.parquet")
+
+    merge.MergeProcessor.build_care_site(output, ["Site A", "Site B"], "5.4")
+
+    output_uri = shared_storage.get_uri(output)
+    rows = _query(
+        f"SELECT care_site_id, care_site_name FROM read_parquet('{output_uri}') ORDER BY care_site_name"
+    )
+    assert rows == [
+        (merge.MergeProcessor.hash_care_site_id("Site A"), "Site A"),
+        (merge.MergeProcessor.hash_care_site_id("Site B"), "Site B"),
+    ]
+
+    # Types come from the OMOP care_site schema, so the parquet loads to BQ cleanly.
+    types = {name: col_type for name, col_type, *_ in _query(f"DESCRIBE SELECT * FROM read_parquet('{output_uri}')")}
+    assert types["care_site_id"] == "BIGINT"
+    assert types["care_site_name"] == "VARCHAR"
+
+
 def test_generate_merge_report_writes_provenance_csv(local_backend):
     root = local_backend
     merge_bucket = str(root / "ehr_merged")

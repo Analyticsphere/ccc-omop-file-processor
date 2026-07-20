@@ -910,6 +910,8 @@ def extract_participant_chunk() -> tuple[str, int]:
     chunk_uri: Optional[str] = data.get('chunk_uri')
     participant_scope: Optional[str] = data.get('participant_scope')
     person_id_column: str = data.get('person_id_column') or constants.DEFAULT_PERSON_ID_COLUMN
+    # Optional: only the person table passes this, to stamp care_site_id with the origin site's hash.
+    site_display_name: Optional[str] = data.get('site_display_name')
     missing_fields = _get_missing_fields(data, ['source_uri', 'chunk_uri', 'participant_scope'])
 
     # Validate required parameters
@@ -921,7 +923,7 @@ def extract_participant_chunk() -> tuple[str, int]:
         assert chunk_uri is not None
         assert participant_scope is not None
 
-        merge.MergeProcessor.extract_chunk(source_uri, chunk_uri, participant_scope, person_id_column)
+        merge.MergeProcessor.extract_chunk(source_uri, chunk_uri, participant_scope, person_id_column, site_display_name)
         return "Extracted participant chunk", 200
     except Exception as e:
         utils.logger.error(f"Unable to extract participant chunk: {str(e)}")
@@ -949,6 +951,31 @@ def reconcile_chunks() -> tuple[str, int]:
     except Exception as e:
         utils.logger.error(f"Unable to reconcile merge chunks: {str(e)}")
         return f"Unable to reconcile merge chunks: {str(e)}", 500
+
+
+@app.route('/build_care_site', methods=['POST'])
+def build_care_site() -> tuple[str, int]:
+    """Build the merged instance's care_site table (one hashed-id row per merged site)."""
+    data: dict[str, Any] = request.get_json() or {}
+    output_uri: Optional[str] = data.get('output_uri')
+    site_display_names: Optional[list] = data.get('site_display_names')
+    cdm_version: Optional[str] = data.get('cdm_version')
+    missing_fields = _get_missing_fields(data, ['output_uri', 'site_display_names', 'cdm_version'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert output_uri is not None
+        assert site_display_names is not None
+        assert cdm_version is not None
+
+        merge.MergeProcessor.build_care_site(output_uri, site_display_names, cdm_version)
+        return "Built care_site table", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to build care_site table: {str(e)}")
+        return f"Unable to build care_site table: {str(e)}", 500
 
 
 @app.route('/generate_merge_report', methods=['POST'])
