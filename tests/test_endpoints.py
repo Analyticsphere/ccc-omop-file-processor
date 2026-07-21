@@ -1477,6 +1477,53 @@ class TestBuildCareSiteEndpoint:
         assert b"Unable to build care_site table" in response.data
 
 
+class TestBuildMergeCdmSourceEndpoint:
+    """Tests for /build_merge_cdm_source endpoint."""
+
+    PAYLOAD = {
+        'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/cdm_source.parquet',
+        'source_cdm_source_uris': [
+            'siteA/2025-01-01/artifacts/converted_files/cdm_source.parquet',
+            'siteB/2025-02-01/artifacts/converted_files/cdm_source.parquet',
+        ],
+        'site_count': 2,
+        'cdm_version': '5.4',
+        'vocabulary_version': 'v5.0 27-AUG-25',
+        'cdm_release_date': '2026-06-24',
+    }
+
+    @patch('core.endpoints.merge.MergeProcessor.build_cdm_source')
+    def test_success(self, mock_build, client):
+        response = client.post('/build_merge_cdm_source', json=self.PAYLOAD)
+
+        assert response.status_code == 200
+        assert b"Built cdm_source" in response.data
+        mock_build.assert_called_once_with(
+            self.PAYLOAD['output_uri'],
+            self.PAYLOAD['source_cdm_source_uris'],
+            2,
+            '5.4',
+            'v5.0 27-AUG-25',
+            '2026-06-24',
+        )
+
+    def test_missing_parameters(self, client):
+        response = client.post('/build_merge_cdm_source', json={
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/cdm_source.parquet'
+        })
+        assert_missing_fields(
+            response, 'source_cdm_source_uris', 'site_count', 'cdm_version', 'vocabulary_version', 'cdm_release_date'
+        )
+
+    @patch('core.endpoints.merge.MergeProcessor.build_cdm_source')
+    def test_exception(self, mock_build, client):
+        mock_build.side_effect = Exception("build failed")
+        response = client.post('/build_merge_cdm_source', json=self.PAYLOAD)
+
+        assert response.status_code == 500
+        assert b"Unable to build cdm_source" in response.data
+
+
 class TestGenerateMergeReportEndpoint:
     """Tests for /generate_merge_report endpoint."""
 

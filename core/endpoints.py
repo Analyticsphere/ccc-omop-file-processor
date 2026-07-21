@@ -978,6 +978,42 @@ def build_care_site() -> tuple[str, int]:
         return f"Unable to build care_site table: {str(e)}", 500
 
 
+@app.route('/build_merge_cdm_source', methods=['POST'])
+def build_merge_cdm_source() -> tuple[str, int]:
+    """Build the merged instance's de novo one-row cdm_source parquet."""
+    data: dict[str, Any] = request.get_json() or {}
+    output_uri: Optional[str] = data.get('output_uri')
+    source_cdm_source_uris: Optional[list] = data.get('source_cdm_source_uris')
+    site_count: Optional[int] = data.get('site_count')
+    cdm_version: Optional[str] = data.get('cdm_version')
+    vocabulary_version: Optional[str] = data.get('vocabulary_version')
+    cdm_release_date: Optional[str] = data.get('cdm_release_date')
+    missing_fields = _get_missing_fields(
+        data,
+        ['output_uri', 'source_cdm_source_uris', 'site_count', 'cdm_version', 'vocabulary_version', 'cdm_release_date']
+    )
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert output_uri is not None
+        assert source_cdm_source_uris is not None
+        assert site_count is not None
+        assert cdm_version is not None
+        assert vocabulary_version is not None
+        assert cdm_release_date is not None
+
+        merge.MergeProcessor.build_cdm_source(
+            output_uri, source_cdm_source_uris, site_count, cdm_version, vocabulary_version, cdm_release_date
+        )
+        return "Built cdm_source", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to build cdm_source: {str(e)}")
+        return f"Unable to build cdm_source: {str(e)}", 500
+
+
 @app.route('/generate_merge_report', methods=['POST'])
 def generate_merge_report() -> tuple[str, int]:
     """Generate merge provenance report artifacts + consolidated CSV."""

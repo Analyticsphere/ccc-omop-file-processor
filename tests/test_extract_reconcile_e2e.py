@@ -164,6 +164,41 @@ def test_build_care_site_writes_typed_row_per_site(local_backend):
     assert types["care_site_name"] == "VARCHAR"
 
 
+def test_build_cdm_source_writes_one_row_with_latest_release_date(local_backend):
+    root = local_backend
+
+    # Two sites' cdm_source files with different source_release_date values.
+    src_a = str(root / "siteA/2025-01-01/artifacts/converted_files/cdm_source.parquet")
+    _write_parquet(src_a, "SELECT CAST('2024-06-01' AS DATE) AS source_release_date")
+    src_b = str(root / "siteB/2025-02-01/artifacts/converted_files/cdm_source.parquet")
+    _write_parquet(src_b, "SELECT CAST('2025-03-15' AS DATE) AS source_release_date")
+
+    output = str(root / "ehr_merged/2026-06-24/artifacts/converted_files/cdm_source.parquet")
+    merge.MergeProcessor.build_cdm_source(
+        output_uri=output,
+        source_cdm_source_uris=[src_a, src_b],
+        site_count=2,
+        cdm_version="5.4",
+        vocabulary_version="v5.0 27-AUG-25",
+        cdm_release_date="2026-06-24",
+    )
+
+    output_uri = shared_storage.get_uri(output)
+    rows = _query(
+        "SELECT cdm_source_name, source_description, source_release_date, cdm_release_date, "
+        f"cdm_version, cdm_version_concept_id, vocabulary_version FROM read_parquet('{output_uri}')"
+    )
+    assert len(rows) == 1
+    (name, desc, source_release, cdm_release, cdm_ver, concept_id, vocab) = rows[0]
+    assert name == "Connect for Cancer Prevention EHR Data"
+    assert "from 2 sites" in desc
+    assert str(source_release) == "2025-03-15"  # latest across the two sites
+    assert str(cdm_release) == "2026-06-24"
+    assert cdm_ver == "5.4"
+    assert concept_id == 756265
+    assert vocab == "v5.0 27-AUG-25"
+
+
 def test_generate_merge_report_writes_provenance_csv(local_backend):
     root = local_backend
     merge_bucket = str(root / "ehr_merged")

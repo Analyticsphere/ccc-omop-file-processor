@@ -190,3 +190,48 @@ class TestBuildCareSiteSql:
     def test_empty_site_list_raises(self):
         with pytest.raises(ValueError):
             MergeProcessor.generate_build_care_site_sql(self.OUTPUT, [], "5.4")
+
+
+class TestBuildCdmSourceSql:
+    """Tests for generate_build_cdm_source_sql()."""
+
+    OUTPUT = "ehr_merged/2026-06-24/artifacts/converted_files/cdm_source.parquet"
+    SOURCES = [
+        "siteA/2025-01-01/artifacts/converted_files/cdm_source.parquet",
+        "siteB/2025-02-01/artifacts/converted_files/cdm_source.parquet",
+    ]
+
+    def _sql(self, cdm_version="5.4"):
+        return MergeProcessor.generate_build_cdm_source_sql(
+            self.OUTPUT, self.SOURCES, site_count=2, cdm_version=cdm_version,
+            vocabulary_version="v5.0 27-AUG-25", cdm_release_date="2026-06-24",
+        )
+
+    def test_fixed_metadata_and_site_count(self):
+        result = self._sql()
+        assert "'Connect for Cancer Prevention EHR Data' AS cdm_source_name" in result
+        assert "'Connect EHR' AS cdm_source_abbreviation" in result
+        assert "'NIH/NCI - Connect for Cancer Prevention Study' AS cdm_holder" in result
+        assert "Combined EHR data from 2 sites participating in the Connect for Cancer Prevention Study" in result
+
+    def test_source_release_date_is_latest_across_sites(self):
+        result = self._sql()
+        assert "MAX(source_release_date)" in result
+        # union over both sites' cdm_source files
+        assert "read_parquet([" in result and "union_by_name=true" in result
+        for uri in self.SOURCES:
+            assert uri in result
+
+    def test_release_date_versions_and_concept_id(self):
+        result = self._sql(cdm_version="5.4")
+        assert "CAST('2026-06-24' AS DATE) AS cdm_release_date" in result
+        assert "'5.4' AS cdm_version" in result
+        assert "756265 AS cdm_version_concept_id" in result  # 5.4 concept id
+        assert "'v5.0 27-AUG-25' AS vocabulary_version" in result
+
+    def test_empty_sources_raises(self):
+        with pytest.raises(ValueError):
+            MergeProcessor.generate_build_cdm_source_sql(
+                self.OUTPUT, [], site_count=0, cdm_version="5.4",
+                vocabulary_version="v", cdm_release_date="2026-06-24",
+            )

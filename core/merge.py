@@ -157,6 +157,66 @@ class MergeProcessor:
         utils.execute_duckdb_sql(sql, f"Unable to build care_site table at {output_uri}")
 
     @staticmethod
+    def generate_build_cdm_source_sql(
+        output_uri: str,
+        source_cdm_source_uris: list[str],
+        site_count: int,
+        cdm_version: str,
+        vocabulary_version: str,
+        cdm_release_date: str,
+    ) -> str:
+        """
+        Generate SQL for the merged instance's de novo one-row cdm_source.
+
+        Fixed Connect metadata (constants) + site_count in the description. source_release_date
+        is the LATEST across the sites' cdm_source files (falling back to cdm_release_date if
+        none). cdm_release_date is the merge run date; cdm_version_concept_id is derived from
+        cdm_version. Column order/types mirror the single-site cdm_source.
+        """
+        if not source_cdm_source_uris:
+            raise ValueError("Cannot build cdm_source: no source cdm_source files provided")
+
+        output = storage.get_uri(output_uri)
+        uri_list = ", ".join(f"'{storage.get_uri(uri)}'" for uri in source_cdm_source_uris)
+        concept_id = utils.get_cdm_version_concept_id(cdm_version)
+        description = constants.MERGE_CDM_SOURCE_DESCRIPTION.format(site_count=site_count)
+
+        return f"""
+        COPY (
+            SELECT
+                '{constants.MERGE_CDM_SOURCE_NAME}' AS cdm_source_name,
+                '{constants.MERGE_CDM_SOURCE_ABBREVIATION}' AS cdm_source_abbreviation,
+                '{constants.MERGE_CDM_HOLDER}' AS cdm_holder,
+                '{description}' AS source_description,
+                '{constants.MERGE_SOURCE_DOCUMENTATION_REFERENCE}' AS source_documentation_reference,
+                '{constants.MERGE_CDM_ETL_REFERENCE}' AS cdm_etl_reference,
+                COALESCE(
+                    (SELECT MAX(source_release_date) FROM read_parquet([{uri_list}], union_by_name=true)),
+                    CAST('{cdm_release_date}' AS DATE)
+                ) AS source_release_date,
+                CAST('{cdm_release_date}' AS DATE) AS cdm_release_date,
+                '{cdm_version}' AS cdm_version,
+                {concept_id} AS cdm_version_concept_id,
+                '{vocabulary_version}' AS vocabulary_version
+        ) TO '{output}' {constants.DUCKDB_FORMAT_STRING}
+        """
+
+    @staticmethod
+    def build_cdm_source(
+        output_uri: str,
+        source_cdm_source_uris: list[str],
+        site_count: int,
+        cdm_version: str,
+        vocabulary_version: str,
+        cdm_release_date: str,
+    ) -> None:
+        """Write the merged instance's de novo cdm_source parquet."""
+        sql = MergeProcessor.generate_build_cdm_source_sql(
+            output_uri, source_cdm_source_uris, site_count, cdm_version, vocabulary_version, cdm_release_date
+        )
+        utils.execute_duckdb_sql(sql, f"Unable to build cdm_source at {output_uri}")
+
+    @staticmethod
     def generate_reconcile_chunks_sql(chunk_glob: str, output_uri: str) -> str:
         """
         Generate SQL to union all chunk files matching a glob into one merged parquet.
