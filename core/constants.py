@@ -628,7 +628,7 @@ DEFAULT_PERSON_ID_COLUMN = "person_id"
 # {site_count} is filled with the number of merged sites; source/cdm release dates
 # and CDM/vocab versions are supplied at build time.
 MERGE_CDM_SOURCE_NAME = "Connect for Cancer Prevention EHR Data"
-MERGE_CDM_SOURCE_ABBREVIATION = "Connect EHR"
+MERGE_CDM_SOURCE_ABBREVIATION = "Connect EHR Data"
 MERGE_CDM_HOLDER = "NIH/NCI - Connect for Cancer Prevention Study"
 MERGE_CDM_SOURCE_DESCRIPTION = "Combined EHR data from {site_count} sites participating in the Connect for Cancer Prevention Study"
 MERGE_SOURCE_DOCUMENTATION_REFERENCE = "https://www.cancer.gov/connect-prevention-study/"
