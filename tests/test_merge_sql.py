@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+import core.constants as constants
 from core.merge import MergeProcessor
 from core.merge_reporting import MergeReporter
 
@@ -209,10 +210,10 @@ class TestBuildCdmSourceSql:
 
     def test_fixed_metadata_and_site_count(self):
         result = self._sql()
-        assert "'Connect for Cancer Prevention EHR Data' AS cdm_source_name" in result
-        assert "'Connect EHR' AS cdm_source_abbreviation" in result
-        assert "'NIH/NCI - Connect for Cancer Prevention Study' AS cdm_holder" in result
-        assert "Combined EHR data from 2 sites participating in the Connect for Cancer Prevention Study" in result
+        assert f"'{constants.MERGE_CDM_SOURCE_NAME}' AS cdm_source_name" in result
+        assert f"'{constants.MERGE_CDM_SOURCE_ABBREVIATION}' AS cdm_source_abbreviation" in result
+        assert f"'{constants.MERGE_CDM_HOLDER}' AS cdm_holder" in result
+        assert constants.MERGE_CDM_SOURCE_DESCRIPTION.format(site_count=2) in result
 
     def test_source_release_date_is_latest_across_sites(self):
         result = self._sql()

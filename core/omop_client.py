@@ -99,10 +99,11 @@ class OMOPClient:
         Populate cdm_source Parquet file with metadata if empty, non-existent, or contains multiple rows.
 
         Checks if site delivered cdm_source file and populates it with metadata if needed:
-        - If file exists with exactly one row: keep the site-delivered row but always
-          rewrite two columns: source_release_date (keeps site value if parseable, else
-          falls back to delivery_date) and cdm_release_date (unconditionally set to
-          delivery_date). Every other site-delivered column passes through unchanged.
+        - If file exists with exactly one row: keep the site-delivered descriptive columns but
+          overwrite the pipeline-controlled fields: source_release_date (keeps site value if
+          parseable, else delivery_date), cdm_release_date (=delivery_date), and
+          cdm_version / cdm_version_concept_id / vocabulary_version (=the target the data was
+          standardized to). Every other site-delivered column passes through unchanged.
         - If file exists with multiple rows: treat as if no rows were delivered and populate
         - If file exists but is empty: populate with metadata
         - If file doesn't exist: create and populate with metadata
@@ -147,9 +148,15 @@ class OMOPClient:
             populate_sql = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, cdm_source_uri)
             utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
         elif row_count == 1:
-            utils.logger.info("cdm_source file has 1 row, rewriting source_release_date (fallback to delivery_date if unparseable) and cdm_release_date (always delivery_date)")
-            rewrite_sql = OMOPClient.generate_rewrite_release_dates_sql(cdm_source_uri, date_format, delivery_date)
-            utils.execute_duckdb_sql(rewrite_sql, "Unable to rewrite release dates in cdm_source")
+            utils.logger.info("cdm_source file has 1 row; rewriting release dates and overwriting cdm/vocab versions to target")
+            rewrite_sql = OMOPClient.generate_rewrite_cdm_source_sql(
+                cdm_source_uri,
+                date_format,
+                delivery_date,
+                cdm_source_data["target_cdm_version"],
+                cdm_source_data["target_vocab_version"],
+            )
+            utils.execute_duckdb_sql(rewrite_sql, "Unable to rewrite cdm_source")
         else:  # row_count > 1
             utils.logger.warning(f"cdm_source file has {row_count} rows, treating as if no rows were delivered and re-populating")
             populate_sql = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, cdm_source_uri)
@@ -365,17 +372,22 @@ class OMOPClient:
         return cdm_source_statement
 
     @staticmethod
-    def generate_rewrite_release_dates_sql(cdm_source_uri: str, date_format: str, delivery_date: str) -> str:
+    def generate_rewrite_cdm_source_sql(
+        cdm_source_uri: str,
+        date_format: str,
+        delivery_date: str,
+        target_cdm_version: str,
+        target_vocab_version: str,
+    ) -> str:
         """
-        Generate SQL that overwrites the cdm_source parquet, replacing two columns:
+        Rewrite a site-delivered 1-row cdm_source in place, overwriting pipeline-controlled fields:
 
-        - source_release_date: COALESCE that keeps the site-delivered value if it
-          parses via date_format or direct cast, otherwise falls back to delivery_date.
-        - cdm_release_date: unconditionally set to delivery_date (the pipeline always
-          stamps this with the delivery date regardless of what the site provided).
+        - source_release_date: site value if parseable (date_format or direct cast), else delivery_date.
+        - cdm_release_date: always delivery_date.
+        - cdm_version / cdm_version_concept_id / vocabulary_version: the target the pipeline
+          standardized the data to (site's self-reported values are discarded).
 
-        Uses DuckDB's SELECT * REPLACE so every other site-delivered column passes
-        through unchanged.
+        SELECT * REPLACE passes every other (descriptive) site-delivered column through unchanged.
         """
         source_release_date_cast = normalization.Normalizer.generate_date_datetime_cast(
             column_name="source_release_date",
@@ -384,11 +396,15 @@ class OMOPClient:
             date_format=date_format,
             datetime_format=""
         )
+        cdm_version_concept_id = utils.get_cdm_version_concept_id(target_cdm_version)
         return f"""
             COPY (
                 SELECT * REPLACE (
                     {source_release_date_cast} AS source_release_date,
-                    CAST('{delivery_date}' AS DATE) AS cdm_release_date
+                    CAST('{delivery_date}' AS DATE) AS cdm_release_date,
+                    '{target_cdm_version}' AS cdm_version,
+                    {cdm_version_concept_id} AS cdm_version_concept_id,
+                    '{target_vocab_version}' AS vocabulary_version
                 )
                 FROM read_parquet('{cdm_source_uri}')
             ) TO '{cdm_source_uri}' {constants.DUCKDB_FORMAT_STRING}

@@ -223,19 +223,25 @@ class TestGenerateSourceExtractionDateSql:
         assert normalize_sql(result) == normalize_sql(expected)
 
 
-class TestGenerateRewriteReleaseDatesSql:
-    """Tests for generate_rewrite_release_dates_sql()."""
+class TestGenerateRewriteCdmSourceSql:
+    """Tests for generate_rewrite_cdm_source_sql()."""
 
     def test_standard_rewrite_sql(self):
-        """SQL uses SELECT * REPLACE to rewrite source_release_date (COALESCE/fallback) and cdm_release_date (=delivery_date), preserving every other column."""
+        """SQL uses SELECT * REPLACE to overwrite release dates + cdm/vocab versions to target, preserving every other column."""
         cdm_source_uri = "gs://test-bucket/2025-01-15/artifacts/converted_files/cdm_source.parquet"
         date_format = "%Y-%m-%d"
         delivery_date = "2025-01-15"
 
-        result = OMOPClient.generate_rewrite_release_dates_sql(cdm_source_uri, date_format, delivery_date)
+        result = OMOPClient.generate_rewrite_cdm_source_sql(
+            cdm_source_uri, date_format, delivery_date, "5.4", "v5.0 27-AUG-25"
+        )
 
-        expected = load_reference_sql("generate_rewrite_release_dates_sql_standard.sql")
+        expected = load_reference_sql("generate_rewrite_cdm_source_sql_standard.sql")
         assert normalize_sql(result) == normalize_sql(expected)
+        # Target versions overwrite whatever the site delivered.
+        assert "'5.4' AS cdm_version" in result
+        assert "756265 AS cdm_version_concept_id" in result
+        assert "'v5.0 27-AUG-25' AS vocabulary_version" in result
 
 
 class TestGenerateGetDeliveryCdmVersionSql:

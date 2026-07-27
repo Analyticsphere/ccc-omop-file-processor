@@ -190,7 +190,7 @@ def test_build_cdm_source_writes_one_row_with_latest_release_date(local_backend)
     )
     assert len(rows) == 1
     (name, desc, source_release, cdm_release, cdm_ver, concept_id, vocab) = rows[0]
-    assert name == "Connect for Cancer Prevention EHR Data"
+    assert name == constants.MERGE_CDM_SOURCE_NAME
     assert "from 2 sites" in desc
     assert str(source_release) == "2025-03-15"  # latest across the two sites
     assert str(cdm_release) == "2026-06-24"
