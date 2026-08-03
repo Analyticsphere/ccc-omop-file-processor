@@ -13,6 +13,7 @@ class MergeProcessor:
     def hash_care_site_id(site_display_name: str) -> int:
         """Stable, deterministic signed-64-bit care_site_id for a site name."""
         digest = hashlib.sha256(site_display_name.encode("utf-8")).digest()
+        # Keep resulting care_site_id within 64 int space
         value = int.from_bytes(digest[:8], "big") & 0x7FFFFFFFFFFFFFFF
         return value or 1
 
@@ -68,9 +69,8 @@ class MergeProcessor:
         output_uri: str, site_display_names: list[str], cdm_version: str
     ) -> str:
         """
-        Build care_site: one row per site, care_site_id = hash(name), care_site_name =
-        name, other columns typed NULL. Column order/types from the OMOP care_site schema
-        so the parquet loads to BQ cleanly. Duplicate names collapse to one row (PK).
+        Build care_site: one row per site, care_site_id = hash(name), care_site_name = name, everything else is NULL.
+        Column order/types from the OMOP care_site schema.
         """
         # De-dup, preserving first-seen order (distinct sites -> distinct ids).
         unique_names = list(dict.fromkeys(site_display_names))
@@ -129,10 +129,9 @@ class MergeProcessor:
         """
         Generate SQL for the merged instance's de novo one-row cdm_source.
 
-        Fixed Connect metadata (constants) + site_count in the description. source_release_date
-        is the LATEST across the sites' cdm_source files (falling back to cdm_release_date if
-        none). cdm_release_date is the merge run date; cdm_version_concept_id is derived from
-        cdm_version. Column order/types mirror the single-site cdm_source.
+        Fixed Connect metadata (constants) + site_count in the description. 
+        source_release_date is the LATEST across the sites' cdm_source files (falling back to cdm_release_date if none). 
+        cdm_release_date is the merge run date; cdm_version_concept_id is derived from cdm_version.
         """
         if not source_cdm_source_uris:
             raise ValueError("Cannot build cdm_source: no source cdm_source files provided")

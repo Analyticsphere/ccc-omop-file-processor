@@ -840,10 +840,6 @@ def load_derived_tables_to_bq() -> tuple[str, int]:
         return f"Error loading derived tables to BigQuery: {str(e)}", 500
 
 
-# ---------------------------------------------------------------------------
-# EHR PR2 merge pipeline
-# ---------------------------------------------------------------------------
-
 @app.route('/get_latest_completed_delivery', methods=['POST'])
 def get_latest_completed_delivery() -> tuple[Any, int]:
     """Return the delivery_date of a site's most recent 'completed' delivery, or null."""

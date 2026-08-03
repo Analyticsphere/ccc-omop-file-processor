@@ -2,10 +2,6 @@
 """
 Cloud Run Job entry point for reconciling per-table merge chunks into one merged table.
 
-Unions every chunk file matching CHUNK_GLOB into a single merged parquet at OUTPUT_URI
-(which lives in converted_files/, outside the chunk folder). union_by_name defends
-against benign column-order/schema drift across sites.
-
 Required Environment Variables:
     CHUNK_GLOB: Glob over the per-table staging folder (e.g. .../merge_chunks/<table>/*.parquet)
     OUTPUT_URI: Destination for the reconciled table (e.g. .../converted_files/<table>.parquet)

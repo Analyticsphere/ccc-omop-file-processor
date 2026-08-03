@@ -2,8 +2,7 @@
 """
 Cloud Run Job entry point for extracting a (group x table) chunk from a source delivery.
 
-Copies one source table into a provenance-named chunk file in the shared per-table
-merge staging area.
+Copies one source table into a provenance-named chunk file in the shared per-table merge staging area.
 
 Required Environment Variables:
     SOURCE_URI: Path to the source delivery's table parquet (e.g. .../converted_files/<table>.parquet)
