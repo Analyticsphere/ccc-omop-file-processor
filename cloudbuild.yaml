@@ -234,9 +234,7 @@ substitutions:
   _DEFAULT_TASK_TIMEOUT: '3600s'
   _SERVICE_TIMEOUT: '3600s'
   _HARMONIZE_VOCAB_TIMEOUT: '7200s'
-  # Merge jobs (extract/reconcile) operate on multi-site data and can run long;
-  # give them more headroom than the default task timeout.
-  _MERGE_TASK_TIMEOUT: '7200s'
+  _MERGE_TASK_TIMEOUT: '3600s'
 
 images:
   - 'gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA'

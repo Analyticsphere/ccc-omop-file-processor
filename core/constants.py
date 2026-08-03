@@ -165,14 +165,10 @@ class ArtifactPaths(str, Enum):
     INVALID_ROWS = f"{ARTIFACTS}invalid_rows/"
     CONNECT_DATA = f"{ARTIFACTS}connect_data/"
     POST_PROCESSING_TMP = f"{ARTIFACTS}post_processing/"
-    # EHR PR2 merge pipeline: shared per-table staging area for provenance-named
-    # chunk files extracted from each source delivery before reconciliation.
     MERGE_CHUNKS = f"{ARTIFACTS}merge_chunks/"
 
-# Using -1 as place/holder default value for numeric columns 
-#   as these are uncommon values in real data
-# Using date 1970-01-01 because it's the Unix epoch, and it's
-#   unlikely that this date will appear in real data
+# Using -1 as place/holder default value for numeric columns  as these are uncommon values in real data
+# Using date 1970-01-01 because it's the Unix epoch, and it's unlikely this date will appear in real data
 DEFAULT_DATE = "1970-01-01"
 DEFAULT_COLUMN_VALUES = {
         "VARCHAR": "''",
@@ -606,10 +602,8 @@ GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS = [
 ]
 
 # Tables that are not rewritten by the natural-key globalization step.
-# person is NOT skipped: it has location_id/provider_id/care_site_id FK columns
-# that must be globalized so they continue to reference rewritten parent rows.
-# person_id is protected by exclusion from GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS,
-# not by skipping the table.
+# person is NOT skipped: it has location_id/provider_id/care_site_id FK columns that must be globalized so they continue to reference rewritten parent rows.
+# person_id is protected by exclusion from GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS, not by skipping the table.
 NATURAL_KEY_REWRITE_SKIP_TABLES = VOCABULARY_TABLES
 
 # ---------------------------------------------------------------------------
