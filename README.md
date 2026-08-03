@@ -4,6 +4,8 @@
 
 The OMOP File Processor is a REST API service for processing healthcare data conforming to the OMOP Common Data Model (CDM). The service validates, normalizes, upgrades, and transforms OMOP data files, harmonizes vocabularies, filters Connect participants, generates derived tables and reporting artifacts, and loads processed data to BigQuery. The file processor is one of three components of the OMOP pipeline.
 
+The service also merges per-site deliveries into a single OMOP instance, combining each site's most recent `completed` delivery into one merged dataset under a separate merge DAG.
+
 The service is deployed as a Docker container on Google Cloud Run and integrates with Airflow DAGs for orchestration. The repository also includes Cloud Run job entry points for long-running processing stages that the orchestrator runs directly. Additional pipeline documentation is available in the [`ehr-pipeline-documentation`](https://github.com/Analyticsphere/ehr-pipeline-documentation) repository, including the [OMOP pipeline user guide](https://github.com/Analyticsphere/ehr-pipeline-documentation/wiki/OMOP-Pipeline-User-Guide).
 
 ### Current Support
@@ -55,6 +57,7 @@ Artifacts are created under `{bucket}/{delivery_date}/artifacts/`.
 | `artifacts/invalid_rows/` | Invalid rows removed during normalization |
 | `artifacts/connect_data/` | Exported Connect participant status Parquet file |
 | `artifacts/post_processing/` | Temporary per-task snapshots used by post-processing diff reporting |
+| `artifacts/merge_chunks/` | Provenance-named per-table chunks staged during a merge run (`<table>__<site>__<delivery_date>.parquet`, grouped by table) |
 | `artifacts/dqd/` | Reserved artifact directory |
 | `artifacts/achilles/` | Reserved artifact directory |
 | `artifacts/pass/` | Reserved artifact directory |
@@ -168,6 +171,7 @@ docker build -t omop-processor:local .
 - Service concurrency: `1`
 - Service timeout: `3600s`
 - Harmonization job timeout: `7200s`
+- Merge job timeouts: `3600s`
 - Other job timeouts: `3600s`
 - DuckDB temp volume mounted at `/mnt/data`
 
@@ -627,9 +631,9 @@ The endpoint details below are listed in the order each endpoint first appears i
 
 **Notes:**
 
-- If `cdm_source.parquet` exists with exactly one row, the endpoint keeps every site-delivered column **except** `source_release_date` and `cdm_release_date`, which are always rewritten:
-    - `source_release_date` keeps the site's value if it parses as a valid date; otherwise it falls back to `delivery_date`.
-    - `cdm_release_date` is unconditionally set to `delivery_date`.
+- If `cdm_source.parquet` exists with exactly one row, the endpoint keeps every site-delivered descriptive column but overwrites the pipeline-controlled fields:
+    - `source_release_date` and `cdm_release_date` keep the site's value if it parses as a valid date; otherwise they fall back to `delivery_date`.
+    - `cdm_version`, `cdm_version_concept_id`, and `vocabulary_version` are overwritten with the target values the pipeline standardized to (`target_cdm_version` / `target_vocab_version`); the site's self-reported values are discarded.
 - If the file does not exist, exists with zero rows, or exists with more than one row, it is populated from the request payload (all rows overwritten).
 - On the populate path: `source_release_date` is wrapped in a date-cast fallback chain (falls back to `delivery_date` if unparseable). `cdm_release_date` is unconditionally set to `delivery_date`. Although the request's `cdm_release_date` field is still required, its value is ignored.
 - The "Source system extraction date" report artifact is always written; if the cdm_source `source_release_date` value cannot be parsed, the artifact falls back to `delivery_date`.
@@ -1289,6 +1293,220 @@ Successfully loaded 2 derived table(s): drug_era, condition_era
 }
 ```
 
+## Merge Pipeline Endpoints
+
+The endpoints below implement the EHR PR2 merge pipeline, which combines each site's most recent `completed` delivery into a single merged OMOP instance. They are driven by a separate merge DAG, not the single-site `ehr_pipeline.py` DAG documented above. A merge run discovers each site's latest completed delivery, extracts every source table into provenance-named chunks under `artifacts/merge_chunks/`, reconciles those chunks into merged `converted_files/` tables, builds the merged instance's `care_site` and `cdm_source`, and records merge provenance.
+
+---
+
+### Get Latest Completed Delivery
+
+**Endpoint:** `POST /get_latest_completed_delivery`
+
+**Description:** Returns the `delivery_date` of a site's most recent `completed` delivery via a server-side `MAX(delivery_date)` query against the BigQuery logging table, or `null` if the site has no completed delivery (or the logging table does not exist yet).
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `site` | string | Yes | Site identifier (`site_name` in the logging table) |
+
+**Response:**
+
+```json
+{
+  "status": "healthy",
+  "delivery_date": "2024-01-15",
+  "service": "omop-file-processor"
+}
+```
+
+---
+
+### Get Delivery CDM Version
+
+**Endpoint:** `POST /get_delivery_cdm_version`
+
+**Description:** Reads the CDM and vocabulary versions a processed delivery was standardized to from its `artifacts/converted_files/cdm_source.parquet`.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `bucket` | string | Yes | Bucket or root directory of the source delivery |
+| `delivery_date` | string | Yes | Delivery date in `YYYY-MM-DD` format |
+
+**Notes:**
+
+- This is the standardized version for a processed delivery; the delivered version recorded in site config and the BigQuery log is not the same thing.
+- Both fields are `null` if the `cdm_source` file has no rows.
+
+**Response:**
+
+```json
+{
+  "status": "healthy",
+  "cdm_version": "5.4",
+  "vocabulary_version": "v5.0 29-FEB-24",
+  "service": "omop-file-processor"
+}
+```
+
+---
+
+### Extract Participant Chunk
+
+**Endpoint:** `POST /extract_participant_chunk`
+
+**DAG usage:** Implemented in the merge DAG through `core.jobs.extract_participant_chunk_job`.
+
+**Description:** Copies one source-delivery table into a provenance-named chunk file (`<table>__<site>__<delivery_date>.parquet`) under `artifacts/merge_chunks/<table>/`.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `source_uri` | string | Yes | Path to the source delivery's table Parquet |
+| `chunk_uri` | string | Yes | Destination chunk Parquet path in the staging area |
+| `site_display_name` | string | No | Source site name. When set (`person` only), stamps `care_site_id` with a deterministic hash of the name so each merged patient records its origin site |
+
+**Example:**
+
+```json
+{
+  "source_uri": "site-a/2024-01-15/artifacts/converted_files/person.parquet",
+  "chunk_uri": "merged/2024-08-03/artifacts/merge_chunks/person/person__site-a__2024-01-15.parquet",
+  "site_display_name": "Hospital A"
+}
+```
+
+---
+
+### Reconcile Chunks
+
+**Endpoint:** `POST /reconcile_chunks`
+
+**DAG usage:** Implemented in the merge DAG through `core.jobs.reconcile_chunks_job`.
+
+**Description:** Unions a table's chunk files into a single merged `converted_files/<table>.parquet`.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chunk_glob` | string | Yes | Glob over the per-table staging folder, e.g. `.../merge_chunks/<table>/*.parquet` |
+| `output_uri` | string | Yes | Destination for the reconciled table |
+
+**Notes:**
+
+- `output_uri` must live outside the chunk folder (in `converted_files/`) so the read glob never re-reads its own output.
+- Chunks are unioned with `union_by_name=true`.
+
+**Example:**
+
+```json
+{
+  "chunk_glob": "merged/2024-08-03/artifacts/merge_chunks/person/*.parquet",
+  "output_uri": "merged/2024-08-03/artifacts/converted_files/person.parquet"
+}
+```
+
+---
+
+### Build Care Site
+
+**Endpoint:** `POST /build_care_site`
+
+**Description:** Writes the merged instance's `care_site` table: one row per merged site mapping its hashed `care_site_id` to `care_site_name`, all other columns `NULL`. `care_site` rows are not carried over from the individual deliveries.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `output_uri` | string | Yes | Destination for the `care_site` Parquet |
+| `site_display_names` | list | Yes | Display names of the merged sites (de-duplicated, first-seen order preserved) |
+| `cdm_version` | string | Yes | OMOP CDM version used to resolve the `care_site` schema |
+
+**Example:**
+
+```json
+{
+  "output_uri": "merged/2024-08-03/artifacts/converted_files/care_site.parquet",
+  "site_display_names": ["Hospital A", "Hospital B"],
+  "cdm_version": "5.4"
+}
+```
+
+---
+
+### Build Merge CDM Source
+
+**Endpoint:** `POST /build_merge_cdm_source`
+
+**Description:** Writes a de novo one-row `cdm_source` for the merged instance using fixed Connect metadata plus the merged site count.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `output_uri` | string | Yes | Destination for the `cdm_source` Parquet |
+| `source_cdm_source_uris` | list | Yes | Source deliveries' `cdm_source` Parquet paths, used to derive `source_release_date` |
+| `site_count` | integer | Yes | Number of merged sites (written into the source description) |
+| `cdm_version` | string | Yes | Target OMOP CDM version (drives `cdm_version_concept_id`) |
+| `vocabulary_version` | string | Yes | Target vocabulary version |
+| `cdm_release_date` | string | Yes | Merge run date, written to `cdm_release_date` |
+
+**Notes:**
+
+- `source_release_date` is the latest across the source deliveries' `cdm_source` files, falling back to `cdm_release_date` if none is present.
+
+**Example:**
+
+```json
+{
+  "output_uri": "merged/2024-08-03/artifacts/converted_files/cdm_source.parquet",
+  "source_cdm_source_uris": [
+    "site-a/2024-01-15/artifacts/converted_files/cdm_source.parquet",
+    "site-b/2024-02-01/artifacts/converted_files/cdm_source.parquet"
+  ],
+  "site_count": 2,
+  "cdm_version": "5.4",
+  "vocabulary_version": "v5.0 29-FEB-24",
+  "cdm_release_date": "2024-08-03"
+}
+```
+
+---
+
+### Generate Merge Report
+
+**Endpoint:** `POST /generate_merge_report`
+
+**Description:** Records merge provenance — the distinct sites merged, each `(site, delivery_date)` delivery and the row count it contributed, and the merge-wide total — as report artifacts consolidated into a delivery report CSV.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `merge_bucket` | string | Yes | The merged instance's bucket |
+| `run_date` | string | Yes | The merged instance's delivery-date slot in `YYYY-MM-DD` format |
+| `site` | string | Yes | Synthetic merge `site_name` used for the report CSV file name |
+| `deliveries` | list | Yes | Source deliveries in the run, each `{"site", "delivery_date"}` |
+
+**Example:**
+
+```json
+{
+  "merge_bucket": "merged",
+  "run_date": "2024-08-03",
+  "site": "connect_ehr",
+  "deliveries": [
+    {"site": "site-a", "delivery_date": "2024-01-15"},
+    {"site": "site-b", "delivery_date": "2024-02-01"}
+  ]
+}
+```
+
 ## Cloud Run Jobs
 
 The repository also exposes direct job entry points under `core/jobs/`.
@@ -1303,6 +1521,8 @@ The repository also exposes direct job entry points under `core/jobs/`.
 | `core.jobs.post_processing_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `CDM_VERSION`, `VOCAB_VERSION`, `TASK_NAME` | `POST /post_processing` |
 | `core.jobs.generate_derived_tables_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `TABLE_NAME`, `VOCAB_VERSION` | `POST /generate_derived_tables_from_harmonized` |
 | `core.jobs.generate_report_csv_job` | `SITE`, `GCS_BUCKET`, `DELIVERY_DATE`, `SITE_DISPLAY_NAME`, `FILE_DELIVERY_FORMAT`, `DELIVERED_CDM_VERSION`, `TARGET_VOCABULARY_VERSION`, `TARGET_CDM_VERSION`; optional `ARTIFACT_TYPE` to generate one artifact type or run the final consolidation | `POST /generate_delivery_report_csv` |
+| `core.jobs.extract_participant_chunk_job` | `SOURCE_URI`, `CHUNK_URI`; optional `SITE_DISPLAY_NAME` | `POST /extract_participant_chunk` |
+| `core.jobs.reconcile_chunks_job` | `CHUNK_GLOB`, `OUTPUT_URI` | `POST /reconcile_chunks` |
 
 ## Running Tests
 
