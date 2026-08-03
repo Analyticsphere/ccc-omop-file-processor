@@ -1,18 +1,10 @@
-"""
-Report artifacts for a merge run.
-
-Unlike the per-site ReportGenerator (core/reporting.py), which analyzes a single
-delivery's tables, this describes what went INTO a merge: which sites and which
-site deliveries were included, and how many rows each delivery contributed.
-"""
-
 import core.constants as constants
 import core.helpers.report_artifact as report_artifact
 import core.reporting as reporting
 import core.utils as utils
 from core.storage_backend import storage
 
-# Artifact names (kept as constants so tests and downstream reporting can key on them).
+# Artifact names
 SOURCE_SITE_ARTIFACT = "Merge source site"
 SOURCE_DELIVERY_ROW_COUNT_ARTIFACT = "Merge source delivery row count"
 TOTAL_ROW_COUNT_ARTIFACT = "Merge total row count"
@@ -36,12 +28,7 @@ class MergeReporter:
 
     @staticmethod
     def generate_delivery_row_count_sql(chunk_glob: str) -> str:
-        """
-        Count every row a single source delivery contributes to the merge.
-
-        Reads all of that delivery's per-table chunks at once; union_by_name stacks
-        the heterogeneous table schemas so COUNT(*) is the delivery's total input rows.
-        """
+        """Count every row a single source delivery contributes to the merge."""
         glob = storage.get_uri(chunk_glob)
         return f"""
         SELECT COUNT(*) AS row_count

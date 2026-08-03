@@ -199,7 +199,7 @@ class TestOMOPClientPopulateCdmSourceFile:
     @patch('core.omop_client.utils.execute_duckdb_sql')
     @patch('core.omop_client.utils.parquet_file_exists')
     def test_populate_cdm_source_file_one_row_always_rewrites_release_dates(self, mock_file_exists, mock_execute, mock_artifact):
-        """File has 1 row -> always rewrite source_release_date (COALESCE/fallback) and cdm_release_date (=delivery_date), preserving every other site value."""
+        """File has 1 row -> rewrite source_release_date and cdm_release_date (both COALESCE: keep site value, fallback delivery_date), preserving every other site value."""
         mock_file_exists.return_value = True
         mock_execute.side_effect = [
             [[1]],    # row count

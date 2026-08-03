@@ -100,8 +100,8 @@ class OMOPClient:
 
         Checks if site delivered cdm_source file and populates it with metadata if needed:
         - If file exists with exactly one row: keep the site-delivered descriptive columns but
-          overwrite the pipeline-controlled fields: source_release_date (keeps site value if
-          parseable, else delivery_date), cdm_release_date (=delivery_date), and
+          overwrite the pipeline-controlled fields: source_release_date and cdm_release_date
+          (keep the site value if parseable, else fall back to delivery_date) and
           cdm_version / cdm_version_concept_id / vocabulary_version (=the target the data was
           standardized to). Every other site-delivered column passes through unchanged.
         - If file exists with multiple rows: treat as if no rows were delivered and populate
@@ -148,7 +148,7 @@ class OMOPClient:
             populate_sql = OMOPClient.generate_populate_cdm_source_sql(cdm_source_data, cdm_source_uri)
             utils.execute_duckdb_sql(populate_sql, "Unable to populate cdm_source file")
         elif row_count == 1:
-            utils.logger.info("cdm_source file has 1 row; rewriting release dates and overwriting cdm/vocab versions to target")
+            utils.logger.info("cdm_source file has 1 row; keeping site release dates (fallback to delivery_date) and overwriting cdm/vocab versions to target")
             rewrite_sql = OMOPClient.generate_rewrite_cdm_source_sql(
                 cdm_source_uri,
                 date_format,
@@ -382,8 +382,8 @@ class OMOPClient:
         """
         Rewrite a site-delivered 1-row cdm_source in place, overwriting pipeline-controlled fields:
 
-        - source_release_date: site value if parseable (date_format or direct cast), else delivery_date.
-        - cdm_release_date: always delivery_date.
+        - source_release_date / cdm_release_date: keep the site value if parseable (date_format
+          or direct cast), else fall back to delivery_date.
         - cdm_version / cdm_version_concept_id / vocabulary_version: the target the pipeline
           standardized the data to (site's self-reported values are discarded).
 
@@ -396,12 +396,19 @@ class OMOPClient:
             date_format=date_format,
             datetime_format=""
         )
+        cdm_release_date_cast = normalization.Normalizer.generate_date_datetime_cast(
+            column_name="cdm_release_date",
+            column_type="DATE",
+            default_value=f"'{delivery_date}'",
+            date_format=date_format,
+            datetime_format=""
+        )
         cdm_version_concept_id = utils.get_cdm_version_concept_id(target_cdm_version)
         return f"""
             COPY (
                 SELECT * REPLACE (
                     {source_release_date_cast} AS source_release_date,
-                    CAST('{delivery_date}' AS DATE) AS cdm_release_date,
+                    {cdm_release_date_cast} AS cdm_release_date,
                     '{target_cdm_version}' AS cdm_version,
                     {cdm_version_concept_id} AS cdm_version_concept_id,
                     '{target_vocab_version}' AS vocabulary_version
