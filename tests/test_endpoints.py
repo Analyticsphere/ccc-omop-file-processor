@@ -1356,12 +1356,11 @@ class TestExtractParticipantChunkEndpoint:
 
         assert response.status_code == 200
         assert b"Extracted participant chunk" in response.data
-        # Optional person_id_column defaults to the constant; site_display_name is None (no stamp).
+        # site_display_name is None (no stamp) when not supplied.
         mock_extract.assert_called_once_with(
             'siteA/2025-01-01/artifacts/converted_files/measurement.parquet',
             'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet',
             'ALL',
-            constants.DEFAULT_PERSON_ID_COLUMN,
             None
         )
 
@@ -1380,7 +1379,6 @@ class TestExtractParticipantChunkEndpoint:
             'siteA/2025-01-01/artifacts/converted_files/person.parquet',
             'ehr_merged/2026-06-24/artifacts/merge_chunks/person/chunk.parquet',
             'ALL',
-            constants.DEFAULT_PERSON_ID_COLUMN,
             'Site A'
         )
 

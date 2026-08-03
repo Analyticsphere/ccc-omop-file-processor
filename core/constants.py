@@ -606,21 +606,13 @@ GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS = [
 # person_id is protected by exclusion from GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS, not by skipping the table.
 NATURAL_KEY_REWRITE_SKIP_TABLES = VOCABULARY_TABLES
 
-# ---------------------------------------------------------------------------
-# EHR PR2 merge pipeline
-# ---------------------------------------------------------------------------
+
 # Sentinel PARTICIPANT_SCOPE value meaning "extract the whole source table" (no
 # participant WHERE clause). Any other value is treated as a GCS/URI reference to
 # a parquet file of participant ids to subset by (v2 path; designed-for now).
 PARTICIPANT_SCOPE_ALL = "ALL"
 
-# Default person_id column used when subsetting a chunk by participant scope.
-DEFAULT_PERSON_ID_COLUMN = "person_id"
-
-# Fixed cdm_source metadata for the merged (de novo) instance. The merge writes ONE
-# row describing the combined product; it does NOT union the sites' cdm_source rows.
-# {site_count} is filled with the number of merged sites; source/cdm release dates
-# and CDM/vocab versions are supplied at build time.
+# Fixed cdm_source metadata for the merged instance.
 MERGE_CDM_SOURCE_NAME = "Connect for Cancer Prevention Study - EHR Data"
 MERGE_CDM_SOURCE_ABBREVIATION = "Connect EHR Data"
 MERGE_CDM_HOLDER = "NIH/NCI - Connect for Cancer Prevention Study"

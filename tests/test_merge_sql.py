@@ -60,22 +60,11 @@ class TestExtractIdScopeSql:
             source_uri="siteA/2025-01-01/artifacts/converted_files/measurement.parquet",
             chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/measurement__siteA__2025-01-01.parquet",
             participant_scope="ehr_merged/2026-06-24/artifacts/merge_chunks/_ids/siteA__2025-01-01.parquet",
-            person_id_column="person_id",
         )
 
         expected = load_reference_sql("extract_chunk_id_scope.sql")
         assert normalize_sql(result) == normalize_sql(expected)
-
-    def test_id_scope_respects_custom_person_id_column(self):
-        """A custom person_id column name is used in the WHERE clause."""
-        result = MergeProcessor.generate_extract_chunk_sql(
-            source_uri="siteA/2025-01-01/artifacts/converted_files/measurement.parquet",
-            chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet",
-            participant_scope="ehr_merged/ids.parquet",
-            person_id_column="subject_id",
-        )
-
-        assert "WHERE subject_id IN (" in result
+        assert "WHERE person_id IN (" in result
 
 
 class TestReconcileGlobUnionByNameSql:

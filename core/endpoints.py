@@ -909,7 +909,6 @@ def extract_participant_chunk() -> tuple[str, int]:
     source_uri: Optional[str] = data.get('source_uri')
     chunk_uri: Optional[str] = data.get('chunk_uri')
     participant_scope: Optional[str] = data.get('participant_scope')
-    person_id_column: str = data.get('person_id_column') or constants.DEFAULT_PERSON_ID_COLUMN
     # Optional: only the person table passes this, to stamp care_site_id with the origin site's hash.
     site_display_name: Optional[str] = data.get('site_display_name')
     missing_fields = _get_missing_fields(data, ['source_uri', 'chunk_uri', 'participant_scope'])
@@ -923,7 +922,7 @@ def extract_participant_chunk() -> tuple[str, int]:
         assert chunk_uri is not None
         assert participant_scope is not None
 
-        merge.MergeProcessor.extract_chunk(source_uri, chunk_uri, participant_scope, person_id_column, site_display_name)
+        merge.MergeProcessor.extract_chunk(source_uri, chunk_uri, participant_scope, site_display_name)
         return "Extracted participant chunk", 200
     except Exception as e:
         utils.logger.error(f"Unable to extract participant chunk: {str(e)}")

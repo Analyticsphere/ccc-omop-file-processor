@@ -12,7 +12,6 @@ Required Environment Variables:
     PARTICIPANT_SCOPE: "ALL" for the whole table, otherwise a path to a parquet of participant ids
 
 Optional Environment Variables:
-    PERSON_ID_COLUMN: Column matched against the id set when scope != "ALL" (default "person_id")
     SITE_DISPLAY_NAME: Source site name; when set (person only), stamps care_site_id with its hash
 
 Exit Codes:
@@ -24,7 +23,6 @@ import os
 import sys
 import traceback
 
-import core.constants as constants
 import core.merge as merge
 import core.utils as utils
 
@@ -47,9 +45,6 @@ def validate_env_vars() -> dict[str, str]:
         utils.logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
         sys.exit(1)
 
-    # Optional: person_id column used only when subsetting by participant scope
-    env_values['PERSON_ID_COLUMN'] = os.getenv('PERSON_ID_COLUMN', constants.DEFAULT_PERSON_ID_COLUMN)
-
     # Optional: site name used to stamp care_site_id (person table only).
     env_values['SITE_DISPLAY_NAME'] = os.getenv('SITE_DISPLAY_NAME', '')
 
@@ -69,7 +64,6 @@ def main():
     utils.logger.info(f"SOURCE_URI: {env_values['SOURCE_URI']}")
     utils.logger.info(f"CHUNK_URI: {env_values['CHUNK_URI']}")
     utils.logger.info(f"PARTICIPANT_SCOPE: {env_values['PARTICIPANT_SCOPE']}")
-    utils.logger.info(f"PERSON_ID_COLUMN: {env_values['PERSON_ID_COLUMN']}")
     utils.logger.info(f"SITE_DISPLAY_NAME: {env_values['SITE_DISPLAY_NAME']}")
 
     try:
@@ -77,7 +71,6 @@ def main():
             source_uri=env_values['SOURCE_URI'],
             chunk_uri=env_values['CHUNK_URI'],
             participant_scope=env_values['PARTICIPANT_SCOPE'],
-            person_id_column=env_values['PERSON_ID_COLUMN'],
             # Empty env var -> None (no stamping); set only for person.
             site_display_name=env_values['SITE_DISPLAY_NAME'] or None,
         )

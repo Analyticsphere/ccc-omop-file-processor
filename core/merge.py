@@ -49,7 +49,6 @@ class MergeProcessor:
         source_uri: str,
         chunk_uri: str,
         participant_scope: str,
-        person_id_column: str = constants.DEFAULT_PERSON_ID_COLUMN,
         site_display_name: Optional[str] = None,
     ) -> str:
         """
@@ -60,8 +59,6 @@ class MergeProcessor:
             chunk_uri: Path to the destination chunk parquet in the staging area.
             participant_scope: constants.PARTICIPANT_SCOPE_ALL for the whole table, otherwise a
                 path to a parquet file with an `id` column of participant ids to keep.
-            person_id_column: Column matched against the id set. Only used
-                when participant_scope is not PARTICIPANT_SCOPE_ALL.
             site_display_name: Source site name; when set (person only), stamps care_site_id
                 with its hash to record each patient's origin site.
         """
@@ -82,7 +79,7 @@ class MergeProcessor:
         return f"""
         COPY (
             SELECT {select_list} FROM read_parquet('{source}')
-            WHERE {person_id_column} IN (
+            WHERE person_id IN (
                 SELECT id FROM read_parquet('{ids}')
             )
         ) TO '{chunk}' {constants.DUCKDB_FORMAT_STRING}
@@ -93,12 +90,11 @@ class MergeProcessor:
         source_uri: str,
         chunk_uri: str,
         participant_scope: str,
-        person_id_column: str = constants.DEFAULT_PERSON_ID_COLUMN,
         site_display_name: Optional[str] = None,
     ) -> None:
         """Execute the chunk extraction. Writes chunk_uri outside the source directory."""
         sql = MergeProcessor.generate_extract_chunk_sql(
-            source_uri, chunk_uri, participant_scope, person_id_column, site_display_name
+            source_uri, chunk_uri, participant_scope, site_display_name
         )
         utils.execute_duckdb_sql(sql, f"Unable to extract participant chunk to {chunk_uri}")
 
