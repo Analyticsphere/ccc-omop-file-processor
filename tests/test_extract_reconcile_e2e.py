@@ -76,8 +76,8 @@ def test_extract_all_then_reconcile_unions_rows_and_columns(local_backend):
     chunk_b = str(chunk_dir / "measurement__siteB__2025-02-01.parquet")
     output = str(root / "ehr_merged/2026-06-24/artifacts/converted_files/measurement.parquet")
 
-    merge.MergeProcessor.extract_chunk(site_a_src, chunk_a, constants.PARTICIPANT_SCOPE_ALL)
-    merge.MergeProcessor.extract_chunk(site_b_src, chunk_b, constants.PARTICIPANT_SCOPE_ALL)
+    merge.MergeProcessor.extract_chunk(site_a_src, chunk_a)
+    merge.MergeProcessor.extract_chunk(site_b_src, chunk_b)
 
     # Provenance-named chunk files land in the shared per-table staging folder.
     assert shared_storage.file_exists(chunk_a)
@@ -98,30 +98,6 @@ def test_extract_all_then_reconcile_unions_rows_and_columns(local_backend):
     assert null_extra == 2
 
 
-def test_extract_id_scope_subsets_participants(local_backend):
-    root = local_backend
-
-    src = str(root / "siteA/2025-01-01/artifacts/converted_files/measurement.parquet")
-    _write_parquet(
-        src,
-        "SELECT * FROM (VALUES (1,101),(2,102),(3,103)) AS t(measurement_id, person_id)",
-    )
-    # Keep only participants 101 and 103. The id column is numeric, matching person_id.
-    ids_uri = str(root / "ehr_merged/2026-06-24/artifacts/merge_chunks/_ids/keep.parquet")
-    _write_parquet(ids_uri, "SELECT * FROM (VALUES (101),(103)) AS t(id)")
-
-    chunk = str(root / "ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet")
-
-    merge.MergeProcessor.extract_chunk(src, chunk, ids_uri)
-
-    chunk_uri = shared_storage.get_uri(chunk)
-    kept = [
-        r[0]
-        for r in _query(f"SELECT person_id FROM read_parquet('{chunk_uri}') ORDER BY person_id")
-    ]
-    assert kept == [101, 103]
-
-
 def test_extract_stamps_person_care_site_id(local_backend):
     root = local_backend
 
@@ -133,9 +109,7 @@ def test_extract_stamps_person_care_site_id(local_backend):
     )
     chunk = str(root / "ehr_merged/2026-06-24/artifacts/merge_chunks/person/person__siteA__2025-01-01.parquet")
 
-    merge.MergeProcessor.extract_chunk(
-        src, chunk, constants.PARTICIPANT_SCOPE_ALL, site_display_name="Site A"
-    )
+    merge.MergeProcessor.extract_chunk(src, chunk, site_display_name="Site A")
 
     expected_id = merge.MergeProcessor.hash_care_site_id("Site A")
     chunk_uri = shared_storage.get_uri(chunk)

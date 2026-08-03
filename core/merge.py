@@ -1,19 +1,3 @@
-"""
-EHR PR2 merge-pipeline helpers.
-
-extract_chunk: copy one (group x table) slice from a source delivery into a
-provenance-named chunk file. v1 scope is "ALL" (whole table); a participant-id
-subset (v2) points PARTICIPANT_SCOPE at a parquet of ids. For person, stamps
-care_site_id = hash_care_site_id(site) to record each patient's origin site.
-
-reconcile_chunks: union a table's chunk files into converted_files/<table>.parquet
-(union_by_name tolerates column-order/schema drift across sites).
-
-build_care_site: write converted_files/care_site.parquet mapping each merged
-site's hashed care_site_id to its name. Not carried from deliveries; built from
-the merged site set to match the person.care_site_id stamps.
-"""
-
 import hashlib
 from typing import Optional
 
@@ -48,17 +32,14 @@ class MergeProcessor:
     def generate_extract_chunk_sql(
         source_uri: str,
         chunk_uri: str,
-        participant_scope: str,
         site_display_name: Optional[str] = None,
     ) -> str:
         """
-        Generate SQL to copy one source table (optionally subset by participant) into a chunk file.
+        Generate SQL to copy one source table into a provenance-named chunk file.
 
         Args:
             source_uri: Path to the source delivery's table parquet (any/no scheme; normalized).
             chunk_uri: Path to the destination chunk parquet in the staging area.
-            participant_scope: constants.PARTICIPANT_SCOPE_ALL for the whole table, otherwise a
-                path to a parquet file with an `id` column of participant ids to keep.
             site_display_name: Source site name; when set (person only), stamps care_site_id
                 with its hash to record each patient's origin site.
         """
@@ -66,22 +47,9 @@ class MergeProcessor:
         chunk = storage.get_uri(chunk_uri)
         select_list = MergeProcessor._extract_select_list(site_display_name)
 
-        if participant_scope == constants.PARTICIPANT_SCOPE_ALL:
-            return f"""
-            COPY (
-                SELECT {select_list} FROM read_parquet('{source}')
-            ) TO '{chunk}' {constants.DUCKDB_FORMAT_STRING}
-            """
-
-        # v2 path will eventually subset to a pre-defined Connect ID list;
-        # for v1, get all IDs and then filter later.
-        ids = storage.get_uri(participant_scope)
         return f"""
         COPY (
             SELECT {select_list} FROM read_parquet('{source}')
-            WHERE person_id IN (
-                SELECT id FROM read_parquet('{ids}')
-            )
         ) TO '{chunk}' {constants.DUCKDB_FORMAT_STRING}
         """
 
@@ -89,14 +57,11 @@ class MergeProcessor:
     def extract_chunk(
         source_uri: str,
         chunk_uri: str,
-        participant_scope: str,
         site_display_name: Optional[str] = None,
     ) -> None:
         """Execute the chunk extraction. Writes chunk_uri outside the source directory."""
-        sql = MergeProcessor.generate_extract_chunk_sql(
-            source_uri, chunk_uri, participant_scope, site_display_name
-        )
-        utils.execute_duckdb_sql(sql, f"Unable to extract participant chunk to {chunk_uri}")
+        sql = MergeProcessor.generate_extract_chunk_sql(source_uri, chunk_uri, site_display_name)
+        utils.execute_duckdb_sql(sql, f"Unable to extract chunk to {chunk_uri}")
 
     @staticmethod
     def generate_build_care_site_sql(

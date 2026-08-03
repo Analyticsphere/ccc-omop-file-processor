@@ -1347,11 +1347,10 @@ class TestExtractParticipantChunkEndpoint:
     """Tests for /extract_participant_chunk endpoint."""
 
     @patch('core.endpoints.merge.MergeProcessor.extract_chunk')
-    def test_success_all_scope(self, mock_extract, client):
+    def test_success(self, mock_extract, client):
         response = client.post('/extract_participant_chunk', json={
             'source_uri': 'siteA/2025-01-01/artifacts/converted_files/measurement.parquet',
             'chunk_uri': 'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet',
-            'participant_scope': 'ALL'
         })
 
         assert response.status_code == 200
@@ -1360,7 +1359,6 @@ class TestExtractParticipantChunkEndpoint:
         mock_extract.assert_called_once_with(
             'siteA/2025-01-01/artifacts/converted_files/measurement.parquet',
             'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet',
-            'ALL',
             None
         )
 
@@ -1369,7 +1367,6 @@ class TestExtractParticipantChunkEndpoint:
         response = client.post('/extract_participant_chunk', json={
             'source_uri': 'siteA/2025-01-01/artifacts/converted_files/person.parquet',
             'chunk_uri': 'ehr_merged/2026-06-24/artifacts/merge_chunks/person/chunk.parquet',
-            'participant_scope': 'ALL',
             'site_display_name': 'Site A',
         })
 
@@ -1378,7 +1375,6 @@ class TestExtractParticipantChunkEndpoint:
         mock_extract.assert_called_once_with(
             'siteA/2025-01-01/artifacts/converted_files/person.parquet',
             'ehr_merged/2026-06-24/artifacts/merge_chunks/person/chunk.parquet',
-            'ALL',
             'Site A'
         )
 
@@ -1386,7 +1382,7 @@ class TestExtractParticipantChunkEndpoint:
         response = client.post('/extract_participant_chunk', json={
             'source_uri': 'siteA/2025-01-01/artifacts/converted_files/measurement.parquet'
         })
-        assert_missing_fields(response, 'chunk_uri', 'participant_scope')
+        assert_missing_fields(response, 'chunk_uri')
 
     @patch('core.endpoints.merge.MergeProcessor.extract_chunk')
     def test_exception(self, mock_extract, client):
@@ -1395,7 +1391,6 @@ class TestExtractParticipantChunkEndpoint:
         response = client.post('/extract_participant_chunk', json={
             'source_uri': 'siteA/2025-01-01/artifacts/converted_files/measurement.parquet',
             'chunk_uri': 'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet',
-            'participant_scope': 'ALL'
         })
 
         assert response.status_code == 500

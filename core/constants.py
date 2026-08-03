@@ -607,11 +607,6 @@ GLOBALLY_UNIQUE_NATURAL_KEY_COLUMNS = [
 NATURAL_KEY_REWRITE_SKIP_TABLES = VOCABULARY_TABLES
 
 
-# Sentinel PARTICIPANT_SCOPE value meaning "extract the whole source table" (no
-# participant WHERE clause). Any other value is treated as a GCS/URI reference to
-# a parquet file of participant ids to subset by (v2 path; designed-for now).
-PARTICIPANT_SCOPE_ALL = "ALL"
-
 # Fixed cdm_source metadata for the merged instance.
 MERGE_CDM_SOURCE_NAME = "Connect for Cancer Prevention Study - EHR Data"
 MERGE_CDM_SOURCE_ABBREVIATION = "Connect EHR Data"

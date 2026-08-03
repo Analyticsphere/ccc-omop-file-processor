@@ -35,36 +35,18 @@ def load_reference_sql(filename: str) -> str:
         return f.read()
 
 
-class TestExtractAllScopeSql:
-    """Tests for generate_extract_chunk_sql() with participant_scope == 'ALL'."""
+class TestExtractChunkSql:
+    """Tests for generate_extract_chunk_sql() — always copies the whole source table."""
 
-    def test_all_scope_has_no_where_clause(self):
-        """ALL scope copies the whole source table with no WHERE clause."""
+    def test_copies_whole_table_no_where_clause(self):
         result = MergeProcessor.generate_extract_chunk_sql(
             source_uri="siteA/2025-01-01/artifacts/converted_files/measurement.parquet",
             chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/measurement__siteA__2025-01-01.parquet",
-            participant_scope="ALL",
         )
 
         expected = load_reference_sql("extract_chunk_all_scope.sql")
         assert normalize_sql(result) == normalize_sql(expected)
         assert "WHERE" not in normalize_sql(result).upper()
-
-
-class TestExtractIdScopeSql:
-    """Tests for generate_extract_chunk_sql() with a participant-id subset (v2 path)."""
-
-    def test_id_scope_filters_by_person_id_in_subquery(self):
-        """A non-ALL scope subsets by person_id IN (SELECT id ...)."""
-        result = MergeProcessor.generate_extract_chunk_sql(
-            source_uri="siteA/2025-01-01/artifacts/converted_files/measurement.parquet",
-            chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/measurement__siteA__2025-01-01.parquet",
-            participant_scope="ehr_merged/2026-06-24/artifacts/merge_chunks/_ids/siteA__2025-01-01.parquet",
-        )
-
-        expected = load_reference_sql("extract_chunk_id_scope.sql")
-        assert normalize_sql(result) == normalize_sql(expected)
-        assert "WHERE person_id IN (" in result
 
 
 class TestReconcileGlobUnionByNameSql:
@@ -119,32 +101,19 @@ class TestHashCareSiteId:
 class TestExtractStampsCareSiteId:
     """Tests that a site name stamps care_site_id via SELECT * REPLACE."""
 
-    def test_all_scope_replaces_care_site_id_with_hash(self):
+    def test_site_name_replaces_care_site_id_with_hash(self):
         care_site_id = MergeProcessor.hash_care_site_id("Site A")
         result = MergeProcessor.generate_extract_chunk_sql(
             source_uri="siteA/2025-01-01/artifacts/converted_files/person.parquet",
             chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/person/person__siteA__2025-01-01.parquet",
-            participant_scope="ALL",
             site_display_name="Site A",
         )
         assert f"* REPLACE (CAST({care_site_id} AS BIGINT) AS care_site_id)" in result
-
-    def test_id_scope_replaces_care_site_id_with_hash(self):
-        care_site_id = MergeProcessor.hash_care_site_id("Site A")
-        result = MergeProcessor.generate_extract_chunk_sql(
-            source_uri="siteA/2025-01-01/artifacts/converted_files/person.parquet",
-            chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/person/chunk.parquet",
-            participant_scope="ehr_merged/ids.parquet",
-            site_display_name="Site A",
-        )
-        assert f"* REPLACE (CAST({care_site_id} AS BIGINT) AS care_site_id)" in result
-        assert "WHERE person_id IN (" in result
 
     def test_no_site_name_selects_star(self):
         result = MergeProcessor.generate_extract_chunk_sql(
             source_uri="siteA/2025-01-01/artifacts/converted_files/person.parquet",
             chunk_uri="ehr_merged/2026-06-24/artifacts/merge_chunks/person/chunk.parquet",
-            participant_scope="ALL",
         )
         assert "REPLACE" not in result
         assert "SELECT * FROM read_parquet(" in normalize_sql(result)

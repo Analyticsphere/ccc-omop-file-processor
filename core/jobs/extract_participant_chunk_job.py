@@ -3,13 +3,11 @@
 Cloud Run Job entry point for extracting a (group x table) chunk from a source delivery.
 
 Copies one source table into a provenance-named chunk file in the shared per-table
-merge staging area. For v1 the participant scope is always "ALL" (whole table); a
-participant-id subset (v2) is supported by pointing PARTICIPANT_SCOPE at a parquet of Connect IDs.
+merge staging area.
 
 Required Environment Variables:
     SOURCE_URI: Path to the source delivery's table parquet (e.g. .../converted_files/<table>.parquet)
     CHUNK_URI: Destination chunk parquet path in the staging area
-    PARTICIPANT_SCOPE: "ALL" for the whole table, otherwise a path to a parquet of participant ids
 
 Optional Environment Variables:
     SITE_DISPLAY_NAME: Source site name; when set (person only), stamps care_site_id with its hash
@@ -29,7 +27,7 @@ import core.utils as utils
 
 def validate_env_vars() -> dict[str, str]:
     """Validate and return required environment variables."""
-    required_vars = ['SOURCE_URI', 'CHUNK_URI', 'PARTICIPANT_SCOPE']
+    required_vars = ['SOURCE_URI', 'CHUNK_URI']
 
     env_values = {}
     missing_vars = []
@@ -63,14 +61,12 @@ def main():
 
     utils.logger.info(f"SOURCE_URI: {env_values['SOURCE_URI']}")
     utils.logger.info(f"CHUNK_URI: {env_values['CHUNK_URI']}")
-    utils.logger.info(f"PARTICIPANT_SCOPE: {env_values['PARTICIPANT_SCOPE']}")
     utils.logger.info(f"SITE_DISPLAY_NAME: {env_values['SITE_DISPLAY_NAME']}")
 
     try:
         merge.MergeProcessor.extract_chunk(
             source_uri=env_values['SOURCE_URI'],
             chunk_uri=env_values['CHUNK_URI'],
-            participant_scope=env_values['PARTICIPANT_SCOPE'],
             # Empty env var -> None (no stamping); set only for person.
             site_display_name=env_values['SITE_DISPLAY_NAME'] or None,
         )

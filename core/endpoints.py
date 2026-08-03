@@ -899,19 +899,13 @@ def get_delivery_cdm_version() -> tuple[Any, int]:
 
 @app.route('/extract_participant_chunk', methods=['POST'])
 def extract_participant_chunk() -> tuple[str, int]:
-    """
-    Copy one source-delivery table into a provenance-named merge chunk file.
-
-    For v1, participant_scope is always "ALL" (whole table). A participant-id subset
-    (v2) is supported by pointing participant_scope at a parquet of ids.
-    """
+    """Copy one source-delivery table into a provenance-named merge chunk file."""
     data: dict[str, Any] = request.get_json() or {}
     source_uri: Optional[str] = data.get('source_uri')
     chunk_uri: Optional[str] = data.get('chunk_uri')
-    participant_scope: Optional[str] = data.get('participant_scope')
     # Optional: only the person table passes this, to stamp care_site_id with the origin site's hash.
     site_display_name: Optional[str] = data.get('site_display_name')
-    missing_fields = _get_missing_fields(data, ['source_uri', 'chunk_uri', 'participant_scope'])
+    missing_fields = _get_missing_fields(data, ['source_uri', 'chunk_uri'])
 
     # Validate required parameters
     if missing_fields:
@@ -920,9 +914,8 @@ def extract_participant_chunk() -> tuple[str, int]:
     try:
         assert source_uri is not None
         assert chunk_uri is not None
-        assert participant_scope is not None
 
-        merge.MergeProcessor.extract_chunk(source_uri, chunk_uri, participant_scope, site_display_name)
+        merge.MergeProcessor.extract_chunk(source_uri, chunk_uri, site_display_name)
         return "Extracted participant chunk", 200
     except Exception as e:
         utils.logger.error(f"Unable to extract participant chunk: {str(e)}")
