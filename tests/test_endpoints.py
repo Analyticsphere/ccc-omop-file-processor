@@ -1268,3 +1268,292 @@ class TestPipelineLogEndpoint:
 
         assert response.status_code == 500
         assert b"Unable to save logging information" in response.data
+
+
+class TestGetLatestCompletedDeliveryEndpoint:
+    """Tests for /get_latest_completed_delivery endpoint."""
+
+    @patch('core.endpoints.pipeline_log.get_latest_completed_delivery')
+    def test_success(self, mock_get, client):
+        mock_get.return_value = '2025-03-01'
+
+        response = client.post('/get_latest_completed_delivery', json={'site': 'siteA'})
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data['delivery_date'] == '2025-03-01'
+        mock_get.assert_called_once_with('siteA')
+
+    @patch('core.endpoints.pipeline_log.get_latest_completed_delivery')
+    def test_no_completed_delivery_returns_null(self, mock_get, client):
+        mock_get.return_value = None
+
+        response = client.post('/get_latest_completed_delivery', json={'site': 'siteA'})
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data['delivery_date'] is None
+
+    def test_missing_parameter(self, client):
+        response = client.post('/get_latest_completed_delivery', json={})
+        assert_missing_fields(response, 'site')
+
+    @patch('core.endpoints.pipeline_log.get_latest_completed_delivery')
+    def test_exception(self, mock_get, client):
+        mock_get.side_effect = Exception("BigQuery error")
+
+        response = client.post('/get_latest_completed_delivery', json={'site': 'siteA'})
+
+        assert response.status_code == 500
+        assert b"Unable to get latest completed delivery" in response.data
+
+
+class TestGetDeliveryCdmVersionEndpoint:
+    """Tests for /get_delivery_cdm_version endpoint."""
+
+    @patch('core.endpoints.omop_client.OMOPClient.get_delivery_cdm_version')
+    def test_success(self, mock_get, client):
+        mock_get.return_value = {'cdm_version': '5.4', 'vocabulary_version': 'v5.0 27-AUG-25'}
+
+        response = client.post('/get_delivery_cdm_version', json={
+            'bucket': 'siteA',
+            'delivery_date': '2025-01-01'
+        })
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data['cdm_version'] == '5.4'
+        assert data['vocabulary_version'] == 'v5.0 27-AUG-25'
+        mock_get.assert_called_once_with('siteA', '2025-01-01')
+
+    def test_missing_parameters(self, client):
+        response = client.post('/get_delivery_cdm_version', json={'bucket': 'siteA'})
+        assert_missing_fields(response, 'delivery_date')
+
+    @patch('core.endpoints.omop_client.OMOPClient.get_delivery_cdm_version')
+    def test_exception(self, mock_get, client):
+        mock_get.side_effect = Exception("read failed")
+
+        response = client.post('/get_delivery_cdm_version', json={
+            'bucket': 'siteA',
+            'delivery_date': '2025-01-01'
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to read cdm_version" in response.data
+
+
+class TestExtractParticipantChunkEndpoint:
+    """Tests for /extract_participant_chunk endpoint."""
+
+    @patch('core.endpoints.merge.MergeProcessor.extract_chunk')
+    def test_success(self, mock_extract, client):
+        response = client.post('/extract_participant_chunk', json={
+            'source_uri': 'siteA/2025-01-01/artifacts/converted_files/measurement.parquet',
+            'chunk_uri': 'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet',
+        })
+
+        assert response.status_code == 200
+        assert b"Extracted participant chunk" in response.data
+        # site_display_name is None (no stamp) when not supplied.
+        mock_extract.assert_called_once_with(
+            'siteA/2025-01-01/artifacts/converted_files/measurement.parquet',
+            'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet',
+            None
+        )
+
+    @patch('core.endpoints.merge.MergeProcessor.extract_chunk')
+    def test_success_with_site_display_name(self, mock_extract, client):
+        response = client.post('/extract_participant_chunk', json={
+            'source_uri': 'siteA/2025-01-01/artifacts/converted_files/person.parquet',
+            'chunk_uri': 'ehr_merged/2026-06-24/artifacts/merge_chunks/person/chunk.parquet',
+            'site_display_name': 'Site A',
+        })
+
+        assert response.status_code == 200
+        # site_display_name is forwarded so person's care_site_id gets stamped.
+        mock_extract.assert_called_once_with(
+            'siteA/2025-01-01/artifacts/converted_files/person.parquet',
+            'ehr_merged/2026-06-24/artifacts/merge_chunks/person/chunk.parquet',
+            'Site A'
+        )
+
+    def test_missing_parameters(self, client):
+        response = client.post('/extract_participant_chunk', json={
+            'source_uri': 'siteA/2025-01-01/artifacts/converted_files/measurement.parquet'
+        })
+        assert_missing_fields(response, 'chunk_uri')
+
+    @patch('core.endpoints.merge.MergeProcessor.extract_chunk')
+    def test_exception(self, mock_extract, client):
+        mock_extract.side_effect = Exception("extract failed")
+
+        response = client.post('/extract_participant_chunk', json={
+            'source_uri': 'siteA/2025-01-01/artifacts/converted_files/measurement.parquet',
+            'chunk_uri': 'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/chunk.parquet',
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to extract participant chunk" in response.data
+
+
+class TestReconcileChunksEndpoint:
+    """Tests for /reconcile_chunks endpoint."""
+
+    @patch('core.endpoints.merge.MergeProcessor.reconcile_chunks')
+    def test_success(self, mock_reconcile, client):
+        response = client.post('/reconcile_chunks', json={
+            'chunk_glob': 'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/*.parquet',
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/measurement.parquet'
+        })
+
+        assert response.status_code == 200
+        assert b"Reconciled merge chunks" in response.data
+        mock_reconcile.assert_called_once_with(
+            'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/*.parquet',
+            'ehr_merged/2026-06-24/artifacts/converted_files/measurement.parquet'
+        )
+
+    def test_missing_parameters(self, client):
+        response = client.post('/reconcile_chunks', json={})
+        assert_missing_fields(response, 'chunk_glob', 'output_uri')
+
+    @patch('core.endpoints.merge.MergeProcessor.reconcile_chunks')
+    def test_exception(self, mock_reconcile, client):
+        mock_reconcile.side_effect = Exception("no chunks matched glob")
+
+        response = client.post('/reconcile_chunks', json={
+            'chunk_glob': 'ehr_merged/2026-06-24/artifacts/merge_chunks/measurement/*.parquet',
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/measurement.parquet'
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to reconcile merge chunks" in response.data
+
+
+class TestBuildCareSiteEndpoint:
+    """Tests for /build_care_site endpoint."""
+
+    @patch('core.endpoints.merge.MergeProcessor.build_care_site')
+    def test_success(self, mock_build, client):
+        response = client.post('/build_care_site', json={
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/care_site.parquet',
+            'site_display_names': ['Site A', 'Site B'],
+            'cdm_version': '5.4',
+        })
+
+        assert response.status_code == 200
+        assert b"Built care_site table" in response.data
+        mock_build.assert_called_once_with(
+            'ehr_merged/2026-06-24/artifacts/converted_files/care_site.parquet',
+            ['Site A', 'Site B'],
+            '5.4'
+        )
+
+    def test_missing_parameters(self, client):
+        response = client.post('/build_care_site', json={
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/care_site.parquet'
+        })
+        assert_missing_fields(response, 'site_display_names', 'cdm_version')
+
+    @patch('core.endpoints.merge.MergeProcessor.build_care_site')
+    def test_exception(self, mock_build, client):
+        mock_build.side_effect = Exception("build failed")
+
+        response = client.post('/build_care_site', json={
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/care_site.parquet',
+            'site_display_names': ['Site A'],
+            'cdm_version': '5.4',
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to build care_site table" in response.data
+
+
+class TestBuildMergeCdmSourceEndpoint:
+    """Tests for /build_merge_cdm_source endpoint."""
+
+    PAYLOAD = {
+        'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/cdm_source.parquet',
+        'source_cdm_source_uris': [
+            'siteA/2025-01-01/artifacts/converted_files/cdm_source.parquet',
+            'siteB/2025-02-01/artifacts/converted_files/cdm_source.parquet',
+        ],
+        'site_count': 2,
+        'cdm_version': '5.4',
+        'vocabulary_version': 'v5.0 27-AUG-25',
+        'cdm_release_date': '2026-06-24',
+    }
+
+    @patch('core.endpoints.merge.MergeProcessor.build_cdm_source')
+    def test_success(self, mock_build, client):
+        response = client.post('/build_merge_cdm_source', json=self.PAYLOAD)
+
+        assert response.status_code == 200
+        assert b"Built cdm_source" in response.data
+        mock_build.assert_called_once_with(
+            self.PAYLOAD['output_uri'],
+            self.PAYLOAD['source_cdm_source_uris'],
+            2,
+            '5.4',
+            'v5.0 27-AUG-25',
+            '2026-06-24',
+        )
+
+    def test_missing_parameters(self, client):
+        response = client.post('/build_merge_cdm_source', json={
+            'output_uri': 'ehr_merged/2026-06-24/artifacts/converted_files/cdm_source.parquet'
+        })
+        assert_missing_fields(
+            response, 'source_cdm_source_uris', 'site_count', 'cdm_version', 'vocabulary_version', 'cdm_release_date'
+        )
+
+    @patch('core.endpoints.merge.MergeProcessor.build_cdm_source')
+    def test_exception(self, mock_build, client):
+        mock_build.side_effect = Exception("build failed")
+        response = client.post('/build_merge_cdm_source', json=self.PAYLOAD)
+
+        assert response.status_code == 500
+        assert b"Unable to build cdm_source" in response.data
+
+
+class TestGenerateMergeReportEndpoint:
+    """Tests for /generate_merge_report endpoint."""
+
+    @patch('core.endpoints.merge_reporting.MergeReporter.generate_merge_report')
+    def test_success(self, mock_report, client):
+        deliveries = [
+            {'site': 'siteA', 'delivery_date': '2025-01-01'},
+            {'site': 'siteB', 'delivery_date': '2025-02-01'},
+        ]
+        response = client.post('/generate_merge_report', json={
+            'merge_bucket': 'ehr_merged',
+            'run_date': '2026-06-24',
+            'site': 'merged_ehr',
+            'deliveries': deliveries,
+        })
+
+        assert response.status_code == 200
+        assert b"Generated merge report" in response.data
+        mock_report.assert_called_once_with('ehr_merged', '2026-06-24', 'merged_ehr', deliveries)
+
+    def test_missing_parameters(self, client):
+        response = client.post('/generate_merge_report', json={
+            'merge_bucket': 'ehr_merged',
+            'run_date': '2026-06-24',
+        })
+        assert_missing_fields(response, 'site', 'deliveries')
+
+    @patch('core.endpoints.merge_reporting.MergeReporter.generate_merge_report')
+    def test_exception(self, mock_report, client):
+        mock_report.side_effect = Exception("count failed")
+
+        response = client.post('/generate_merge_report', json={
+            'merge_bucket': 'ehr_merged',
+            'run_date': '2026-06-24',
+            'site': 'merged_ehr',
+            'deliveries': [{'site': 'siteA', 'delivery_date': '2025-01-01'}],
+        })
+
+        assert response.status_code == 500
+        assert b"Unable to generate merge report" in response.data

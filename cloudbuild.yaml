@@ -183,6 +183,44 @@ steps:
     '--args=python,-m,core.jobs.generate_report_csv_job'
   ]
 
+# Deploy Cloud Run Job: Extract Participant Chunk (EHR PR2 merge pipeline)
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: [
+    'run', 'jobs', 'deploy', 'ccc-omop-file-processor-extract-participant-chunk-job',
+    '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
+    '--region=us-central1',
+    '--service-account=$SERVICE_ACCOUNT_EMAIL',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
+    '--cpu=$_DEFAULT_CPU',
+    '--memory=$_DEFAULT_MEMORY',
+    '--task-timeout=$_MERGE_TASK_TIMEOUT',
+    '--max-retries=0',
+    '--parallelism=1',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
+    '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
+    '--args=python,-m,core.jobs.extract_participant_chunk_job'
+  ]
+
+# Deploy Cloud Run Job: Reconcile Chunks (EHR PR2 merge pipeline)
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: [
+    'run', 'jobs', 'deploy', 'ccc-omop-file-processor-reconcile-chunks-job',
+    '--image=gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA',
+    '--region=us-central1',
+    '--service-account=$SERVICE_ACCOUNT_EMAIL',
+    '--set-env-vars=PROJECT_ID=$PROJECT_ID,COMMIT_SHA=$COMMIT_SHA,BQ_LOGGING_TABLE=$_BQ_LOGGING_TABLE,OMOP_VOCAB_PATH=$_OMOP_VOCAB_PATH',
+    '--cpu=$_DEFAULT_CPU',
+    '--memory=$_DEFAULT_MEMORY',
+    '--task-timeout=$_MERGE_TASK_TIMEOUT',
+    '--max-retries=0',
+    '--parallelism=1',
+    '--add-volume=name=duckdb_files,type=cloud-storage,bucket=$_TMP_DIRECTORY',
+    '--add-volume-mount=volume=duckdb_files,mount-path=/mnt/data',
+    '--args=python,-m,core.jobs.reconcile_chunks_job'
+  ]
+
 options:
   logging: CLOUD_LOGGING_ONLY
 
@@ -196,6 +234,7 @@ substitutions:
   _DEFAULT_TASK_TIMEOUT: '3600s'
   _SERVICE_TIMEOUT: '3600s'
   _HARMONIZE_VOCAB_TIMEOUT: '7200s'
+  _MERGE_TASK_TIMEOUT: '3600s'
 
 images:
   - 'gcr.io/$PROJECT_ID/$_IMAGE_NAME:$COMMIT_SHA'

@@ -9,6 +9,8 @@ import core.file_processor as file_processor
 import core.file_validation as file_validation
 import core.gcp_services as gcp_services
 import core.helpers.pipeline_log as pipeline_log
+import core.merge as merge
+import core.merge_reporting as merge_reporting
 import core.natural_keys as natural_keys
 import core.normalization as normalization
 import core.omop_client as omop_client
@@ -836,6 +838,195 @@ def load_derived_tables_to_bq() -> tuple[str, int]:
     except Exception as e:
         utils.logger.error(f"Error loading derived tables to BigQuery: {str(e)}")
         return f"Error loading derived tables to BigQuery: {str(e)}", 500
+
+
+@app.route('/get_latest_completed_delivery', methods=['POST'])
+def get_latest_completed_delivery() -> tuple[Any, int]:
+    """Return the delivery_date of a site's most recent 'completed' delivery, or null."""
+    data: dict[str, Any] = request.get_json() or {}
+    site: Optional[str] = data.get('site')
+    missing_fields = _get_missing_fields(data, ['site'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert site is not None
+
+        delivery_date: Optional[str] = pipeline_log.get_latest_completed_delivery(site)
+        return jsonify({
+            'status': 'healthy',
+            'delivery_date': delivery_date,
+            'service': constants.SERVICE_NAME
+        }), 200
+    except Exception as e:
+        utils.logger.error(f"Unable to get latest completed delivery for {site}: {str(e)}")
+        return f"Unable to get latest completed delivery for {site}: {str(e)}", 500
+
+
+@app.route('/get_delivery_cdm_version', methods=['POST'])
+def get_delivery_cdm_version() -> tuple[Any, int]:
+    """Return the CDM and vocabulary versions a processed delivery was standardized to."""
+    data: dict[str, Any] = request.get_json() or {}
+    bucket: Optional[str] = data.get('bucket')
+    delivery_date: Optional[str] = data.get('delivery_date')
+    missing_fields = _get_missing_fields(data, ['bucket', 'delivery_date'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert bucket is not None
+        assert delivery_date is not None
+
+        versions = omop_client.OMOPClient.get_delivery_cdm_version(bucket, delivery_date)
+        return jsonify({
+            'status': 'healthy',
+            'cdm_version': versions['cdm_version'],
+            'vocabulary_version': versions['vocabulary_version'],
+            'service': constants.SERVICE_NAME
+        }), 200
+    except Exception as e:
+        utils.logger.error(f"Unable to read cdm_version for {bucket}/{delivery_date}: {str(e)}")
+        return f"Unable to read cdm_version for {bucket}/{delivery_date}: {str(e)}", 500
+
+
+@app.route('/extract_participant_chunk', methods=['POST'])
+def extract_participant_chunk() -> tuple[str, int]:
+    """Copy one source-delivery table into a provenance-named merge chunk file."""
+    data: dict[str, Any] = request.get_json() or {}
+    source_uri: Optional[str] = data.get('source_uri')
+    chunk_uri: Optional[str] = data.get('chunk_uri')
+    # Optional: only the person table passes this, to stamp care_site_id with the origin site's hash.
+    site_display_name: Optional[str] = data.get('site_display_name')
+    missing_fields = _get_missing_fields(data, ['source_uri', 'chunk_uri'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert source_uri is not None
+        assert chunk_uri is not None
+
+        merge.MergeProcessor.extract_chunk(source_uri, chunk_uri, site_display_name)
+        return "Extracted participant chunk", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to extract participant chunk: {str(e)}")
+        return f"Unable to extract participant chunk: {str(e)}", 500
+
+
+@app.route('/reconcile_chunks', methods=['POST'])
+def reconcile_chunks() -> tuple[str, int]:
+    """Union all chunk files for a table into a single merged parquet in converted_files/."""
+    data: dict[str, Any] = request.get_json() or {}
+    chunk_glob: Optional[str] = data.get('chunk_glob')
+    output_uri: Optional[str] = data.get('output_uri')
+    missing_fields = _get_missing_fields(data, ['chunk_glob', 'output_uri'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert chunk_glob is not None
+        assert output_uri is not None
+
+        merge.MergeProcessor.reconcile_chunks(chunk_glob, output_uri)
+        return "Reconciled merge chunks", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to reconcile merge chunks: {str(e)}")
+        return f"Unable to reconcile merge chunks: {str(e)}", 500
+
+
+@app.route('/build_care_site', methods=['POST'])
+def build_care_site() -> tuple[str, int]:
+    """Build the merged instance's care_site table (one hashed-id row per merged site)."""
+    data: dict[str, Any] = request.get_json() or {}
+    output_uri: Optional[str] = data.get('output_uri')
+    site_display_names: Optional[list] = data.get('site_display_names')
+    cdm_version: Optional[str] = data.get('cdm_version')
+    missing_fields = _get_missing_fields(data, ['output_uri', 'site_display_names', 'cdm_version'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert output_uri is not None
+        assert site_display_names is not None
+        assert cdm_version is not None
+
+        merge.MergeProcessor.build_care_site(output_uri, site_display_names, cdm_version)
+        return "Built care_site table", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to build care_site table: {str(e)}")
+        return f"Unable to build care_site table: {str(e)}", 500
+
+
+@app.route('/build_merge_cdm_source', methods=['POST'])
+def build_merge_cdm_source() -> tuple[str, int]:
+    """Build the merged instance's de novo one-row cdm_source parquet."""
+    data: dict[str, Any] = request.get_json() or {}
+    output_uri: Optional[str] = data.get('output_uri')
+    source_cdm_source_uris: Optional[list] = data.get('source_cdm_source_uris')
+    site_count: Optional[int] = data.get('site_count')
+    cdm_version: Optional[str] = data.get('cdm_version')
+    vocabulary_version: Optional[str] = data.get('vocabulary_version')
+    cdm_release_date: Optional[str] = data.get('cdm_release_date')
+    missing_fields = _get_missing_fields(
+        data,
+        ['output_uri', 'source_cdm_source_uris', 'site_count', 'cdm_version', 'vocabulary_version', 'cdm_release_date']
+    )
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert output_uri is not None
+        assert source_cdm_source_uris is not None
+        assert site_count is not None
+        assert cdm_version is not None
+        assert vocabulary_version is not None
+        assert cdm_release_date is not None
+
+        merge.MergeProcessor.build_cdm_source(
+            output_uri, source_cdm_source_uris, site_count, cdm_version, vocabulary_version, cdm_release_date
+        )
+        return "Built cdm_source", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to build cdm_source: {str(e)}")
+        return f"Unable to build cdm_source: {str(e)}", 500
+
+
+@app.route('/generate_merge_report', methods=['POST'])
+def generate_merge_report() -> tuple[str, int]:
+    """Generate merge provenance report artifacts + consolidated CSV."""
+    data: dict[str, Any] = request.get_json() or {}
+    merge_bucket: Optional[str] = data.get('merge_bucket')
+    run_date: Optional[str] = data.get('run_date')
+    site: Optional[str] = data.get('site')
+    deliveries: Optional[list] = data.get('deliveries')
+    missing_fields = _get_missing_fields(data, ['merge_bucket', 'run_date', 'site', 'deliveries'])
+
+    # Validate required parameters
+    if missing_fields:
+        return _missing_fields_response(missing_fields)
+
+    try:
+        assert merge_bucket is not None
+        assert run_date is not None
+        assert site is not None
+        assert deliveries is not None
+
+        merge_reporting.MergeReporter.generate_merge_report(merge_bucket, run_date, site, deliveries)
+        return "Generated merge report", 200
+    except Exception as e:
+        utils.logger.error(f"Unable to generate merge report: {str(e)}")
+        return f"Unable to generate merge report: {str(e)}", 500
 
 
 @app.route('/pipeline_log', methods=['POST'])

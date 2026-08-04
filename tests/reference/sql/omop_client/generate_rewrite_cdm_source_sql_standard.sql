@@ -6,7 +6,14 @@
                         TRY_CAST(source_release_date AS DATE),
                         CAST('2025-01-15' AS DATE)
                     ) AS source_release_date,
-                    CAST('2025-01-15' AS DATE) AS cdm_release_date
+                    COALESCE(
+                        TRY_CAST(TRY_STRPTIME(CAST(cdm_release_date AS VARCHAR), '%Y-%m-%d') AS DATE),
+                        TRY_CAST(cdm_release_date AS DATE),
+                        CAST('2025-01-15' AS DATE)
+                    ) AS cdm_release_date,
+                    '5.4' AS cdm_version,
+                    756265 AS cdm_version_concept_id,
+                    'v5.0 27-AUG-25' AS vocabulary_version
                 )
                 FROM read_parquet('gs://test-bucket/2025-01-15/artifacts/converted_files/cdm_source.parquet')
             ) TO 'gs://test-bucket/2025-01-15/artifacts/converted_files/cdm_source.parquet' (FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 1)
